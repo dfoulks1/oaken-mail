@@ -1,0 +1,283 @@
+# Software map data. Edit this file as pieces get built; the page
+# "Software map" is generated from it and the build fails if it drifts from the code.
+#
+# status:  built | partial | planned
+#   built / partial  -> `path` must exist in the repository
+#   planned          -> `path` must not exist yet (when you create it, update the status)
+# uses:    components this one calls directly. A call may go to the same layer or a lower one;
+#          anything else fails the build (the layering rule from the architecture).
+# prompt:  the build prompt that delivers (or delivered) the component.
+# Layers are listed top to bottom.
+
+[[layers]]
+id = "clients"
+name = "Clients"
+
+[[layers]]
+id = "api"
+name = "Local API"
+
+[[layers]]
+id = "services"
+name = "Operations and services"
+
+[[layers]]
+id = "ingest"
+name = "Ingest"
+
+[[layers]]
+id = "runtime"
+name = "Runtime"
+
+[[layers]]
+id = "plugins"
+name = "Plugins"
+
+[[layers]]
+id = "storage"
+name = "Storage"
+
+[[layers]]
+id = "foundation"
+name = "Foundation"
+
+[[layers]]
+id = "project"
+name = "Project tooling"
+
+# --- Clients -----------------------------------------------------------------------------
+[[components]]
+id = "cli"
+name = "CLI"
+layer = "clients"
+status = "partial"
+prompt = "17"
+path = "src/oaken/cli.py"
+summary = "Thin command-line client of the local API. Today it only prints the version."
+uses = ["api"]
+
+[[components]]
+id = "mcp"
+name = "MCP stdio shim"
+layer = "clients"
+status = "planned"
+prompt = "18"
+summary = "Forwards MCP tool calls to core; generated from the operation registry. Never exposes sending."
+uses = ["api"]
+
+[[components]]
+id = "webui"
+name = "Web UI"
+layer = "clients"
+status = "planned"
+prompt = "later"
+summary = "Browser client served by core. Framework choice is deferred."
+uses = ["api"]
+
+# --- Local API ---------------------------------------------------------------------------
+[[components]]
+id = "api"
+name = "HTTP + SSE daemon"
+layer = "api"
+status = "planned"
+prompt = "16"
+summary = "Local HTTP and server-sent events on 127.0.0.1 with token auth; start, stop and status."
+uses = ["operations", "events"]
+
+# --- Operations and services -------------------------------------------------------------
+[[components]]
+id = "operations"
+name = "Operation registry"
+layer = "services"
+status = "planned"
+prompt = "13"
+summary = "Typed operations with permission classes and the confirm gate; HTTP and MCP are generated from it."
+uses = ["retrieval", "readstate", "audit", "jobs"]
+
+[[components]]
+id = "retrieval"
+name = "Retrieval and ask"
+layer = "services"
+status = "planned"
+prompt = "15"
+summary = "Hybrid search, token-budgeted context and cited question answering."
+uses = ["index", "pluginhost"]
+
+[[components]]
+id = "readstate"
+name = "Read state"
+layer = "services"
+status = "planned"
+prompt = "12"
+summary = "Marks mail read only on open or summarize; writes back to the provider with undo."
+uses = ["audit", "rawstore", "pluginhost"]
+
+[[components]]
+id = "audit"
+name = "Audit log"
+layer = "services"
+status = "planned"
+prompt = "12"
+summary = "Records every state-changing action, with undo where possible."
+uses = ["rawstore"]
+
+# --- Ingest ------------------------------------------------------------------------------
+[[components]]
+id = "ingest"
+name = "Ingest pipeline"
+layer = "ingest"
+status = "planned"
+prompt = "09"
+summary = "Staged, idempotent, resumable pipeline: keyword-searchable first, embedded and enriched after."
+uses = ["parsing", "jobs", "events", "pluginhost", "rawstore", "index"]
+
+[[components]]
+id = "parsing"
+name = "Parsing and cleaning"
+layer = "ingest"
+status = "planned"
+prompt = "06"
+summary = "RFC 822 to structured fields and cleaned text; threading keys."
+uses = []
+
+# --- Runtime -----------------------------------------------------------------------------
+[[components]]
+id = "events"
+name = "Event bus"
+layer = "runtime"
+status = "planned"
+prompt = "03"
+summary = "In-memory, typed events."
+uses = []
+
+[[components]]
+id = "jobs"
+name = "Job queue"
+layer = "runtime"
+status = "planned"
+prompt = "03"
+summary = "Durable queue that survives restarts, with retries and backoff."
+uses = ["rawstore"]
+
+[[components]]
+id = "scheduler"
+name = "Scheduler"
+layer = "runtime"
+status = "planned"
+prompt = "03"
+summary = "Recurring work such as periodic sync."
+uses = ["jobs"]
+
+[[components]]
+id = "pluginhost"
+name = "Plugin host"
+layer = "runtime"
+status = "planned"
+prompt = "04"
+summary = "Entry-point discovery, lifecycle, capabilities and health for the five plugin contracts, plus the fakes."
+uses = ["events", "provider", "embedder", "llm", "enrichers", "vectorstore"]
+
+# --- Plugins -----------------------------------------------------------------------------
+[[components]]
+id = "provider"
+name = "Provider: Gmail"
+layer = "plugins"
+status = "planned"
+prompt = "11"
+summary = "Bring-your-own OAuth, full and incremental sync, flag write-back."
+uses = []
+
+[[components]]
+id = "embedder"
+name = "Embedder: Ollama"
+layer = "plugins"
+status = "planned"
+prompt = "10"
+summary = "Turns text into vectors with a local model."
+uses = ["safety"]
+
+[[components]]
+id = "llm"
+name = "LLM backend: Ollama"
+layer = "plugins"
+status = "planned"
+prompt = "10"
+summary = "Structured outputs from a local model."
+uses = ["safety"]
+
+[[components]]
+id = "enrichers"
+name = "Enrichers"
+layer = "plugins"
+status = "planned"
+prompt = "14"
+summary = "Summary, triage, actions and the header/MIME inspector."
+uses = ["safety"]
+
+[[components]]
+id = "vectorstore"
+name = "Vector store: sqlite-vec"
+layer = "plugins"
+status = "planned"
+prompt = "08"
+summary = "Stores and searches vectors."
+uses = []
+
+# --- Storage -----------------------------------------------------------------------------
+[[components]]
+id = "rawstore"
+name = "raw.db and blob store"
+layer = "storage"
+status = "planned"
+prompt = "05"
+summary = "Source of truth: compressed messages, cursors, job queue, audit log, read-state intents."
+uses = ["dbaccess"]
+
+[[components]]
+id = "index"
+name = "index.db"
+layer = "storage"
+status = "planned"
+prompt = "07"
+summary = "Everything derived and rebuildable: chunks, full-text index, enrichments."
+uses = ["dbaccess"]
+
+# --- Foundation --------------------------------------------------------------------------
+[[components]]
+id = "dbaccess"
+name = "Core foundation"
+layer = "foundation"
+status = "planned"
+prompt = "02"
+summary = "Settings, platform paths, logging, errors, ids, clock and the database access layer."
+uses = []
+
+[[components]]
+id = "safety"
+name = "Prompt safety and LLM cache"
+layer = "foundation"
+status = "planned"
+prompt = "10"
+summary = "The UntrustedText type and the cache keyed by content hash, model and prompt version."
+uses = []
+
+# --- Project tooling ---------------------------------------------------------------------
+[[components]]
+id = "tooling"
+name = "Repository and CI"
+layer = "project"
+status = "built"
+prompt = "01"
+path = "pyproject.toml"
+summary = "uv project, lint, types, tests, secret scanning and CI on three platforms."
+uses = []
+
+[[components]]
+id = "docsite"
+name = "Documentation site"
+layer = "project"
+status = "built"
+prompt = "01a"
+path = "docs/tools"
+summary = "This site: generated from docs/, checked for links and determinism, deployed to GitHub Pages."
+uses = ["tooling"]

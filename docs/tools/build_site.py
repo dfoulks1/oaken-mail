@@ -60,6 +60,7 @@ def collect_pages(cfg: Config) -> list[Page]:
         seen.add(pid)
         if entry.get("generated"):
             page = generated.get(pid)(cfg)
+            page.id = pid  # the registry decides where a generated page lives
             for key in ("title", "subtitle", "lead", "group", "order", "description"):
                 if key in entry:
                     setattr(page, key, entry[key])
