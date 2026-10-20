@@ -75,15 +75,27 @@
     </nav>
   </aside>
 
-  <main class="ok-main"><section class="ok-pane flex-grow-1"><div class="ok-scroll"><div class="ok-page">
+  <main class="ok-main"><section class="ok-pane flex-grow-1"><div class="ok-scroll"><div class="ok-page ok-page-wide">
     <h1 class="h3 mb-4">Settings</h1>
-    <ul class="nav nav-pills mb-4 gap-1" role="tablist">
-      <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#s-appearance">Appearance</button></li>
-      <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#s-identities">Identities</button></li>
-      <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#s-filters">Filters</button></li>
-      <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#s-composing">Composing</button></li>
-      <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#s-security">Security</button></li>
-    </ul>
+    <div class="ok-settings">
+    <nav class="ok-rail nav flex-column" role="tablist" aria-orientation="vertical">
+      <div class="ok-rail-group">General</div>
+      <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#s-appearance"><i class="bi bi-palette"></i>Appearance</button>
+      <button class="nav-link" data-bs-toggle="pill" data-bs-target="#s-workspaces"><i class="bi bi-columns-gap"></i>Workspaces</button>
+      <div class="ok-rail-group">Mail</div>
+      <button class="nav-link" data-bs-toggle="pill" data-bs-target="#s-accounts"><i class="bi bi-envelope-at"></i>Accounts</button>
+      <button class="nav-link" data-bs-toggle="pill" data-bs-target="#s-identities"><i class="bi bi-person-vcard"></i>Identities</button>
+      <button class="nav-link" data-bs-toggle="pill" data-bs-target="#s-schedule"><i class="bi bi-clock-history"></i>Schedule</button>
+      <button class="nav-link" data-bs-toggle="pill" data-bs-target="#s-filters"><i class="bi bi-funnel"></i>Sieve</button>
+      <button class="nav-link" data-bs-toggle="pill" data-bs-target="#s-composing"><i class="bi bi-pencil"></i>Composing</button>
+      <div class="ok-rail-group">AI &amp; Data</div>
+      <button class="nav-link" data-bs-toggle="pill" data-bs-target="#s-ai"><i class="bi bi-robot"></i>AI &amp; Models</button>
+      <button class="nav-link" data-bs-toggle="pill" data-bs-target="#s-plugins"><i class="bi bi-plug"></i>Plugins</button>
+      <button class="nav-link" data-bs-toggle="pill" data-bs-target="#s-storage"><i class="bi bi-database"></i>Storage &amp; Data</button>
+      <div class="ok-rail-group">System</div>
+      <button class="nav-link" data-bs-toggle="pill" data-bs-target="#s-logs"><i class="bi bi-journal-text"></i>Logs</button>
+      <button class="nav-link" data-bs-toggle="pill" data-bs-target="#s-security"><i class="bi bi-shield-lock"></i>Security</button>
+    </nav>
     <div class="tab-content">
       <div class="tab-pane fade show active" id="s-appearance">
         <div class="ok-section"><h2>Theme</h2><div class="row g-3">
@@ -103,6 +115,183 @@
           <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="r2"><label class="form-check-label" for="r2">Load remote images automatically</label></div>
           <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="r3" checked><label class="form-check-label" for="r3">Enable keyboard shortcuts</label></div></div>
       </div>
+
+      <div class="tab-pane fade" id="s-workspaces">
+        <div class="ok-section"><div class="d-flex align-items-center mb-3"><h2 class="mb-0">Workspaces <span class="ok-tag ms-2">TBD</span></h2><button class="btn btn-sm btn-outline-oaken ms-auto" disabled>New workspace</button></div>
+          <div class="ok-tbd"><i class="bi bi-columns-gap"></i>
+            <div class="fw-semibold mb-1">Not defined yet</div>
+            <p class="mb-0 mx-auto" style="max-width:34rem">&ldquo;Workspace&rdquo; isn&rsquo;t part of the Oaken&nbsp;Mail architecture. This pane is a placeholder until the concept is pinned down &mdash; likely a switchable context that bundles a set of accounts, filters and folders (e.g.&nbsp;<em>Work</em> vs <em>Personal</em>).</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="s-accounts">
+        <div class="ok-section"><div class="d-flex align-items-center mb-3"><h2 class="mb-0">Accounts</h2>
+          <div class="dropdown ms-auto"><button class="btn btn-sm btn-outline-oaken dropdown-toggle" data-bs-toggle="dropdown">Add account</button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><button class="dropdown-item"><i class="bi bi-google me-2"></i>Google (Gmail API)</button></li>
+              <li><button class="dropdown-item"><i class="bi bi-envelope me-2"></i>IMAP mailbox</button></li>
+              <li><button class="dropdown-item"><i class="bi bi-send me-2"></i>SMTP (send only)</button></li>
+            </ul></div></div>
+          <div class="list-group">
+            <div class="list-group-item py-3">
+              <div class="d-flex align-items-center gap-3">
+                <span class="ok-avatar" style="background:var(--ok-feather-orange)">AE</span>
+                <div class="min-w-0"><div class="fw-semibold">alex@example.com <span class="ok-tag ms-1">Gmail</span></div><div class="small text-muted">Synced 2 min ago · cursor 184213 · 12,904 messages</div></div>
+                <div class="ms-auto d-flex align-items-center gap-2"><span class="d-inline-flex align-items-center gap-1 small"><span class="ok-dot ok-ok"></span>Active</span><button class="btn btn-sm btn-ghost">Pause</button><button class="btn btn-sm btn-outline-oaken">Manage</button></div>
+              </div>
+              <div class="mt-2 d-flex flex-wrap align-items-center gap-1"><span class="ok-tag">auth</span><span class="ok-tag">sync.pull</span><span class="ok-tag">flags.write</span><span class="ok-tag">send</span><span class="ok-tag ms-auto">every 15 min · America/New_York</span></div>
+            </div>
+            <div class="list-group-item py-3">
+              <div class="d-flex align-items-center gap-3">
+                <span class="ok-avatar" style="background:var(--ok-feather-purple)">AW</span>
+                <div class="min-w-0"><div class="fw-semibold">alex.work@gmail.com <span class="ok-tag ms-1">Gmail</span></div><div class="small text-muted">Paused — refresh token refused</div></div>
+                <div class="ms-auto d-flex align-items-center gap-2"><span class="d-inline-flex align-items-center gap-1 small"><span class="ok-dot ok-err"></span>Auth error</span><button class="btn btn-sm btn-outline-oaken">Re-authenticate</button></div>
+              </div>
+              <div class="mt-2 d-flex flex-wrap align-items-center gap-1"><span class="ok-tag">auth</span><span class="ok-tag">sync.pull</span><span class="ok-tag">flags.write</span><span class="ok-tag">send</span><span class="ok-tag ms-auto">every 15 min · America/New_York</span></div>
+            </div>
+            <div class="list-group-item py-3">
+              <div class="d-flex align-items-center gap-3">
+                <span class="ok-avatar" style="background:var(--ok-primary)">AF</span>
+                <div class="min-w-0"><div class="fw-semibold">alex@fastmail.com <span class="ok-tag ms-1">IMAP</span></div><div class="small text-muted">Synced 5 min ago · 2 folder schedules · 8,110 messages</div></div>
+                <div class="ms-auto d-flex align-items-center gap-2"><span class="d-inline-flex align-items-center gap-1 small"><span class="ok-dot ok-ok"></span>Active</span><button class="btn btn-sm btn-ghost">Pause</button><button class="btn btn-sm btn-outline-oaken">Manage</button></div>
+              </div>
+              <div class="mt-2 d-flex flex-wrap align-items-center gap-1"><span class="ok-tag">auth</span><span class="ok-tag">sync.pull</span><span class="ok-tag">flags.write</span><span class="ok-tag">folders</span><span class="ok-tag ms-auto">cron · Europe/London</span></div>
+            </div>
+            <div class="list-group-item py-3">
+              <div class="d-flex align-items-center gap-3">
+                <span class="ok-avatar" style="background:var(--ok-feather-amber)"><i class="bi bi-send"></i></span>
+                <div class="min-w-0"><div class="fw-semibold">smtp.example.org <span class="ok-tag ms-1">SMTP</span></div><div class="small text-muted">Send only · no mailbox to sync</div></div>
+                <div class="ms-auto d-flex align-items-center gap-2"><span class="d-inline-flex align-items-center gap-1 small"><span class="ok-dot ok-ok"></span>Ready</span><button class="btn btn-sm btn-outline-oaken">Manage</button></div>
+              </div>
+              <div class="mt-2 d-flex flex-wrap align-items-center gap-1"><span class="ok-tag">send</span></div>
+            </div>
+          </div>
+          <p class="small text-muted mt-3 mb-0">Secrets live only in the OS keyring (service <code>oaken</code>), never in config, logs or exceptions. Google uses your own OAuth client at <code>gmail.modify</code> scope.</p>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="s-schedule">
+        <div class="ok-section"><h2>Defaults</h2>
+          <dl class="ok-kv mb-0">
+            <dt>Default interval</dt><dd>Every 15 minutes</dd>
+            <dt>Minimum interval</dt><dd>60 seconds (floor, enforced on save)</dd>
+            <dt>Max concurrent syncs</dt><dd><input class="form-control form-control-sm d-inline-block" value="3" style="width:4rem"></dd>
+            <dt>Missed runs</dt><dd>Collapse into one catch-up run</dd>
+            <dt>On failure</dt><dd>Back off with jitter; an auth failure pauses only that account</dd>
+          </dl>
+        </div>
+        <div class="ok-section"><h2>Quiet hours</h2>
+          <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" id="qh" checked><label class="form-check-label" for="qh">Mute alerts during quiet hours <span class="text-muted">(sync still runs)</span></label></div>
+          <div class="d-flex align-items-center gap-2"><input type="time" class="form-control form-control-sm" style="width:auto" value="22:00"><span class="text-muted">to</span><input type="time" class="form-control form-control-sm" style="width:auto" value="07:00"></div>
+        </div>
+        <div class="ok-section"><div class="d-flex align-items-center mb-3"><h2 class="mb-0">Schedules</h2><button class="btn btn-sm btn-outline-oaken ms-auto">New schedule</button></div>
+          <div class="table-responsive"><table class="table align-middle mb-0">
+            <thead><tr><th>Account / folder</th><th>Type</th><th>When</th><th>Timezone</th><th>Next run</th><th>Last run</th><th></th></tr></thead>
+            <tbody>
+              <tr><td>alex@example.com</td><td>Interval</td><td>every 15 min</td><td>America/New_York</td><td>in 11 min</td><td class="text-nowrap"><span class="ok-dot ok-ok"></span> ok · 2 min ago</td><td class="text-end"><button class="btn btn-sm btn-ghost">Sync now</button></td></tr>
+              <tr><td>alex.work@gmail.com</td><td>Interval</td><td>every 15 min</td><td>America/New_York</td><td class="text-muted">paused</td><td class="text-nowrap"><span class="ok-dot ok-err"></span> auth error</td><td class="text-end"><button class="btn btn-sm btn-ghost" disabled>Sync now</button></td></tr>
+              <tr><td>alex@fastmail.com · INBOX</td><td>Cron</td><td><code>*/10 * * * *</code></td><td>Europe/London</td><td>in 4 min</td><td class="text-nowrap"><span class="ok-dot ok-ok"></span> ok · 5 min ago</td><td class="text-end"><button class="btn btn-sm btn-ghost">Sync now</button></td></tr>
+              <tr><td>alex@fastmail.com · Lists</td><td>Cron</td><td><code>0 * * * *</code></td><td>Europe/London</td><td>in 38 min</td><td class="text-nowrap"><span class="ok-dot ok-ok"></span> ok · 22 min ago</td><td class="text-end"><button class="btn btn-sm btn-ghost">Sync now</button></td></tr>
+            </tbody>
+          </table></div>
+          <div class="d-flex align-items-center mt-3 gap-2"><span class="small text-muted">Schedules are live data in <code>raw.db</code>; every edit is audited.</span><button class="btn btn-sm btn-ghost ms-auto"><i class="bi bi-download me-1"></i>Export crontab (read-only)</button></div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="s-ai">
+        <div class="ok-section"><h2>Backends</h2>
+          <div class="mb-3"><label class="form-label">Ollama endpoint</label><input class="form-control" value="http://127.0.0.1:11434"><div class="form-text">Local by default. Nothing leaves the machine unless you point this elsewhere.</div></div>
+          <div class="row g-3">
+            <div class="col-md-6"><label class="form-label">LLM model</label><select class="form-select"><option>llama3.1:8b</option><option>qwen2.5:14b</option><option>mistral-nemo</option></select></div>
+            <div class="col-md-6"><label class="form-label">Embedder model</label><select class="form-select"><option>nomic-embed-text</option><option>mxbai-embed-large</option><option>all-minilm</option></select></div>
+          </div>
+          <div class="form-text mt-2">Changing the embedder re-runs an embed job — mail is never re-downloaded.</div>
+        </div>
+        <div class="ok-section"><h2>Token thrift</h2>
+          <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="t1" checked><label class="form-check-label" for="t1">Strip quoted replies, signatures and footers at ingest</label></div>
+          <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" id="t2" checked><label class="form-check-label" for="t2">Strip HTML boilerplate before chunking</label></div>
+          <div><label class="form-label">Retrieval — top chunks sent to the model</label><input type="number" class="form-control form-control-sm" value="6" style="width:5rem"></div>
+        </div>
+        <div class="ok-section"><div class="d-flex align-items-center mb-3"><h2 class="mb-0">Enrichment cache</h2><button class="btn btn-sm btn-ghost ms-auto">Clear cache</button></div>
+          <p class="small text-muted mb-3">Every LLM result is cached by <code>(content_hash, model, prompt_version)</code>, so re-runs are free until an input changes.</p>
+          <div class="row g-3">
+            <div class="col-6 col-md-3"><div class="ok-metric"><div class="v">18,442</div><div class="l">cached results</div></div></div>
+            <div class="col-6 col-md-3"><div class="ok-metric"><div class="v">312 MB</div><div class="l">cache size</div></div></div>
+            <div class="col-6 col-md-3"><div class="ok-metric"><div class="v">v4</div><div class="l">prompt version</div></div></div>
+            <div class="col-6 col-md-3"><div class="ok-metric"><div class="v">94%</div><div class="l">hit rate</div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="s-plugins">
+        <div class="ok-section"><div class="d-flex align-items-center mb-3"><h2 class="mb-0">Installed plugins</h2><span class="small text-muted ms-auto">First-party only in v1 · in-process</span></div>
+          <div class="list-group">
+            <div class="list-group-item py-3 d-flex align-items-center gap-3"><i class="bi bi-google fs-5"></i><div class="min-w-0"><div class="fw-semibold">Gmail <span class="text-muted fw-normal">· Provider</span></div><div class="d-flex flex-wrap gap-1 mt-1"><span class="ok-tag">auth</span><span class="ok-tag">sync.pull</span><span class="ok-tag">flags.write</span><span class="ok-tag">send</span></div></div><div class="ms-auto d-flex align-items-center gap-3"><span class="d-inline-flex align-items-center gap-1 small"><span class="ok-dot ok-ok"></span>healthy</span><div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" checked aria-label="Enabled"></div></div></div>
+            <div class="list-group-item py-3 d-flex align-items-center gap-3"><i class="bi bi-envelope fs-5"></i><div class="min-w-0"><div class="fw-semibold">IMAP <span class="text-muted fw-normal">· Provider (generic)</span></div><div class="d-flex flex-wrap gap-1 mt-1"><span class="ok-tag">auth</span><span class="ok-tag">sync.pull</span><span class="ok-tag">flags.write</span><span class="ok-tag">folders</span></div></div><div class="ms-auto d-flex align-items-center gap-3"><span class="d-inline-flex align-items-center gap-1 small"><span class="ok-dot ok-ok"></span>healthy</span><div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" checked aria-label="Enabled"></div></div></div>
+            <div class="list-group-item py-3 d-flex align-items-center gap-3"><i class="bi bi-send fs-5"></i><div class="min-w-0"><div class="fw-semibold">SMTP <span class="text-muted fw-normal">· Provider (send)</span></div><div class="d-flex flex-wrap gap-1 mt-1"><span class="ok-tag">send</span></div></div><div class="ms-auto d-flex align-items-center gap-3"><span class="d-inline-flex align-items-center gap-1 small"><span class="ok-dot ok-ok"></span>healthy</span><div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" checked aria-label="Enabled"></div></div></div>
+            <div class="list-group-item py-3 d-flex align-items-center gap-3"><i class="bi bi-cpu fs-5"></i><div class="min-w-0"><div class="fw-semibold">Ollama <span class="text-muted fw-normal">· Embedder</span></div><div class="d-flex flex-wrap gap-1 mt-1"><span class="ok-tag">embed</span><span class="ok-tag">nomic-embed-text</span></div></div><div class="ms-auto d-flex align-items-center gap-3"><span class="d-inline-flex align-items-center gap-1 small"><span class="ok-dot ok-ok"></span>healthy</span><div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" checked aria-label="Enabled"></div></div></div>
+            <div class="list-group-item py-3 d-flex align-items-center gap-3"><i class="bi bi-robot fs-5"></i><div class="min-w-0"><div class="fw-semibold">Ollama <span class="text-muted fw-normal">· LLM backend</span></div><div class="d-flex flex-wrap gap-1 mt-1"><span class="ok-tag">generate</span><span class="ok-tag">llama3.1:8b</span></div></div><div class="ms-auto d-flex align-items-center gap-3"><span class="d-inline-flex align-items-center gap-1 small"><span class="ok-dot ok-ok"></span>healthy</span><div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" checked aria-label="Enabled"></div></div></div>
+            <div class="list-group-item py-3 d-flex align-items-center gap-3"><i class="bi bi-stars fs-5"></i><div class="min-w-0"><div class="fw-semibold">Enricher <span class="text-muted fw-normal">· first-party</span></div><div class="d-flex flex-wrap gap-1 mt-1"><span class="ok-tag">summary</span><span class="ok-tag">triage</span><span class="ok-tag">actions</span><span class="ok-tag">header/MIME</span></div></div><div class="ms-auto d-flex align-items-center gap-3"><span class="d-inline-flex align-items-center gap-1 small"><span class="ok-dot ok-warn"></span>degraded</span><div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" checked aria-label="Enabled"></div></div></div>
+            <div class="list-group-item py-3 d-flex align-items-center gap-3"><i class="bi bi-diagram-3 fs-5"></i><div class="min-w-0"><div class="fw-semibold">sqlite-vec <span class="text-muted fw-normal">· Vector store</span></div><div class="d-flex flex-wrap gap-1 mt-1"><span class="ok-tag">upsert</span><span class="ok-tag">search</span></div></div><div class="ms-auto d-flex align-items-center gap-3"><span class="d-inline-flex align-items-center gap-1 small"><span class="ok-dot ok-ok"></span>healthy</span><div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" checked aria-label="Enabled"></div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="s-storage">
+        <div class="ok-section"><h2>Databases</h2>
+          <div class="row g-3 mb-3">
+            <div class="col-6 col-md-3"><div class="ok-metric"><div class="v">2.3 GB</div><div class="l">raw.db — source of truth</div></div></div>
+            <div class="col-6 col-md-3"><div class="ok-metric"><div class="v">640 MB</div><div class="l">index.db — rebuildable</div></div></div>
+            <div class="col-6 col-md-3"><div class="ok-metric"><div class="v">41,208</div><div class="l">messages</div></div></div>
+            <div class="col-6 col-md-3"><div class="ok-metric"><div class="v">188,502</div><div class="l">chunks + vectors</div></div></div>
+          </div>
+          <p class="small text-muted mb-0">Data lives in <code>~/.local/share/oaken/</code>, never in the repo. <code>index.db</code> can be deleted and rebuilt entirely from <code>raw.db</code>.</p>
+        </div>
+        <div class="ok-section"><h2>Maintenance</h2>
+          <div class="d-flex align-items-center mb-3"><div><div class="fw-semibold">Rebuild index</div><div class="small text-muted">Reparse, re-chunk and re-index from raw bytes (keyword-only; deterministic).</div></div><button class="btn btn-sm btn-outline-oaken ms-auto">Rebuild</button></div>
+          <div class="d-flex align-items-center mb-3"><div><div class="fw-semibold">Re-enrich</div><div class="small text-muted">Re-run summaries, triage and actions — a separate job from the index rebuild.</div></div><button class="btn btn-sm btn-outline-oaken ms-auto">Re-enrich</button></div>
+          <div class="d-flex align-items-center"><div><div class="fw-semibold">Vacuum databases</div><div class="small text-muted">Reclaim disk space after large deletions.</div></div><button class="btn btn-sm btn-ghost ms-auto">Vacuum</button></div>
+        </div>
+        <div class="ok-section"><div class="d-flex align-items-center mb-3"><h2 class="mb-0">Quarantine</h2><span class="ok-tag ms-2">owner-only</span></div>
+          <div class="d-flex align-items-center"><div><div class="fw-semibold">3 attachments quarantined</div><div class="small text-muted">Stored with no execute bit; never opened or analysed by core.</div></div><button class="btn btn-sm btn-ghost ms-auto">Open folder</button></div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="s-logs">
+        <div class="ok-section"><div class="d-flex align-items-center mb-3 gap-2 flex-wrap">
+            <ul class="nav nav-pills gap-1 mb-0" role="tablist">
+              <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#log-audit">Audit log</button></li>
+              <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#log-events">Events</button></li>
+            </ul>
+            <input class="form-control form-control-sm ms-auto" style="max-width:14rem" placeholder="Filter…">
+            <button class="btn btn-sm btn-ghost"><i class="bi bi-download me-1"></i>Export</button>
+          </div>
+          <div class="tab-content">
+            <div class="tab-pane fade show active" id="log-audit">
+              <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+                <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td class="text-muted text-nowrap">15:21:04</td><td>user</td><td><code>readstate.mark_read</code></td><td>msg 184213</td><td class="text-end"><button class="btn btn-sm btn-ghost">Undo</button></td></tr>
+                  <tr><td class="text-muted text-nowrap">15:18:40</td><td>user</td><td><code>schedule.update</code></td><td>alex@fastmail.com · INBOX</td><td class="text-end"><button class="btn btn-sm btn-ghost">Undo</button></td></tr>
+                  <tr><td class="text-muted text-nowrap">15:02:11</td><td>user</td><td><code>account.pause</code></td><td>alex.work@gmail.com</td><td class="text-end"><button class="btn btn-sm btn-ghost">Undo</button></td></tr>
+                  <tr><td class="text-muted text-nowrap">14:47:55</td><td>system</td><td><code>sieve.file</code></td><td>12 messages → Lists</td><td class="text-end text-muted">—</td></tr>
+                </tbody>
+              </table></div>
+              <p class="small text-muted mt-3 mb-0">The audit log lives in <code>raw.db</code> and holds ids and booleans only — never mail content.</p>
+            </div>
+            <div class="tab-pane fade" id="log-events">
+              <pre class="mb-0 p-3" style="background:var(--ok-surface-2);border-radius:var(--ok-radius);overflow:auto;font-size:.82rem;line-height:1.55"><code>{"ts":"2026-10-20T15:21:04Z","event":"sync.completed","account":"alex@example.com","new":3,"ms":812}
+{"ts":"2026-10-20T15:20:52Z","event":"ingest.enriched","doc":184213,"model":"llama3.1:8b","cached":false}
+{"ts":"2026-10-20T15:18:40Z","event":"schedule.updated","target":"alex@fastmail.com/INBOX"}
+{"ts":"2026-10-20T15:02:11Z","event":"account.paused","account":"alex.work@gmail.com","reason":"AuthError"}
+{"ts":"2026-10-20T14:47:55Z","event":"sieve.filed","count":12,"label":"Lists"}</code></pre>
+              <p class="small text-muted mt-3 mb-0">Events are an append-only JSON-lines file, read via the <code>oaken events</code> CLI.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="tab-pane fade" id="s-identities"><div class="ok-section"><div class="d-flex mb-3"><h2 class="mb-0">Sending identities</h2><button class="btn btn-sm btn-outline-oaken ms-auto">Add identity</button></div>
         <div class="list-group">
           <div class="list-group-item d-flex align-items-center py-3"><div><div class="fw-semibold">Alex Example &lt;alex@example.com&gt;</div><div class="small text-muted">Default</div></div><button class="btn btn-sm btn-ghost ms-auto">Edit</button></div>
@@ -110,7 +299,7 @@
         <div class="ok-section"><h2>Signature</h2><textarea class="form-control" rows="4">--
 Alex Example
 Example Organization</textarea></div></div>
-      <div class="tab-pane fade" id="s-filters"><div class="ok-section"><div class="d-flex mb-3"><h2 class="mb-0">Filters</h2><button class="btn btn-sm btn-outline-oaken ms-auto">New filter</button></div>
+      <div class="tab-pane fade" id="s-filters"><div class="ok-section"><div class="d-flex mb-3"><h2 class="mb-0">Sieve</h2><button class="btn btn-sm btn-outline-oaken ms-auto">New filter</button></div>
         <div class="list-group">
           <div class="list-group-item py-3 d-flex"><div><div class="fw-semibold">List-Id contains dev.lists.example.com</div><div class="small text-muted">Move to dev@lists, skip Inbox</div></div><div class="form-check form-switch ms-auto"><input class="form-check-input" type="checkbox" checked aria-label="Enabled"></div></div>
           <div class="list-group-item py-3 d-flex"><div><div class="fw-semibold">Subject contains [VOTE]</div><div class="small text-muted">Label Releases, star</div></div><div class="form-check form-switch ms-auto"><input class="form-check-input" type="checkbox" checked aria-label="Enabled"></div></div></div></div></div>
@@ -123,8 +312,9 @@ Example Organization</textarea></div></div>
         <div class="d-flex align-items-center mb-3"><div><div class="fw-semibold">Two-factor authentication</div><div class="small text-muted">Enabled via authenticator app</div></div><button class="btn btn-sm btn-outline-oaken ms-auto">Manage</button></div>
         <div class="d-flex align-items-center mb-3"><div><div class="fw-semibold">PGP keys</div><div class="small text-muted">1 key imported</div></div><button class="btn btn-sm btn-outline-oaken ms-auto">Manage</button></div>
         <div class="d-flex align-items-center"><div><div class="fw-semibold">Active sessions</div><div class="small text-muted">2 devices</div></div><button class="btn btn-sm btn-outline-oaken ms-auto">Review</button></div></div></div>
+      <div class="d-flex gap-2 mt-1"><button class="btn btn-oaken px-4">Save changes</button><button class="btn btn-ghost">Cancel</button></div>
     </div>
-    <div class="d-flex gap-2"><button class="btn btn-oaken px-4">Save changes</button><button class="btn btn-ghost">Cancel</button></div>
+    </div>
   </div></div></section></main>
   </div>
 </div>
