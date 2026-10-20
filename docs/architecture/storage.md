@@ -68,7 +68,8 @@ belong in the OS keyring, and the store refuses a config key that looks like a s
 
 ## Safety
 
-- Database files and the LFS folder are readable by their owner only.
+- Database files and the LFS folder are readable by their owner only. LFS is not encrypted yet;
+  encrypting it is an option for later.
 - Message content never reaches a log: log lines carry ids, sizes and hashes, and a test checks
   this by searching the captured log for the body.
 

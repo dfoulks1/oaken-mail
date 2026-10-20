@@ -194,6 +194,8 @@ notifies = ["api", "ingest"]
 types = [
   ["Event", "frozen dataclass", "Base of every event: ts and a UUIDv7 event_id; subclasses add account_id and fields."],
   ["EventStream", "async iterator", "Bounded drop-oldest queue for one client; counts what it dropped."],
+  ["PluginEvent", "frozen dataclass", "Base for events a plugin defines itself; the host stamps the sender's name."],
+  ["MessageStored, LargeMessageStored", "frozen dataclasses", "Raised by the raw store after commit: is_new/changed, and a large message kept in LFS."],
 ]
 funcs = [
   ["EventBus.subscribe(type, handler)", "Internal handler for an event type; failures are logged, never propagated."],
@@ -275,6 +277,7 @@ types = [
 funcs = [
   ["PluginHost.providers_with(capability)", "Healthy providers that implement a capability. Sending is never routed."],
   ["adapt.to_batch(obj, who)", "Accept a dict, list or dataclass from a plugin and return the strict type, or a readable PluginError."],
+  ["PluginContext.publish(event)", "Announce a plugin-defined PluginEvent on the bus; core events cannot be forged this way."],
   ["verify_provider(make, ids)", "Run the whole provider contract suite in one call (one verify_* per kind)."],
 ]
 notes = ["Core never imports provider code; a plugin never touches the databases.", "Plugins run in-process and are not sandboxed in v1."]
@@ -344,6 +347,7 @@ prompt = "05"
 path = "src/oaken/core/rawstore.py"
 summary = "Source of truth: zstd RFC 822 blobs (content-addressed), accounts, provider ids, sync cursors and read-state intents, with an LFS folder for large messages. The job queue shares the file."
 uses = ["dbaccess"]
+notifies = ["ingest", "api"]
 types = [
   ["RawStore", "class", "Idempotent, transactional put; get_raw with sha256 verification; soft delete; cursors; stats; gc_blobs; account create and config."],
   ["MessageMeta", "frozen dataclass", "What a provider knows besides the bytes: internal date, read, starred, labels."],
@@ -355,6 +359,7 @@ funcs = [
   ["RawStore.get_stub(message_id) -> bytes", "The headers only, without opening the LFS file of a large message."],
   ["RawStore.gc_blobs() -> GcResult", "Remove unreferenced blobs and their LFS files. A referenced blob is never removed."],
 ]
+notes = ["Large messages (over storage.inline_max_bytes) live whole in the lfs/ folder; raw.db keeps a header stub and a link.", "Database files and the LFS folder are owner-only. Encrypting LFS is a possible later option."]
 
 [[components]]
 id = "index"
@@ -390,7 +395,7 @@ funcs = [
   ["migrate(db, directory) -> list[int]", "Forward-only migrations with checksums; refuses a newer database."],
   ["configure_logging(settings)", "structlog to stderr; redacts secrets and truncates long fields."],
 ]
-notes = ["OAKEN_HOME relocates every path under one root; tests rely on it."]
+notes = ["OAKEN_HOME relocates every path under one root; tests rely on it.", "Database files are created owner-only (0600) before SQLite opens them, so -wal and -shm inherit it."]
 
 [[components]]
 id = "safety"

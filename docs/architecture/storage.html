@@ -146,7 +146,8 @@ belong in the OS keyring, and the store refuses a config key that looks like a s
 </section>
 <section id="safety" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>Safety</h2></div>
 <ul>
-<li>Database files and the LFS folder are readable by their owner only.</li>
+<li>Database files and the LFS folder are readable by their owner only. LFS is not encrypted yet;
+encrypting it is an option for later.</li>
 <li>Message content never reaches a log: log lines carry ids, sizes and hashes, and a test checks
 this by searching the captured log for the body.</li>
 </ul>
