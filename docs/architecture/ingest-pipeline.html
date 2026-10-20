@@ -72,9 +72,10 @@
       <a class="nav-link" href="#when-something-is-down"><span class="num">4</span>When something is down</a>
       <a class="nav-link" href="#reprocessing"><span class="num">5</span>Reprocessing</a>
       <a class="nav-link" href="#token-accounting"><span class="num">6</span>Token accounting</a>
-      <a class="nav-link" href="#the-quarantine-folder"><span class="num">7</span>The quarantine folder</a>
-      <a class="nav-link" href="#plugins-and-events"><span class="num">8</span>Plugins and events</a>
-      <a class="nav-link" href="#settings"><span class="num">9</span>Settings</a>
+      <a class="nav-link" href="#the-enrichers"><span class="num">7</span>The enrichers</a>
+      <a class="nav-link" href="#the-quarantine-folder"><span class="num">8</span>The quarantine folder</a>
+      <a class="nav-link" href="#plugins-and-events"><span class="num">9</span>Plugins and events</a>
+      <a class="nav-link" href="#settings"><span class="num">10</span>Settings</a>
     </nav></div>
   </div></div>
 </nav>
@@ -116,7 +117,9 @@ discarded or marked <code>skip_enrich</code> never reaches the expensive stages.
 indexed (fields and FTS5), flagged attachments are written to the quarantine folder, and the
 embed and enrich jobs are queued. From here on the message is <strong>searchable by keyword</strong>.</li>
 <li><strong>Embed</strong> (<code>ingest.embed</code>). Chunk text goes to the embedder and the vectors to the vector store.</li>
-<li><strong>Enrich</strong> (<code>ingest.enrich</code>). Each configured enricher runs on the cleaned text.</li>
+<li><strong>Enrich</strong> (<code>ingest.enrich</code>). Each enricher runs on the cleaned text, and on the message's
+headers and attachment metadata. The first-party ones are <code>summary</code>, <code>triage</code>, <code>actions</code> and
+<code>inspector</code> (see below).</li>
 </ol>
 <p>Embedding and enrichment are separate jobs because they are slow, can fail for different reasons,
 and can be switched off on their own. With no embedder configured the pipeline is just store, filter
@@ -206,12 +209,57 @@ and account (asking twice queues once):</p>
 <p>Every call a stage makes, or avoids, is recorded in <code>ai_usage</code>: stage, model, tokens in and out,
 and whether it was a cache hit. <code>usage_summary(since)</code> adds them up per stage and model and
 reports <strong>tokens saved</strong>: what the cached calls would have cost. Embedding tokens are counted
-from the text sent. Enrichment tokens are <em>estimates</em> from the tokenizer, because the enricher
-contract does not report them.</p>
+from the text sent. The <code>enrich</code> rows are estimates from the tokenizer; each model call an enricher
+makes is also recorded exactly under its own stage (<code>llm.enrich.summary</code>, ...) by <code>generate_cached</code>.</p>
 <p>Enrichment results live in <code>raw.db</code>, not <code>index.db</code>, because they cost model time and <code>index.db</code>
 can be thrown away and rebuilt.</p>
 </section>
-<section id="the-quarantine-folder" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>The quarantine folder</h2></div>
+<section id="the-enrichers" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>The enrichers</h2></div>
+<p>Each result is small structured data, stored once and reused, so a later question never re-reads
+the body. A result is replaced only after its successor exists, and a version bump of one enricher
+refreshes only that enricher's rows.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Enricher</th>
+<th>Model</th>
+<th>Stores</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>summary</code></td>
+<td>yes</td>
+<td>One to three sentences and up to five key points. A reply is summarized from its own new text plus the stored summary of the message before it, never that message's body.</td>
+</tr>
+<tr>
+<td><code>triage</code></td>
+<td>only if headers cannot say</td>
+<td><code>category</code>, <code>priority</code> 0-3, <code>needs_reply</code>, <code>waiting_on_others</code>, a short <code>reason</code>, and <code>source</code> (<code>rules</code> or <code>llm</code>). <code>Auto-Submitted</code>, <code>Precedence: bulk</code>, <code>List-Id</code>, <code>List-Unsubscribe</code> and a no-reply sender decide the category with no model call.</td>
+</tr>
+<tr>
+<td><code>actions</code></td>
+<td>yes</td>
+<td>Action items and deadlines, each with a quote and where it sits. A quote that is not in the message is dropped and counted in <code>dropped</code>, so an invented task is never stored.</td>
+</tr>
+<tr>
+<td><code>inspector</code></td>
+<td>never</td>
+<td>SPF, DKIM and DMARC from the topmost <code>Authentication-Results</code>, ARC, spam headers, hop count from <code>Received</code> headers, date sanity, <code>Reply-To</code> against <code>From</code>, <code>List-*</code> headers, and risky attachment names. Findings are short codes in <code>warnings</code>.</td>
+</tr>
+</tbody>
+</table></div>
+<p>The model-backed ones cut a long message to <code>ai.enrich_max_input_tokens</code> by keeping its head and
+tail with a marker between, and say <code>truncated</code>. <code>summary</code> and <code>actions</code> do not ask a model about
+bulk or automated mail (<code>skip_bulk</code>, on by default): nobody wrote it to the reader, and it is the
+largest saving there is. Every model call goes through <code>generate_cached</code>, so mail is only ever
+fenced <code>UntrustedText</code>, answers are validated against a schema, and a rerun is a cache hit.
+Enrichment never marks a message read.</p>
+<p>To check a model against the enrichers' fixtures by hand (not in CI):
+<code>uv run python -m oaken.evals enrich [--enricher NAME]</code>. It scores properties of the result, not
+exact words.</p>
+</section>
+<section id="the-quarantine-folder" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>The quarantine folder</h2></div>
 <p>Attachments flagged by name or type (executables, scripts, archives that hide them) are written to
 <code>quarantine/</code> inside the data folder by the parse stage:</p>
 <ul>
@@ -226,7 +274,7 @@ extracted.</li>
 </ul>
 <p><code>Quarantine.problems()</code> reports loose permissions from file modes alone.</p>
 </section>
-<section id="plugins-and-events" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>Plugins and events</h2></div>
+<section id="plugins-and-events" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>Plugins and events</h2></div>
 <p>Each step publishes an event (<code>MessageIndexed</code>, <code>MessageEmbedded</code>, <code>MessageEnriched</code>,
 <code>AttachmentQuarantined</code>, <code>SyncStarted</code>, <code>SyncProgress</code>, <code>SyncFinished</code>). A plugin can listen with
 <code>ctx.subscribe(EventType, handler)</code>; see <a href="../plugins.html">Plugins</a>. Handlers are read-only, and a
@@ -234,7 +282,7 @@ handler that raises cannot disturb the pipeline.</p>
 <p>The pipeline reaches a vector store only through one small seam (<code>Vectors</code>), so more than one
 store can sit behind it later.</p>
 </section>
-<section id="settings" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>Settings</h2></div>
+<section id="settings" class="doc-section"><div class="section-head"><span class="section-num">10</span><h2>Settings</h2></div>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
 <thead>
 <tr>
@@ -268,6 +316,21 @@ store can sit behind it later.</p>
 <td><code>ingest.embed_concurrency</code> / <code>enrich_concurrency</code></td>
 <td>1</td>
 <td>Jobs of each stage at once</td>
+</tr>
+<tr>
+<td><code>ai.enrich_max_input_tokens</code></td>
+<td>3000</td>
+<td>Most tokens of one message an LLM enricher is sent</td>
+</tr>
+<tr>
+<td><code>plugins.&lt;enricher&gt;.enabled</code></td>
+<td>true</td>
+<td><code>false</code> skips that enricher</td>
+</tr>
+<tr>
+<td><code>plugins.summary.skip_bulk</code> / <code>plugins.actions.skip_bulk</code></td>
+<td>true</td>
+<td>Do not ask a model about bulk mail</td>
 </tr>
 <tr>
 <td><code>ingest.throughput_window_seconds</code></td>

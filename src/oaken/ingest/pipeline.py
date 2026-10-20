@@ -18,6 +18,7 @@ Message text never reaches a log.
 
 import asyncio
 import json
+import sqlite3
 import time
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -54,9 +55,10 @@ from oaken.ingest.quarantine import Quarantine
 from oaken.ingest.usage import UsageStore
 from oaken.mail.filtering import FilterEngine
 from oaken.mail.parse import parse, read_attachment
+from oaken.mail.threading import normalize_subject
 from oaken.mail.tokens import Tokenizer, load_tokenizer
 from oaken.plugins.adapt import to_enrich_output, to_vectors
-from oaken.plugins.contracts import EnrichInput, VectorItem
+from oaken.plugins.contracts import EnrichAttachment, EnrichInput, VectorItem
 
 log = get_logger("oaken.ingest")
 
@@ -396,7 +398,10 @@ class Pipeline:
             return out
         llm = self.backends.llm()
         account = AccountId(doc["account_id"])
+        msg_input: EnrichInput | None = None
         for name, enricher in self.backends.enrichers().items():
+            if self.settings.plugins.get(name, {}).get("enabled") is False:
+                continue  # switched off with [plugins.<name>] enabled = false
             if enricher.needs_llm and llm is None:
                 raise PluginError(f"enricher {name} needs a language model, none is available")
             model = llm.model_id if enricher.needs_llm and llm else ""
@@ -409,18 +414,10 @@ class Pipeline:
                     account_id=account, message_id=message_id,
                 )  # fmt: skip
                 continue
+            if msg_input is None:
+                msg_input = await self._enrich_input(message_id, doc)
             result = to_enrich_output(
-                await enricher.enrich(
-                    EnrichInput(
-                        message_id=message_id,
-                        account_id=account,
-                        subject=UntrustedText(doc["subject"]),
-                        body=UntrustedText(doc["cleaned_text"]),
-                        headers={
-                            "from": UntrustedText(f"{doc['from_name']} <{doc['from_addr']}>"),
-                        },
-                    )
-                ),
+                await enricher.enrich(msg_input),
                 f"enricher {name}",
                 getattr(enricher, "output_model", None),
             )
@@ -445,6 +442,40 @@ class Pipeline:
                     )
                 )
         return out
+
+    async def _enrich_input(self, message_id: MessageId, doc: sqlite3.Row) -> EnrichInput:
+        """What an enricher is handed: the cleaned text, every header, the attachments' metadata
+        (never their bytes) and, for a reply, the stored summary of the message before it."""
+        raw = await self.raw.get_raw(message_id)
+        parsed = await asyncio.to_thread(parse, raw, self.settings.mail)
+        parent = await self.index.previous_in_thread(message_id)
+        summary = await self.enrichment(parent, "summary") if parent else None
+        parent_summary = summary.get("summary") if summary else None
+        return EnrichInput(
+            message_id=message_id,
+            account_id=doc["account_id"],
+            subject=UntrustedText(doc["subject"]),
+            body=UntrustedText(doc["cleaned_text"]),
+            headers={"from": UntrustedText(f"{doc['from_name']} <{doc['from_addr']}>")},
+            raw_headers={
+                k: tuple(UntrustedText(v) for v in vals) for k, vals in parsed.headers.items()
+            },
+            attachments=tuple(
+                EnrichAttachment(
+                    filename=UntrustedText(a.filename) if a.filename else None,
+                    content_type=a.content_type,
+                    size=a.size,
+                    inline=a.inline,
+                    quarantine=a.quarantine,
+                )
+                for a in parsed.attachments
+            ),
+            date=parsed.date,
+            is_reply=bool(parsed.in_reply_to) or normalize_subject(parsed.subject)[1],
+            parent_summary=UntrustedText(parent_summary)
+            if isinstance(parent_summary, str)
+            else None,
+        )
 
     async def _cached_enrichment(
         self, message_id: MessageId, key: tuple[str, str, str, str]

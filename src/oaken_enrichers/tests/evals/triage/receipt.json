@@ -1,0 +1,26 @@
+{
+  "name": "receipt",
+  "input": {
+    "subject": "Your order #4521",
+    "body": "Thanks for your order #4521. Your total was $19.99 and it ships on Monday.",
+    "from": "Shop <orders@shop.example>"
+  },
+  "expect": {
+    "in": {
+      "category": [
+        "transactional",
+        "notification"
+      ]
+    },
+    "equals": {
+      "needs_reply": false
+    }
+  },
+  "fake_reply": {
+    "category": "transactional",
+    "priority": 1,
+    "needs_reply": false,
+    "waiting_on_others": false,
+    "reason": "An order receipt."
+  }
+}

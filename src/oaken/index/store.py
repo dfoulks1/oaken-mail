@@ -481,6 +481,17 @@ class IndexStore:
             (message_id,),
         )
 
+    async def previous_in_thread(self, message_id: MessageId) -> MessageId | None:
+        """The message just before this one in its thread (by date), or None. A reply's parent,
+        close enough for context: it is only used to hand an enricher the parent's summary."""
+        row = await self.db.fetchone(
+            "SELECT p.message_id FROM docs d JOIN docs p ON p.thread_key = d.thread_key"
+            " AND p.message_id != d.message_id AND p.date_utc < d.date_utc"
+            " WHERE d.message_id = ? ORDER BY p.date_utc DESC LIMIT 1",
+            (message_id,),
+        )
+        return MessageId(row["message_id"]) if row else None
+
     async def chunk_rows(self, message_id: MessageId) -> list[sqlite3.Row]:
         return await self.db.fetchall(
             "SELECT id, ordinal, source, subject, sender, text, token_estimate, content_hash"

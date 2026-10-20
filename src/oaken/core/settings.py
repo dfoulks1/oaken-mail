@@ -58,6 +58,9 @@ class AISettings(_Section):
     # Longest model answer, in characters, that is accepted before it counts as invalid output.
     max_output_chars: int = Field(default=64 * 1024, ge=256)
     vector_store: str = "sqlite-vec"
+    # Most tokens of one message's cleaned text an LLM enricher sends. A longer message keeps its
+    # head and tail with a marker between, and the result says ``truncated``.
+    enrich_max_input_tokens: int = Field(default=3000, ge=200)
     # Chunking (prompt 07): the target size of a chunk and how much of the previous one a chunk
     # repeats, both in tokens as the configured tokenizer counts them.
     chunk_tokens: int = Field(default=256, ge=16, le=8192)

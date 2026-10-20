@@ -29,6 +29,12 @@ oaken = "oaken.cli:main"
 [project.entry-points."oaken.embedders"]
 ollama = "oaken_ollama:OllamaEmbedder"
 
+[project.entry-points."oaken.enrichers"]
+summary = "oaken_enrichers:SummaryEnricher"
+triage = "oaken_enrichers:TriageEnricher"
+actions = "oaken_enrichers:ActionsEnricher"
+inspector = "oaken_enrichers:InspectorEnricher"
+
 [project.entry-points."oaken.llm_backends"]
 ollama = "oaken_ollama:OllamaLLM"
 ollama-remote = "oaken_ollama:OllamaLLM"
@@ -54,7 +60,7 @@ build-backend = "hatchling.build"
 path = "src/oaken/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/oaken", "src/oaken_vec_sqlite", "src/oaken_ollama", "src/oaken_gmail", "src/oaken_smtp", "src/oaken_imap"]
+packages = ["src/oaken", "src/oaken_vec_sqlite", "src/oaken_ollama", "src/oaken_gmail", "src/oaken_smtp", "src/oaken_imap", "src/oaken_enrichers"]
 exclude = ["**/tests/**"]
 
 [dependency-groups]
@@ -126,5 +132,5 @@ files = ["src", "tests", "docs/tools"]
 mypy_path = "docs/tools"
 
 [[tool.mypy.overrides]]
-module = ["pygments", "pygments.*", "sqlite_vec", "imapclient", "imapclient.*"]
+module = ["pygments", "pygments.*", "sqlite_vec", "imapclient", "imapclient.*", "rich", "rich.*"]
 ignore_missing_imports = true

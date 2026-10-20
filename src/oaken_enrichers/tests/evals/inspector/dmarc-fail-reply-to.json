@@ -1,0 +1,27 @@
+{
+  "name": "dmarc-fail-reply-to",
+  "input": {
+    "subject": "Account notice",
+    "from": "Bank <alerts@bank.example>",
+    "body": "Please confirm your details.",
+    "headers": {
+      "Authentication-Results": "mx.example.org; spf=pass smtp.mailfrom=bank.example; dkim=none; dmarc=fail header.from=bank.example",
+      "Reply-To": "help@collect.example.net"
+    }
+  },
+  "expect": {
+    "equals": {
+      "authentication.dmarc": "fail",
+      "authentication.spf": "pass",
+      "authentication.dkim": "none",
+      "reply_to_domain_mismatch": true
+    },
+    "contains_any": {
+      "warnings": [
+        "dmarc-fail",
+        "reply-to-other-domain"
+      ]
+    },
+    "calls": 0
+  }
+}

@@ -220,6 +220,11 @@
 <td><code>None</code></td>
 </tr>
 <tr>
+<td><code>llm</code></td>
+<td><code>LLMAccess | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
 <td><code>_subscriptions</code></td>
 <td><code>list[Callable[[], None]]</code></td>
 <td><code>empty</code></td>
@@ -579,8 +584,46 @@
 </tr>
 </tbody>
 </table></div>
+<h3 id="enrichattachment"><code>EnrichAttachment</code></h3>
+<p>What the message says about one attachment. The bytes are never passed to an enricher.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>filename</code></td>
+<td><code>UntrustedText | None</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>content_type</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>size</code></td>
+<td><code>int</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>inline</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+</tr>
+<tr>
+<td><code>quarantine</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+</tr>
+</tbody>
+</table></div>
 <h3 id="enrichinput"><code>EnrichInput</code></h3>
-<p>A cleaned message. Everything derived from the mail is <code>UntrustedText</code>.</p>
+<p>A cleaned message. Everything derived from the mail is <code>UntrustedText</code>. <code>headers</code> holds a few display values (<code>from</code>). <code>raw_headers</code> has every header, keys in lower case and every value kept, for a deterministic enricher such as the inspector. <code>parent_summary</code> is the stored summary of the message this one replies to, when core has one: a reply is summarized from its own new text plus that, never from the parent's body.</p>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
 <thead>
 <tr>
@@ -614,6 +657,31 @@
 <td><code>headers</code></td>
 <td><code>dict[str, UntrustedText]</code></td>
 <td><code>empty</code></td>
+</tr>
+<tr>
+<td><code>raw_headers</code></td>
+<td><code>dict[str, tuple[UntrustedText, ...]]</code></td>
+<td><code>empty</code></td>
+</tr>
+<tr>
+<td><code>attachments</code></td>
+<td><code>tuple[EnrichAttachment, ...]</code></td>
+<td><code>()</code></td>
+</tr>
+<tr>
+<td><code>date</code></td>
+<td><code>datetime | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>is_reply</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+</tr>
+<tr>
+<td><code>parent_summary</code></td>
+<td><code>UntrustedText | None</code></td>
+<td><code>None</code></td>
 </tr>
 </tbody>
 </table></div>
@@ -740,6 +808,10 @@
 </section>
 <section id="protocols" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Protocols</h2></div>
 <p>A plugin satisfies a contract by having these members.</p>
+<h3 id="llmaccess"><code>LLMAccess</code></h3>
+<p>The one way a plugin reaches a language model: a <code>PromptBuilder</code> task about mail, as <code>UntrustedText</code> parts. Core picks the workspace from the account, enforces what it allows, answers a repeated question from its cache and validates the answer against the task's schema. A plugin never sees a backend, a database or a workspace.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">generate_cached</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">builder</span><span class="p">:</span> <span class="s1">'PromptBuilder[Any]'</span><span class="p">,</span> <span class="o">*</span><span class="n">parts</span><span class="p">:</span> <span class="n">UntrustedText</span><span class="p">,</span> <span class="n">content_hash</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">account_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">message_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span>
+</code></pre></div>
 <h3 id="plugin"><code>Plugin</code></h3>
 <p>Lifecycle, shared by every kind. All three are optional for a plugin to define.</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">PluginContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>

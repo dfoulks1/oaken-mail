@@ -1,0 +1,20 @@
+{
+  "name": "mailing-list",
+  "input": {
+    "subject": "[dev] weekly digest",
+    "body": "This week on the list: three threads about releases.",
+    "from": "Dev List <dev@lists.example.org>",
+    "headers": {
+      "List-Id": "<dev.lists.example.org>",
+      "List-Unsubscribe": "<mailto:leave@lists.example.org>"
+    }
+  },
+  "expect": {
+    "equals": {
+      "category": "newsletter",
+      "source": "rules",
+      "priority": 0
+    },
+    "calls": 0
+  }
+}

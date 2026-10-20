@@ -27,6 +27,7 @@ from oaken.plugins.contracts import (
     Embedder,
     Enricher,
     Health,
+    LLMAccess,
     LLMBackend,
     PluginContext,
     PluginInfo,
@@ -51,6 +52,20 @@ Discover = Callable[[str], Iterable[EntryPoint]]
 
 def discover_entry_points(group: str) -> Iterable[EntryPoint]:
     return entry_points(group=group)
+
+
+class _HostLLM:
+    """``ctx.llm``: forwards to whichever service core has attached to the host at call time, so a
+    plugin started before the service exists (or after it is replaced) still works."""
+
+    def __init__(self, host: "PluginHost") -> None:
+        self._host = host
+
+    async def generate_cached(self, builder: Any, *parts: Any, **kwargs: Any) -> Any:
+        access = self._host.llm_access
+        if access is None:
+            raise PluginError("no language model service is attached to the plugin host")
+        return await access.generate_cached(builder, *parts, **kwargs)
 
 
 @dataclass
@@ -108,6 +123,8 @@ class PluginHost:
         self._records: dict[tuple[PluginKind, str], _Record] = {}
         self._task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
+        # Set by core once it has an LLM service; plugins reach it through ``ctx.llm``.
+        self.llm_access: LLMAccess | None = None
 
     # -- lifecycle ---------------------------------------------------------------------------
     async def load(self) -> None:
@@ -211,6 +228,7 @@ class PluginHost:
             config={**self.settings.plugins.get(base_name, {}), **(rec.overlay or {})},
             bus=self.bus,
             account_id=rec.account_id,
+            llm=_HostLLM(self),
         )
         rec.ctx = ctx
         try:

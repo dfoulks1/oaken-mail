@@ -1,0 +1,26 @@
+{
+  "name": "clean",
+  "input": {
+    "subject": "Hello",
+    "body": "Hi!",
+    "headers": {
+      "Authentication-Results": "mx.example.org; spf=pass; dkim=pass; dmarc=pass",
+      "Received": [
+        "from a by b; Mon, 01 Jan 2024 10:00:00 +0000",
+        "from c by a; Mon, 01 Jan 2024 09:59:59 +0000"
+      ]
+    }
+  },
+  "expect": {
+    "equals": {
+      "authentication.spf": "pass",
+      "authentication.dkim": "pass",
+      "authentication.dmarc": "pass",
+      "hops": 2
+    },
+    "max_len": {
+      "warnings": 0
+    },
+    "calls": 0
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "reply-with-parent",
+  "input": {
+    "subject": "Re: Lunch",
+    "body": "Tuesday at noon is fine. See you at the usual place.",
+    "parent_summary": "Alex asks whether lunch on Tuesday works."
+  },
+  "expect": {
+    "contains_any": {
+      "summary": [
+        "tuesday",
+        "noon",
+        "lunch"
+      ]
+    },
+    "max_len": {
+      "key_points": 5
+    }
+  },
+  "fake_reply": {
+    "summary": "Agrees to lunch on Tuesday at noon at the usual place.",
+    "key_points": [
+      "Tuesday noon"
+    ]
+  }
+}

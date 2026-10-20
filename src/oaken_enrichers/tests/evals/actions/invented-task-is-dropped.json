@@ -1,0 +1,24 @@
+{
+  "name": "invented-task-is-dropped",
+  "input": {
+    "subject": "FYI",
+    "body": "Thanks for the update, looks good."
+  },
+  "expect": {
+    "max_len": {
+      "action_items": 0,
+      "deadlines": 0
+    }
+  },
+  "fake_reply": {
+    "action_items": [
+      {
+        "text": "Pay the invoice",
+        "owner": null,
+        "due": null,
+        "quote": "Please pay the invoice today."
+      }
+    ],
+    "deadlines": []
+  }
+}

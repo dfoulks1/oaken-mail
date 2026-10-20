@@ -1,0 +1,33 @@
+{
+  "name": "reschedule",
+  "input": {
+    "subject": "Moving our review",
+    "body": "Hi Sam,\n\nI need to move our Thursday design review to Friday at 2pm because the client call overlaps. Can you confirm that works?\n\nThanks,\nAlex"
+  },
+  "expect": {
+    "contains_any": {
+      "summary": [
+        "friday",
+        "review",
+        "move",
+        "reschedul"
+      ]
+    },
+    "min_len": {
+      "summary": 10
+    },
+    "max_len": {
+      "key_points": 5
+    },
+    "equals": {
+      "injection_suspected": false
+    }
+  },
+  "fake_reply": {
+    "summary": "Alex asks to move Thursday's design review to Friday at 2pm and wants confirmation.",
+    "key_points": [
+      "Review moves to Friday 2pm",
+      "Confirmation needed"
+    ]
+  }
+}

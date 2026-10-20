@@ -314,3 +314,34 @@ async def test_the_background_health_loop_polls_and_stops_cleanly(
         await asyncio.sleep(0.01)
     await host.stop()
     assert Good.calls.count(("health",)) >= 2 and Good.calls[-1] == ("stop",)
+
+
+async def test_a_plugin_reaches_the_language_model_only_through_ctx_llm() -> None:
+    """The host hands every plugin ``ctx.llm``; it forwards to whatever core attached, and says so
+    plainly when core has attached nothing yet."""
+    host, _bus, _seen = make_host()
+    seen: list[object] = []
+
+    class Access:
+        async def generate_cached(self, builder: object, *parts: object, **kw: object) -> str:
+            seen.append((builder, parts, kw))
+            return "answer"
+
+    from oaken.plugins.contracts import PluginContext
+
+    ctx: list[PluginContext] = []
+
+    class Spy:
+        async def start(self, c: PluginContext) -> None:
+            ctx.append(c)
+
+    from oaken.plugins.host import _Record
+
+    rec = _Record(kind="enricher", name="spy", instance=Spy())
+    await host._start_one(rec)
+    assert ctx[0].llm is not None
+    with pytest.raises(PluginError, match="no language model service"):
+        await ctx[0].llm.generate_cached(object(), content_hash="h")  # type: ignore[arg-type]
+    host.llm_access = Access()
+    assert await ctx[0].llm.generate_cached(object(), content_hash="h") == "answer"  # type: ignore[arg-type]
+    assert len(seen) == 1

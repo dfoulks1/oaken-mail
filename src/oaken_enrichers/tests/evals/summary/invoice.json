@@ -1,0 +1,27 @@
+{
+  "name": "invoice",
+  "input": {
+    "subject": "Invoice INV-2041",
+    "from": "Billing <billing@vendor.example>",
+    "body": "Hello,\n\nYour invoice INV-2041 for $420.00 is attached and is due on 2024-04-30. Pay by bank transfer to the account on the invoice.\n\nVendor Billing"
+  },
+  "expect": {
+    "contains_any": {
+      "summary": [
+        "invoice",
+        "420",
+        "due"
+      ]
+    },
+    "max_len": {
+      "key_points": 5
+    }
+  },
+  "fake_reply": {
+    "summary": "Invoice INV-2041 for $420.00 is due on 2024-04-30.",
+    "key_points": [
+      "$420.00",
+      "Due 2024-04-30"
+    ]
+  }
+}

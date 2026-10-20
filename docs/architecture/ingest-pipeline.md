@@ -31,7 +31,9 @@ flowchart LR
    indexed (fields and FTS5), flagged attachments are written to the quarantine folder, and the
    embed and enrich jobs are queued. From here on the message is **searchable by keyword**.
 3. **Embed** (`ingest.embed`). Chunk text goes to the embedder and the vectors to the vector store.
-4. **Enrich** (`ingest.enrich`). Each configured enricher runs on the cleaned text.
+4. **Enrich** (`ingest.enrich`). Each enricher runs on the cleaned text, and on the message's
+   headers and attachment metadata. The first-party ones are `summary`, `triage`, `actions` and
+   `inspector` (see below).
 
 Embedding and enrichment are separate jobs because they are slow, can fail for different reasons,
 and can be switched off on their own. With no embedder configured the pipeline is just store, filter
@@ -91,11 +93,35 @@ and account (asking twice queues once):
 Every call a stage makes, or avoids, is recorded in `ai_usage`: stage, model, tokens in and out,
 and whether it was a cache hit. `usage_summary(since)` adds them up per stage and model and
 reports **tokens saved**: what the cached calls would have cost. Embedding tokens are counted
-from the text sent. Enrichment tokens are *estimates* from the tokenizer, because the enricher
-contract does not report them.
+from the text sent. The `enrich` rows are estimates from the tokenizer; each model call an enricher
+makes is also recorded exactly under its own stage (`llm.enrich.summary`, ...) by `generate_cached`.
 
 Enrichment results live in `raw.db`, not `index.db`, because they cost model time and `index.db`
 can be thrown away and rebuilt.
+
+## The enrichers
+
+Each result is small structured data, stored once and reused, so a later question never re-reads
+the body. A result is replaced only after its successor exists, and a version bump of one enricher
+refreshes only that enricher's rows.
+
+| Enricher | Model | Stores |
+| --- | --- | --- |
+| `summary` | yes | One to three sentences and up to five key points. A reply is summarized from its own new text plus the stored summary of the message before it, never that message's body. |
+| `triage` | only if headers cannot say | `category`, `priority` 0-3, `needs_reply`, `waiting_on_others`, a short `reason`, and `source` (`rules` or `llm`). `Auto-Submitted`, `Precedence: bulk`, `List-Id`, `List-Unsubscribe` and a no-reply sender decide the category with no model call. |
+| `actions` | yes | Action items and deadlines, each with a quote and where it sits. A quote that is not in the message is dropped and counted in `dropped`, so an invented task is never stored. |
+| `inspector` | never | SPF, DKIM and DMARC from the topmost `Authentication-Results`, ARC, spam headers, hop count from `Received` headers, date sanity, `Reply-To` against `From`, `List-*` headers, and risky attachment names. Findings are short codes in `warnings`. |
+
+The model-backed ones cut a long message to `ai.enrich_max_input_tokens` by keeping its head and
+tail with a marker between, and say `truncated`. `summary` and `actions` do not ask a model about
+bulk or automated mail (`skip_bulk`, on by default): nobody wrote it to the reader, and it is the
+largest saving there is. Every model call goes through `generate_cached`, so mail is only ever
+fenced `UntrustedText`, answers are validated against a schema, and a rerun is a cache hit.
+Enrichment never marks a message read.
+
+To check a model against the enrichers' fixtures by hand (not in CI):
+`uv run python -m oaken.evals enrich [--enricher NAME]`. It scores properties of the result, not
+exact words.
 
 ## The quarantine folder
 
@@ -132,6 +158,9 @@ store can sit behind it later.
 | `ingest.backfill_queue_cap` | 2000 | Queued `ingest.*` jobs at which a backfill pauses |
 | `ingest.stage_max_attempts` | 8 | Attempts before a stage job is parked |
 | `ingest.embed_concurrency` / `enrich_concurrency` | 1 | Jobs of each stage at once |
+| `ai.enrich_max_input_tokens` | 3000 | Most tokens of one message an LLM enricher is sent |
+| `plugins.<enricher>.enabled` | true | `false` skips that enricher |
+| `plugins.summary.skip_bulk` / `plugins.actions.skip_bulk` | true | Do not ask a model about bulk mail |
 | `ingest.throughput_window_seconds` | 600 | Window for the embedding speed shown in status |
 | `mail.attachments.quarantine` | true | Write flagged attachments to the quarantine folder |
 | `mail.attachments.quarantine_dir` | `quarantine` | Folder, relative to the data folder |

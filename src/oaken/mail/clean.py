@@ -13,6 +13,7 @@ cannot make a pattern slow.
 """
 
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
@@ -175,14 +176,30 @@ def clean(
     )
 
 
+def bulk_signals(headers: Mapping[str, Sequence[str]]) -> tuple[str, ...]:
+    """The bulk or automated-mail signals among ``headers`` (lower-case names, every value), by
+    name: ``list-id``, ``list-unsubscribe``, ``precedence`` and ``auto-submitted``. The cleaner uses
+    them to be stricter with footers, and the enrichers use them to skip work on mail nobody wrote
+    to the reader."""
+
+    def first(name: str) -> str:
+        values = headers.get(name)
+        return values[0].strip() if values else ""
+
+    found = []
+    if first("list-id"):
+        found.append("list-id")
+    if first("list-unsubscribe"):
+        found.append("list-unsubscribe")
+    if first("precedence").lower() in _LIST_PRECEDENCE:
+        found.append("precedence")
+    if (first("auto-submitted") or "no").lower() != "no":
+        found.append("auto-submitted")
+    return tuple(found)
+
+
 def _is_bulk(parsed: ParsedMessage) -> bool:
-    precedence = (parsed.header("precedence") or "").lower()
-    return bool(
-        parsed.list_id
-        or parsed.header("list-unsubscribe")
-        or precedence in _LIST_PRECEDENCE
-        or (parsed.header("auto-submitted") or "no").lower() != "no"
-    )
+    return bool(bulk_signals(parsed.headers))
 
 
 def _compile(patterns: tuple[str, ...], extra: list[str]) -> list[re.Pattern[str]]:

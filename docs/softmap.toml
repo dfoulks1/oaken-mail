@@ -401,11 +401,23 @@ ext = ["Ollama"]
 id = "enrichers"
 name = "Enrichers"
 layer = "plugins"
-status = "planned"
+status = "built"
 prompt = "14"
-summary = "Summary, triage, actions and the header/MIME inspector."
+path = "src/oaken_enrichers"
+summary = "Summary, triage, actions and the header/MIME inspector: first-party enrichers whose results are stored once at ingest. The three that use a model reach it only through ctx.llm and generate_cached."
 uses = ["safety"]
 untrusted = true
+types = [
+  ["SummaryEnricher", "class", "Sentences and key points; a reply is summarized from its new text plus the parent's stored summary."],
+  ["TriageEnricher", "class", "Category, priority and reply flags; header rules decide bulk, automated and no-reply mail with no model call."],
+  ["ActionsEnricher", "class", "Action items and deadlines; an item whose quote is not in the message is dropped."],
+  ["InspectorEnricher", "class", "SPF, DKIM, DMARC, ARC, hops, date, Reply-To, List-* and risky attachments. No model."],
+]
+funcs = [
+  ["PluginContext.llm.generate_cached(builder, *parts, content_hash, account_id)", "The one way a plugin reaches a model; core picks the account's workspace."],
+  ["python -m oaken.evals enrich", "Scores the eval fixtures against the configured model; manual, never CI."],
+]
+notes = ["Built means: the four enrichers run in the real pipeline against FakeLLM, with tests for every rule, the injection fixtures and the cache. Not yet run against a live model: do that with oaken.evals.", "summary and actions skip bulk mail by default (skip_bulk).", "Core does not yet attach an LLM service to the host (no daemon until 16): host.llm_access = WorkspaceLLM(service, raw)."]
 
 [[components]]
 id = "vectorstore"

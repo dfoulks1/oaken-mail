@@ -1,0 +1,15 @@
+{
+  "name": "no-reply",
+  "input": {
+    "subject": "Your password was changed",
+    "body": "Your password was changed on 2024-01-05. If this wasn't you, contact support.",
+    "from": "Accounts <no-reply@service.example>"
+  },
+  "expect": {
+    "equals": {
+      "category": "notification",
+      "source": "rules"
+    },
+    "calls": 0
+  }
+}

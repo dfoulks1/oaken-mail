@@ -13,7 +13,7 @@ tuples are accepted and coerced into these types) and strict about what it hands
 from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
-from typing import Any, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
@@ -22,6 +22,9 @@ from oaken.core.errors import PluginError
 from oaken.core.events import Event, EventBus, PluginEvent
 from oaken.core.settings import Settings
 from oaken.core.untrusted import UntrustedText
+
+if TYPE_CHECKING:  # ``oaken.ai.prompts`` imports this module
+    from oaken.ai.prompts import PromptBuilder
 
 PLUGIN_API_VERSION = 1
 
@@ -78,6 +81,22 @@ class PluginInfo:
     api_version: int
 
 
+class LLMAccess(Protocol):
+    """The one way a plugin reaches a language model: a ``PromptBuilder`` task about mail, as
+    ``UntrustedText`` parts. Core picks the workspace from the account, enforces what it allows,
+    answers a repeated question from its cache and validates the answer against the task's schema.
+    A plugin never sees a backend, a database or a workspace."""
+
+    async def generate_cached(
+        self,
+        builder: "PromptBuilder[Any]",
+        *parts: UntrustedText,
+        content_hash: str,
+        account_id: str | None = None,
+        message_id: str | None = None,
+    ) -> Any: ...
+
+
 @dataclass(frozen=True)
 class PluginContext:
     """Handed to ``start()``. ``config`` is the plugin's own ``[plugins.<name>]`` table."""
@@ -93,6 +112,9 @@ class PluginContext:
     # accounts runs one instance each). ``config`` is then the plugin's table with that account's
     # own settings on top. None for the plugin's shared instance.
     account_id: str | None = None
+    # Core's language-model access (see ``LLMAccess``), for a plugin that ``needs_llm``. None in a
+    # context built without it (most tests); calling it before core has one raises PluginError.
+    llm: LLMAccess | None = None
     _subscriptions: list[Callable[[], None]] = field(
         default_factory=list, repr=False, compare=False
     )
@@ -332,14 +354,36 @@ class LLMBackend(Plugin, Protocol):
 
 
 @dataclass(frozen=True)
+class EnrichAttachment:
+    """What the message says about one attachment. The bytes are never passed to an enricher."""
+
+    filename: UntrustedText | None
+    content_type: str
+    size: int
+    inline: bool = False
+    quarantine: bool = False
+
+
+@dataclass(frozen=True)
 class EnrichInput:
-    """A cleaned message. Everything derived from the mail is ``UntrustedText``."""
+    """A cleaned message. Everything derived from the mail is ``UntrustedText``.
+
+    ``headers`` holds a few display values (``from``). ``raw_headers`` has every header, keys in
+    lower case and every value kept, for a deterministic enricher such as the inspector.
+    ``parent_summary`` is the stored summary of the message this one replies to, when core has
+    one: a reply is summarized from its own new text plus that, never from the parent's body.
+    """
 
     message_id: str
     account_id: str
     subject: UntrustedText
     body: UntrustedText
     headers: dict[str, UntrustedText] = field(default_factory=dict)
+    raw_headers: dict[str, tuple[UntrustedText, ...]] = field(default_factory=dict)
+    attachments: tuple[EnrichAttachment, ...] = ()
+    date: datetime | None = None
+    is_reply: bool = False
+    parent_summary: UntrustedText | None = None
 
 
 @dataclass(frozen=True)

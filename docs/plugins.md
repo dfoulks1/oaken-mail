@@ -118,6 +118,38 @@ schema. Change the `version` whenever the output could change: it is part of the
 new version re-runs the enricher and an unchanged one never does. An enricher that needs a model
 sets `needs_llm=True`.
 
+### What an enricher is given
+
+An `EnrichInput` has the message's cleaned text (`body`), `subject`, a few display `headers`, every
+header in `raw_headers` (lower-case names, all values), the attachments' metadata (`attachments`:
+name, type, size, whether core flagged it; never the bytes), the `date`, whether it `is_reply`, and,
+for a reply, the stored `parent_summary` of the message before it. Everything derived from the mail
+is `UntrustedText`.
+
+### Reaching a model
+
+An enricher never gets a backend. It is handed `ctx.llm` in `start()` and asks through it:
+
+```python
+class Answer(SafeOutput):
+    title: str
+
+TITLE = PromptBuilder("my.title", "1", "Give the email a three-word title.", Answer)
+
+answer = await self.ctx.llm.generate_cached(
+    TITLE, msg.subject, msg.body,
+    content_hash=msg.message_id, account_id=msg.account_id, message_id=msg.message_id,
+)
+```
+
+Core picks the workspace from the account (a `secure` one only reaches a local model), answers a
+repeated question from its cache, validates the reply against `Answer` and records the tokens.
+The instructions are a literal in your source; the mail goes in as `UntrustedText` parts, and a
+lint test fails a module that builds a request any other way. The first-party enrichers
+(`oaken_enrichers`: `summary`, `triage`, `actions`, `inspector`) are the worked examples. Turn one
+off with `[plugins.<name>] enabled = false`; `summary` and `actions` skip bulk mail unless you set
+`skip_bulk = false`.
+
 ## Registering it
 
 A plugin is found through an entry point in its package's `pyproject.toml`. First-party plugins

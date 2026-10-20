@@ -1,0 +1,23 @@
+{
+  "name": "risky-attachment",
+  "input": {
+    "subject": "Invoice",
+    "body": "See attached.",
+    "attachments": [
+      {
+        "filename": "invoice.pdf.exe",
+        "content_type": "application/x-msdownload",
+        "size": 1024
+      }
+    ]
+  },
+  "expect": {
+    "contains_any": {
+      "warnings": [
+        "risky-attachment"
+      ]
+    },
+    "equals": {},
+    "calls": 0
+  }
+}

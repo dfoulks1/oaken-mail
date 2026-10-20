@@ -1,0 +1,30 @@
+{
+  "name": "colleague-asks",
+  "input": {
+    "subject": "Report",
+    "body": "Hi Sam, can you send me the Q1 report before the board meeting on Thursday? I need to read it first.",
+    "from": "Alex <alex@example.com>"
+  },
+  "expect": {
+    "in": {
+      "category": [
+        "work"
+      ],
+      "priority": [
+        2,
+        3
+      ]
+    },
+    "equals": {
+      "needs_reply": true,
+      "source": "llm"
+    }
+  },
+  "fake_reply": {
+    "category": "work",
+    "priority": 3,
+    "needs_reply": true,
+    "waiting_on_others": false,
+    "reason": "A colleague needs the report before Thursday."
+  }
+}

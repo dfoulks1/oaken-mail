@@ -1,0 +1,30 @@
+{
+  "name": "task-with-deadline",
+  "input": {
+    "subject": "Contract",
+    "body": "Hi Sam,\n\nPlease send the signed contract to legal by 2024-03-15. Also, the budget review is on Friday at noon.\n\nThanks,\nAlex"
+  },
+  "expect": {
+    "min_len": {
+      "action_items": 1
+    },
+    "quotes_verbatim": true
+  },
+  "fake_reply": {
+    "action_items": [
+      {
+        "text": "Send the signed contract to legal",
+        "owner": "Sam",
+        "due": "2024-03-15",
+        "quote": "Please send the signed contract to legal by 2024-03-15."
+      }
+    ],
+    "deadlines": [
+      {
+        "text": "Budget review",
+        "date": "Friday at noon",
+        "quote": "the budget review is on Friday at noon"
+      }
+    ]
+  }
+}

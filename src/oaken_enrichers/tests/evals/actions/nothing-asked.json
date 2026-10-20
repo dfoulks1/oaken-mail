@@ -1,0 +1,17 @@
+{
+  "name": "nothing-asked",
+  "input": {
+    "subject": "FYI",
+    "body": "Just letting you know the office is closed on Monday. No action needed."
+  },
+  "expect": {
+    "max_len": {
+      "action_items": 0
+    },
+    "quotes_verbatim": true
+  },
+  "fake_reply": {
+    "action_items": [],
+    "deadlines": []
+  }
+}

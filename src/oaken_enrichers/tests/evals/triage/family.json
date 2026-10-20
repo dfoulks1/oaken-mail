@@ -1,0 +1,25 @@
+{
+  "name": "family",
+  "input": {
+    "subject": "Saturday",
+    "body": "Hey! Are you coming to Mom's birthday dinner on Saturday? Let me know so I can book the table.",
+    "from": "Jo <jo@example.net>"
+  },
+  "expect": {
+    "in": {
+      "category": [
+        "personal"
+      ]
+    },
+    "equals": {
+      "needs_reply": true
+    }
+  },
+  "fake_reply": {
+    "category": "personal",
+    "priority": 2,
+    "needs_reply": true,
+    "waiting_on_others": false,
+    "reason": "Sibling asks about a family dinner."
+  }
+}

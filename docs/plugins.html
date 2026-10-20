@@ -226,6 +226,31 @@ always an <code>UntrustedText</code>, never part of the system text.</p>
 schema. Change the <code>version</code> whenever the output could change: it is part of the cache key, so a
 new version re-runs the enricher and an unchanged one never does. An enricher that needs a model
 sets <code>needs_llm=True</code>.</p>
+<h3 id="what-an-enricher-is-given">What an enricher is given</h3>
+<p>An <code>EnrichInput</code> has the message's cleaned text (<code>body</code>), <code>subject</code>, a few display <code>headers</code>, every
+header in <code>raw_headers</code> (lower-case names, all values), the attachments' metadata (<code>attachments</code>:
+name, type, size, whether core flagged it; never the bytes), the <code>date</code>, whether it <code>is_reply</code>, and,
+for a reply, the stored <code>parent_summary</code> of the message before it. Everything derived from the mail
+is <code>UntrustedText</code>.</p>
+<h3 id="reaching-a-model">Reaching a model</h3>
+<p>An enricher never gets a backend. It is handed <code>ctx.llm</code> in <code>start()</code> and asks through it:</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">class</span><span class="w"> </span><span class="nc">Answer</span><span class="p">(</span><span class="n">SafeOutput</span><span class="p">):</span>
+    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span>
+
+<span class="n">TITLE</span> <span class="o">=</span> <span class="n">PromptBuilder</span><span class="p">(</span><span class="s2">"my.title"</span><span class="p">,</span> <span class="s2">"1"</span><span class="p">,</span> <span class="s2">"Give the email a three-word title."</span><span class="p">,</span> <span class="n">Answer</span><span class="p">)</span>
+
+<span class="n">answer</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">llm</span><span class="o">.</span><span class="n">generate_cached</span><span class="p">(</span>
+    <span class="n">TITLE</span><span class="p">,</span> <span class="n">msg</span><span class="o">.</span><span class="n">subject</span><span class="p">,</span> <span class="n">msg</span><span class="o">.</span><span class="n">body</span><span class="p">,</span>
+    <span class="n">content_hash</span><span class="o">=</span><span class="n">msg</span><span class="o">.</span><span class="n">message_id</span><span class="p">,</span> <span class="n">account_id</span><span class="o">=</span><span class="n">msg</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span> <span class="n">message_id</span><span class="o">=</span><span class="n">msg</span><span class="o">.</span><span class="n">message_id</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<p>Core picks the workspace from the account (a <code>secure</code> one only reaches a local model), answers a
+repeated question from its cache, validates the reply against <code>Answer</code> and records the tokens.
+The instructions are a literal in your source; the mail goes in as <code>UntrustedText</code> parts, and a
+lint test fails a module that builds a request any other way. The first-party enrichers
+(<code>oaken_enrichers</code>: <code>summary</code>, <code>triage</code>, <code>actions</code>, <code>inspector</code>) are the worked examples. Turn one
+off with <code>[plugins.&lt;name&gt;] enabled = false</code>; <code>summary</code> and <code>actions</code> skip bulk mail unless you set
+<code>skip_bulk = false</code>.</p>
 </section>
 <section id="registering-it" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Registering it</h2></div>
 <p>A plugin is found through an entry point in its package's <code>pyproject.toml</code>. First-party plugins
