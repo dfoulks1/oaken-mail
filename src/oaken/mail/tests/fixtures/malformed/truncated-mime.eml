@@ -1,0 +1,17 @@
+From: Alex Rivera <alex@example.com>
+To: Sam Chen <sam@example.org>
+Subject: Truncated
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <m3@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="=_t1"
+
+--=_t1
+Content-Type: text/plain; charset=utf-8
+
+The first part is complete.
+
+--=_t1
+Content-Type: text/html; charset=utf-8
+
+<html><body><p>The second part is cut o

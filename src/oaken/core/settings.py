@@ -83,6 +83,90 @@ class SwarmSettings(_Section):
     default_max_per_hour: int = Field(default=600, ge=1)  # jobs one agent may claim per hour
 
 
+class ThreadingSettings(_Section):
+    """How ``thread_key`` is derived. The standard reference is jwz's threading algorithm."""
+
+    # references: only Message-ID / In-Reply-To / References decide. references+subject also
+    # derives a key from the normalized subject for replies that carry no reference headers.
+    strategy: Literal["references", "references+subject"] = "references+subject"
+    # Reply and forward prefixes removed from the front of a subject (case-insensitive, with an
+    # optional counter such as ``Re[2]:``). Extend this list for other languages or clients.
+    subject_prefixes: list[str] = Field(
+        default_factory=lambda: [
+            "re",
+            "fwd",
+            "fw",
+            "aw",
+            "wg",
+            "sv",
+            "vs",
+            "antw",
+            "tr",
+            "rv",
+            "enc",
+            "res",
+        ]
+    )
+    strip_list_tags: bool = True  # drop leading ``[list-name]`` tags from the subject
+    # Whether the subject-derived key also includes the participants (sender and recipients).
+    fallback_includes_participants: bool = True
+
+
+class CleaningSettings(_Section):
+    """Tuning for the cleaner. Every pattern is a regular expression matched against one line
+    (long lines are cut before matching, so a hostile message cannot make a pattern slow)."""
+
+    # Rule names (see docs/architecture/parsing.md) switched off entirely.
+    disabled_rules: list[str] = Field(default_factory=list)
+    extra_attribution_patterns: list[str] = Field(default_factory=list)
+    extra_footer_patterns: list[str] = Field(default_factory=list)
+    extra_disclaimer_patterns: list[str] = Field(default_factory=list)
+    extra_boilerplate_patterns: list[str] = Field(default_factory=list)
+    extra_closing_patterns: list[str] = Field(default_factory=list)
+    # A signature after a closing phrase ("Thanks,") may be at most this many lines.
+    signature_max_lines: int = Field(default=8, ge=1, le=50)
+    # Use the text/plain alternative when it holds at least this fraction of the HTML's text.
+    plain_min_ratio: float = Field(default=0.5, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def _patterns_compile(self) -> "CleaningSettings":
+        import re
+
+        for name in (
+            "extra_attribution_patterns",
+            "extra_footer_patterns",
+            "extra_disclaimer_patterns",
+            "extra_boilerplate_patterns",
+            "extra_closing_patterns",
+        ):
+            for pattern in getattr(self, name):
+                try:
+                    re.compile(pattern)
+                except re.error as exc:
+                    raise ValueError(f"{name}: bad pattern {pattern!r}: {exc}") from exc
+        return self
+
+
+class AttachmentSettings(_Section):
+    """Attachments are never opened or analysed. A quarantined one is flagged so that nothing
+    previews, serves or extracts it without a deliberate action."""
+
+    extra_quarantine_extensions: list[str] = Field(default_factory=list)
+    extra_quarantine_types: list[str] = Field(default_factory=list)
+    exempt_extensions: list[str] = Field(default_factory=list)  # never quarantined by extension
+
+
+class MailSettings(_Section):
+    threading: ThreadingSettings = ThreadingSettings()
+    cleaning: CleaningSettings = CleaningSettings()
+    attachments: AttachmentSettings = AttachmentSettings()
+    # A local Hugging Face tokenizer.json for exact token counts (for example the file that ships
+    # with your Qwen model). Unset, counts are a cheap estimate. Nothing is ever downloaded.
+    tokenizer_file: str | None = None
+    # A text body longer than this is cut (the full message stays in raw.db) and a warning added.
+    max_text_chars: int = Field(default=2_000_000, ge=1000)
+
+
 class SyncSettings(_Section):
     provider: str = "gmail"
     interval_seconds: int = Field(default=300, ge=1)
@@ -109,6 +193,7 @@ class Settings(BaseSettings):
     ai: AISettings = AISettings()
     jobs: JobsSettings = JobsSettings()
     swarm: SwarmSettings = SwarmSettings()
+    mail: MailSettings = MailSettings()
     sync: SyncSettings = SyncSettings()
     api: APISettings = APISettings()
     log: LogSettings = LogSettings()

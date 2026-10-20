@@ -1,0 +1,12 @@
+From: Alex Rivera <alex@example.com>
+To: Sam Chen <sam@example.org>
+Subject: Windows line endings
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <a6@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Line one.
+Line two.
+
+Line four after a blank line.

@@ -1,0 +1,8 @@
+Spring sale
+
+Everything in the garden department is 30% off until Sunday.
+
+Shop the sale (https://news.example.net/c/1?utm_source=mail)
+Item | Price
+Trowel | $8
+Gloves | $12

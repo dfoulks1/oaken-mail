@@ -1,0 +1,10 @@
+From: Alex Rivera <alex@example.com>
+To: Sam Chen <sam@example.org>
+Subject: Odd charset
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <c4@example.com>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+Content-Type: text/plain; charset=x-no-such-charset
+
+Plain ASCII words in a part with a made-up charset.

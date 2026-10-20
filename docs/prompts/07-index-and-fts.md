@@ -59,3 +59,11 @@ Vectors (08), pipeline orchestration (09).
 Standard report. Include index size vs. `raw.db` size on the synthetic corpus, and
 the legacy comparison: the old `term_freq` table was ~3.0M rows for ~1.1k emails;
 report the equivalent FTS5 size for a similarly sized synthetic corpus.
+
+## Note from prompt 06
+
+`oaken.mail` is pure: call `parse`, `clean` and `thread_key` per message, and clean each
+`ParsedMessage.forwarded` entry separately. Settings live in `[mail.*]`. Join a reply that carries no
+reference headers to the thread with the same `ThreadInfo.subject_key`. A time limit on that
+subject join (so a recurring subject does not merge across months) is the index's job.
+Quarantined attachments are flags in `ParsedMessage.attachments`; store the metadata, never the bytes.

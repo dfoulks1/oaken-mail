@@ -1,0 +1,20 @@
+From: Alex Rivera <alex@example.com>
+To: Sam Chen <sam@example.org>
+Subject: Log excerpt
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <at3@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="=_att_001"
+
+--=_att_001
+Content-Type: text/plain; charset=utf-8
+
+The log excerpt is attached as a file.
+
+--=_att_001
+Content-Type: text/plain; charset=utf-8; name="excerpt.txt"
+Content-Disposition: attachment; filename="excerpt.txt"
+
+2024-03-04 09:00:01 INFO started
+2024-03-04 09:00:02 WARN slow disk
+--=_att_001--

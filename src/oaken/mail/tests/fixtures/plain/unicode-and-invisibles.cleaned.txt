@@ -1,0 +1,7 @@
+Hello world, the soft hyphen and RLO marks should vanish.
+
+Emoji stay: 👨‍👩‍👧 and café stays.
+
+Trailing spaces collapse.
+
+Blank runs collapse.

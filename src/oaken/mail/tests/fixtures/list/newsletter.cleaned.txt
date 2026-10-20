@@ -1,0 +1,7 @@
+This week: three things worth reading.
+
+1. A short history of mailbox formats
+2. Why plain text still wins
+3. Notes on threading
+
+Read them all at https://example.net/weekly/42

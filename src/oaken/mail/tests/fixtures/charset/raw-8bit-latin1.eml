@@ -1,0 +1,10 @@
+From: Alex Rivera <alex@example.com>
+To: Sam Chen <sam@example.org>
+Subject: No charset
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <c5@example.com>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+Content-Type: text/plain
+
+Le café est prêt, sans charset déclaré.

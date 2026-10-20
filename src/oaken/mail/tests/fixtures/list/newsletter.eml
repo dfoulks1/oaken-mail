@@ -1,0 +1,22 @@
+From: The Weekly <hello@example.net>
+To: Sam Chen <sam@example.org>
+Subject: The Weekly #42
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <l2@example.net>
+MIME-Version: 1.0
+List-Id: <weekly.example.net>
+List-Unsubscribe: <https://example.net/u/9>
+Content-Type: text/plain; charset=utf-8
+
+This week: three things worth reading.
+
+1. A short history of mailbox formats
+2. Why plain text still wins
+3. Notes on threading
+
+Read them all at https://example.net/weekly/42
+
+----
+You are receiving this because you subscribed at example.net.
+To unsubscribe, visit https://example.net/u/9
+Update your preferences at https://example.net/prefs

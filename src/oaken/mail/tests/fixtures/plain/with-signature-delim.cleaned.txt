@@ -1,0 +1,2 @@
+Release notes are attached to the wiki page. The main change is the new
+export format; the old one stays available for one more release.

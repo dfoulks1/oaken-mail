@@ -1,0 +1,20 @@
+From: Example Store <news@example.net>
+To: Sam Chen <sam@example.org>
+Subject: Spring sale starts now
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <h2@example.net>
+MIME-Version: 1.0
+List-Unsubscribe: <https://news.example.net/u/abc>
+Precedence: bulk
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<div style="display:none;max-height:0;overflow:hidden">Save 30% this week only -- preheader text nobody should read</div>
+<table width="600"><tr><td><img src="https://news.example.net/logo.png" alt="Example Store"></td></tr>
+<tr><td><h1>Spring sale</h1><p>Everything in the garden department is 30% off until Sunday.</p>
+<p><a href="https://news.example.net/c/1?utm_source=mail">Shop the sale</a></p></td></tr>
+<tr><td><table><tr><th>Item</th><th>Price</th></tr><tr><td>Trowel</td><td>$8</td></tr><tr><td>Gloves</td><td>$12</td></tr></table></td></tr>
+<tr><td><img src="https://news.example.net/p.gif" width="1" height="1"></td></tr>
+<tr><td><p>You are receiving this email because you signed up at example.net.</p>
+<p><a href="https://news.example.net/u/abc">Unsubscribe</a> | <a href="https://news.example.net/prefs">Manage preferences</a></p>
+<p>&copy; 2024 Example Store. All rights reserved.</p></td></tr></table></body></html>

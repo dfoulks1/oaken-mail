@@ -1,0 +1,20 @@
+From: Example Bank <alerts@example.net>
+To: Sam Chen <sam@example.org>
+Subject: Your statement is ready
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <alt2@example.net>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="=_alt_001"
+
+--=_alt_001
+Content-Type: text/plain; charset=utf-8
+
+Your email client does not support HTML. Please view this message in a browser.
+
+--=_alt_001
+Content-Type: text/html; charset=utf-8
+
+<html><body><h2>Your March statement is ready</h2>
+<p>Your statement for the account ending 0042 is available. The closing balance is $1,204.50 and the minimum payment of $25.00 is due on April 3.</p>
+<p>You can review every transaction in the app or on the website.</p></body></html>
+--=_alt_001--

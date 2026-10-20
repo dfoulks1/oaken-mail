@@ -1,0 +1,7 @@
+From: <<not an address
+To: Sam Chen <sam@example.org>
+Subject: Bad headers
+Date: sometime last tuesday
+Message-ID: <m4@example.com>
+
+The headers are broken but the body is fine.

@@ -11,7 +11,9 @@ dependencies = [
     "platformdirs>=4.13.5",
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.1",
+    "selectolax>=1.0.1",
     "structlog>=26.1.0",
+    "tokenizers>=0.23.3",
     "zstandard>=0.25.0",
 ]
 

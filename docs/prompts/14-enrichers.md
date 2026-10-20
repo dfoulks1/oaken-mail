@@ -72,3 +72,9 @@ the user can review them.
 `needs_llm = True` has no way to reach the LLM yet. Decide here how it gets one (suggested: the
 host passes the configured backend through `PluginContext` at `start()`, and enrichers call it only
 through `generate_cached()`). Use `BaseEnricher` / `@enricher`, and run `EnricherContract`.
+
+## Note from prompt 06
+
+The cleaner already reads bulk signals (`List-Id`, `List-Unsubscribe`, `Precedence`,
+`Auto-Submitted`). The header/MIME inspector can reuse them so bulk and automated mail skips the
+expensive enrichers, which is probably the largest CPU saving available.

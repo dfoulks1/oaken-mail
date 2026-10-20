@@ -1,0 +1,32 @@
+From: Alex Rivera <alex@example.com>
+To: Sam Chen <sam@example.org>
+Subject: Invitation: Planning review
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <cal1@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="=_cal_001"
+
+--=_cal_001
+Content-Type: text/plain; charset=utf-8
+
+Alex Rivera invited you to Planning review.
+When: Thursday, March 7, 2024, 10:00-11:00 UTC
+Where: Room 4
+
+--=_cal_001
+Content-Type: text/calendar; charset=utf-8; method=REQUEST
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Example//Calendar//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+UID:evt-1@example.com
+DTSTART:20240307T100000Z
+DTEND:20240307T110000Z
+SUMMARY:Planning review
+ORGANIZER:mailto:alex@example.com
+END:VEVENT
+END:VCALENDAR
+
+--=_cal_001--

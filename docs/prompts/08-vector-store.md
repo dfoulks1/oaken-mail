@@ -53,3 +53,9 @@ Embedding model calls (10), hybrid ranking (15), ANN indexes.
 ## Checkpoint
 
 Standard report. Lead with the spike result and decision.
+
+## Note from prompt 06
+
+Chunk by token budget with `oaken.mail.load_tokenizer(settings.mail)`: exact when
+`mail.tokenizer_file` is set to the embedder's tokenizer, an estimate otherwise (leave headroom for
+the estimate). Counting is far cheaper than the model pass.

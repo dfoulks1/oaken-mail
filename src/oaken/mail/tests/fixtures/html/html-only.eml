@@ -1,0 +1,14 @@
+From: Alex Rivera <alex@example.com>
+To: Sam Chen <sam@example.org>
+Subject: Meeting notes
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <h1@example.com>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+
+<html><head><title>x</title><style>p { color: red }</style></head>
+<body><p>Hi team,</p><p>Notes from today:</p>
+<ul><li>Ship the export format</li><li>Retire the old importer<ul><li>after one release</li></ul></li></ul>
+<p>Details are on the <a href="https://wiki.example.com/notes">wiki page</a>, or at
+<a href="https://wiki.example.com/notes">https://wiki.example.com/notes</a>.</p>
+<p>Thanks,<br>Alex</p></body></html>

@@ -1,0 +1,12 @@
+From: Alex Rivera <alex@example.com>
+To: Sam Chen <sam@example.org>
+Subject: Weekly numbers
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <h3@example.com>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+
+<html><body><p>Numbers for the week:</p>
+<table><tr><th>Team</th><th>Open</th><th>Closed</th></tr>
+<tr><td>Core</td><td>14</td><td>31</td></tr><tr><td>Docs</td><td>3</td><td>9</td></tr></table>
+<p>Ordered steps:</p><ol><li>Triage</li><li>Assign</li><li>Review</li></ol></body></html>

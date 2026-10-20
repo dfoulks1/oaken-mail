@@ -1,0 +1,10 @@
+From: Alex Rivera <alex@example.com>
+To: Sam Chen <sam@example.org>
+Subject: Broken utf-8
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <c6@example.com>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+Content-Type: text/plain; charset=utf-8
+
+Valid start, then bad bytes: ÿþÃ and a valid ending.

@@ -1,0 +1,297 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parsing and cleaning · Oaken Mail</title>
+<meta name="description" content="The parser, the cleaning rules and why each exists, thread keys, the tokenizer, attachments and quarantine, and every setting that tunes them.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Parsing and cleaning · Oaken Mail">
+<meta property="og:description" content="The parser, the cleaning rules and why each exists, thread keys, the tokenizer, attachments and quarantine, and every setting that tunes them.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="../assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">From raw mail to the text a model should actually read</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="overview.html">Architecture overview</a>
+      <a class="doc-link" href="jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="software-map.html">Software map</a>
+      <a class="doc-link" href="swarm.html">The swarm</a>
+      <a class="doc-link" href="storage.html">Raw storage</a>
+      <a class="doc-link current" href="parsing.html" aria-current="page">Parsing and cleaning</a>
+      <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#the-shape-of-it"><span class="num">1</span>The shape of it</a>
+      <a class="nav-link" href="#parsing"><span class="num">2</span>Parsing</a>
+      <a class="nav-link" href="#cleaning"><span class="num">3</span>Cleaning</a>
+      <a class="nav-link" href="#thread-keys"><span class="num">4</span>Thread keys</a>
+      <a class="nav-link" href="#attachments"><span class="num">5</span>Attachments</a>
+      <a class="nav-link" href="#tokens"><span class="num">6</span>Tokens</a>
+      <a class="nav-link" href="#measured-on-the-synthetic-corpus"><span class="num">7</span>Measured on the synthetic corpus</a>
+      <a class="nav-link" href="#settings"><span class="num">8</span>Settings</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <h1 class="display-6">Parsing and cleaning</h1>
+    <p class="lead">A message goes from bytes to structured fields, a thread key and cleaned text with no database, no network and no model involved. Cleaning is where most of the token savings come from.</p>
+  </header>
+
+<section id="the-shape-of-it" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>The shape of it</h2></div>
+<div class="code"><pre class="highlight"><code class="language-text">raw bytes ──parse──▶ ParsedMessage ──clean──▶ CleanedText      (segments, cleaned, counts)
+                          │
+                          └──thread_key──▶ ThreadInfo
+</code></pre></div>
+<p>Everything here is <strong>pure and deterministic</strong>: the same bytes and settings always give the same
+result, nothing is written anywhere, and nothing calls a model. That makes it cheap to run on every
+message at ingest and easy to test. Prompt 07 stores the results in <code>index.db</code>; because the raw
+message is kept, any change to a rule is a rebuild, never a re-download.</p>
+</section>
+<section id="parsing" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Parsing</h2></div>
+<p><code>parse(raw)</code> uses the standard library's <code>email</code> package and <strong>never raises</strong>. Anything it cannot
+read becomes a line in <code>warnings</code>: an unknown or wrong charset (decoded with replacements), a
+missing <code>Date</code>, a multipart with no readable parts (its body is read as text), MIME defects.</p>
+<p>The result has the addresses, <code>Message-ID</code>, <code>In-Reply-To</code> and <code>References</code> (as ids), the subject, the
+date in UTC with the original string, the <code>List-Id</code>, every header (lower-case keys, repeated headers
+kept), the text and HTML bodies, attachment metadata, and any <code>message/rfc822</code> parts parsed as
+messages of their own (<code>forwarded</code>). A forwarded message is content, so ingest cleans each one
+separately.</p>
+</section>
+<section id="cleaning" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Cleaning</h2></div>
+<p><code>clean(parsed)</code> first picks a body: the <code>text/plain</code> part when it holds at least
+<code>plain_min_ratio</code> (half, by default) of the HTML's text, otherwise the HTML converted to text. A
+plain part that only says &quot;view this in your browser&quot; loses to the real HTML.</p>
+<p>It then tags <strong>every line</strong> with exactly one kind and groups neighbours into segments. Only <code>new</code>
+text goes to <code>cleaned</code>. Nothing is thrown away: the full segment list stays on the result, along
+with <code>chars_in</code>, <code>chars_out</code> and token counts, so a rule that is too eager can always be seen.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Rule</th>
+<th>Tags as</th>
+<th>What it does and why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>quote.prefix</code></td>
+<td>quoted</td>
+<td>Lines starting with <code>&gt;</code>. A reply quotes what the reader already has. Text between quote blocks (an interleaved reply) stays new.</td>
+</tr>
+<tr>
+<td><code>quote.attribution</code></td>
+<td>quoted</td>
+<td>An &quot;On … wrote:&quot; line (it may wrap over lines, and has German, French, Spanish, Italian, Portuguese, Dutch and Danish forms). If <code>&gt;</code> lines follow, only they are quoted; if the marks were lost (HTML to text), everything after is. It needs an <code>@</code> or a digit, so &quot;as the author wrote:&quot; is not mistaken for one.</td>
+</tr>
+<tr>
+<td><code>quote.original_marker</code></td>
+<td>quoted</td>
+<td><code>-----Original Message-----</code> and its translations: everything after it is the old message.</td>
+</tr>
+<tr>
+<td><code>quote.header_block</code></td>
+<td>quoted</td>
+<td>An Outlook-style <code>From:</code> / <code>Sent:</code> / <code>To:</code> / <code>Subject:</code> block starts the old message. A block right after a &quot;Forwarded message&quot; line is <strong>not</strong> a quote: a forward's content is what the user sent you.</td>
+</tr>
+<tr>
+<td><code>signature.delimiter</code></td>
+<td>signature</td>
+<td>The <code>-- </code> line and up to 25 lines after it, stopping at a quote.</td>
+</tr>
+<tr>
+<td><code>signature.closing</code></td>
+<td>signature</td>
+<td>A closing phrase (&quot;Thanks,&quot;, &quot;Best regards,&quot;) followed by a short block (at most <code>signature_max_lines</code>, each line under 100 characters) at the end of the new text. The closing phrase itself stays.</td>
+</tr>
+<tr>
+<td><code>footer.list</code></td>
+<td>footer</td>
+<td>Mailing-list and newsletter footers (unsubscribe links, &quot;you are receiving this&quot;, preference links, mailman info, copyright). One hit is enough when the message looks bulk (<code>List-Id</code>, <code>List-Unsubscribe</code>, <code>Precedence</code>, <code>Auto-Submitted</code>); two are needed otherwise, so a personal mail that mentions &quot;unsubscribe&quot; is safe. A separator line just above the footer goes with it.</td>
+</tr>
+<tr>
+<td><code>disclaimer.legal</code></td>
+<td>disclaimer</td>
+<td>Legal and &quot;please consider the environment&quot; paragraphs among the last four. A message that is nothing but a disclaimer is kept, because then it is the message.</td>
+</tr>
+<tr>
+<td><code>boilerplate.stock</code></td>
+<td>boilerplate</td>
+<td>Stock lines: &quot;Sent from my iPhone&quot;, &quot;Get Outlook for iOS&quot;, image placeholders.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Before any rule runs, the text is normalized: line endings, non-breaking spaces, repeated spaces,
+runs of blank lines, control characters, and <strong>invisible characters</strong> (zero-width space, directional
+overrides, byte-order marks, soft hyphens). Those are used to hide text from readers and reorder
+it, and they cost tokens. The zero-width joiners that emoji and some scripts need are kept.</p>
+<h3 id="html-to-text">HTML to text</h3>
+<p>HTML goes through <code>selectolax</code> (the lexbor parser: fast, forgiving, one dependency). It drops
+<code>script</code>, <code>style</code>, <code>head</code>, hidden elements (preheaders: <code>display:none</code>, <code>max-height:0</code>,
+<code>mso-hide:all</code> and friends) and tracking pixels. Links become <code>text (url)</code> only when the text
+differs from the URL. Lists keep <code>-</code> and <code>1.</code> markers, a table with several columns becomes
+<code>a | b</code> rows, a layout table becomes plain text, and quoted blocks (<code>blockquote</code>, Gmail's
+<code>gmail_quote</code>) get <code>&gt; </code> markers so the cleaner sees the same thing it sees in plain text.</p>
+</section>
+<section id="thread-keys" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Thread keys</h2></div>
+<p><code>thread_key(parsed)</code> gives a stable key from one message alone, so it can be recomputed any time.
+The reference design is <a href="https://www.jwz.org/doc/threading.html">jwz's threading algorithm</a>.</p>
+<ul>
+<li>A reply carries the root's id first in <code>References</code>, so every message in a chain shares the key
+<code>mid:&lt;root id&gt;</code>. Two threads with the same subject but different roots never merge.</li>
+<li>With no <code>References</code>, <code>In-Reply-To</code> names the parent, and with neither, the message's own id is
+the key.</li>
+<li>A reply with no reference headers at all (some clients drop them) falls back to a hash of the
+normalized subject and the participants. <code>subject_key</code> is always available, so the index can
+attach such a reply to the thread whose first message has the same subject key.</li>
+<li>A limit such as &quot;do not merge a recurring subject across months&quot; needs a look-up, so it belongs
+to the index (prompt 07), not to this stateless function.</li>
+</ul>
+</section>
+<section id="attachments" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Attachments</h2></div>
+<p>Oaken analyses email, not attachments. The parser records each attachment's filename, type, size,
+<code>Content-ID</code>, whether it is inline, and where it sits in the message (<code>part_path</code>). It does not
+decode or extract any bytes.</p>
+<ul>
+<li><strong>No copy.</strong> The bytes are already inside the raw message, in <code>raw.db</code> or in the LFS folder.
+<code>read_attachment(raw, part_path)</code> is the explicit door to them, and nothing in ingest calls it.</li>
+<li><strong>Quarantine.</strong> An attachment is flagged <code>quarantine</code> when its extension or declared type is on
+the risk list (executables, scripts, macro-enabled Office files, archives, disk images), or its
+filename hides its type with a right-to-left override. &quot;invoice.pdf.exe&quot; is judged on <code>exe</code>. The
+flag means &quot;never opened, previewed or served inline without a deliberate action&quot;.</li>
+<li><strong>Extractors are opt-in.</strong> <code>AttachmentExtractor</code> is the interface a future &quot;analyse this
+attachment&quot; request would use. Nothing implements it by default, and nothing in ingest calls it.</li>
+</ul>
+</section>
+<section id="tokens" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Tokens</h2></div>
+<p>Counting is cheap, and it is <strong>not</strong> done by a model. <code>Tokenizer.count(text)</code> returns a number, so
+it cannot carry an instruction anywhere. By default counts are an estimate (about one per short
+word, label &quot;estimate&quot;). Set <code>mail.tokenizer_file</code> to a local Hugging Face <code>tokenizer.json</code>, such as
+the one shipped with your Qwen model, for exact counts through the <code>tokenizers</code> package. Nothing is
+ever downloaded. <code>CleanedText</code> carries <code>tokens_in</code> and <code>tokens_out</code>.</p>
+<p>Mail text reaches a model only through <code>CleanedText.untrusted()</code>, which returns an <code>UntrustedText</code>.</p>
+</section>
+<section id="measured-on-the-synthetic-corpus" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>Measured on the synthetic corpus</h2></div>
+<p>The test suite parses and cleans 52 hand-written fixtures and prints this table on every run.
+These are synthetic messages, so read them as the shape of the saving and not a promise:</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Class</th>
+<th>Characters kept</th>
+<th>Tokens kept</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Reply chains</td>
+<td>26%</td>
+<td>22%</td>
+</tr>
+<tr>
+<td>Legal disclaimers</td>
+<td>37%</td>
+<td>39%</td>
+</tr>
+<tr>
+<td>Mailing lists</td>
+<td>54%</td>
+<td>42%</td>
+</tr>
+<tr>
+<td>HTML (marketing, tables)</td>
+<td>68%</td>
+<td>67%</td>
+</tr>
+<tr>
+<td>Plain (signatures, mobile)</td>
+<td>78%</td>
+<td>77%</td>
+</tr>
+<tr>
+<td>Forwards</td>
+<td>99%</td>
+<td>99%</td>
+</tr>
+<tr>
+<td>Everything else (charsets, calendar, bounces, threads, attachments)</td>
+<td>100%</td>
+<td>100%</td>
+</tr>
+</tbody>
+</table></div>
+<p>Cleaning one message takes well under a millisecond here, so tokenizing and cleaning do not bog the
+machine down; the time is in the model.</p>
+</section>
+<section id="settings" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>Settings</h2></div>
+<div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[mail]</span>
+<span class="n">tokenizer_file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"~/models/qwen3/tokenizer.json"</span><span class="w">   </span><span class="c1"># optional; unset means an estimate</span>
+<span class="n">max_text_chars</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2000000</span><span class="w">                           </span><span class="c1"># a longer body is cut (raw.db keeps it all)</span>
+
+<span class="k">[mail.threading]</span>
+<span class="n">strategy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"references+subject"</span><span class="w">        </span><span class="c1"># or "references"</span>
+<span class="n">subject_prefixes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"re"</span><span class="p">,</span><span class="w"> </span><span class="s2">"fwd"</span><span class="p">,</span><span class="w"> </span><span class="s2">"fw"</span><span class="p">,</span><span class="w"> </span><span class="s2">"aw"</span><span class="p">,</span><span class="w"> </span><span class="s2">"wg"</span><span class="p">,</span><span class="w"> </span><span class="s2">"sv"</span><span class="p">,</span><span class="w"> </span><span class="s2">"vs"</span><span class="p">,</span><span class="w"> </span><span class="s2">"antw"</span><span class="p">,</span><span class="w"> </span><span class="s2">"tr"</span><span class="p">,</span><span class="w"> </span><span class="s2">"rv"</span><span class="p">,</span><span class="w"> </span><span class="s2">"enc"</span><span class="p">,</span><span class="w"> </span><span class="s2">"res"</span><span class="p">]</span>
+<span class="n">strip_list_tags</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">fallback_includes_participants</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+
+<span class="k">[mail.cleaning]</span>
+<span class="n">disabled_rules</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span><span class="w">                    </span><span class="c1"># e.g. ["signature.closing"]</span>
+<span class="n">extra_attribution_patterns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span><span class="w">        </span><span class="c1"># regular expressions, one line each</span>
+<span class="n">extra_footer_patterns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+<span class="n">extra_disclaimer_patterns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+<span class="n">extra_boilerplate_patterns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+<span class="n">extra_closing_patterns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+<span class="n">signature_max_lines</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">8</span>
+<span class="n">plain_min_ratio</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5</span>
+
+<span class="k">[mail.attachments]</span>
+<span class="n">extra_quarantine_extensions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+<span class="n">extra_quarantine_types</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+<span class="n">exempt_extensions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+</code></pre></div>
+<p>Patterns are checked against one line at a time and only its first 500 characters, so a hostile
+message cannot make a pattern slow. A pattern that does not compile is a configuration error when
+settings load.</p>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

@@ -233,3 +233,6 @@ client_secret*.json
 node_modules/
 site/
 .claude/settings.local.json
+
+# Synthetic test fixtures are committed (no real mail; see docs/architecture/parsing.md).
+!src/oaken/mail/tests/fixtures/**/*.eml

@@ -1,0 +1,1 @@
+Valid start, then bad bytes: ��� and a valid ending.

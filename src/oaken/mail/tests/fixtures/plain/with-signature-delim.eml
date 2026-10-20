@@ -1,0 +1,15 @@
+From: Alex Rivera <alex@example.com>
+To: Sam Chen <sam@example.org>
+Subject: Release notes
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <a2@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Release notes are attached to the wiki page. The main change is the new
+export format; the old one stays available for one more release.
+
+-- 
+Alex Rivera
+Platform Engineering
+alex@example.com | +1 555 0100

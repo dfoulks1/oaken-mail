@@ -174,11 +174,27 @@ untrusted = true
 id = "parsing"
 name = "Parsing"
 layer = "ingest"
-status = "planned"
+status = "built"
 prompt = "06"
-summary = "RFC 822 to structured fields and cleaned text (quotes, signatures and boilerplate removed); threading keys."
+path = "src/oaken/mail"
+summary = "RFC 822 to structured fields and cleaned text (quotes, signatures and boilerplate removed); thread keys; token counts. Pure and deterministic: no database, no network, no model."
 uses = []
 untrusted = true
+types = [
+  ["ParsedMessage", "frozen dataclass", "Headers, addresses, ids, UTC date, text and HTML bodies, attachment metadata, forwarded messages and warnings. parse() never raises."],
+  ["CleanedText", "frozen dataclass", "Tagged segments, the cleaned text (new content only), chars and tokens in and out, and untrusted() for the model boundary."],
+  ["ThreadInfo", "frozen dataclass", "The thread key, a subject key for the index to join reference-less replies, and how the key was derived."],
+  ["AttachmentInfo", "frozen dataclass", "Filename, type, size, content-id, inline, quarantine flag and part path. Never the bytes."],
+  ["Tokenizer", "Protocol", "count(text) -> int. An estimate by default; exact from a local tokenizer.json."],
+]
+funcs = [
+  ["parse(raw, settings) -> ParsedMessage", "Standard-library parser with policy.default; malformed mail becomes warnings."],
+  ["clean(parsed, settings, tokenizer) -> CleanedText", "Pick plain or HTML, then tag quotes, signatures, footers, disclaimers and boilerplate by named rules."],
+  ["thread_key(parsed, settings) -> ThreadInfo", "Stateless key from References, In-Reply-To or Message-ID, with a configurable subject fallback."],
+  ["html_to_text(html) -> str", "selectolax: drops scripts, hidden preheaders and tracking pixels; keeps lists, tables, quotes and links."],
+  ["read_attachment(raw, part_path) -> bytes", "The explicit, on-demand door to an attachment's bytes; nothing in ingest calls it."],
+]
+notes = ["Every cleaning rule has a name and can be switched off or extended in [mail.cleaning].", "Attachments are flagged for quarantine by name and type and are never analysed unless asked."]
 
 # --- Runtime -----------------------------------------------------------------------------
 [[components]]

@@ -1,0 +1,10 @@
+From: Alex Rivera <alex@example.com>
+To: Sam Chen <sam@example.org>
+Received: from a.example.com by b.example.org
+Received: from b.example.org by c.example.net
+Subject: Duplicates
+Subject: A second subject
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <m5@example.com>
+
+Two Received headers and two Subject headers.

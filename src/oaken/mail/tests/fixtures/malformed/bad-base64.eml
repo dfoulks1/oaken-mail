@@ -1,0 +1,10 @@
+From: Alex Rivera <alex@example.com>
+To: Sam Chen <sam@example.org>
+Subject: Bad base64
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <m6@example.com>
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Type: text/plain; charset=utf-8
+
+SGVsbG8gd29ybGQ!!!not-base64===

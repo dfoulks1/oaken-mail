@@ -1,0 +1,28 @@
+From: Alex Rivera <alex@example.com>
+To: Sam Chen <sam@example.org>
+Subject: Invoice
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <at2@example.net>
+MIME-Version: 1.0
+Content-Type: multipart/related; boundary="=_att_001"
+
+--=_att_001
+Content-Type: text/html; charset=utf-8
+
+<html><body><p>Your invoice is attached.</p><img src="cid:logo1@example.net"></body></html>
+--=_att_001
+Content-Type: image/png; name="logo.png"
+Content-Disposition: inline; filename="logo.png"
+Content-ID: <logo1@example.net>
+Content-Transfer-Encoding: base64
+
+c3ludGhldGljIHBuZyBieXRlc3N5bnRoZXRpYyBwbmcgYnl0ZXNzeW50aGV0aWMgcG5nIGJ5dGVz
+c3ludGhldGljIHBuZyBieXRlcw==
+--=_att_001
+Content-Type: application/octet-stream; name="invoice.pdf.exe"
+Content-Disposition: attachment; filename="invoice.pdf.exe"
+Content-Transfer-Encoding: base64
+
+TVogc3ludGhldGljIGV4ZWN1dGFibGUgYnl0ZXNNWiBzeW50aGV0aWMgZXhlY3V0YWJsZSBieXRl
+c01aIHN5bnRoZXRpYyBleGVjdXRhYmxlIGJ5dGVz
+--=_att_001--

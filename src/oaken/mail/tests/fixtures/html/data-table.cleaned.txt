@@ -1,0 +1,11 @@
+Numbers for the week:
+
+Team | Open | Closed
+Core | 14 | 31
+Docs | 3 | 9
+
+Ordered steps:
+
+1. Triage
+2. Assign
+3. Review

@@ -1,0 +1,6 @@
+I would like to propose a new export format based on line-delimited JSON.
+It streams, it diffs well, and it is trivial to parse.
+
+Comments welcome before the end of the week.
+
+Pat

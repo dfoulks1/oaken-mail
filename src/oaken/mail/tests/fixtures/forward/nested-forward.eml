@@ -1,0 +1,47 @@
+From: Alex Rivera <alex@example.com>
+To: Sam Chen <sam@example.org>
+Subject: Fwd: Fwd: Vendor quote
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <f3@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="=_fwd_001"
+
+--=_fwd_001
+Content-Type: text/plain; charset=utf-8
+
+See below, forwarded twice now.
+
+--=_fwd_001
+Content-Type: message/rfc822
+Content-Disposition: attachment
+
+From: Sam Chen <sam@example.org>
+To: Lee Park <lee@example.org>
+Subject: Fwd: Vendor quote
+Date: Sat, 02 Mar 2024 08:00:00 +0000
+Message-ID: <inner0@example.org>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="=_fwd_002"
+
+--=_fwd_002
+Content-Type: text/plain; charset=utf-8
+
+Passing this along.
+
+--=_fwd_002
+Content-Type: message/rfc822
+Content-Disposition: attachment
+
+From: Pat Doe <pat@example.net>
+To: Alex Rivera <alex@example.com>
+Subject: Vendor quote
+Date: Fri, 01 Mar 2024 14:00:00 +0000
+Message-ID: <inner1@example.net>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Our quote for the annual licence is $12,000, valid until the end of March.
+
+--=_fwd_002--
+
+--=_fwd_001--

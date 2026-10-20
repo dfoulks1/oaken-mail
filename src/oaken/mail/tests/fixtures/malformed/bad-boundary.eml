@@ -1,0 +1,13 @@
+From: Alex Rivera <alex@example.com>
+To: Sam Chen <sam@example.org>
+Subject: Bad boundary
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <m2@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="=_missing"
+
+--=_other
+Content-Type: text/plain
+
+Body under the wrong boundary.
+--=_other--

@@ -1,0 +1,11 @@
+Hi team,
+
+Notes from today:
+
+- Ship the export format
+- Retire the old importer
+  - after one release
+
+Details are on the wiki page (https://wiki.example.com/notes), or at https://wiki.example.com/notes.
+
+Thanks,

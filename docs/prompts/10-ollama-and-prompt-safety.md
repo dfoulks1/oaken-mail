@@ -71,3 +71,10 @@ Standard report. Include the exact default model names you propose and why.
 **Note from prompt 04:** `core/untrusted.py` already exists with the bare type (immutable, no
 `__str__`, `unwrap()`, no text in `repr`). Add `render(label=...)` and the prompt builder to it;
 the plugin contracts (`LLMRequest.user`, `EnrichInput`) already accept `UntrustedText`.
+
+## Note from prompt 06
+
+`CleanedText.untrusted()` is the door from parsed mail to a model. Token counts are available
+before any model call, so routing (skip a very short message, map-reduce a very long one) can be
+decided deterministically. A token count is a number: it cannot carry an instruction, but it does
+not make text safe either; the `UntrustedText` rules still apply.

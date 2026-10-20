@@ -1,0 +1,21 @@
+From: Alex Rivera <alex@example.com>
+To: Sam Chen <sam@example.org>
+Subject: Agenda
+Date: Mon, 04 Mar 2024 09:15:00 +0000
+Message-ID: <alt1@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="=_alt_001"
+
+--=_alt_001
+Content-Type: text/plain; charset=utf-8
+
+Agenda for Friday:
+1. Roadmap review
+2. Hiring plan
+3. Open questions
+
+--=_alt_001
+Content-Type: text/html; charset=utf-8
+
+<html><body><p>Agenda for Friday:</p><ol><li>Roadmap review</li><li>Hiring plan</li><li>Open questions</li></ol></body></html>
+--=_alt_001--

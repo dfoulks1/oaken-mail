@@ -60,3 +60,26 @@ Writing to any DB (07), language detection, attachment content extraction.
 
 Standard report. Include a table of average cleaned/original size ratio per fixture
 class so the user can see the expected token savings.
+
+## Built differently
+
+- **Settings, not constants.** Threading and cleaning are tuned in `[mail.threading]` and
+  `[mail.cleaning]` (prefix lists, extra patterns, disabled rules, signature length), validated when
+  settings load. Rules have names (`quote.prefix`, `footer.list`, ...).
+- **No "drop at most 90%" guard.** Every segment is kept and tagged, so nothing is hidden.
+- **Attachments are metadata only, with a quarantine flag.** The default `text/plain` extractor
+  was dropped: `AttachmentExtractor` is an interface that nothing implements or calls by default.
+  `read_attachment(raw, part_path)` fetches bytes on explicit request.
+- **Token counts.** `tokens_in` and `tokens_out` come from a `Tokenizer`: an estimate by default,
+  exact from a local `tokenizer.json` (`mail.tokenizer_file`, the `tokenizers` package). Nothing is
+  downloaded. Dependencies added: `selectolax` and `tokenizers`.
+- **Fixtures live next to the code** (`src/oaken/mail/tests/fixtures/`), with a golden
+  `.cleaned.txt` beside each `.eml`; `OAKEN_UPDATE_GOLDENS=1 pytest` regenerates them.
+- **The subject-fallback time window is not here.** It needs a look-up, so it belongs to the index.
+
+## Note from prompt 06
+
+Clean each entry of `ParsedMessage.forwarded` separately: a forwarded message is content, but
+`clean()` of the outer message does not include it. For a reply with no reference headers,
+`ThreadInfo.subject_key` is the hint for attaching it to the thread whose first message has the
+same subject key. Store `CleanedText.tokens_out` and `chars_out`; the migrations continue at `0005`.
