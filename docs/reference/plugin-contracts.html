@@ -36,6 +36,7 @@
     <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
       <div class="label">Start</div>
       <a class="doc-link" href="../providers/gmail.html">Connect Gmail</a>
+      <a class="doc-link" href="../providers/smtp.html">Send through your own SMTP server</a>
       <div class="label">Concepts</div>
       <a class="doc-link" href="../architecture/overview.html">Architecture overview</a>
       <a class="doc-link" href="../architecture/jobs.html">Events, jobs and the scheduler</a>
@@ -584,7 +585,7 @@
 </code></pre></div>
 <p>A cheap liveness check, polled periodically by the host.</p>
 <h3 id="provider"><code>Provider</code></h3>
-<p>A mail source. Capabilities: <code>auth</code>, <code>sync.pull</code>, <code>flags.write</code>, <code>send</code>.</p>
+<p>A mail source or a way to send. Capabilities: <code>auth</code>, <code>sync.pull</code>, <code>flags.write</code>, <code>send</code>. A provider declares at least <code>sync.pull</code> or <code>send</code>: a send-only provider (an SMTP server) has no mail to pull.</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">authenticate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">PluginContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 <p>Make sure the plugin can talk to the service (capability <code>auth</code>).</p>
@@ -647,7 +648,7 @@
 <section id="base-classes" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Base classes</h2></div>
 <p>Optional. They supply defaults so a plugin overrides only what it does.</p>
 <h3 id="baseprovider"><code>BaseProvider</code></h3>
-<p>Override <code>pull</code> at least. Add <code>authenticate</code> and <code>set_flags</code> as the service allows. Capabilities come from what you override (<code>pull</code> is <code>sync.pull</code>, <code>set_flags</code> is <code>flags.write</code>). To state them yourself, set <code>capabilities = frozenset({...})</code>; the host rejects a capability whose method you did not write.</p>
+<p>Override <code>pull</code> (a mail source) or <code>send</code> (a sender) at least. Add <code>authenticate</code> and <code>set_flags</code> as the service allows. Capabilities come from what you override (<code>pull</code> is <code>sync.pull</code>, <code>set_flags</code> is <code>flags.write</code>). To state them yourself, set <code>capabilities = frozenset({...})</code>; the host rejects a capability whose method you did not write.</p>
 <p>Set:</p>
 <ul>
 <li><code>kind: ClassVar[PluginKind] = 'provider'</code></li>

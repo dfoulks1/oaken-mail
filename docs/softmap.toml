@@ -578,6 +578,29 @@ funcs = [
 ]
 notes = ["Scope is gmail.modify only; no permanent delete and no drafts.", "invalid_grant sets needs re-authorization, publishes an event and stops asking until the token changes. A Testing-mode Google app expires tokens in 7 days.", "Spam and Trash are never synced; moving a message there reports it deleted.", "Test live later: the fake server proves the requests, not that Google accepts them."]
 
+[[components]]
+id = "smtp"
+name = "SMTP send plugin"
+layer = "plugins"
+status = "built"
+prompt = "11b"
+path = "src/oaken_smtp"
+summary = "A provider that only sends: it submits a message through your own SMTP server over STARTTLS or implicit TLS, never in the clear. It declares only auth and send. The password lives only in the OS keyring."
+uses = []
+ext = ["SMTP server", "OS keyring"]
+types = [
+  ["SmtpProvider", "class", "The oaken.providers plugin: authenticate (log in once, send nothing) and send. One connection per send."],
+  ["SendFailed", "exception", "What a refused or failed send raises: accepted and refused recipients with the server's codes, and transient (4xx, network) versus permanent (5xx, TLS)."],
+  ["AuthRequired", "exception", "The password is missing or was rejected; storing a new one fixes it, retrying does not."],
+  ["KeyringStore", "class", "The password in the OS keyring (service oaken, user smtp:ACCOUNT); no keyring means a clear error, never a file."],
+  ["SmtpConfig", "pydantic model", "[plugins.smtp]: host, port, security (starttls or tls only), username, from_address, account, timeout."],
+]
+funcs = [
+  ["prepare(raw, from_address)", "The envelope and bytes to submit: Bcc goes to the envelope only and is removed from the headers, a Message-ID is added if missing, nothing else changes."],
+  ["SmtpProvider.send(raw)", "Returns the Message-ID. A partial refusal raises SendFailed listing who got it, so a retry can skip them."],
+]
+notes = ["There is no plaintext option. A server that does not offer STARTTLS is refused before the password is sent, and certificates are always checked.", "A wrong password (530, 534, 535, 538) makes the plugin unhealthy and publishes an event; no attempt is made again until a different password is stored.", "Test live later: the in-process fake server proves the protocol handling, not that your provider accepts it."]
+
 # --- Project tooling ---------------------------------------------------------------------
 [[components]]
 id = "tooling"

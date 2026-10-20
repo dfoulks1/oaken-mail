@@ -36,6 +36,7 @@
     <div class="docnav"><a class="home-link" href="index.html">&#8962; Home</a>
       <div class="label">Start</div>
       <a class="doc-link" href="providers/gmail.html">Connect Gmail</a>
+      <a class="doc-link" href="providers/smtp.html">Send through your own SMTP server</a>
       <div class="label">Concepts</div>
       <a class="doc-link" href="architecture/overview.html">Architecture overview</a>
       <a class="doc-link" href="architecture/jobs.html">Events, jobs and the scheduler</a>
@@ -154,7 +155,7 @@ is no second list to keep in step:</p>
 <tbody>
 <tr>
 <td><code>pull(cursor)</code></td>
-<td><code>sync.pull</code> (required for a provider)</td>
+<td><code>sync.pull</code> (a provider needs this or <code>send</code>)</td>
 </tr>
 <tr>
 <td><code>authenticate(ctx)</code></td>
@@ -281,6 +282,10 @@ credential as an unhealthy <code>health()</code> plus a plugin event instead of 
 <code>authenticate</code>, <code>pull</code>, <code>set_flags</code> and <code>send</code>, so it declares all four capabilities. Its tests run
 the shared <code>ProviderContract</code> against an in-memory fake Google. See <a href="providers/gmail.html">Connect
 Gmail</a>.</p>
+<p>A provider does not have to read mail. <code>oaken_smtp</code> declares only <code>auth</code> and <code>send</code>: it is a provider
+that sends through your own SMTP server, with the password in the keyring. A provider must implement
+<code>pull</code> or <code>send</code>, and the contract suite checks only the capabilities a plugin declares. See <a href="providers/smtp.html">Send
+through your own SMTP server</a>.</p>
 </section>
 <section id="plugin-events" class="doc-section"><div class="section-head"><span class="section-num">11</span><h2>Plugin events</h2></div>
 <p>Core announces what happens on an event bus, and a plugin can announce its own. Subclass

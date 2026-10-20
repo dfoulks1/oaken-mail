@@ -156,9 +156,18 @@ def test_capabilities_are_inferred_from_overrides_and_extra_methods_are_not_clai
     assert not problems and info is not None and info.capabilities == {"sync.pull"}
 
 
-def test_a_provider_with_no_pull_is_rejected() -> None:
+def test_a_provider_that_does_nothing_is_rejected() -> None:
     _, problems = check_plugin("provider", "p", BaseProvider())
-    assert any("must implement pull" in p for p in problems)
+    assert any("must implement pull" in p and "send()" in p for p in problems)
+
+
+def test_a_provider_may_only_send() -> None:
+    class SendOnly(BaseProvider):
+        async def send(self, raw_bytes: bytes) -> str:
+            return "id"
+
+    info, problems = check_plugin("provider", "p", SendOnly())
+    assert not problems and info is not None and info.capabilities == {"send"}
 
 
 def test_untrusted_text_has_no_implicit_str_and_hides_itself_in_repr() -> None:

@@ -43,8 +43,11 @@ def check_plugin(kind: PluginKind, name: str, obj: object) -> tuple[PluginInfo |
             problems.append(f"unknown capability {cap!r} for a {kind} (allowed: {allowed})")
         elif not is_implemented(obj, known[cap]):
             problems.append(f"declares {cap!r} but does not implement {known[cap]}()")
-    if kind == "provider" and "sync.pull" not in caps:
-        problems.append("a provider must implement pull() (capability 'sync.pull')")
+    if kind == "provider" and not caps & {"sync.pull", "send"}:
+        problems.append(
+            "a provider must implement pull() (capability 'sync.pull') "
+            "or send() (capability 'send')"
+        )
 
     for member in REQUIRED_MEMBERS[kind]:
         if not hasattr(obj, member):

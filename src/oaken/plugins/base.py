@@ -75,7 +75,8 @@ class _Base:
 
 
 class BaseProvider(_Base):
-    """Override ``pull`` at least. Add ``authenticate`` and ``set_flags`` as the service allows.
+    """Override ``pull`` (a mail source) or ``send`` (a sender) at least. Add ``authenticate`` and
+    ``set_flags`` as the service allows.
 
     Capabilities come from what you override (``pull`` is ``sync.pull``, ``set_flags`` is
     ``flags.write``). To state them yourself, set ``capabilities = frozenset({...})``; the host

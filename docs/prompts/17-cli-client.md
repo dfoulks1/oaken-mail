@@ -129,4 +129,7 @@ same commit (see `00-context.md`).
 | 11 | `list_labels`, `create_label`, `rename_label`, `delete_label` | `oaken labels [list\|create\|rename\|delete]` | Gmail labels; system labels refuse rename and delete. Confirm before delete. |
 | 11 | `trash`, `untrash`, `archive`, `star`, `set_flags` | `oaken mail trash\|untrash\|archive\|star ID...` | Per-id results; a partial failure lists the ids that did not change. |
 | 11 | `send` | (not in 11) | Sending goes through the outbox, audit and confirm step in a later prompt; never over MCP. |
+| 11b | SMTP password (`SmtpProvider.set_password`) | `oaken auth smtp [--account NAME]` | Reads the password without echoing it, stores it in the keyring and says so. Never prints it, never takes it as an argument. |
+| 11b | SMTP health (`needs a new password`) | `oaken doctor` / `oaken accounts` | Shows the needs-a-new-password state, and the command to fix it. |
+| 11b | `authenticate` | `oaken auth smtp --check` | Connects, requires TLS and logs in; sends nothing. |
 

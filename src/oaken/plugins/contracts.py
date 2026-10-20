@@ -178,7 +178,9 @@ class PullBatch:
 
 @runtime_checkable
 class Provider(Plugin, Protocol):
-    """A mail source. Capabilities: ``auth``, ``sync.pull``, ``flags.write``, ``send``."""
+    """A mail source or a way to send. Capabilities: ``auth``, ``sync.pull``, ``flags.write``,
+    ``send``. A provider declares at least ``sync.pull`` or ``send``: a send-only provider (an SMTP
+    server) has no mail to pull."""
 
     async def authenticate(self, ctx: PluginContext) -> None:
         """Make sure the plugin can talk to the service (capability ``auth``)."""

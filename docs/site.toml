@@ -79,6 +79,10 @@ id = "providers/gmail"
 file = "providers/gmail.md"
 
 [[pages]]
+id = "providers/smtp"
+file = "providers/smtp.md"
+
+[[pages]]
 id = "plugins"
 file = "plugins.md"
 

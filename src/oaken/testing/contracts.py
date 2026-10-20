@@ -97,7 +97,14 @@ async def _pull_all(provider: Any, cursor: str | None) -> tuple[list[Any], str |
     return batches, last
 
 
+def _pulls(provider: Any) -> bool:
+    """A send-only provider has nothing to pull, so the pull rules do not apply to it."""
+    return "sync.pull" in declared_capabilities(provider, "provider")
+
+
 async def check_provider_pulls_everything(provider: Any, ids: set[str]) -> None:
+    if not _pulls(provider):
+        return
     batches, cursor = await _pull_all(provider, None)
     pulled = [m.provider_id for b in batches for m in b.messages]
     assert len(pulled) == len(set(pulled)), "a message was delivered twice in one pull"
@@ -107,6 +114,8 @@ async def check_provider_pulls_everything(provider: Any, ids: set[str]) -> None:
 
 
 async def check_provider_resumes_from_cursor(provider: Any, ids: set[str]) -> None:
+    if not _pulls(provider):
+        return
     _, cursor = await _pull_all(provider, None)
     batches, _ = await _pull_all(provider, cursor)
     again = [m.provider_id for b in batches for m in b.messages]

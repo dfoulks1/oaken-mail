@@ -1,0 +1,173 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Send through your own SMTP server · Oaken Mail</title>
+<meta name="description" content="Configure the SMTP send plugin: host, port, STARTTLS or TLS, the keyring password, what happens to Bcc, how failures are reported, and a first live check.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Send through your own SMTP server · Oaken Mail">
+<meta property="og:description" content="Configure the SMTP send plugin: host, port, STARTTLS or TLS, the keyring password, what happens to Bcc, how failures are reported, and a first live check.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="../assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">A send-only provider with the password in your keyring and TLS always on</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Start</div>
+      <a class="doc-link" href="gmail.html">Connect Gmail</a>
+      <a class="doc-link current" href="smtp.html" aria-current="page">Send through your own SMTP server</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="../architecture/overview.html">Architecture overview</a>
+      <a class="doc-link" href="../architecture/jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="../architecture/software-map.html">Software map</a>
+      <a class="doc-link" href="../architecture/swarm.html">The swarm</a>
+      <a class="doc-link" href="../architecture/storage.html">Raw storage</a>
+      <a class="doc-link" href="../architecture/parsing.html">Parsing and cleaning</a>
+      <a class="doc-link" href="../architecture/sieve.html">Sieve filtering</a>
+      <a class="doc-link" href="../architecture/index.html">The search index</a>
+      <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <a class="doc-link" href="../architecture/vectors.html">The vector store</a>
+      <a class="doc-link" href="../architecture/ingest-pipeline.html">The ingest pipeline</a>
+      <a class="doc-link" href="../architecture/ai-safety.html">Prompt safety and workspaces</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#what-the-plugin-does"><span class="num">1</span>What the plugin does</a>
+      <a class="nav-link" href="#configure-it"><span class="num">2</span>Configure it</a>
+      <a class="nav-link" href="#always-encrypted"><span class="num">3</span>Always encrypted</a>
+      <a class="nav-link" href="#what-gets-sent"><span class="num">4</span>What gets sent</a>
+      <a class="nav-link" href="#when-something-goes-wrong"><span class="num">5</span>When something goes wrong</a>
+      <a class="nav-link" href="#first-live-check-by-hand"><span class="num">6</span>First live check, by hand</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <h1 class="display-6">Send through your own SMTP server</h1>
+    <p class="lead">Oaken can send mail through any SMTP server you already use. The plugin does one thing: it submits a message over an encrypted connection and reports who accepted it.</p>
+  </header>
+
+<section id="what-the-plugin-does" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>What the plugin does</h2></div>
+<p><code>oaken-smtp</code> is a provider plugin that only <strong>sends</strong>. It declares two capabilities, <code>auth</code> and
+<code>send</code>, and nothing else: it does not read, list, flag or delete mail, so it is never your mailbox.
+Pair it with a provider that does read mail (Gmail, or IMAP later) by naming it as the account's
+<code>send_via</code>.</p>
+<p>Sending is only a method on the plugin. Nothing in Oaken calls it on its own, and it is never
+exposed over MCP; the outbox, audit and confirmation step come in a later prompt.</p>
+</section>
+<section id="configure-it" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Configure it</h2></div>
+<p>Add a table to <code>config.toml</code>. There is no password setting, on purpose.</p>
+<div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[plugins.smtp]</span>
+<span class="n">host</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"smtp.example.com"</span>
+<span class="n">security</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"starttls"</span><span class="w">        </span><span class="c1"># "starttls" (port 587) or "tls" (port 465); there is no other choice</span>
+<span class="n">username</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"me@example.com"</span><span class="w">  </span><span class="c1"># defaults to from_address</span>
+<span class="n">from_address</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"me@example.com"</span>
+<span class="c1"># port = 587                 # only if your server uses a different one</span>
+<span class="c1"># account = "default"        # names the keyring entry, for more than one SMTP account</span>
+<span class="c1"># timeout = 30</span>
+</code></pre></div>
+<p>Then store the password in your operating system's keyring (service <code>oaken</code>, entry
+<code>smtp:&lt;account&gt;</code>). It is never written to a file, a log or an error message. If you use two-step
+verification, most providers want an <strong>app password</strong> here instead of your normal one.</p>
+</section>
+<section id="always-encrypted" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Always encrypted</h2></div>
+<ul>
+<li><code>starttls</code> connects and <strong>requires</strong> the server to upgrade to TLS. If the server does not offer
+it, nothing is sent and the password is never transmitted: the plugin refuses rather than fall
+back to plaintext.</li>
+<li><code>tls</code> is encrypted from the first byte.</li>
+<li>The server's certificate is always checked against your system's trusted authorities. There is no
+option to skip the check.</li>
+</ul>
+</section>
+<section id="what-gets-sent" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>What gets sent</h2></div>
+<p>The message goes out byte for byte, with two exceptions:</p>
+<ul>
+<li><strong>Bcc.</strong> Bcc recipients are added to the envelope and the <code>Bcc</code> header is removed, so no
+recipient can see them. (A <code>Resent-Bcc</code> header is removed too.)</li>
+<li><strong>Message-ID.</strong> If the message has none, one is added. The plugin returns the <code>Message-ID</code> of what
+it sent.</li>
+</ul>
+<p>The envelope sender is <code>from_address</code>. The recipients are the addresses in <code>To</code>, <code>Cc</code> and <code>Bcc</code>,
+without duplicates. A message with no recipient, or an address that is not an address, is refused
+before the plugin connects.</p>
+<p>Each send opens its own connection and closes it again. Nothing is held open between sends.</p>
+</section>
+<section id="when-something-goes-wrong" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>When something goes wrong</h2></div>
+<p>A send either works for every recipient or raises <code>SendFailed</code>, which says exactly what happened:</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>accepted</code></td>
+<td>Recipients the server took the message for. It is on its way to them, so a retry must leave them out.</td>
+</tr>
+<tr>
+<td><code>refused</code></td>
+<td>Each other recipient and the server's reply code and text.</td>
+</tr>
+<tr>
+<td><code>transient</code></td>
+<td><code>True</code> if trying again later can work (a 4xx reply or a network failure). <code>False</code> if it cannot (a 5xx reply, a refused TLS requirement, an untrusted certificate).</td>
+</tr>
+</tbody>
+</table></div>
+<p>A wrong password is not retried. The server's reply (530, 534, 535 or 538) makes the plugin
+unhealthy with &quot;needs a new password&quot; and publishes an event. It makes no further attempt, so there
+is no lockout loop, until you store a different password. No restart is needed: the next health
+check notices the new one.</p>
+</section>
+<section id="first-live-check-by-hand" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>First live check, by hand</h2></div>
+<p>The plugin's tests run against an in-process fake server, so they prove the protocol handling and
+not that your provider accepts it. To try yours:</p>
+<ol>
+<li>Add <code>[plugins.smtp]</code> and store the password as above.</li>
+<li>Run <code>uv run pytest -m live_smtp</code>. By default it connects, requires TLS and logs in, and sends
+nothing.</li>
+<li>To send one short test message, set <code>OAKEN_LIVE_SMTP_TO</code> to an address you own and run it again.</li>
+</ol>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

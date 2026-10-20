@@ -50,7 +50,7 @@ is no second list to keep in step:
 
 | You write | You gain |
 |---|---|
-| `pull(cursor)` | `sync.pull` (required for a provider) |
+| `pull(cursor)` | `sync.pull` (a provider needs this or `send`) |
 | `authenticate(ctx)` | `auth` |
 | `set_flags(provider_ids, add, remove)` | `flags.write`, so a read in Oaken becomes a read on the server |
 | `send(raw_bytes)` | `send`, declared for the future. Nothing calls it in v1, and sending is never exposed over MCP |
@@ -188,6 +188,11 @@ credential as an unhealthy `health()` plus a plugin event instead of crashing, a
 `authenticate`, `pull`, `set_flags` and `send`, so it declares all four capabilities. Its tests run
 the shared `ProviderContract` against an in-memory fake Google. See [Connect
 Gmail](providers/gmail.html).
+
+A provider does not have to read mail. `oaken_smtp` declares only `auth` and `send`: it is a provider
+that sends through your own SMTP server, with the password in the keyring. A provider must implement
+`pull` or `send`, and the contract suite checks only the capabilities a plugin declares. See [Send
+through your own SMTP server](providers/smtp.html).
 
 ## Plugin events
 
