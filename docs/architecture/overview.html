@@ -1,0 +1,189 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture overview · Oaken Mail</title>
+<meta name="description" content="The core process, thin clients, plugins and the two databases.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Architecture overview · Oaken Mail">
+<meta property="og:description" content="The core process, thin clients, plugins and the two databases.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=&#39;http%3A//www.w3.org/2000/svg&#39; viewBox=&#39;0 0 32 32&#39;%3E%3Crect width=&#39;32&#39; height=&#39;32&#39; rx=&#39;7&#39; fill=&#39;%231f4e79&#39;/%3E%3Cpath d=&#39;M16 5c-4 0-7 3-7 7 0 2 1 3 1 5 0 3-2 4-2 7h16c0-3-2-4-2-7 0-2 1-3 1-5 0-4-3-7-7-7z&#39; fill=&#39;%23e8f0f8&#39;/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand">OAKEN</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html">OAKEN</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">How Oaken Mail fits together</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link current" href="overview.html" aria-current="page">Architecture overview</a>
+      <a class="doc-link" href="software-map.html">Software map</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#the-shape-of-the-system"><span class="num">1</span>The shape of the system</a>
+      <a class="nav-link" href="#two-databases"><span class="num">2</span>Two databases</a>
+      <a class="nav-link" href="#ingest"><span class="num">3</span>Ingest</a>
+      <a class="nav-link" href="#plugins"><span class="num">4</span>Plugins</a>
+      <a class="nav-link" href="#principles"><span class="num">5</span>Principles</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <h1 class="display-6">Architecture overview</h1>
+    <p class="lead">One long-running core process owns your mail and its processing. Everything you interact with is a thin client of it, and everything it can be extended with is a plugin.</p>
+  </header>
+
+<section id="the-shape-of-the-system" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>The shape of the system</h2></div>
+<p>A single core process does the work. The command line, the web interface and an MCP
+adapter are thin clients that talk to it over a local HTTP and server-sent-events API,
+bound to <code>127.0.0.1</code> and protected by a token.</p>
+<pre class="mermaid">flowchart TD
+    CLI[CLI] --&gt; API
+    WEB[Web UI] --&gt; API
+    MCP[MCP stdio shim] --&gt; API
+    API["Local HTTP + SSE API (127.0.0.1, token)"] --&gt; CORE
+    subgraph CORE[Core process]
+        OPS[Operations] --- BUS[Event bus]
+        JOBS[Durable job queue] --- SCHED[Scheduler]
+        ING[Ingest pipeline] --- HOST[Plugin host]
+    end
+    CORE --&gt; RAW[(raw.db)]
+    CORE --&gt; IDX[(index.db)]
+    HOST --&gt; PLUG["Plugins: provider, embedder, LLM, enricher, vector store"]
+</pre><noscript><pre><code>flowchart TD
+    CLI[CLI] --&gt; API
+    WEB[Web UI] --&gt; API
+    MCP[MCP stdio shim] --&gt; API
+    API["Local HTTP + SSE API (127.0.0.1, token)"] --&gt; CORE
+    subgraph CORE[Core process]
+        OPS[Operations] --- BUS[Event bus]
+        JOBS[Durable job queue] --- SCHED[Scheduler]
+        ING[Ingest pipeline] --- HOST[Plugin host]
+    end
+    CORE --&gt; RAW[(raw.db)]
+    CORE --&gt; IDX[(index.db)]
+    HOST --&gt; PLUG["Plugins: provider, embedder, LLM, enricher, vector store"]
+</code></pre></noscript>
+<p>Because clients hold no logic of their own, they stay small, and the whole system can run
+in a single process with fakes for tests.</p>
+</section>
+<section id="two-databases" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Two databases</h2></div>
+<p>Storage is two SQLite files, and only one of them is precious.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>File</th>
+<th>Role</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>raw.db</code></td>
+<td>Source of truth</td>
+<td>Compressed original messages, provider ids, sync cursors, the job queue, the audit log</td>
+</tr>
+<tr>
+<td><code>index.db</code></td>
+<td>Derived and disposable</td>
+<td>Parsed fields, cleaned text, chunks, full-text index, vectors, summaries and other enrichments</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>index.db</code> can be deleted and rebuilt from <code>raw.db</code> at any time. Changing the embedding
+model therefore means running a job again, never downloading your mail again.</p>
+</section>
+<section id="ingest" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Ingest</h2></div>
+<p>When a message arrives it moves through a staged, resumable pipeline. It is searchable by
+keyword straight away; embedding and enrichment follow in the background. There is no
+separate &quot;analyze the mailbox&quot; step after a sync.</p>
+</section>
+<section id="plugins" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Plugins</h2></div>
+<p>Plugins extend the core through declared capabilities. In the first version they run
+in-process and are first-party only.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Plugin type</th>
+<th>Job</th>
+<th>First implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Provider</td>
+<td>Authenticate, pull mail, write flags back</td>
+<td>Gmail</td>
+</tr>
+<tr>
+<td>Embedder</td>
+<td>Turn text into vectors</td>
+<td>Ollama</td>
+</tr>
+<tr>
+<td>LLM backend</td>
+<td>Run local language models</td>
+<td>Ollama</td>
+</tr>
+<tr>
+<td>Enricher</td>
+<td>Derive summaries, triage, actions, header inspection</td>
+<td>Built in</td>
+</tr>
+<tr>
+<td>Vector store</td>
+<td>Store and search vectors</td>
+<td>sqlite-vec</td>
+</tr>
+</tbody>
+</table></div>
+<p>The core never imports provider code, and a provider plugin never touches the databases.
+They meet only through the contract: return values and events.</p>
+</section>
+<section id="principles" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Principles</h2></div>
+<ul>
+<li><strong>Local first.</strong> Nothing leaves the machine unless you configure a remote endpoint.</li>
+<li><strong>Mail is data.</strong> Message text reaches a model only as clearly marked untrusted input,
+and actions that change mail are confirmed in code, not in a prompt.</li>
+<li><strong>Read state follows you.</strong> A message is marked read only when you open or summarize it,
+never by background work.</li>
+<li><strong>No sending over MCP.</strong> Sending mail is never exposed through the MCP adapter.</li>
+</ul>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js" integrity="sha384-rbtjAdnIQE/aQJGEgXrVUlMibdfTSa4PQju4HDhN3sR2PmaKFzhEafuePsl9H/9I" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

@@ -11,7 +11,8 @@ Builds the site to a temporary directory (twice) and fails on:
 * broken internal links and anchors, duplicate ids, heading-level skips, images without alt;
 * any ``http://`` URL, any external host outside the allowlist, a CDN tag without an
   integrity hash, unbalanced HTML;
-* output that differs between the two builds (non-determinism).
+* output that differs between the two builds (non-determinism);
+* committed HTML in docs/ that differs from a fresh build (run build_site.py and commit).
 
 Extension hook: if ``docs/tools/check_commands.py`` exists it is imported and its
 ``check(cfg) -> list[str]`` is called; every string returned is reported as a problem.
@@ -29,7 +30,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 import pagebase
-from build_site import build
+from build_site import build, published_files
 from model import BuildError, Config, is_excluded, load_config
 
 HERE = Path(__file__).resolve().parent
@@ -202,6 +203,22 @@ def _tree(root: Path) -> dict[str, bytes]:
     }
 
 
+def _stale(cfg: Config, fresh: Path) -> list[str]:
+    """The committed HTML in docs/ must equal what a build produces now."""
+    published = published_files(cfg.docs_dir)
+    if not published:
+        return []  # never published (e.g. a fixture tree)
+    want = _tree(fresh)
+    out: list[str] = []
+    for rel in sorted(set(want) | set(published)):
+        have = cfg.docs_dir / rel
+        if rel not in want:
+            out.append(f"stale published file docs/{rel} (rebuild the site)")
+        elif not have.is_file() or have.read_bytes() != want[rel]:
+            out.append(f"docs/{rel} is out of date; run: uv run python docs/tools/build_site.py")
+    return out
+
+
 def _extra_checks(cfg: Config) -> list[str]:
     path = HERE / "check_commands.py"
     if not path.is_file():
@@ -228,6 +245,7 @@ def check(cfg: Config) -> list[str]:
         if ta != tb:
             diff = sorted(k for k in set(ta) | set(tb) if ta.get(k) != tb.get(k))
             problems.append(f"non-deterministic output; differs between builds: {diff}")
+        problems += _stale(cfg, a)
         scans: dict[Path, PageScan] = {}
         pages = sorted(a.rglob("*.html"))
         for page in pages:

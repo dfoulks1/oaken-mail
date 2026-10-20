@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Build the Oaken Mail website from docs/ into site/.
+"""Build the Oaken Mail website from docs/ into docs/ (committed, served by GitHub Pages).
 
-    uv run --group docs python docs/tools/build_site.py [--out site] [--serve] [--strict]
+    uv run --group docs python docs/tools/build_site.py [--out DIR] [--serve] [--strict]
+
+With no --out the generated HTML is written into docs/ next to the Markdown sources, and
+GitHub Pages serves it from the main branch's /docs folder. The generated files are listed in
+docs/.site-manifest, so a rebuild replaces only those and never touches your sources.
 
 Output is deterministic: no timestamps, sorted iteration, LF newlines, so two builds of the
 same tree are byte-identical. All internal links are relative, so the site works under
@@ -10,6 +14,7 @@ same tree are byte-identical. All internal links are relative, so the site works
 """
 
 import argparse
+import contextlib
 import functools
 import http.server
 import shutil
@@ -25,7 +30,6 @@ from model import (
     BuildError,
     Config,
     Page,
-    git_info,
     load_config,
     page_from_markdown,
     project_version,
@@ -36,6 +40,7 @@ HERE = Path(__file__).resolve().parent
 CARDS_MARKER = "<p>{{doc-cards}}</p>"
 HOME_ID = "index"
 TODO_MARKER = "TODO(user)"
+MANIFEST = ".site-manifest"
 
 
 def make_env() -> Environment:
@@ -121,14 +126,19 @@ def build(cfg: Config, out: Path, strict: bool = False) -> list[str]:
     renderer = Renderer(cfg, pages + [home])
     env = make_env()
 
-    if not _is_safe_out(out):
-        raise BuildError(f"refusing to overwrite {out}: not empty and not a previous site build")
-    if out.exists():
-        shutil.rmtree(out)
+    publish = out.resolve() == cfg.docs_dir.resolve()
+    if not publish:
+        if not _is_safe_out(out):
+            raise BuildError(
+                f"refusing to overwrite {out}: not empty and not a previous site build"
+            )
+        if out.exists():
+            shutil.rmtree(out)
     written: dict[str, bytes] = {}
 
     version = project_version(cfg.repo_root)
-    footer = f"{cfg.title} {version} · {git_info(cfg.repo_root)} · Apache-2.0"
+    # No commit SHA or date: the HTML is committed, so it can never name its own commit.
+    footer = f"{cfg.title} {version} · Apache-2.0"
     common: dict[str, Any] = {
         "site": cfg,
         "favicon": pagebase.FAVICON,
@@ -202,11 +212,33 @@ def build(cfg: Config, out: Path, strict: bool = False) -> list[str]:
     written["robots.txt"] = robots.encode()
     written[".nojekyll"] = b""
 
+    if publish:
+        _remove_stale(out, set(written))
+        written[MANIFEST] = ("\n".join(sorted(written)) + "\n").encode("utf-8")
     for rel in sorted(written):
         target = out / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(written[rel])
     return sorted(written)
+
+
+def published_files(docs_dir: Path) -> list[str]:
+    """Files a previous publish wrote into docs/ (empty if it was never published)."""
+    manifest = docs_dir / MANIFEST
+    if not manifest.is_file():
+        return []
+    return [ln for ln in manifest.read_text(encoding="utf-8").splitlines() if ln]
+
+
+def _remove_stale(out: Path, keep: set[str]) -> None:
+    """Delete files an earlier publish wrote that this build no longer produces."""
+    for rel in published_files(out):
+        target = (out / rel).resolve()
+        if rel in keep or out.resolve() not in target.parents:
+            continue
+        target.unlink(missing_ok=True)
+        with contextlib.suppress(OSError):  # directory not empty: it holds sources
+            target.parent.rmdir()
 
 
 def serve(out: Path, port: int) -> None:
@@ -224,14 +256,16 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--docs", type=Path, default=default_docs, help="docs directory (site.toml)")
     ap.add_argument("--repo-root", type=Path, default=None)
-    ap.add_argument("--out", type=Path, default=None, help="output dir (default: <repo>/site)")
+    ap.add_argument(
+        "--out", type=Path, default=None, help="output dir (default: docs/, the published site)"
+    )
     ap.add_argument("--serve", action="store_true", help="serve the result on 127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--strict", action="store_true", help=f"fail if {TODO_MARKER} remains")
     args = ap.parse_args(argv)
     try:
         cfg = load_config(args.docs, args.repo_root)
-        out = (args.out or cfg.repo_root / "site").resolve()
+        out = (args.out or cfg.docs_dir).resolve()
         files = build(cfg, out, strict=args.strict)
     except BuildError as exc:
         print(f"error: {exc}", file=sys.stderr)

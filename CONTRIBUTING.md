@@ -29,13 +29,19 @@ pre-commit, or run `uv run detect-secrets-hook --baseline .secrets.baseline <fil
 
 ## Documentation
 
-The project website is generated from `docs/` and published to GitHub Pages. If you change
-user-visible behaviour, add or change a page, then check it before committing:
+The project website is generated **locally** from the Markdown in `docs/` and the generated
+HTML is committed beside it; GitHub Pages serves the `main` branch's `/docs` folder. CI does not
+build it. After changing docs (or the software map), regenerate, check and commit the result:
 
 ```bash
-uv run --group docs python docs/tools/check_docs.py      # build + link check
-uv run --group docs python docs/tools/build_site.py --serve   # preview on 127.0.0.1:8000
+uv run --group docs python docs/tools/build_site.py           # regenerate the HTML in docs/
+uv run --group docs python docs/tools/check_docs.py           # links, anchors, and "HTML is up to date"
+uv run --group docs python docs/tools/build_site.py --out /tmp/preview --serve   # optional preview
 ```
 
-Register new pages in `docs/site.toml`. Keep the software map current: edit `docs/softmap.toml` in the same change that builds or alters a component (the build fails if it disagrees with the repository). Generated output goes to `site/` and is not
-committed.
+`check_docs.py` (and CI) fails if the committed HTML differs from a fresh build. The build
+records what it generated in `docs/.site-manifest` and only ever replaces those files.
+
+Register new pages in `docs/site.toml`. Keep the software map current: edit
+`docs/softmap.toml` in the same change that builds or alters a component (the build fails if it
+disagrees with the repository).

@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+import sys
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -44,10 +45,12 @@ def test_paths_live_under_oaken_home(oaken_home: Path) -> None:
     assert paths.config_dir() == oaken_home.resolve() / "config"
     rf = paths.runtime_file()
     assert rf.parent == oaken_home.resolve() / "run" and not rf.exists()
-    for d in (paths.data_dir(), paths.config_dir(), rf.parent):
-        assert d.stat().st_mode & 0o777 == 0o700
+    if sys.platform != "win32":  # POSIX permission bits do not exist on Windows
+        for d in (paths.data_dir(), paths.config_dir(), rf.parent):
+            assert d.stat().st_mode & 0o777 == 0o700
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="XDG variables apply on Linux")
 def test_paths_default_to_platform_dirs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.delenv("OAKEN_HOME")
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))

@@ -182,7 +182,7 @@ def test_footer_has_no_wall_clock(built: Callable[[], Path]) -> None:
     html = read(built(), "alpha.html")
     footer = re.search(r"<footer>(.*?)</footer>", html)
     assert footer is not None
-    assert footer.group(1) == "Fixture dev · dev · Apache-2.0"
+    assert footer.group(1) == "Fixture dev · Apache-2.0"
 
 
 def test_two_builds_are_byte_identical(tree: Tree, tmp_path: Path) -> None:

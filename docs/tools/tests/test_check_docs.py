@@ -158,7 +158,7 @@ def test_cdn_tag_without_integrity_fails(tree: Tree, monkeypatch: pytest.MonkeyP
 
 def test_nondeterministic_output_fails(tree: Tree, monkeypatch: pytest.MonkeyPatch) -> None:
     counter = iter(range(1000))
-    monkeypatch.setattr(build_site, "git_info", lambda _root: f"sha{next(counter)}")
+    monkeypatch.setattr(build_site, "project_version", lambda _root: f"v{next(counter)}")
     assert any("non-deterministic" in p for p in problems(tree))
 
 
