@@ -141,6 +141,12 @@ class MessageReadChanged(Event):
     account_id: AccountId
     message_id: MessageId
     read: bool
+    # Why, and the audit row a client can offer to undo. ``server_sync`` changes have no audit row.
+    reason: str = ""
+    audit_id: str | None = None
+    # True while the change exists only here: no provider can write it back yet. ``error`` says why.
+    local_only: bool = False
+    error: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)

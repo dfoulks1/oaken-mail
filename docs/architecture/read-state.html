@@ -1,0 +1,311 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Read state · Oaken Mail</title>
+<meta name="description" content="What marks a message read and what never does, the local-first write-back state machine, the audit log and undo, the confirm gate, and the settings.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Read state · Oaken Mail">
+<meta property="og:description" content="What marks a message read and what never does, the local-first write-back state machine, the audit log and undo, the confirm gate, and the settings.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="../assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">A message is read because you saw it, never because software touched it</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Start</div>
+      <a class="doc-link" href="../providers/gmail.html">Connect Gmail</a>
+      <a class="doc-link" href="../providers/smtp.html">Send through your own SMTP server</a>
+      <a class="doc-link" href="../providers/imap.html">Connect any IMAP server</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="overview.html">Architecture overview</a>
+      <a class="doc-link" href="jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="software-map.html">Software map</a>
+      <a class="doc-link" href="swarm.html">The swarm</a>
+      <a class="doc-link" href="storage.html">Raw storage</a>
+      <a class="doc-link" href="parsing.html">Parsing and cleaning</a>
+      <a class="doc-link" href="sieve.html">Sieve filtering</a>
+      <a class="doc-link" href="index.html">The search index</a>
+      <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <a class="doc-link" href="vectors.html">The vector store</a>
+      <a class="doc-link" href="ingest-pipeline.html">The ingest pipeline</a>
+      <a class="doc-link" href="ai-safety.html">Prompt safety and workspaces</a>
+      <a class="doc-link current" href="read-state.html" aria-current="page">Read state</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#what-marks-a-message-read-and-what-never-does"><span class="num">1</span>What marks a message read, and what never does</a>
+      <a class="nav-link" href="#local-first"><span class="num">2</span>Local first</a>
+      <a class="nav-link" href="#undo-and-the-audit-log"><span class="num">3</span>Undo and the audit log</a>
+      <a class="nav-link" href="#reasons-and-the-confirm-gate"><span class="num">4</span>Reasons and the confirm gate</a>
+      <a class="nav-link" href="#settings"><span class="num">5</span>Settings</a>
+      <a class="nav-link" href="#for-clients"><span class="num">6</span>For clients</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <h1 class="display-6">Read state</h1>
+    <p class="lead">One place in core marks mail read or unread. It happens when you open a message or ask for a summary of it, and for nothing else. Every change is local first, written to your mail service afterwards, recorded, and can be undone.</p>
+  </header>
+
+<section id="what-marks-a-message-read-and-what-never-does" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>What marks a message read, and what never does</h2></div>
+<p><strong>These mark a message read:</strong></p>
+<ul>
+<li>You <strong>open</strong> it and it stays open for a moment (2 seconds unless you change it). If you move on
+before then, nothing happens.</li>
+<li>You <strong>ask for a summary</strong> of it, in the app or through an MCP client (<code>summarize_email</code>).</li>
+<li>You mark it read yourself.</li>
+</ul>
+<p><strong>These never do, and a test makes sure it stays that way:</strong></p>
+<ul>
+<li>Syncing, ingesting, parsing, filtering with Sieve, embedding or enriching mail. That includes a
+summary that was made in the background.</li>
+<li>Search results, list views and bulk reads.</li>
+<li>A Sieve script that sets <code>\Seen</code>. That is <em>your own organization of the message</em>, kept locally; it
+is not you having seen it.</li>
+</ul>
+<p>Background work cannot do it even by mistake: a request from the system itself is refused
+outright, whatever its reason and even with a confirmation.</p>
+</section>
+<section id="local-first" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Local first</h2></div>
+<p>Marking a message read changes your local copy <strong>at once</strong>, so the screen is never waiting on
+a mail server. Writing it back to the service follows, and a failure never undoes what you see.</p>
+<pre class="mermaid">sequenceDiagram
+    participant U as You
+    participant R as Read state
+    participant D as raw.db
+    participant Q as Job queue
+    participant P as Provider
+    U-&gt;&gt;R: open / summarize / mark read
+    R-&gt;&gt;D: set is_read, set the dirty marker, write the audit row (one transaction)
+    R-&gt;&gt;Q: one write job for this message
+    R--&gt;&gt;U: MessageReadChanged (with reason and audit id)
+    Q-&gt;&gt;P: set_flags (flags.write)
+    P--&gt;&gt;Q: ok
+    Q-&gt;&gt;D: clear the dirty marker
+</pre><noscript><pre><code>sequenceDiagram
+    participant U as You
+    participant R as Read state
+    participant D as raw.db
+    participant Q as Job queue
+    participant P as Provider
+    U-&gt;&gt;R: open / summarize / mark read
+    R-&gt;&gt;D: set is_read, set the dirty marker, write the audit row (one transaction)
+    R-&gt;&gt;Q: one write job for this message
+    R--&gt;&gt;U: MessageReadChanged (with reason and audit id)
+    Q-&gt;&gt;P: set_flags (flags.write)
+    P--&gt;&gt;Q: ok
+    Q-&gt;&gt;D: clear the dirty marker
+</code></pre></noscript>
+<h3 id="the-state-machine">The state machine</h3>
+<p>The <strong>dirty marker</strong> (<code>message_state.local_dirty_json</code>) is what the server has not been told yet.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Local state</th>
+<th>Dirty marker</th>
+<th>Something happens</th>
+<th>What core does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>unread</td>
+<td>none</td>
+<td>you read it</td>
+<td>set read, set the marker, audit, queue a write</td>
+</tr>
+<tr>
+<td>read</td>
+<td>none</td>
+<td>you read it again</td>
+<td>nothing: no audit row, no write</td>
+</tr>
+<tr>
+<td>read</td>
+<td><code>read</code></td>
+<td>you mark it unread</td>
+<td>set unread, replace the marker (the one write job picks up the latest), audit</td>
+</tr>
+<tr>
+<td>any</td>
+<td><code>read</code> or <code>unread</code>, provider can write</td>
+<td>the write job runs and the provider accepts</td>
+<td>clear the marker</td>
+</tr>
+<tr>
+<td>any</td>
+<td>marker</td>
+<td>the provider is down or slow</td>
+<td>keep the marker, retry with backoff; you keep seeing the local state</td>
+</tr>
+<tr>
+<td>any</td>
+<td>marker</td>
+<td>the provider refuses for good</td>
+<td>keep the marker, fail the job once, record why, tell clients (<code>local_only</code>)</td>
+</tr>
+<tr>
+<td>any</td>
+<td>marker, <strong>no provider can write flags</strong></td>
+<td>you mark it</td>
+<td>change stays local, no job is queued, the reason is recorded, clients are told (<code>local_only</code>)</td>
+</tr>
+<tr>
+<td>any</td>
+<td>marker</td>
+<td>the server reports a different flag</td>
+<td><strong>ignored</strong>: your change is about to overwrite it</td>
+</tr>
+<tr>
+<td>any</td>
+<td>none</td>
+<td>the server reports a change (read on another device)</td>
+<td>local state follows the server; not audited</td>
+</tr>
+<tr>
+<td>any</td>
+<td>marker, then a provider that can write flags appears</td>
+<td><code>resume_pending</code></td>
+<td>queue the write</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Last writer.</strong> While a change of yours is waiting, it wins over anything the server says. Once
+the server has taken it, the server's word is the latest again.</p>
+<p><strong>When nothing can write the change.</strong> It is not retried on a timer. It stays local, flagged
+<code>local_only</code> with the reason, until the provider is fixed and <code>resume_pending</code> queues it. A screen
+for handling these is a later job.</p>
+</section>
+<section id="undo-and-the-audit-log" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Undo and the audit log</h2></div>
+<p>Every change writes one row to <code>audit_log</code> <strong>in the same transaction</strong> as the change itself: who
+(user, agent or system, with a label), the reason, the operation, and the value of every message
+before and after. Only internal ids and flags are stored, never any mail.</p>
+<ul>
+<li><code>undo(audit_id)</code> puts back the exact prior value of every message in the change (a message that
+was already read before the change stays read), writes its own audit row, and queues the reverse
+write. An undo can itself be undone, and the same row cannot be undone twice.</li>
+<li>A change to many messages is cut into rows of <code>read_state.audit_chunk</code> messages (500 by default)
+that share a batch id. Undoing any row of the batch undoes all of it.</li>
+<li>Each <code>MessageReadChanged</code> event carries <code>reason</code> and <code>audit_id</code>, so a client can offer <strong>Undo</strong>.</li>
+</ul>
+</section>
+<section id="reasons-and-the-confirm-gate" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Reasons and the confirm gate</h2></div>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Reason</th>
+<th>Who</th>
+<th>Needs <code>confirm</code>?</th>
+<th>Turned off by <code>auto_mark = false</code>?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_opened</code></td>
+<td>you, by opening a message</td>
+<td>no</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>user_summarized</code></td>
+<td>you, asking for a summary</td>
+<td>no</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>mcp_summarized</code></td>
+<td>an MCP client's <code>summarize_email</code>, which you asked for</td>
+<td>no</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>user_marked_read</code>, <code>user_marked_unread</code>, <code>user_undo</code>, any other <code>user_*</code></td>
+<td>you</td>
+<td>no</td>
+<td>no</td>
+</tr>
+<tr>
+<td>any other reason, or any <code>user_*</code> reason from an agent</td>
+<td>an agent or a script</td>
+<td><strong>yes</strong></td>
+<td>no</td>
+</tr>
+</tbody>
+</table></div>
+<p>The gate is code, not a prompt. The operation registry (prompt 13) replaces this small version
+with the shared confirm gate.</p>
+</section>
+<section id="settings" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Settings</h2></div>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ui.mark_read_delay_ms</code></td>
+<td>2000</td>
+<td>How long a message must stay open before core marks it read. Core owns the timer, so every client behaves alike</td>
+</tr>
+<tr>
+<td><code>read_state.auto_mark</code></td>
+<td>true</td>
+<td><code>false</code> turns off opening and summarizing as reasons to mark read. Marking read or unread yourself still works</td>
+</tr>
+<tr>
+<td><code>read_state.audit_chunk</code></td>
+<td>500</td>
+<td>Messages per audit row</td>
+</tr>
+</tbody>
+</table></div>
+</section>
+<section id="for-clients" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>For clients</h2></div>
+<p>A client tells core which message is on screen with <code>message_presented(id)</code> and
+<code>message_dismissed(id)</code>; presenting it again restarts the wait. It does not run a timer of its own.</p>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js" integrity="sha384-rbtjAdnIQE/aQJGEgXrVUlMibdfTSa4PQju4HDhN3sR2PmaKFzhEafuePsl9H/9I" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

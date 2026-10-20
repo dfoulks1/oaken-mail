@@ -75,6 +75,10 @@ id = "architecture/ai-safety"
 file = "architecture/ai-safety.md"
 
 [[pages]]
+id = "architecture/read-state"
+file = "architecture/read-state.md"
+
+[[pages]]
 id = "providers/gmail"
 file = "providers/gmail.md"
 

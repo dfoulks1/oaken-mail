@@ -139,3 +139,9 @@ same commit (see `00-context.md`).
 | 11c | `trash`, `archive`, `move` | `oaken mail trash\|archive\|move ID... [--to FOLDER]` | Shares the Gmail `oaken mail` verbs; a partial failure lists the ids that did not move. Question: one command for both providers, or per-provider flags? |
 | 11c | `ImapFolderReset` event | `oaken events` | The server renumbered a folder and it was read again; worth surfacing in `oaken doctor`. |
 
+| 12 | `mark_read`, `mark_unread` | `oaken mark read\|unread ID...` | An explicit user command, so `user_marked_read` / `user_marked_unread` with no confirm. Prints the audit id. Bulk changes are chunked into audit rows (`read_state.audit_chunk`). |
+| 12 | `undo(audit_id)` | `oaken undo AUDIT_ID` | Undoes the whole batch the row belongs to; prints the new audit id. Refuses a row that was already undone. |
+| 12 | `AuditLog.recent`, `get`, `batch` | `oaken audit [--op OP] [--limit N]`, `oaken audit show ID` | Actor, reason, op, ids and before and after. No mail content is ever stored there. Needs an export or retention story (how long are rows kept?). |
+| 12 | `ReadState.resume_pending` | `oaken read-state resume [--account A]` | Queues write-backs for changes that stayed local (no provider could write flags, or core stopped). Also worth running at startup. |
+| 12 | Local-only read changes (`local_dirty_json` with an `error`) | `oaken read-state pending [--account A]` | Lists changes that exist only here and why (`no_flags_write_provider`, a refusal). The UI process for dealing with them is later; this is the operator's view. |
+| 12 | `message_presented`, `message_dismissed` | (API only) | Clients call these; a CLI has no "on screen". `oaken open ID` could call `presented` then wait out `ui.mark_read_delay_ms`. |

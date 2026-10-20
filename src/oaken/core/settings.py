@@ -243,6 +243,23 @@ class SyncSettings(_Section):
     batch_size: int = Field(default=100, ge=1)
 
 
+class ReadStateSettings(_Section):
+    """What may mark mail read, and how the audit log is cut up (prompt 12)."""
+
+    # False turns off every *automatic* mark (opening, summarizing). An explicit mark read or
+    # mark unread still works.
+    auto_mark: bool = True
+    # Message ids per audit row. A bigger change is several rows that share a batch id, and one
+    # undo reverses them all.
+    audit_chunk: int = Field(default=500, ge=1, le=5000)
+
+
+class UISettings(_Section):
+    # How long a message must stay presented before core marks it read. Core owns the timer, so
+    # every client behaves the same.
+    mark_read_delay_ms: int = Field(default=2000, ge=0, le=600_000)
+
+
 class APISettings(_Section):
     host: Literal["127.0.0.1"] = "127.0.0.1"  # fixed: the API is never exposed off-host
     port: int = Field(default=0, ge=0, le=65535)  # 0 = pick a free port
@@ -269,6 +286,8 @@ class Settings(BaseSettings):
     mail: MailSettings = MailSettings()
     index: IndexSettings = IndexSettings()
     sync: SyncSettings = SyncSettings()
+    read_state: ReadStateSettings = ReadStateSettings()
+    ui: UISettings = UISettings()
     api: APISettings = APISettings()
     log: LogSettings = LogSettings()
     # Free-form, per plugin: [plugins.gmail] ... reaches that plugin as ``ctx.config``.

@@ -145,18 +145,25 @@ uses = ["index", "pluginhost"]
 id = "readstate"
 name = "Read state"
 layer = "services"
-status = "planned"
+status = "built"
 prompt = "12"
-summary = "Marks mail read only when the user opens or summarizes it; writes back to the provider with undo."
-uses = ["audit", "rawstore", "pluginhost"]
+path = "src/oaken/readstate/service.py"
+summary = "Marks mail read only when the user opens or summarizes it. Local first: sets the state and a dirty marker, audits, then writes back through a durable job. A change nothing can write stays local and says so."
+uses = ["audit", "rawstore", "jobs", "events", "pluginhost"]
+types = [
+  ["ReadState", "class", "mark_read, mark_unread, message_presented, message_dismissed, undo, resume_pending and apply_server_flags (a SyncRunner flag sink)."],
+  ["ReadResult", "dataclass", "What changed, what was unchanged, missing or local-only, and the audit ids."],
+]
+notes = ["The write job is readstate.write, one per message. A system actor is refused outright; reasons that are not the user's need confirm=True until prompt 13.", "Nothing schedules the provider yet, so a write-back reaches a real mailbox only once a scheduler drives providers."]
 
 [[components]]
 id = "audit"
 name = "Audit log"
 layer = "services"
-status = "planned"
+status = "built"
 prompt = "12"
-summary = "Records every state-changing action, with undo where possible."
+path = "src/oaken/readstate/audit.py"
+summary = "Records every undoable state change in raw.db, in the same transaction as the change, with the value before and after."
 uses = ["rawstore"]
 
 # --- Ingest ------------------------------------------------------------------------------

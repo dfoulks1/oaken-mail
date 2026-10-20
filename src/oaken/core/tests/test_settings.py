@@ -79,3 +79,15 @@ def test_settings_are_frozen() -> None:
     s = Settings()
     with pytest.raises(ValidationError):
         s.api = s.api.model_copy()
+
+
+def test_read_state_and_ui_defaults_and_limits() -> None:
+    s = Settings()
+    assert (s.read_state.auto_mark, s.read_state.audit_chunk, s.ui.mark_read_delay_ms) == (
+        True,
+        500,
+        2000,
+    )
+    for bad in ({"read_state": {"audit_chunk": 0}}, {"ui": {"mark_read_delay_ms": -1}}):
+        with pytest.raises(ValidationError):
+            Settings.model_validate(bad)
