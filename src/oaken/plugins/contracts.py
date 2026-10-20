@@ -15,6 +15,8 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any, Literal, Protocol, runtime_checkable
 
+from pydantic import BaseModel
+
 from oaken.core.clock import Clock
 from oaken.core.errors import PluginError
 from oaken.core.events import Event, EventBus, PluginEvent
@@ -128,6 +130,68 @@ class PluginContext:
 class Health:
     ok: bool
     detail: str = ""
+
+
+# -- Operations a plugin offers ----------------------------------------------------------------
+# Any plugin, of any kind, may offer operations by defining ``operations()``. Core adds them to the
+# operation registry as ``<plugin>.<name>``, so the CLI, the UI and (if the user allows it) MCP get
+# them with the same permission classes, confirm gate and audit as core's own.
+
+
+@dataclass(frozen=True)
+class PluginOpContext:
+    """What an operation handler of a plugin receives besides its input. No database handle: a
+    plugin reaches its own service, its ``config`` and the clock, nothing else."""
+
+    plugin: str
+    client: str  # which door the call came through: cli, ui, mcp or internal
+    actor: str  # who: a label, never a secret
+    config: dict[str, Any]
+    clock: Clock
+    log: Any
+
+
+@dataclass(frozen=True)
+class PluginChange:
+    """One line of a proposal: what would change. ``target`` is an id, never mail text."""
+
+    target: str
+    field: str = ""
+    before: Any = None
+    after: Any = None
+
+
+@dataclass(frozen=True)
+class PluginPreview:
+    """What a mutating operation would do, shown to the person before it does it."""
+
+    summary: str
+    changes: tuple[PluginChange, ...] = ()
+    total: int = 0
+
+
+PluginOpHandler = Callable[[PluginOpContext, Any], Awaitable[Any]]
+PluginOpPreview = Callable[[PluginOpContext, Any], Awaitable[PluginPreview]]
+
+
+@dataclass(frozen=True)
+class PluginOperation:
+    """One operation a plugin offers.
+
+    ``permission`` is ``read`` or ``mutate`` (a plugin cannot send). A ``mutate`` is confirmed by
+    the person at the CLI or UI, and by proposal and token over MCP; give it a ``preview`` to say
+    what it would change. ``mcp`` is ``off`` (the user may turn it on) or ``never`` (they may not):
+    a plugin's operations are never on by default. ``input`` and ``output`` are pydantic models.
+    """
+
+    name: str
+    summary: str
+    permission: Literal["read", "mutate"]
+    input: type[BaseModel]
+    output: type[BaseModel]
+    handler: PluginOpHandler
+    preview: PluginOpPreview | None = None
+    mcp: Literal["off", "never"] = "off"
 
 
 @runtime_checkable

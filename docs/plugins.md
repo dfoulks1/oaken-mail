@@ -145,6 +145,9 @@ enrichers are all used.
   fails a health check is marked unhealthy, logged, announced as a `PluginHealthChanged` event, and
   left out of lookups. A plugin whose `start()` failed is retried at each health check, so a service
   that was down comes back by itself.
+- **Offer operations.** If the plugin has an `operations()` method, each `PluginOperation` it
+  returns becomes `<plugin>.<name>` in the [operation registry](architecture/operations.md), under
+  the same confirm gate. They start off over MCP and cannot mark mail read.
 - **Stop.** `stop()` is called once at shutdown.
 
 Core never stops because a plugin did. `start`, `stop` and `health` are all optional to define.

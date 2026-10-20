@@ -1,3 +1,5 @@
+> **Superseded in 13:** a summary no longer marks read by itself; see `docs/architecture/operations.md`.
+
 # 12 — Read state: `mark_read` on open/summarize, write-back, audit, undo
 
 **Read first:** `docs/prompts/00-context.md`. **Depends on:** 11 (and 05, 09).

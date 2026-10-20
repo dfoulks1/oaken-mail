@@ -266,6 +266,30 @@ class ReadStateSettings(_Section):
     audit_chunk: int = Field(default=500, ge=1, le=5000)
 
 
+class OperationsSettings(_Section):
+    """Limits and the confirm gate of the operation registry (prompt 13). The ``mcp_`` values are
+    what an MCP caller gets; tighter, because every character an agent reads costs tokens."""
+
+    # Most messages one call may list or search, and most characters of mail text one reply holds.
+    max_results: int = Field(default=50, ge=1, le=1000)
+    max_chars: int = Field(default=20_000, ge=500)
+    mcp_max_results: int = Field(default=20, ge=1, le=1000)
+    mcp_max_chars: int = Field(default=8_000, ge=500)
+    # How much of a message a listing or search shows by default (the full text is get_message).
+    snippet_chars: int = Field(default=240, ge=20, le=5000)
+    # Message ids in one mark-read, mark-unread or undo; one audit batch, one undo.
+    max_batch_ids: int = Field(default=200, ge=1, le=5000)
+    # Messages summarized in one call: each is a model call, so the cap is lower.
+    max_summarize_ids: int = Field(default=20, ge=1, le=500)
+    # Bytes of a raw message ``get_raw`` returns (the full message stays in raw.db).
+    max_raw_bytes: int = Field(default=256 * 1024, ge=1024)
+    # How long a proposal's confirmation token lives, and how many one caller may hold.
+    confirm_ttl_seconds: float = Field(default=120.0, gt=0, le=3600)
+    max_pending_confirmations: int = Field(default=1000, ge=1)
+    # Changes listed in a proposal (the total is always stated).
+    proposal_changes_shown: int = Field(default=50, ge=1, le=1000)
+
+
 class UISettings(_Section):
     # How long a message must stay presented before core marks it read. Core owns the timer, so
     # every client behaves the same.
@@ -299,6 +323,7 @@ class Settings(BaseSettings):
     index: IndexSettings = IndexSettings()
     sync: SyncSettings = SyncSettings()
     read_state: ReadStateSettings = ReadStateSettings()
+    operations: OperationsSettings = OperationsSettings()
     ui: UISettings = UISettings()
     api: APISettings = APISettings()
     log: LogSettings = LogSettings()

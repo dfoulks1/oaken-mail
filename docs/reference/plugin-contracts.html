@@ -53,8 +53,10 @@
       <a class="doc-link" href="../architecture/ai-safety.html">Prompt safety and workspaces</a>
       <a class="doc-link" href="../architecture/read-state.html">Read state</a>
       <a class="doc-link" href="../architecture/sync-schedule.html">Sync schedule</a>
+      <a class="doc-link" href="../architecture/operations.html">Operations</a>
       <div class="label">Reference</div>
       <a class="doc-link current" href="plugin-contracts.html" aria-current="page">Plugin contracts</a>
+      <a class="doc-link" href="operations.html">Operations</a>
       <div class="label">Project</div>
       <a class="doc-link" href="../contributing.html">Contributing</a>
       <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
@@ -243,6 +245,163 @@
 <td><code>detail</code></td>
 <td><code>str</code></td>
 <td><code>''</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="pluginopcontext"><code>PluginOpContext</code></h3>
+<p>What an operation handler of a plugin receives besides its input. No database handle: a plugin reaches its own service, its <code>config</code> and the clock, nothing else.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>plugin</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>client</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>actor</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>config</code></td>
+<td><code>dict[str, Any]</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>clock</code></td>
+<td><code>Clock</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>log</code></td>
+<td><code>Any</code></td>
+<td><code>required</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="pluginchange"><code>PluginChange</code></h3>
+<p>One line of a proposal: what would change. <code>target</code> is an id, never mail text.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>target</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>field</code></td>
+<td><code>str</code></td>
+<td><code>''</code></td>
+</tr>
+<tr>
+<td><code>before</code></td>
+<td><code>Any</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>after</code></td>
+<td><code>Any</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="pluginpreview"><code>PluginPreview</code></h3>
+<p>What a mutating operation would do, shown to the person before it does it.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>summary</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>changes</code></td>
+<td><code>tuple[PluginChange, ...]</code></td>
+<td><code>()</code></td>
+</tr>
+<tr>
+<td><code>total</code></td>
+<td><code>int</code></td>
+<td><code>0</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="pluginoperation"><code>PluginOperation</code></h3>
+<p>One operation a plugin offers. <code>permission</code> is <code>read</code> or <code>mutate</code> (a plugin cannot send). A <code>mutate</code> is confirmed by the person at the CLI or UI, and by proposal and token over MCP; give it a <code>preview</code> to say what it would change. <code>mcp</code> is <code>off</code> (the user may turn it on) or <code>never</code> (they may not): a plugin's operations are never on by default. <code>input</code> and <code>output</code> are pydantic models.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>summary</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>permission</code></td>
+<td><code>Literal['read', 'mutate']</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>input</code></td>
+<td><code>type[BaseModel]</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>output</code></td>
+<td><code>type[BaseModel]</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>handler</code></td>
+<td><code>PluginOpHandler</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>preview</code></td>
+<td><code>PluginOpPreview | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>mcp</code></td>
+<td><code>Literal['off', 'never']</code></td>
+<td><code>'off'</code></td>
 </tr>
 </tbody>
 </table></div>

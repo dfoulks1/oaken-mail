@@ -1,0 +1,255 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Operations · Oaken Mail</title>
+<meta name="description" content="The operation registry, permission classes, the confirm gate and proposals, MCP exposure you control, result limits, plugin operations, the OpenAPI document and what is not built yet.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Operations · Oaken Mail">
+<meta property="og:description" content="The operation registry, permission classes, the confirm gate and proposals, MCP exposure you control, result limits, plugin operations, the OpenAPI document and what is not built yet.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="../assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">Every capability is one typed operation, with a permission class and a confirm gate</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Start</div>
+      <a class="doc-link" href="../providers/gmail.html">Connect Gmail</a>
+      <a class="doc-link" href="../providers/smtp.html">Send through your own SMTP server</a>
+      <a class="doc-link" href="../providers/imap.html">Connect any IMAP server</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="overview.html">Architecture overview</a>
+      <a class="doc-link" href="jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="software-map.html">Software map</a>
+      <a class="doc-link" href="swarm.html">The swarm</a>
+      <a class="doc-link" href="storage.html">Raw storage</a>
+      <a class="doc-link" href="parsing.html">Parsing and cleaning</a>
+      <a class="doc-link" href="sieve.html">Sieve filtering</a>
+      <a class="doc-link" href="index.html">The search index</a>
+      <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <a class="doc-link" href="vectors.html">The vector store</a>
+      <a class="doc-link" href="ingest-pipeline.html">The ingest pipeline</a>
+      <a class="doc-link" href="ai-safety.html">Prompt safety and workspaces</a>
+      <a class="doc-link" href="read-state.html">Read state</a>
+      <a class="doc-link" href="sync-schedule.html">Sync schedule</a>
+      <a class="doc-link current" href="operations.html" aria-current="page">Operations</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
+      <a class="doc-link" href="../reference/operations.html">Operations</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#one-registry-three-doors"><span class="num">1</span>One registry, three doors</a>
+      <a class="nav-link" href="#permission-classes"><span class="num">2</span>Permission classes</a>
+      <a class="nav-link" href="#the-confirm-gate"><span class="num">3</span>The confirm gate</a>
+      <a class="nav-link" href="#what-an-agent-is-offered"><span class="num">4</span>What an agent is offered</a>
+      <a class="nav-link" href="#read-state"><span class="num">5</span>Read state</a>
+      <a class="nav-link" href="#limits"><span class="num">6</span>Limits</a>
+      <a class="nav-link" href="#plugin-operations"><span class="num">7</span>Plugin operations</a>
+      <a class="nav-link" href="#what-is-not-built"><span class="num">8</span>What is not built</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <h1 class="display-6">Operations</h1>
+    <p class="lead">The CLI, the web UI and the MCP server do not each decide what is safe. They all call one registry of typed operations, and the rules live in code: a permission class on every operation, a confirm gate on every change, and a ceiling on what an agent may ever be offered.</p>
+  </header>
+
+<section id="one-registry-three-doors" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>One registry, three doors</h2></div>
+<p>An operation has a name, a one-line summary, input and output models, a permission class and a
+handler. The <a href="../reference/operations.html">full list</a> is generated from the registry. The OpenAPI 3.1
+document is derived from the same models, so it cannot disagree with the code.</p>
+<p>A caller says which door it came through: <code>cli</code>, <code>ui</code>, <code>mcp</code> or <code>internal</code>. An <code>mcp</code> caller must be
+an agent and a <code>cli</code> or <code>ui</code> caller must be a person. Only a person can confirm.</p>
+</section>
+<section id="permission-classes" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Permission classes</h2></div>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Class</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>read</code></td>
+<td>Changes nothing, and never marks mail read.</td>
+</tr>
+<tr>
+<td><code>mutate</code></td>
+<td>Changes something. Needs confirming.</td>
+</tr>
+<tr>
+<td><code>send</code></td>
+<td>Reserved. Refused in this version, and never offered over MCP.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Defining an operation that breaks a rule fails at import, so it cannot ship: a <code>send</code> that could be
+offered over MCP, a <code>read</code> that marks mail read, or a <code>mutate</code> an agent can reach that cannot say what
+it would change.</p>
+</section>
+<section id="the-confirm-gate" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>The confirm gate</h2></div>
+<p>Every call passes the same checks, in this order:</p>
+<ol>
+<li><strong>Exposure.</strong> An MCP caller gets &quot;not available&quot; for anything not offered to it, in the same words
+whether it is switched off or can never be offered.</li>
+<li><strong>Input.</strong> It must parse. The error names the field, never the value.</li>
+<li><strong>Class.</strong> <code>send</code> is refused.</li>
+<li><strong>Confirmation, for <code>mutate</code>.</strong>
+<ul>
+<li>A person at the CLI or UI confirms by passing <code>confirm</code>, meaning they asked for exactly this.</li>
+<li>An agent cannot. It gets a <strong>proposal</strong>: what would change (ids with before and after, never
+mail text), a count, and a single-use token. Nothing has changed yet. It calls again with the
+token, which is accepted only for the same operation, the same input and the same caller.</li>
+</ul>
+</li>
+<li><strong>Run, validate the output, audit.</strong></li>
+</ol>
+<p>Tokens are random, stored only as a hash, last two minutes by default, are burned by any attempt to
+use them, and a caller can hold only so many at once.</p>
+</section>
+<section id="what-an-agent-is-offered" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>What an agent is offered</h2></div>
+<p>Each operation has a <strong>ceiling</strong> fixed in code: <code>never</code>, <code>off</code> or <code>on</code>.</p>
+<ul>
+<li><code>never</code>: cannot be offered over MCP, whatever you set. Sending, raw mail bytes, the audit log,
+rebuilding the index, editing exposure itself and editing schedules.</li>
+<li><code>off</code>: may be offered, and is not until you turn it on.</li>
+<li><code>on</code>: offered by default.</li>
+</ul>
+<p>You can lower an operation, or a whole plugin, from the default, and raise one up to its ceiling. The
+setting is one global list in the database, changed through <code>set_operation_exposure</code>, which is never
+available to an agent, so an agent cannot widen its own reach. Each change is audited. Per-token
+scoping is left for the MCP server.</p>
+</section>
+<section id="read-state" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Read state</h2></div>
+<p>Reading never marks mail read. The handler that marks it is the one place that does, after the gate
+has confirmed it, and a test keeps the registry, the gate and the plugin bridge from naming the
+read-state service at all.</p>
+<p><code>summarize_message</code> is a <code>mutate</code> with an option to mark the messages read afterwards. A summary on
+its own never marks anything read: opening a message is the only automatic reason left. Several
+messages can be summarized in one call (20 by default), then marked read together in one confirmed
+step.</p>
+</section>
+<section id="limits" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Limits</h2></div>
+<p>Results are bounded, and the bounds are settings in <code>[operations]</code>. When in doubt, it is a setting.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>max_results</code> / <code>mcp_max_results</code></td>
+<td>50 / 20</td>
+<td>Rows in one listing, for you and for an agent</td>
+</tr>
+<tr>
+<td><code>max_chars</code> / <code>mcp_max_chars</code></td>
+<td>20000 / 8000</td>
+<td>Mail text in one answer</td>
+</tr>
+<tr>
+<td><code>snippet_chars</code></td>
+<td>240</td>
+<td>One snippet</td>
+</tr>
+<tr>
+<td><code>max_batch_ids</code></td>
+<td>200</td>
+<td>Ids in one mark or undo</td>
+</tr>
+<tr>
+<td><code>max_summarize_ids</code></td>
+<td>20</td>
+<td>Messages in one summary call</td>
+</tr>
+<tr>
+<td><code>max_raw_bytes</code></td>
+<td>256 KiB</td>
+<td>Raw bytes in one answer</td>
+</tr>
+<tr>
+<td><code>confirm_ttl_seconds</code></td>
+<td>120</td>
+<td>How long a proposal lasts</td>
+</tr>
+<tr>
+<td><code>max_pending_confirmations</code></td>
+<td>1000</td>
+<td>Open proposals</td>
+</tr>
+<tr>
+<td><code>proposal_changes_shown</code></td>
+<td>50</td>
+<td>Changes listed in a proposal</td>
+</tr>
+</tbody>
+</table></div>
+<p>A request over a count limit is refused, not cut, so nothing is silently skipped. Text is cut and the
+answer says it was.</p>
+</section>
+<section id="plugin-operations" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>Plugin operations</h2></div>
+<p>A plugin can offer operations, named <code>&lt;plugin&gt;.&lt;name&gt;</code>. They get the same gate, the same audit and
+the same ceiling rules, with these differences:</p>
+<ul>
+<li>they start <strong>off</strong> over MCP, and can never mark mail read;</li>
+<li>the handler gets no database handle, only its own service, its settings and the clock;</li>
+<li>a failure inside a plugin is reduced to the exception type, because it could quote mail;</li>
+<li>a call has a timeout, and an unhealthy plugin offers nothing.</li>
+</ul>
+</section>
+<section id="what-is-not-built" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>What is not built</h2></div>
+<ul>
+<li>A <strong>generic plugin settings store</strong> for the UI. <code>list_plugins</code> shows each plugin's settings
+schema, but nothing yet writes them.</li>
+<li><code>search</code> and <code>ask</code> exist as stubs, off over MCP, until retrieval lands.</li>
+<li><strong>Summaries run inline</strong>, one after another, capped per call. They are not a job.</li>
+<li>The registry's audit row is written just after the change, not in the same transaction. A crash in
+between loses the row, not the change. Operations that already audit atomically (read state,
+schedules, exposure) are not affected.</li>
+<li>Plugin operations come from a plugin's shared instance, not from per-account instances.</li>
+<li>There is no HTTP server yet. The in-process client is what the tests and later the daemon use.</li>
+</ul>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

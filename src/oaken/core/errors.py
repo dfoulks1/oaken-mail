@@ -69,3 +69,39 @@ class InvalidResult(OakenError):
     """A job result that fails its schema or size limit. The job is left leased."""
 
     code = "invalid_result"
+
+
+class InvalidInput(OakenError):
+    """An operation was called with input that does not fit its model, or breaks a limit."""
+
+    code = "invalid_input"
+
+
+class NotImplementedYet(OakenError):
+    """The operation is defined, but the prompt that fills it in has not been built."""
+
+    code = "not_implemented"
+
+
+class Unavailable(OakenError):
+    """A service the operation needs is not running in this process."""
+
+    code = "unavailable"
+
+
+class ConfirmationInvalid(PermissionDenied):
+    """A confirmation token that is unknown, used already, expired, or for a different call."""
+
+    code = "confirmation_invalid"
+
+
+class NotExposed(PermissionDenied):
+    """The operation is not offered to this kind of caller (MCP exposure is the user's setting)."""
+
+    code = "not_exposed"
+
+
+class SendDisabled(PermissionDenied):
+    """Sending is defined but switched off in v1."""
+
+    code = "send_disabled"

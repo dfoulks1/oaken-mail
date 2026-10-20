@@ -1,0 +1,437 @@
+# SPDX-License-Identifier: Apache-2.0
+"""Operations about the system itself: status, usage, accounts, plugins, the audit log, and which
+operations an MCP client may call."""
+
+from dataclasses import asdict
+from datetime import datetime, timedelta
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
+
+from oaken.core.errors import Conflict, NotFound
+from oaken.core.operations.context import OpContext
+from oaken.core.operations.exposure import OP, PLUGIN, scope_of
+from oaken.core.operations.registry import AnyOperation, Change, Preview, operation
+from oaken.plugins.host import ACCOUNT_SEP
+from oaken.readstate.service import READ_OPS
+
+
+class Empty(BaseModel):
+    pass
+
+
+class StatusOutput(BaseModel):
+    version: str
+    accounts: int
+    messages: int
+    indexed: int
+    index_stale: bool
+    queue_depth: int | None = None  # ingest jobs queued or running
+    plugins_healthy: int | None = None
+    plugins_total: int | None = None
+    schedules_paused: int | None = None
+
+
+@operation(
+    "status",
+    "A short health summary: accounts, messages, index, queue, plugins and paused schedules.",
+    permission="read",
+    input=Empty,
+    output=StatusOutput,
+    mcp="on",
+)
+async def status(ctx: OpContext, inp: Empty) -> StatusOutput:
+    stats = await ctx.svc.raw.stats()
+    index = await ctx.svc.index.stats()
+    out = StatusOutput(
+        version=ctx.svc.version,
+        accounts=stats.accounts,
+        messages=stats.messages - stats.deleted_messages,
+        indexed=index.docs,
+        index_stale=index.stale,
+    )
+    if ctx.svc.pipeline is not None:
+        out.queue_depth = await ctx.svc.pipeline.depth()
+    if ctx.svc.plugins is not None:
+        rows = ctx.svc.plugins.statuses()
+        out.plugins_total, out.plugins_healthy = len(rows), sum(r.healthy for r in rows)
+    if ctx.svc.sync is not None:
+        out.schedules_paused = sum(s.paused for s in await ctx.svc.sync.schedules())
+    return out
+
+
+class StageOut(BaseModel):
+    pending: int = 0
+    retrying: int = 0
+    running: int = 0
+    failed: int = 0
+    oldest_pending_seconds: float | None = None
+    per_second: float = 0.0
+    eta_seconds: float | None = None
+
+
+class ParkedOut(BaseModel):
+    job_id: str
+    stage: str
+    message_id: str | None = None
+    attempts: int
+    error: str
+
+
+class PipelineStatusOutput(BaseModel):
+    stages: dict[str, StageOut]
+    docs: int
+    chunks: int
+    index_stale: bool
+    vector_model: str | None = None
+    vectors: int
+    embedder_model: str | None = None
+    embeddings_stale: bool
+    backfill_paused: bool
+    quarantined_files: int
+    parked: list[ParkedOut] = Field(default_factory=list)
+
+
+@operation(
+    "pipeline_status",
+    "Where ingest stands: each stage's queue, throughput and ETA, and jobs parked as failed.",
+    permission="read",
+    input=Empty,
+    output=PipelineStatusOutput,
+    mcp="on",
+)
+async def pipeline_status(ctx: OpContext, inp: Empty) -> PipelineStatusOutput:
+    s = await ctx.svc.need_pipeline().pipeline_status()
+    return PipelineStatusOutput.model_validate(asdict(s))
+
+
+class UsageInput(BaseModel):
+    since_hours: float | None = Field(default=None, gt=0)
+    workspace: str | None = None
+
+
+class UsageRowOut(BaseModel):
+    workspace: str
+    stage: str
+    model_id: str
+    calls: int
+    cached_calls: int
+    tokens_in: int
+    tokens_out: int
+    tokens_saved: int
+
+
+class UsageOutput(BaseModel):
+    rows: list[UsageRowOut]
+
+
+@operation(
+    "usage_summary",
+    "Model calls and tokens per workspace, stage and model, and what the cache saved.",
+    permission="read",
+    input=UsageInput,
+    output=UsageOutput,
+    mcp="on",
+)
+async def usage_summary(ctx: OpContext, inp: UsageInput) -> UsageOutput:
+    since: datetime | None = None
+    if inp.since_hours:
+        since = ctx.svc.clock.now() - timedelta(hours=inp.since_hours)
+    rows = await ctx.svc.need_usage().usage_summary(since, inp.workspace)
+    return UsageOutput(rows=[UsageRowOut.model_validate(asdict(r)) for r in rows])
+
+
+class AccountInfo(BaseModel):
+    account_id: str
+    provider: str
+    display_name: str
+
+
+class AccountsOutput(BaseModel):
+    accounts: list[AccountInfo]
+
+
+@operation(
+    "list_accounts",
+    "The configured accounts: id, provider and display name (never credentials).",
+    permission="read",
+    input=Empty,
+    output=AccountsOutput,
+    mcp="on",
+)
+async def list_accounts(ctx: OpContext, inp: Empty) -> AccountsOutput:
+    return AccountsOutput(
+        accounts=[
+            AccountInfo(account_id=a.id, provider=a.provider, display_name=a.display_name)
+            for a in await ctx.svc.raw.list_accounts()
+        ]
+    )
+
+
+class PluginInfoOut(BaseModel):
+    name: str  # for one account's instance: <plugin>@<account>
+    kind: str
+    version: str
+    capabilities: list[str]
+    started: bool
+    healthy: bool
+    detail: str = ""
+    operations: list[str] = Field(default_factory=list)  # the operations it offers
+    config_schema: dict[str, Any] | None = None  # JSON Schema of its settings, if it declares one
+
+
+class PluginsInput(BaseModel):
+    name: str | None = None  # one plugin (or one account's instance); default: all
+
+
+class PluginsOutput(BaseModel):
+    plugins: list[PluginInfoOut]
+
+
+def _plugin_rows(ctx: OpContext, name: str | None) -> list[PluginInfoOut]:
+    host = ctx.svc.need_plugins()
+    offered: dict[str, list[str]] = {}
+    for op in ctx.registry.all():
+        if op.plugin:
+            offered.setdefault(op.plugin, []).append(op.name)
+    rows = [
+        PluginInfoOut(
+            name=s.name,
+            kind=s.kind,
+            version=s.version,
+            capabilities=sorted(s.capabilities),
+            started=s.started,
+            healthy=s.healthy,
+            detail=s.detail,
+            operations=offered.get(s.name.partition(ACCOUNT_SEP)[0], []),
+            config_schema=host.config_schema(s.kind, s.name.partition(ACCOUNT_SEP)[0]),
+        )
+        for s in host.statuses()
+        if name is None or s.name == name or s.name.partition(ACCOUNT_SEP)[0] == name
+    ]
+    if name is not None and not rows:
+        raise NotFound(f"no such plugin: {name}")
+    return rows
+
+
+@operation(
+    "list_plugins",
+    "Every plugin: kind, version, capabilities, health, the operations it offers, its settings.",
+    permission="read",
+    input=PluginsInput,
+    output=PluginsOutput,
+    mcp="on",
+)
+async def list_plugins(ctx: OpContext, inp: PluginsInput) -> PluginsOutput:
+    return PluginsOutput(plugins=_plugin_rows(ctx, inp.name))
+
+
+@operation(
+    "plugin_health",
+    "Whether plugins are started and healthy, and why not if they are not.",
+    permission="read",
+    input=PluginsInput,
+    output=PluginsOutput,
+    mcp="on",
+)
+async def plugin_health(ctx: OpContext, inp: PluginsInput) -> PluginsOutput:
+    return PluginsOutput(plugins=_plugin_rows(ctx, inp.name))
+
+
+class AuditInput(BaseModel):
+    limit: int = Field(default=50, ge=1, le=500)
+    op: str | None = None
+
+
+class AuditItem(BaseModel):
+    audit_id: str
+    ts: datetime
+    actor_kind: str
+    actor_label: str
+    reason: str
+    op: str
+    batch_id: str
+    count: int  # how many things the row covers
+    undone_by: str | None = None
+    undoable: bool
+
+
+class AuditOutput(BaseModel):
+    entries: list[AuditItem]
+
+
+@operation(
+    "list_audit",
+    "The newest audit-log rows: who changed what, why, and whether it can be undone.",
+    permission="read",
+    input=AuditInput,
+    output=AuditOutput,
+    mcp="never",
+)
+async def list_audit(ctx: OpContext, inp: AuditInput) -> AuditOutput:
+    rows = await ctx.svc.audit.recent(inp.limit, op=inp.op)
+    return AuditOutput(
+        entries=[
+            AuditItem(
+                audit_id=e.id,
+                ts=e.ts,
+                actor_kind=e.actor.kind,
+                actor_label=e.actor.label,
+                reason=e.reason,
+                op=e.op,
+                batch_id=e.batch_id,
+                count=len(e.message_ids),
+                undone_by=e.undone_by,
+                undoable=e.op in READ_OPS and e.undone_by is None,
+            )
+            for e in rows
+        ]
+    )
+
+
+class OperationInfo(BaseModel):
+    name: str
+    summary: str
+    permission: str
+    marks_read: bool
+    streaming: bool
+    plugin: str | None = None
+    mcp_allowed: bool  # the ceiling, fixed in code
+    mcp_default: bool  # on or off before the user chooses
+    mcp_enabled: bool  # what an MCP client gets now
+
+
+class OperationsOutput(BaseModel):
+    operations: list[OperationInfo]
+
+
+@operation(
+    "list_operations",
+    "Every operation with its permission class, and whether MCP clients may call it.",
+    permission="read",
+    input=Empty,
+    output=OperationsOutput,
+    mcp="never",
+)
+async def list_operations(ctx: OpContext, inp: Empty) -> OperationsOutput:
+    chosen = await ctx.exposure.settings()
+    return OperationsOutput(
+        operations=[
+            OperationInfo(
+                name=o.name,
+                summary=o.summary,
+                permission=o.permission,
+                marks_read=o.marks_read,
+                streaming=o.streaming,
+                plugin=o.plugin,
+                mcp_allowed=o.mcp_allowed,
+                mcp_default=o.mcp_exposed,
+                mcp_enabled=ctx.exposure.effective(o, chosen),
+            )
+            for o in ctx.registry.all()
+        ]
+    )
+
+
+class ExposureInput(BaseModel):
+    scope: Literal["operation", "plugin"]
+    name: str  # an operation name, or a plugin name (all of its operations)
+    mcp: bool | None  # on, off, or None to go back to the default
+
+
+class ExposureOutput(BaseModel):
+    scope: str
+    before: bool | None
+    after: bool | None
+    operations: list[OperationInfo]  # what the choice now covers
+
+
+def _targets(ctx: OpContext, inp: ExposureInput) -> list[AnyOperation]:
+    if inp.scope == "operation":
+        op = ctx.registry.get(inp.name)  # NotFound
+        if not op.mcp_allowed:
+            raise Conflict(f"{op.name} can never be offered over MCP, whatever is set")
+        return [op]
+    ops = [o for o in ctx.registry.all() if o.plugin == inp.name]
+    if not ops:
+        known = {s.name.partition(ACCOUNT_SEP)[0] for s in ctx.svc.need_plugins().statuses()}
+        if inp.name not in known:
+            raise NotFound(f"no such plugin: {inp.name}")
+    return ops
+
+
+async def _preview_exposure(ctx: OpContext, inp: ExposureInput) -> Preview:
+    ops = _targets(ctx, inp)
+    chosen = await ctx.exposure.settings()
+    after = {**chosen}
+    key = scope_of(OP if inp.scope == "operation" else PLUGIN, inp.name)
+    if inp.mcp is None:
+        after.pop(key, None)
+    else:
+        after[key] = inp.mcp
+    changes = [
+        Change(
+            target=o.name,
+            field="mcp",
+            before=ctx.exposure.effective(o, chosen),
+            after=ctx.exposure.effective(o, after),
+        )
+        for o in ops
+    ]
+    changes = [c for c in changes if c.before != c.after]  # what actually becomes (un)reachable
+    return Preview(
+        summary=f"Change what MCP clients may call ({inp.scope} {inp.name})",
+        changes=changes,
+        total_changes=len(changes),
+    )
+
+
+@operation(
+    "set_operation_exposure",
+    "Choose whether MCP clients may call an operation, or all of a plugin's operations.",
+    permission="mutate",
+    input=ExposureInput,
+    output=ExposureOutput,
+    mcp="never",  # an agent must not be able to widen its own reach
+    preview=_preview_exposure,
+    audit="service",
+)
+async def set_operation_exposure(ctx: OpContext, inp: ExposureInput) -> ExposureOutput:
+    ops = _targets(ctx, inp)
+    scope = scope_of(OP if inp.scope == "operation" else PLUGIN, inp.name)
+    before = await ctx.exposure.set(
+        scope, inp.mcp, actor=ctx.caller.actor, reason=f"{ctx.caller.client}_set_exposure"
+    )
+    chosen = await ctx.exposure.settings()
+    return ExposureOutput(
+        scope=scope,
+        before=before,
+        after=inp.mcp,
+        operations=[
+            OperationInfo(
+                name=o.name,
+                summary=o.summary,
+                permission=o.permission,
+                marks_read=o.marks_read,
+                streaming=o.streaming,
+                plugin=o.plugin,
+                mcp_allowed=o.mcp_allowed,
+                mcp_default=o.mcp_exposed,
+                mcp_enabled=ctx.exposure.effective(o, chosen),
+            )
+            for o in ops
+        ],
+    )
+
+
+OPERATIONS: tuple[AnyOperation, ...] = (
+    status,
+    pipeline_status,
+    usage_summary,
+    list_accounts,
+    list_plugins,
+    plugin_health,
+    list_audit,
+    list_operations,
+    set_operation_exposure,
+)

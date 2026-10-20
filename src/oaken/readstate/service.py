@@ -50,12 +50,10 @@ NO_PROVIDER = "no_flags_write_provider"
 MAX_ROUNDS = 5  # writes in one job when the user keeps changing their mind
 IN_LIMIT = 500  # ids per ``IN (...)`` query
 
-# Reasons that are an automatic consequence of something the user did. ``auto_mark = false`` turns
-# these off; an explicit mark read or unread (any other reason) is never affected by it.
-AUTOMATIC = frozenset({"user_opened", "user_summarized", "mcp_summarized"})
-# Reasons that need no ``confirm``: anything a user does themselves (``user_*``, from a user
-# actor), and the MCP summarize operation, where the user's own request is the confirmation.
-PRECONFIRMED = frozenset({"mcp_summarized"})
+# Reasons that are an automatic consequence of something the user did (opening a message).
+# ``auto_mark = false`` turns these off; an explicit mark read or unread (any other reason, a
+# summary the person chose to mark read included) is never affected by it.
+AUTOMATIC = frozenset({"user_opened"})
 READ_OPS = frozenset({"mark_read", "mark_unread", "undo"})
 
 # Asked with an account id: the provider instance that serves that account, if it can write flags.
@@ -63,7 +61,8 @@ ProviderFor = Callable[[str], Provider | None]
 
 
 class ConfirmRequired(PermissionDenied):
-    """The change needs ``confirm=True`` (the confirm gate; prompt 13 replaces this stub)."""
+    """The change needs ``confirm=True``, which the operation registry's gate passes once a person
+    (or a token from a proposal) has approved it."""
 
     code = "confirm_required"
 
@@ -187,14 +186,14 @@ class ReadState:
 
     @staticmethod
     def _gate(actor: Actor, reason: str, confirm: bool) -> None:
-        """The confirm gate, stubbed until prompt 13. Background work is refused outright."""
+        """Defence in depth behind the operation registry's confirm gate (prompt 13), where a
+        change is really approved and which passes ``confirm=True`` once it has. Background work
+        is refused outright, whatever any caller says."""
         if actor.kind == "system":
             raise PermissionDenied("background work never changes read state")
         if not reason:
             raise PermissionDenied("a change of read state needs a reason")
-        preconfirmed = (actor.kind == "user" and reason.startswith("user_")) or (
-            reason in PRECONFIRMED
-        )
+        preconfirmed = actor.kind == "user" and reason.startswith("user_")
         if not preconfirmed and not confirm:
             raise ConfirmRequired(f"changing read state for {reason!r} needs confirm=True")
 

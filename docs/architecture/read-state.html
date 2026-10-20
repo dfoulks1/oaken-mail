@@ -53,8 +53,10 @@
       <a class="doc-link" href="ai-safety.html">Prompt safety and workspaces</a>
       <a class="doc-link current" href="read-state.html" aria-current="page">Read state</a>
       <a class="doc-link" href="sync-schedule.html">Sync schedule</a>
+      <a class="doc-link" href="operations.html">Operations</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
+      <a class="doc-link" href="../reference/operations.html">Operations</a>
       <div class="label">Project</div>
       <a class="doc-link" href="../contributing.html">Contributing</a>
       <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
@@ -77,7 +79,7 @@
   <header class="cover">
     <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
     <h1 class="display-6">Read state</h1>
-    <p class="lead">One place in core marks mail read or unread. It happens when you open a message or ask for a summary of it, and for nothing else. Every change is local first, written to your mail service afterwards, recorded, and can be undone.</p>
+    <p class="lead">One place in core marks mail read or unread. It happens when you open a message or tell it to, and for nothing else. Every change is local first, written to your mail service afterwards, recorded, and can be undone.</p>
   </header>
 
 <section id="what-marks-a-message-read-and-what-never-does" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>What marks a message read, and what never does</h2></div>
@@ -85,8 +87,8 @@
 <ul>
 <li>You <strong>open</strong> it and it stays open for a moment (2 seconds unless you change it). If you move on
 before then, nothing happens.</li>
-<li>You <strong>ask for a summary</strong> of it, in the app or through an MCP client (<code>summarize_email</code>).</li>
-<li>You mark it read yourself.</li>
+<li>You mark it read yourself, including the offer at the end of a summary: a summary alone never
+does. An MCP client can only do it through a confirmed proposal.</li>
 </ul>
 <p><strong>These never do, and a test makes sure it stays that way:</strong></p>
 <ul>
@@ -108,7 +110,7 @@ a mail server. Writing it back to the service follows, and a failure never undoe
     participant D as raw.db
     participant Q as Job queue
     participant P as Provider
-    U-&gt;&gt;R: open / summarize / mark read
+    U-&gt;&gt;R: open / mark read
     R-&gt;&gt;D: set is_read, set the dirty marker, write the audit row (one transaction)
     R-&gt;&gt;Q: one write job for this message
     R--&gt;&gt;U: MessageReadChanged (with reason and audit id)
@@ -121,7 +123,7 @@ a mail server. Writing it back to the service follows, and a failure never undoe
     participant D as raw.db
     participant Q as Job queue
     participant P as Provider
-    U-&gt;&gt;R: open / summarize / mark read
+    U-&gt;&gt;R: open / mark read
     R-&gt;&gt;D: set is_read, set the dirty marker, write the audit row (one transaction)
     R-&gt;&gt;Q: one write job for this message
     R--&gt;&gt;U: MessageReadChanged (with reason and audit id)
@@ -241,15 +243,15 @@ that share a batch id. Undoing any row of the batch undoes all of it.</li>
 </tr>
 <tr>
 <td><code>user_summarized</code></td>
-<td>you, asking for a summary</td>
+<td>you, choosing to mark messages read after a summary</td>
 <td>no</td>
-<td>yes</td>
+<td>no</td>
 </tr>
 <tr>
 <td><code>mcp_summarized</code></td>
-<td>an MCP client's <code>summarize_email</code>, which you asked for</td>
+<td>an MCP client, after a summary</td>
+<td><strong>yes</strong></td>
 <td>no</td>
-<td>yes</td>
 </tr>
 <tr>
 <td><code>user_marked_read</code>, <code>user_marked_unread</code>, <code>user_undo</code>, any other <code>user_*</code></td>
@@ -265,8 +267,8 @@ that share a batch id. Undoing any row of the batch undoes all of it.</li>
 </tr>
 </tbody>
 </table></div>
-<p>The gate is code, not a prompt. The operation registry (prompt 13) replaces this small version
-with the shared confirm gate.</p>
+<p>The gate is code, not a prompt. The <a href="operations.html">operation registry</a> is the one that
+decides, and passes the confirmation down; this check stays as a second line of defence.</p>
 </section>
 <section id="settings" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Settings</h2></div>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
@@ -286,7 +288,7 @@ with the shared confirm gate.</p>
 <tr>
 <td><code>read_state.auto_mark</code></td>
 <td>true</td>
-<td><code>false</code> turns off opening and summarizing as reasons to mark read. Marking read or unread yourself still works</td>
+<td><code>false</code> turns off opening as a reason to mark read. Marking read or unread yourself still works</td>
 </tr>
 <tr>
 <td><code>read_state.audit_chunk</code></td>

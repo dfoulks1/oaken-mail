@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: Apache-2.0
+"""What an operation's handler may reach: the services the daemon (or a test rig) has built.
+
+The core ones are required. The rest are optional because a process may run without them (no
+model, no plugins, a test rig with a few parts); a handler that needs one asks for it with ``need``
+and the caller gets ``unavailable`` rather than a crash.
+"""
+
+from dataclasses import dataclass
+from typing import TypeVar
+
+from oaken.ai.generate import LLMService
+from oaken.core.attrs import AttrStore
+from oaken.core.clock import Clock
+from oaken.core.errors import Unavailable
+from oaken.core.events import EventBus
+from oaken.core.jobs import JobQueue
+from oaken.core.rawstore import RawStore
+from oaken.core.settings import Settings
+from oaken.index import Indexer, IndexStore
+from oaken.ingest import Pipeline, UsageStore
+from oaken.ingest.schedule import SyncService
+from oaken.plugins.host import PluginHost
+from oaken.readstate import AuditLog, ReadState
+
+T = TypeVar("T")
+
+
+def need(value: T | None, what: str) -> T:
+    if value is None:
+        raise Unavailable(f"{what} is not running")
+    return value
+
+
+@dataclass
+class Services:
+    raw: RawStore
+    index: IndexStore
+    attrs: AttrStore
+    queue: JobQueue
+    audit: AuditLog
+    settings: Settings
+    clock: Clock
+    bus: EventBus | None = None
+    readstate: ReadState | None = None
+    pipeline: Pipeline | None = None
+    indexer: Indexer | None = None
+    usage: UsageStore | None = None
+    sync: SyncService | None = None
+    plugins: PluginHost | None = None
+    llm: LLMService | None = None
+    version: str = ""
+
+    def need_readstate(self) -> ReadState:
+        return need(self.readstate, "read state")
+
+    def need_pipeline(self) -> Pipeline:
+        return need(self.pipeline, "the ingest pipeline")
+
+    def need_indexer(self) -> Indexer:
+        return need(self.indexer, "the indexer")
+
+    def need_usage(self) -> UsageStore:
+        return need(self.usage, "usage accounting")
+
+    def need_sync(self) -> SyncService:
+        return need(self.sync, "the sync scheduler")
+
+    def need_plugins(self) -> PluginHost:
+        return need(self.plugins, "the plugin host")
+
+    def need_llm(self) -> LLMService:
+        return need(self.llm, "the language model service")

@@ -31,10 +31,12 @@ from oaken.plugins.contracts import (
     PluginContext,
     PluginInfo,
     PluginKind,
+    PluginOpContext,
+    PluginOperation,
     Provider,
     VectorStore,
 )
-from oaken.plugins.validate import check_plugin
+from oaken.plugins.validate import check_plugin, declared_operations
 
 log = get_logger("oaken.plugins")
 
@@ -65,6 +67,14 @@ class _Record:
     factory: Any = None  # what the entry point loaded: a class or function that makes instances
     account_id: str | None = None  # set on an instance started for one account
     overlay: dict[str, Any] | None = None  # that account's own (non-secret) settings
+
+
+@dataclass(frozen=True)
+class OfferedOperation:
+    """An operation a started, healthy plugin offers (the registry namespaces it)."""
+
+    plugin: str
+    declaration: PluginOperation
 
 
 @dataclass(frozen=True)
@@ -277,6 +287,51 @@ class PluginHost:
                     detail=rec.detail,
                 )
             )
+
+    # -- operations a plugin offers ----------------------------------------------------------
+    def _shared(self) -> list[_Record]:
+        """The plugin's own instance (not one started for an account) of each healthy plugin."""
+        return [
+            r
+            for r in sorted(self._records.values(), key=lambda r: (r.kind, r.name))
+            if r.account_id is None and r.started and r.healthy and r.instance is not None
+        ]
+
+    def offered_operations(self) -> list[OfferedOperation]:
+        """What the healthy plugins offer. An operation that cannot be read is skipped (it was
+        already reported as a problem when the plugin loaded)."""
+        out: list[OfferedOperation] = []
+        for rec in self._shared():
+            try:
+                decls = declared_operations(rec.instance)
+            except Exception as exc:
+                log.error("plugin operations failed", name=rec.name, error=type(exc).__name__)
+                continue
+            out.extend(
+                OfferedOperation(rec.name, d) for d in decls if isinstance(d, PluginOperation)
+            )
+        return out
+
+    def operation_context(self, plugin: str, client: str, actor: str) -> PluginOpContext:
+        """The context for one call of ``plugin``'s operation."""
+        for rec in self._shared():
+            if rec.name == plugin and rec.ctx is not None:
+                return PluginOpContext(
+                    plugin=plugin,
+                    client=client,
+                    actor=actor,
+                    config=dict(rec.ctx.config),
+                    clock=self.clock,
+                    log=rec.ctx.log,
+                )
+        raise NotFound(f"plugin {plugin!r} is not running")
+
+    def config_schema(self, kind: PluginKind, name: str) -> dict[str, Any] | None:
+        """JSON Schema of a plugin's settings, if it declares ``config_model`` (pydantic)."""
+        rec = self._records.get((kind, name))
+        model = getattr(rec.instance, "config_model", None) if rec else None
+        schema = getattr(model, "model_json_schema", None)
+        return schema() if callable(schema) else None
 
     # -- lookup ------------------------------------------------------------------------------
     def statuses(self) -> list[PluginStatus]:

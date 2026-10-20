@@ -17,7 +17,7 @@ from model import BuildError, Config, Page, page_from_meta
 Builder = Callable[[Config], Page]
 
 # Modules imported by load_all(); each calls register() for the pages it owns.
-GENERATOR_MODULES: list[str] = ["softmap", "gen_plugin_contracts"]
+GENERATOR_MODULES: list[str] = ["softmap", "gen_plugin_contracts", "gen_operations"]
 
 _REGISTRY: dict[str, Builder] = {}
 

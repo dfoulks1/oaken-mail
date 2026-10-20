@@ -53,8 +53,10 @@
       <a class="doc-link" href="architecture/ai-safety.html">Prompt safety and workspaces</a>
       <a class="doc-link" href="architecture/read-state.html">Read state</a>
       <a class="doc-link" href="architecture/sync-schedule.html">Sync schedule</a>
+      <a class="doc-link" href="architecture/operations.html">Operations</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="reference/plugin-contracts.html">Plugin contracts</a>
+      <a class="doc-link" href="reference/operations.html">Operations</a>
       <div class="label">Project</div>
       <a class="doc-link" href="contributing.html">Contributing</a>
       <a class="doc-link" href="adr/index.html">Architecture decisions</a>
@@ -248,6 +250,9 @@ every problem it finds at once.</li>
 fails a health check is marked unhealthy, logged, announced as a <code>PluginHealthChanged</code> event, and
 left out of lookups. A plugin whose <code>start()</code> failed is retried at each health check, so a service
 that was down comes back by itself.</li>
+<li><strong>Offer operations.</strong> If the plugin has an <code>operations()</code> method, each <code>PluginOperation</code> it
+returns becomes <code>&lt;plugin&gt;.&lt;name&gt;</code> in the <a href="architecture/operations.html">operation registry</a>, under
+the same confirm gate. They start off over MCP and cannot mark mail read.</li>
 <li><strong>Stop.</strong> <code>stop()</code> is called once at shutdown.</li>
 </ul>
 <p>Core never stops because a plugin did. <code>start</code>, <code>stop</code> and <code>health</code> are all optional to define.</p>

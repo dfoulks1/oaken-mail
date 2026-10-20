@@ -126,11 +126,17 @@ notes = ["Runs whether or not the web UI does. Its own token, caller class and l
 id = "operations"
 name = "Operation registry"
 layer = "services"
-status = "planned"
+status = "built"
 prompt = "13"
+path = "src/oaken/core/operations/registry.py"
 summary = "Typed operations with permission classes and the confirm gate. HTTP and MCP surfaces are generated from it."
-uses = ["retrieval", "readstate", "audit", "jobs"]
-notes = ["Anything that mutates mail is gated here, in code, not in a prompt."]
+uses = ["retrieval", "readstate", "audit", "syncsched", "llm", "pluginhost"]
+types = [
+  ["Operation", "dataclass", "Name, permission (read, mutate, send), input and output models, MCP ceiling, preview and handler."],
+  ["CoreClient", "class", "The one path every call takes: exposure, input, class, confirm gate, handler, audit."],
+  ["Proposal", "model", "What a mutation would change, with a single-use token an agent redeems."],
+]
+notes = ["Anything that mutates mail is gated here, in code, not in a prompt.", "31 core operations, plus those plugins offer as <plugin>.<name>. Retrieval (search, ask) is stubbed until prompt 15.", "No HTTP server yet; the in-process client is what tests use. Exposure to MCP is a ceiling in code and a user setting in operation_settings."]
 
 [[components]]
 id = "retrieval"
@@ -148,13 +154,13 @@ layer = "services"
 status = "built"
 prompt = "12"
 path = "src/oaken/readstate/service.py"
-summary = "Marks mail read only when the user opens or summarizes it. Local first: sets the state and a dirty marker, audits, then writes back through a durable job. A change nothing can write stays local and says so."
+summary = "Marks mail read only when the user opens it or says to (a summary alone never does). Local first: sets the state and a dirty marker, audits, then writes back through a durable job. A change nothing can write stays local and says so."
 uses = ["audit", "rawstore", "jobs", "events", "pluginhost"]
 types = [
   ["ReadState", "class", "mark_read, mark_unread, message_presented, message_dismissed, undo, resume_pending and apply_server_flags (a SyncRunner flag sink)."],
   ["ReadResult", "dataclass", "What changed, what was unchanged, missing or local-only, and the audit ids."],
 ]
-notes = ["The write job is readstate.write, one per message. A system actor is refused outright; reasons that are not the user's need confirm=True until prompt 13.", "Providers are keyed by account id, so write-back reaches the right mailbox of several."]
+notes = ["The write job is readstate.write, one per message. A system actor is refused outright; reasons that are not the user's need confirm=True, which the operation registry passes after its gate.", "Providers are keyed by account id, so write-back reaches the right mailbox of several."]
 
 [[components]]
 id = "audit"

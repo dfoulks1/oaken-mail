@@ -83,6 +83,10 @@ id = "architecture/sync-schedule"
 file = "architecture/sync-schedule.md"
 
 [[pages]]
+id = "architecture/operations"
+file = "architecture/operations.md"
+
+[[pages]]
 id = "providers/gmail"
 file = "providers/gmail.md"
 
@@ -100,6 +104,10 @@ file = "plugins.md"
 
 [[pages]]
 id = "reference/plugin-contracts"
+generated = true
+
+[[pages]]
+id = "reference/operations"
 generated = true
 
 [[pages]]

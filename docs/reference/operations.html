@@ -1,0 +1,513 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Operations · Oaken Mail</title>
+<meta name="description" content="Every operation: permission class, MCP exposure, inputs and outputs.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Operations · Oaken Mail">
+<meta property="og:description" content="Every operation: permission class, MCP exposure, inputs and outputs.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="../assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">Operations</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Start</div>
+      <a class="doc-link" href="../providers/gmail.html">Connect Gmail</a>
+      <a class="doc-link" href="../providers/smtp.html">Send through your own SMTP server</a>
+      <a class="doc-link" href="../providers/imap.html">Connect any IMAP server</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="../architecture/overview.html">Architecture overview</a>
+      <a class="doc-link" href="../architecture/jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="../architecture/software-map.html">Software map</a>
+      <a class="doc-link" href="../architecture/swarm.html">The swarm</a>
+      <a class="doc-link" href="../architecture/storage.html">Raw storage</a>
+      <a class="doc-link" href="../architecture/parsing.html">Parsing and cleaning</a>
+      <a class="doc-link" href="../architecture/sieve.html">Sieve filtering</a>
+      <a class="doc-link" href="../architecture/index.html">The search index</a>
+      <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <a class="doc-link" href="../architecture/vectors.html">The vector store</a>
+      <a class="doc-link" href="../architecture/ingest-pipeline.html">The ingest pipeline</a>
+      <a class="doc-link" href="../architecture/ai-safety.html">Prompt safety and workspaces</a>
+      <a class="doc-link" href="../architecture/read-state.html">Read state</a>
+      <a class="doc-link" href="../architecture/sync-schedule.html">Sync schedule</a>
+      <a class="doc-link" href="../architecture/operations.html">Operations</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="plugin-contracts.html">Plugin contracts</a>
+      <a class="doc-link current" href="operations.html" aria-current="page">Operations</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#inputs-and-outputs"><span class="num">1</span>Inputs and outputs</a>
+      <a class="nav-link" href="#plugin-operations"><span class="num">2</span>Plugin operations</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-secondary">Generated</span></div>
+    <h1 class="display-6">Operations</h1>
+    <p class="lead">Everything a client can ask Oaken Mail to do, with its permission class and MCP exposure, generated from the registry.</p>
+  </header>
+<p>Every operation, defined once. The general API, the CLI and the MCP server are generated from the same registry. <a href="../architecture/operations.html">How it works</a>.</p>
+<p><strong>Permission</strong>: <code>read</code> changes nothing, <code>mutate</code> asks for confirmation, <code>send</code> is refused in this version. <strong>MCP</strong> is the ceiling in code and the default; the user can lower it, and raise it only up to the ceiling. <strong>Marks read</strong> means it may change read state.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Operation</th>
+<th>Permission</th>
+<th>MCP</th>
+<th>Marks read</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ask</code></td>
+<td>read</td>
+<td>off until you turn it on</td>
+<td>no</td>
+<td>Answer a question from the mail, with the messages it came from. Arrives with prompt 15.</td>
+</tr>
+<tr>
+<td><code>get_message</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>One message: cleaned text and metadata. Never marks it read.</td>
+</tr>
+<tr>
+<td><code>get_message_rules</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>How a message was filed: its labels, flags and disposition, and the rule behind each.</td>
+</tr>
+<tr>
+<td><code>get_raw</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>The raw headers of a message, and optionally its raw bytes, for inspection. Not for MCP.</td>
+</tr>
+<tr>
+<td><code>list_accounts</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>The configured accounts: id, provider and display name (never credentials).</td>
+</tr>
+<tr>
+<td><code>list_audit</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>The newest audit-log rows: who changed what, why, and whether it can be undone.</td>
+</tr>
+<tr>
+<td><code>list_labels</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>Every label and disposition with how many live messages carry it.</td>
+</tr>
+<tr>
+<td><code>list_messages</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>List the newest messages that match the filters, with a short snippet of each.</td>
+</tr>
+<tr>
+<td><code>list_operations</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>Every operation with its permission class, and whether MCP clients may call it.</td>
+</tr>
+<tr>
+<td><code>list_plugins</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>Every plugin: kind, version, capabilities, health, the operations it offers, its settings.</td>
+</tr>
+<tr>
+<td><code>list_schedules</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>Every sync schedule: when it next runs, how the last run went, and whether it is paused.</td>
+</tr>
+<tr>
+<td><code>mark_read</code></td>
+<td>mutate</td>
+<td>on by default</td>
+<td>yes</td>
+<td>Mark messages read. Written back to the mailbox; undoable.</td>
+</tr>
+<tr>
+<td><code>mark_unread</code></td>
+<td>mutate</td>
+<td>on by default</td>
+<td>yes</td>
+<td>Mark messages unread. Written back to the mailbox; undoable.</td>
+</tr>
+<tr>
+<td><code>message_dismissed</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>The user stopped looking before the delay passed: cancel the pending mark.</td>
+</tr>
+<tr>
+<td><code>message_presented</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>yes</td>
+<td>The user is looking at this message: core marks it read after the configured delay.</td>
+</tr>
+<tr>
+<td><code>pause_schedule</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Pause a sync schedule until it is resumed.</td>
+</tr>
+<tr>
+<td><code>pipeline_status</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>Where ingest stands: each stage's queue, throughput and ETA, and jobs parked as failed.</td>
+</tr>
+<tr>
+<td><code>plugin_health</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>Whether plugins are started and healthy, and why not if they are not.</td>
+</tr>
+<tr>
+<td><code>rebuild_index</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Rebuild the search index from the raw store (resumable).</td>
+</tr>
+<tr>
+<td><code>remove_schedule</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Remove a sync schedule (a per-folder one, or an account's, which stops its sync).</td>
+</tr>
+<tr>
+<td><code>reprocess</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Bring one pipeline stage up to date for old mail (parse, filter, embed or enrich).</td>
+</tr>
+<tr>
+<td><code>resume_schedule</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Resume a paused sync schedule: it is due now and its failure count is cleared.</td>
+</tr>
+<tr>
+<td><code>search</code></td>
+<td>read</td>
+<td>off until you turn it on</td>
+<td>no</td>
+<td>Hybrid search (keyword and meaning). Arrives with prompt 15; use search_keyword for now.</td>
+</tr>
+<tr>
+<td><code>search_keyword</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>Keyword search (BM25) over the index: words, phrases, -exclusions and from:/label:/after:.</td>
+</tr>
+<tr>
+<td><code>set_operation_exposure</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Choose whether MCP clients may call an operation, or all of a plugin's operations.</td>
+</tr>
+<tr>
+<td><code>set_schedule</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Create or change a sync schedule. The floor and the timezone are checked now.</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>A short health summary: accounts, messages, index, queue, plugins and paused schedules.</td>
+</tr>
+<tr>
+<td><code>summarize_message</code></td>
+<td>mutate</td>
+<td>on by default</td>
+<td>yes</td>
+<td>Summarize messages with the local model. Optionally mark the summarized ones read.</td>
+</tr>
+<tr>
+<td><code>sync_now</code></td>
+<td>mutate</td>
+<td>on by default</td>
+<td>no</td>
+<td>Sync an account (or one folder) now. Joins a sync already queued or running.</td>
+</tr>
+<tr>
+<td><code>undo</code></td>
+<td>mutate</td>
+<td>on by default</td>
+<td>yes</td>
+<td>Undo a read-state change from the audit log, restoring exactly what each message was.</td>
+</tr>
+<tr>
+<td><code>usage_summary</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>Model calls and tokens per workspace, stage and model, and what the cache saved.</td>
+</tr>
+</tbody>
+</table></div>
+
+<section id="inputs-and-outputs" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>Inputs and outputs</h2></div>
+<p>A trailing <code>?</code> marks an optional field.</p>
+<h3 id="ask"><code>ask</code></h3>
+<p>Answer a question from the mail, with the messages it came from. Arrives with prompt 15.</p>
+<ul>
+<li>Input: <code>question</code>, <code>account_id</code>?</li>
+<li>Output: <code>answer</code>, <code>message_ids</code>?</li>
+</ul>
+<h3 id="get-message"><code>get_message</code></h3>
+<p>The cleaned text (quotes and signatures removed), cut to the caller's limit. Reading a message here does not change read state: only opening or summarizing it, by the user, does.</p>
+<ul>
+<li>Input: <code>message_id</code>, <code>include_text</code>?, <code>text_chars</code>?</li>
+<li>Output: <code>message_id</code>, <code>account_id</code>, <code>thread_key</code>?, <code>subject</code>?, <code>from_addr</code>?, <code>from_name</code>?, <code>date</code>?, <code>labels</code>?, <code>disposition</code>?, <code>is_read</code>?, <code>indexed</code>?, <code>text</code>?, <code>truncated</code>?, <code>attachments</code>?, <code>content_is_untrusted</code>?</li>
+</ul>
+<h3 id="get-message-rules"><code>get_message_rules</code></h3>
+<p>How a message was filed: its labels, flags and disposition, and the rule behind each.</p>
+<ul>
+<li>Input: <code>message_id</code></li>
+<li>Output: <code>message_id</code>, <code>attrs</code>, <code>filter</code>?</li>
+</ul>
+<h3 id="get-raw"><code>get_raw</code></h3>
+<p>The raw headers of a message, and optionally its raw bytes, for inspection. Not for MCP.</p>
+<ul>
+<li>Input: <code>message_id</code>, <code>include_raw</code>?</li>
+<li>Output: <code>message_id</code>, <code>size_raw</code>, <code>in_lfs</code>, <code>headers</code>, <code>raw_base64</code>?, <code>truncated</code>?</li>
+</ul>
+<h3 id="list-accounts"><code>list_accounts</code></h3>
+<p>The configured accounts: id, provider and display name (never credentials).</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>accounts</code></li>
+</ul>
+<h3 id="list-audit"><code>list_audit</code></h3>
+<p>The newest audit-log rows: who changed what, why, and whether it can be undone.</p>
+<ul>
+<li>Input: <code>limit</code>?, <code>op</code>?</li>
+<li>Output: <code>entries</code></li>
+</ul>
+<h3 id="list-labels"><code>list_labels</code></h3>
+<p>Every label and disposition with how many live messages carry it.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>labels</code>, <code>dispositions</code>, <code>content_is_untrusted</code>?</li>
+</ul>
+<h3 id="list-messages"><code>list_messages</code></h3>
+<p>Newest first. Snippets by default; <code>include_text</code> adds the cleaned text within the reply's character budget. Never marks anything read.</p>
+<ul>
+<li>Input: <code>account_id</code>?, <code>label</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>limit</code>?, <code>include_text</code>?, <code>text_chars</code>?</li>
+<li>Output: <code>items</code>, <code>truncated</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
+</ul>
+<h3 id="list-operations"><code>list_operations</code></h3>
+<p>Every operation with its permission class, and whether MCP clients may call it.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>operations</code></li>
+</ul>
+<h3 id="list-plugins"><code>list_plugins</code></h3>
+<p>Every plugin: kind, version, capabilities, health, the operations it offers, its settings.</p>
+<ul>
+<li>Input: <code>name</code>?</li>
+<li>Output: <code>plugins</code></li>
+</ul>
+<h3 id="list-schedules"><code>list_schedules</code></h3>
+<p>Every sync schedule: when it next runs, how the last run went, and whether it is paused.</p>
+<ul>
+<li>Input: <code>crontab</code>?</li>
+<li>Output: <code>schedules</code>, <code>crontab</code>?</li>
+</ul>
+<h3 id="mark-read"><code>mark_read</code></h3>
+<p>Mark messages read. Written back to the mailbox; undoable.</p>
+<ul>
+<li>Input: <code>ids</code>, <code>after_summary</code>?</li>
+<li>Output: <code>changed</code>, <code>unchanged</code>, <code>missing</code>, <code>local_only</code>, <code>audit_ids</code>, <code>batch_id</code>?, <code>skipped</code>?</li>
+</ul>
+<h3 id="mark-unread"><code>mark_unread</code></h3>
+<p>Mark messages unread. Written back to the mailbox; undoable.</p>
+<ul>
+<li>Input: <code>ids</code>, <code>after_summary</code>?</li>
+<li>Output: <code>changed</code>, <code>unchanged</code>, <code>missing</code>, <code>local_only</code>, <code>audit_ids</code>, <code>batch_id</code>?, <code>skipped</code>?</li>
+</ul>
+<h3 id="message-dismissed"><code>message_dismissed</code></h3>
+<p>The user stopped looking before the delay passed: cancel the pending mark.</p>
+<ul>
+<li>Input: <code>message_id</code></li>
+<li>Output: <code>cancelled</code></li>
+</ul>
+<h3 id="message-presented"><code>message_presented</code></h3>
+<p>The user is looking at this message: core marks it read after the configured delay.</p>
+<ul>
+<li>Input: <code>message_id</code></li>
+<li>Output: <code>armed</code></li>
+</ul>
+<h3 id="pause-schedule"><code>pause_schedule</code></h3>
+<p>Pause a sync schedule until it is resumed.</p>
+<ul>
+<li>Input: <code>account_id</code>, <code>folder</code>?, <code>why</code>?</li>
+<li>Output: <code>schedule</code></li>
+</ul>
+<h3 id="pipeline-status"><code>pipeline_status</code></h3>
+<p>Where ingest stands: each stage's queue, throughput and ETA, and jobs parked as failed.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>stages</code>, <code>docs</code>, <code>chunks</code>, <code>index_stale</code>, <code>vector_model</code>?, <code>vectors</code>, <code>embedder_model</code>?, <code>embeddings_stale</code>, <code>backfill_paused</code>, <code>quarantined_files</code>, <code>parked</code>?</li>
+</ul>
+<h3 id="plugin-health"><code>plugin_health</code></h3>
+<p>Whether plugins are started and healthy, and why not if they are not.</p>
+<ul>
+<li>Input: <code>name</code>?</li>
+<li>Output: <code>plugins</code></li>
+</ul>
+<h3 id="rebuild-index"><code>rebuild_index</code></h3>
+<p>Rebuild the search index from the raw store (resumable).</p>
+<ul>
+<li>Input: <code>account_id</code>?, <code>force</code>?</li>
+<li>Output: <code>job_id</code>, <code>created</code></li>
+</ul>
+<h3 id="remove-schedule"><code>remove_schedule</code></h3>
+<p>Remove a sync schedule (a per-folder one, or an account's, which stops its sync).</p>
+<ul>
+<li>Input: <code>account_id</code>, <code>folder</code>?</li>
+<li>Output: <code>removed</code></li>
+</ul>
+<h3 id="reprocess"><code>reprocess</code></h3>
+<p>Bring one pipeline stage up to date for old mail (parse, filter, embed or enrich).</p>
+<ul>
+<li>Input: <code>stage</code>, <code>account_id</code>?</li>
+<li>Output: <code>job_id</code>, <code>created</code></li>
+</ul>
+<h3 id="resume-schedule"><code>resume_schedule</code></h3>
+<p>Resume a paused sync schedule: it is due now and its failure count is cleared.</p>
+<ul>
+<li>Input: <code>account_id</code>, <code>folder</code>?</li>
+<li>Output: <code>schedule</code></li>
+</ul>
+<h3 id="search"><code>search</code></h3>
+<p>Hybrid search (keyword and meaning). Arrives with prompt 15; use search_keyword for now.</p>
+<ul>
+<li>Input: <code>account_id</code>?, <code>label</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>query</code>, <code>limit</code>?</li>
+<li>Output: <code>items</code>, <code>truncated</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
+</ul>
+<h3 id="search-keyword"><code>search_keyword</code></h3>
+<p>Hits come back with the matching words marked <code>**like this**</code>. Never marks read.</p>
+<ul>
+<li>Input: <code>account_id</code>?, <code>label</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>query</code>, <code>limit</code>?</li>
+<li>Output: <code>items</code>, <code>truncated</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
+</ul>
+<h3 id="set-operation-exposure"><code>set_operation_exposure</code></h3>
+<p>Choose whether MCP clients may call an operation, or all of a plugin's operations.</p>
+<ul>
+<li>Input: <code>scope</code>, <code>name</code>, <code>mcp</code></li>
+<li>Output: <code>scope</code>, <code>before</code>, <code>after</code>, <code>operations</code></li>
+</ul>
+<h3 id="set-schedule"><code>set_schedule</code></h3>
+<p>Create or change a sync schedule. The floor and the timezone are checked now.</p>
+<ul>
+<li>Input: <code>account_id</code>, <code>folder</code>?, <code>schedule</code>, <code>timezone</code>?, <code>quiet</code>?, <code>clear_quiet</code>?, <code>run_now</code>?</li>
+<li>Output: <code>schedule</code></li>
+</ul>
+<h3 id="status"><code>status</code></h3>
+<p>A short health summary: accounts, messages, index, queue, plugins and paused schedules.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>version</code>, <code>accounts</code>, <code>messages</code>, <code>indexed</code>, <code>index_stale</code>, <code>queue_depth</code>?, <code>plugins_healthy</code>?, <code>plugins_total</code>?, <code>schedules_paused</code>?</li>
+</ul>
+<h3 id="summarize-message"><code>summarize_message</code></h3>
+<p>Summaries are cached by content and model, and made in the message's own workspace (a <code>secure</code> one never reaches a remote model). Mail text goes to the model only as <code>UntrustedText</code>. A message that cannot be summarized says why and does not stop the others. Read state changes only if <code>mark_read</code> is true, and only for the ones that got a summary.</p>
+<ul>
+<li>Input: <code>message_ids</code>, <code>mark_read</code>?</li>
+<li>Output: <code>items</code>, <code>marked_read</code>?, <code>content_is_untrusted</code>?</li>
+</ul>
+<h3 id="sync-now"><code>sync_now</code></h3>
+<p>Sync an account (or one folder) now. Joins a sync already queued or running.</p>
+<ul>
+<li>Input: <code>account_id</code>, <code>folder</code>?</li>
+<li>Output: <code>job_id</code>, <code>created</code></li>
+</ul>
+<h3 id="undo"><code>undo</code></h3>
+<p>Undo a read-state change from the audit log, restoring exactly what each message was.</p>
+<ul>
+<li>Input: <code>audit_id</code></li>
+<li>Output: <code>changed</code>, <code>unchanged</code>, <code>missing</code>, <code>local_only</code>, <code>audit_ids</code>, <code>batch_id</code>?, <code>skipped</code>?</li>
+</ul>
+<h3 id="usage-summary"><code>usage_summary</code></h3>
+<p>Model calls and tokens per workspace, stage and model, and what the cache saved.</p>
+<ul>
+<li>Input: <code>since_hours</code>?, <code>workspace</code>?</li>
+<li>Output: <code>rows</code></li>
+</ul>
+</section>
+<section id="plugin-operations" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Plugin operations</h2></div>
+<p>A plugin may offer more, named <code>&lt;plugin&gt;.&lt;name&gt;</code>. They are listed by <code>list_operations</code> at run time, and are always off over MCP until the user turns them on.</p>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

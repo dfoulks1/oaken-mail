@@ -1,7 +1,7 @@
 +++
 title = "Read state"
 subtitle = "A message is read because you saw it, never because software touched it"
-lead = "One place in core marks mail read or unread. It happens when you open a message or ask for a summary of it, and for nothing else. Every change is local first, written to your mail service afterwards, recorded, and can be undone."
+lead = "One place in core marks mail read or unread. It happens when you open a message or tell it to, and for nothing else. Every change is local first, written to your mail service afterwards, recorded, and can be undone."
 badges = [["text-bg-warning", "Pre-alpha"]]
 group = "concepts"
 order = 39
@@ -14,8 +14,8 @@ description = "What marks a message read and what never does, the local-first wr
 
 - You **open** it and it stays open for a moment (2 seconds unless you change it). If you move on
   before then, nothing happens.
-- You **ask for a summary** of it, in the app or through an MCP client (`summarize_email`).
-- You mark it read yourself.
+- You mark it read yourself, including the offer at the end of a summary: a summary alone never
+  does. An MCP client can only do it through a confirmed proposal.
 
 **These never do, and a test makes sure it stays that way:**
 
@@ -40,7 +40,7 @@ sequenceDiagram
     participant D as raw.db
     participant Q as Job queue
     participant P as Provider
-    U->>R: open / summarize / mark read
+    U->>R: open / mark read
     R->>D: set is_read, set the dirty marker, write the audit row (one transaction)
     R->>Q: one write job for this message
     R-->>U: MessageReadChanged (with reason and audit id)
@@ -91,20 +91,20 @@ before and after. Only internal ids and flags are stored, never any mail.
 | Reason | Who | Needs `confirm`? | Turned off by `auto_mark = false`? |
 |---|---|---|---|
 | `user_opened` | you, by opening a message | no | yes |
-| `user_summarized` | you, asking for a summary | no | yes |
-| `mcp_summarized` | an MCP client's `summarize_email`, which you asked for | no | yes |
+| `user_summarized` | you, choosing to mark messages read after a summary | no | no |
+| `mcp_summarized` | an MCP client, after a summary | **yes** | no |
 | `user_marked_read`, `user_marked_unread`, `user_undo`, any other `user_*` | you | no | no |
 | any other reason, or any `user_*` reason from an agent | an agent or a script | **yes** | no |
 
-The gate is code, not a prompt. The operation registry (prompt 13) replaces this small version
-with the shared confirm gate.
+The gate is code, not a prompt. The [operation registry](operations.md) is the one that
+decides, and passes the confirmation down; this check stays as a second line of defence.
 
 ## Settings
 
 | Setting | Default | Meaning |
 |---|---|---|
 | `ui.mark_read_delay_ms` | 2000 | How long a message must stay open before core marks it read. Core owns the timer, so every client behaves alike |
-| `read_state.auto_mark` | true | `false` turns off opening and summarizing as reasons to mark read. Marking read or unread yourself still works |
+| `read_state.auto_mark` | true | `false` turns off opening as a reason to mark read. Marking read or unread yourself still works |
 | `read_state.audit_chunk` | 500 | Messages per audit row |
 
 ## For clients

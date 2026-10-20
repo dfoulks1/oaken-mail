@@ -71,19 +71,23 @@ async def test_the_confirm_gate(rsrig: RS) -> None:
     with pytest.raises(ConfirmRequired):
         await rsrig.rs.mark_read([b], "triage")
     assert (await rsrig.rs.mark_read([b], "triage", confirm=True)).changed == (b,)
-    # ... and the MCP summarize reason is pre-confirmed for an agent.
-    assert (await rsrig.rs.mark_read([c], "mcp_summarized", actor=AGENT)).changed == (c,)
+    # ... and a summary no longer confirms anything: an agent's mark after one needs the gate too.
+    with pytest.raises(ConfirmRequired):
+        await rsrig.rs.mark_read([c], "mcp_summarized", actor=AGENT)
+    assert (await rsrig.rs.mark_read([c], "mcp_summarized", actor=AGENT, confirm=True)).changed == (
+        c,
+    )
     assert all([await rsrig.is_read(m) for m in (a, b, c)])
 
 
-async def test_a_summary_marks_read_but_a_search_returning_the_same_message_does_not(
+async def test_a_confirmed_summary_mark_changes_one_message_and_a_search_changes_none(
     rsrig: RS,
 ) -> None:
     ids = await rsrig.add(3)
     hits = await rsrig.rig.index.keyword_search("topic1", SearchFilters(), k=10)
     assert hits.hits, "the search found nothing, so it proves nothing"
     assert not await rsrig.is_read(ids[1])
-    await rsrig.rs.mark_read([ids[1]], "mcp_summarized", actor=AGENT)
+    await rsrig.rs.mark_read([ids[1]], "mcp_summarized", actor=AGENT, confirm=True)
     assert await rsrig.is_read(ids[1])
     assert not await rsrig.is_read(ids[0]) and not await rsrig.is_read(ids[2])
 
@@ -107,10 +111,12 @@ async def test_auto_mark_off_leaves_automatic_marks_alone_but_explicit_marks_wor
         assert await rs.rs.message_presented(mid) is False
         rs.rig.clock.advance(seconds=60)
         assert await rs.rs.due() == 0
-        for reason, actor in (("user_opened", USER), ("mcp_summarized", AGENT)):
-            result = await rs.rs.mark_read([mid], reason, actor=actor)
-            assert result.skipped == "auto_mark_off" and result.changed == ()
+        result = await rs.rs.mark_read([mid], "user_opened", actor=USER)
+        assert result.skipped == "auto_mark_off" and result.changed == ()
         assert not await rs.is_read(mid)
+        # a summary the person chose to mark read is an explicit mark, not an automatic one
+        assert (await rs.rs.mark_read([mid], "user_summarized")).changed == (mid,)
+        assert (await rs.rs.mark_unread([mid], "user_marked_unread")).changed == (mid,)
         assert (await rs.rs.mark_read([mid], "user_marked_read")).changed == (mid,)
         assert await rs.is_read(mid)
         assert (await rs.rs.mark_unread([mid], "user_marked_unread")).changed == (mid,)

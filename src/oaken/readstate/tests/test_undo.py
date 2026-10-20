@@ -73,7 +73,7 @@ async def test_the_default_chunk_is_500(rsrig: RS) -> None:
 
 async def test_the_audit_row_names_the_actor_and_the_reason(rsrig: RS) -> None:
     (mid,) = await rsrig.add(1)
-    await rsrig.rs.mark_read([mid], "mcp_summarized", actor=AGENT)
+    await rsrig.rs.mark_read([mid], "mcp_summarized", actor=AGENT, confirm=True)
     [entry] = await rsrig.audit.recent()
     assert (entry.actor.kind, entry.actor.label, entry.reason) == (
         "agent",

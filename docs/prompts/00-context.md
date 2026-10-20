@@ -88,7 +88,8 @@ Key rules:
    wrapped in an `UntrustedText` type and kept out of system prompts. Anything that
    mutates mail is enforced by a confirm gate **in code**, not in a prompt.
 7. **Read state follows what the user has seen.** Messages are marked read only on
-   user-initiated "opened/presented" or user-initiated "summarize" — never by
+   user-initiated "opened/presented" or an explicit mark (also after a summary, if the user
+   chooses) — never by
    background ingest/enrichment. Search results and bulk reads never mark read.
 8. **Sending is never exposed over MCP.** (Send itself comes in a later phase.)
 9. **Many accounts from day one.** `account_id` is in every schema, and the plugin host starts one
@@ -179,7 +180,7 @@ BM25 index with no raw bytes. It is **not** migrated. It is backed up and left a
 
 ### Read state and the audit log
 
-- Read state follows what the user has seen: a message is marked read only when the user opens it (after `ui.mark_read_delay_ms`, owned by core) or asks for a summary (`mcp_summarized` counts as the user reading it). `read_state.auto_mark = false` turns those off.
+- Read state follows what the user has seen: a message is marked read only when the user opens it (after `ui.mark_read_delay_ms`, owned by core) (`read_state.auto_mark = false` turns that off). A summary never marks anything read by itself: the user may choose to mark the summarized messages read afterwards, and an agent can only do so through a confirmed proposal (prompt 13).
 - **Local first.** A change sets local state and a dirty marker, is audited, then written back through a durable `readstate.write` job. A change nothing can write **stays local** and says so, until the user deals with it (a UI for that comes later).
 - A system actor is refused outright. Reasons that are not the user's need `confirm=True` until the operation registry's confirm gate (13) replaces the stub.
 - Every undoable change is in the audit log (`raw.db`) in the same transaction, holding ids and booleans, never mail content. The log can be exported or tee'd to a file later (`oaken audit export`; not built).

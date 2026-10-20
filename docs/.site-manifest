@@ -5,6 +5,7 @@ architecture/ai-safety.html
 architecture/index.html
 architecture/ingest-pipeline.html
 architecture/jobs.html
+architecture/operations.html
 architecture/overview.html
 architecture/parsing.html
 architecture/read-state.html
@@ -35,6 +36,7 @@ plugins.html
 providers/gmail.html
 providers/imap.html
 providers/smtp.html
+reference/operations.html
 reference/plugin-contracts.html
 robots.txt
 security.html
