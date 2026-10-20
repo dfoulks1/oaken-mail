@@ -36,6 +36,56 @@ def set_client_factory(factory: ClientFactory | None) -> None:
     _factory = factory
 
 
+AgentFactory = Callable[[argparse.Namespace], Any]
+_agent_factory: AgentFactory | None = None
+
+
+def set_agent_client_factory(factory: AgentFactory | None) -> None:
+    """Install (or clear) the factory for the agent-protocol client; tests inject an ASGI one."""
+    global _agent_factory
+    _agent_factory = factory
+
+
+def make_agent_client(args: argparse.Namespace) -> Any:
+    """The agent-protocol client. The credential is the agent's own token (``OAKEN_AGENT_TOKEN``,
+    or the file in ``--agent-token-file``), never the API token."""
+    if _agent_factory is not None:
+        return _agent_factory(args)
+    import os
+    from pathlib import Path
+
+    from oaken_cli.discovery import discover
+    from oaken_cli.http import AgentClient
+
+    token = os.environ.get("OAKEN_AGENT_TOKEN", "")
+    path = getattr(args, "agent_token_file", None)
+    if path:
+        token = Path(path).expanduser().read_text(encoding="utf-8").strip()
+    if not token:
+        raise CliError(
+            "no agent token: set OAKEN_AGENT_TOKEN or pass --agent-token-file", ExitCode.AUTH
+        )
+    return AgentClient(discover(url=getattr(args, "url", None), token=token))
+
+
+def run_agent(body: Callable[[Any], Awaitable[int]], args: argparse.Namespace) -> int:
+    """Like :func:`run`, for the agent-protocol client."""
+
+    async def _main() -> int:
+        client = make_agent_client(args)
+        try:
+            return await body(client)
+        finally:
+            await client.aclose()
+
+    try:
+        return asyncio.run(_main())
+    except CliError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise _translate(exc) from exc
+
+
 def make_client(args: argparse.Namespace) -> ApiClient:
     """Build the :class:`ApiClient` for this invocation.
 

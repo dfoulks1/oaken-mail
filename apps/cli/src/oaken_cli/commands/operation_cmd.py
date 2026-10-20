@@ -25,6 +25,8 @@ from oaken_cli.exits import CliError, ExitCode
 def cmd_operation(args: argparse.Namespace) -> int:
     if not args.name:
         return run(lambda client: _list(client, args), args)
+    if args.describe:
+        return run(lambda client: _describe(client, args), args)
     return run(lambda client: _call(client, args), args)
 
 
@@ -44,6 +46,51 @@ async def _list(client: ApiClient, args: argparse.Namespace) -> int:
         from oaken_cli.output import print_table
 
         print_table(data, ["name", "permission", "summary"], title="operations")
+
+    return emit(args, data=data, text=text)
+
+
+def _fields(schema: object) -> list[dict[str, object]]:
+    """The fields of a JSON Schema object as rows: name, type, whether required."""
+    if not isinstance(schema, dict):
+        return []
+    required = set(schema.get("required", []))
+    return [
+        {
+            "field": name,
+            "type": str(
+                p.get("type") or ("/".join(str(x.get("type")) for x in p.get("anyOf", []))) or "any"
+            ),
+            "required": name in required,
+            "description": p.get("description", ""),
+        }
+        for name, p in schema.get("properties", {}).items()
+    ]
+
+
+async def _describe(client: ApiClient, args: argparse.Namespace) -> int:
+    ops = {o.name: o for o in await client.list_ops()}
+    op = ops.get(args.name)
+    if op is None:
+        raise CliError(f"no such operation: {args.name}", ExitCode.USAGE)
+    data = {
+        "name": op.name,
+        "summary": op.summary,
+        "permission": op.permission,
+        "marks_read": op.marks_read,
+        "input": _fields(op.input_schema),
+        "output": _fields(op.output_schema),
+    }
+
+    def text() -> None:
+        from oaken_cli.output import print_table, print_text
+
+        print_text(f"{op.name}: {op.summary}")
+        mark = "; may change read state" if op.marks_read else ""
+        print_text(f"permission: {op.permission}{mark}")
+        cols = ["field", "type", "required", "description"]
+        print_table(_fields(op.input_schema), cols, title="input")
+        print_table(_fields(op.output_schema), cols, title="output")
 
     return emit(args, data=data, text=text)
 

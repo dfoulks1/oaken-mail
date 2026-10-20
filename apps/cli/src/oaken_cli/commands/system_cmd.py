@@ -231,10 +231,22 @@ async def _ask(client: ApiClient, args: argparse.Namespace) -> int:
     def text() -> None:
         from oaken_cli.output import print_text
 
-        print_text(out.get("answer", "") if isinstance(out, dict) else "")
-        ids = out.get("message_ids", []) if isinstance(out, dict) else []
-        if ids:
-            print_text(f"\nfrom: {', '.join(ids)}")
+        print_text(out.get("answer", ""))
+        if out.get("insufficient_evidence"):
+            print_text("(not enough in the mail to answer this)")
+        cites = out.get("citations", []) or []
+        if cites:
+            print_text("\nsources:")
+        for c in cites:
+            print_text(
+                f"  [{c.get('claim')}] {c.get('subject', '')} ({c.get('sender', '')}, "
+                f"{str(c.get('date') or '')[:10]}) {c.get('message_id', '')}"
+            )
+            print_text(f'      "{c.get("quote", "")}"')
+        if out.get("degraded"):
+            print_text(f"note: keyword evidence only ({out.get('degraded_reason', '')})")
+        for w in out.get("warnings", []) or []:
+            print_text(f"warning: {w}")
 
     return emit(args, data=result.output, text=text)
 

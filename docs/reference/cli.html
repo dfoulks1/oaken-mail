@@ -107,15 +107,15 @@
 <tbody>
 <tr>
 <td><a href="#start"><code>start</code></a></td>
-<td>Start the core daemon (prompt 16).</td>
+<td>Start the core daemon (foreground; --detach for background).</td>
 </tr>
 <tr>
 <td><a href="#stop"><code>stop</code></a></td>
-<td>Stop the core daemon (prompt 16).</td>
+<td>Stop the core daemon.</td>
 </tr>
 <tr>
 <td><a href="#restart"><code>restart</code></a></td>
-<td>Restart the core daemon (prompt 16).</td>
+<td>Restart the core daemon.</td>
 </tr>
 <tr>
 <td><a href="#operation"><code>operation</code></a></td>
@@ -127,7 +127,7 @@
 </tr>
 <tr>
 <td><a href="#search"><code>search</code></a></td>
-<td>Keyword search over the index.</td>
+<td>Search the mail (keyword and meaning, merged).</td>
 </tr>
 <tr>
 <td><a href="#show"><code>show</code></a></td>
@@ -155,7 +155,7 @@
 </tr>
 <tr>
 <td><a href="#ask"><code>ask</code></a></td>
-<td>Answer a question from the mail (prompt 15).</td>
+<td>Answer a question from the mail, citing the messages.</td>
 </tr>
 <tr>
 <td><a href="#pipeline"><code>pipeline</code></a></td>
@@ -192,6 +192,18 @@
 <tr>
 <td><a href="#watch"><code>watch</code></a></td>
 <td>Stream core events as lines (or --json).</td>
+</tr>
+<tr>
+<td><a href="#agents"><code>agents</code></a></td>
+<td>Create, list and revoke external agents (the swarm).</td>
+</tr>
+<tr>
+<td><a href="#jobs"><code>jobs</code></a></td>
+<td>Lease and finish jobs as an agent (OAKEN_AGENT_TOKEN).</td>
+</tr>
+<tr>
+<td><a href="#completion"><code>completion</code></a></td>
+<td>Print a shell completion script (bash, zsh or fish).</td>
 </tr>
 </tbody>
 </table></div>
@@ -241,16 +253,16 @@
 </section>
 <section id="command-details" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Command details</h2></div>
 <h3 id="start"><code>start</code></h3>
-<p>Start the core daemon (prompt 16).</p>
+<p>Start the core daemon (foreground; --detach for background).</p>
 <p>Options:</p>
 <ul>
 <li><code>--detach</code> — Run in the background.</li>
 </ul>
 <h3 id="stop"><code>stop</code></h3>
-<p>Stop the core daemon (prompt 16).</p>
+<p>Stop the core daemon.</p>
 <p>No arguments.</p>
 <h3 id="restart"><code>restart</code></h3>
-<p>Restart the core daemon (prompt 16).</p>
+<p>Restart the core daemon.</p>
 <p>Options:</p>
 <ul>
 <li><code>--detach</code> — Run in the background.</li>
@@ -264,23 +276,30 @@
 <p>Options:</p>
 <ul>
 <li><code>--json-input</code> — The operation input as a JSON object. Use '-' or omit to read stdin when piped.</li>
+<li><code>--describe</code> — Show the operation's summary and input and output fields instead of calling it.</li>
 <li><code>--yes</code> — Confirm a mutating operation (the person asked for exactly this).</li>
 </ul>
 <h3 id="status"><code>status</code></h3>
 <p>Is core running? (does not start it)</p>
 <p>No arguments.</p>
 <h3 id="search"><code>search</code></h3>
-<p>Keyword search over the index.</p>
+<p>Hybrid search: keyword and vector results merged by rank. Operators in the query: from:, before:, after:, label:, in:, -term, &quot;phrase&quot;, term*. Each hit says which retriever found it; if the vector side was down the result says so.</p>
 <p>Arguments:</p>
 <ul>
-<li><code>query</code> — Search terms: words, &quot;phrases&quot;, -exclude, term*.</li>
+<li><code>query</code> — Search terms and operators.</li>
 </ul>
 <p>Options:</p>
 <ul>
 <li><code>--from</code> — Only this sender.</li>
 <li><code>--since</code> — Only after this date (ISO 8601).</li>
+<li><code>--before</code> — Only before this date (ISO 8601).</li>
 <li><code>--label</code> — Only messages carrying this label.</li>
 <li><code>--account</code> — Restrict to one account.</li>
+<li><code>--disposition</code> — inbox, archive or discarded (discarded is explicit).</li>
+<li><code>--category</code> — Only this triage category.</li>
+<li><code>--min-priority</code> — Only this priority or more.</li>
+<li><code>--unread</code> — Only unread messages.</li>
+<li><code>--keyword</code> — Keyword search only (no model, no vectors).</li>
 <li><code>--limit</code> — Maximum results.</li>
 </ul>
 <h3 id="show"><code>show</code></h3>
@@ -336,10 +355,11 @@
 <ul>
 <li><code>--account</code> — Account to sync; default is all.</li>
 <li><code>--folder</code> — One folder; default is the whole account.</li>
-<li><code>--wait</code> — Stream job events until it finishes.</li>
+<li><code>--wait</code> — Wait until the sync job finishes.</li>
+<li><code>--timeout</code> — Give up waiting after S seconds.</li>
 </ul>
 <h3 id="ask"><code>ask</code></h3>
-<p>Answer a question from the mail (prompt 15).</p>
+<p>Answer a question from the mail, citing the messages.</p>
 <p>Arguments:</p>
 <ul>
 <li><code>question</code> — The question to answer.</li>
@@ -396,6 +416,79 @@
 <h3 id="watch"><code>watch</code></h3>
 <p>Stream core events as lines (or --json).</p>
 <p>No arguments.</p>
+<h3 id="agents"><code>agents</code></h3>
+<p>Agents lease jobs from the queue with a token of their own (the swarm page).</p>
+<h4 id="agents-create"><code>agents create</code></h4>
+<p>Register an agent and print its token once.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>label</code> — A name for the agent.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--kind</code> — A job kind it may lease.</li>
+<li><code>--account</code> — Limit it to this account (repeatable).</li>
+<li><code>--max-leases</code> — Jobs it may hold at once.</li>
+<li><code>--max-per-hour</code> — Jobs it may claim per hour.</li>
+</ul>
+<h4 id="agents-list"><code>agents list</code></h4>
+<p>List agents.</p>
+<p>Options:</p>
+<ul>
+<li><code>--all</code> — Include revoked agents.</li>
+</ul>
+<h4 id="agents-revoke"><code>agents revoke</code></h4>
+<p>Revoke an agent; its jobs go back on the queue.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>agent_id</code> — The agent id (see 'oaken agents list').</li>
+</ul>
+<h3 id="jobs"><code>jobs</code></h3>
+<p>The agent side of the queue. Authenticated by the agent's own token (OAKEN_AGENT_TOKEN or --agent-token-file); the API token is not used.</p>
+<p>Options:</p>
+<ul>
+<li><code>--agent-token-file</code> — Read the agent token from PATH.</li>
+</ul>
+<h4 id="jobs-claim"><code>jobs claim</code></h4>
+<p>Lease the next job.</p>
+<p>Options:</p>
+<ul>
+<li><code>--kind</code> — Only this kind.</li>
+</ul>
+<h4 id="jobs-heartbeat"><code>jobs heartbeat</code></h4>
+<p>Extend a lease.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>job_id</code> —</li>
+</ul>
+<h4 id="jobs-complete"><code>jobs complete</code></h4>
+<p>Hand back a result.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>job_id</code> —</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--result</code> — The result object; '-' reads stdin.</li>
+<li><code>--produced-by</code> — The model or tool that made it.</li>
+</ul>
+<h4 id="jobs-fail"><code>jobs fail</code></h4>
+<p>Report an error.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>job_id</code> —</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--error</code> — What went wrong (no mail).</li>
+<li><code>--permanent</code> — Do not retry it.</li>
+</ul>
+<h3 id="completion"><code>completion</code></h3>
+<p>Install with, for example: eval &quot;$(oaken completion bash)&quot;.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>shell</code> —</li>
+</ul>
 </section>
   <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
 </main>

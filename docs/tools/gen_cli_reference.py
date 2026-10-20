@@ -45,6 +45,8 @@ def _positionals(parser: argparse.ArgumentParser) -> list[str]:
     for action in parser._actions:  # noqa: SLF001
         if action.option_strings or action.dest in ("help", "command"):
             continue
+        if isinstance(action, argparse._SubParsersAction):  # noqa: SLF001
+            continue  # listed as its own sections
         name = action.metavar or action.dest
         rows.append(f"`{name}` — {action.help or ''}")
     return rows
@@ -141,19 +143,25 @@ def build(cfg: Config) -> Page:
     )
 
 
-def _command_section(name: str, sub: argparse.ArgumentParser, summary: str) -> list[str]:
-    lines = [f"### `{name}`", ""]
+def _command_section(
+    name: str, sub: argparse.ArgumentParser, summary: str, level: int = 3
+) -> list[str]:
+    lines = [f"{'#' * level} `{name}`", ""]
     blurb = (sub.description or "").strip() or summary
     if blurb:
         lines += [blurb, ""]
     positionals = _positionals(sub)
     options = _options(sub)
+    nested = _subparsers(sub)
     if positionals:
         lines += ["Arguments:", ""] + [f"- {p}" for p in positionals] + [""]
     if options:
         lines += ["Options:", ""] + [f"- {o}" for o in options] + [""]
-    if not positionals and not options:
+    if not positionals and not options and not nested:
         lines += ["No arguments.", ""]
+    nested_help = _command_help(sub)
+    for child, parser in nested.items():
+        lines += _command_section(f"{name} {child}", parser, nested_help.get(child, ""), level + 1)
     return lines
 
 

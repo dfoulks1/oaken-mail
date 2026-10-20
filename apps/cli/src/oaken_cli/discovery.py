@@ -7,8 +7,9 @@ contract from the client side; prompt 16 must write a file this parser accepts.
 
 The runtime file
 -----------------
-Path: ``paths.runtime_file("runtime.json")`` — i.e. ``~/.config/oaken/runtime.json`` on Linux, or
-``$OAKEN_HOME/run/runtime.json`` when ``OAKEN_HOME`` is set. Mode ``0600``. JSON, UTF-8:
+Path: ``paths.runtime_file("runtime.json")`` — the platform runtime directory
+(``$XDG_RUNTIME_DIR/oaken`` on Linux), or ``$OAKEN_HOME/run/runtime.json`` when ``OAKEN_HOME`` is
+set. Mode ``0600``. JSON, UTF-8:
 
 .. code-block:: json
 
@@ -21,9 +22,9 @@ Path: ``paths.runtime_file("runtime.json")`` — i.e. ``~/.config/oaken/runtime.
     }
 
 ``host`` is always loopback (the API never binds off-host). ``port`` is the concrete bound port
-(never ``0``; the daemon resolves a free port before writing the file). A runtime file whose
-``pid`` names no live process is **stale** — core crashed or was killed — and is treated as
-"core is not running".
+(``0`` while core is starting: it claims the file first, then publishes the port). A runtime
+file whose ``pid`` names no live process is **stale** (core crashed or was killed) and is
+treated as "core is not running".
 
 The token
 ---------
@@ -37,11 +38,6 @@ Dev overrides
 ``--url http://127.0.0.1:PORT`` and ``--token-file PATH`` (or ``OAKEN_URL`` / ``OAKEN_TOKEN_FILE``)
 bypass the runtime file for development against a hand-started server. An override never relaxes
 the loopback rule: a non-loopback ``--url`` is refused.
-
-.. note::
-   ``paths.runtime_file`` currently defaults to ``core.json``; prompt 17 specifies ``runtime.json``
-   and this module uses that name. Prompt 16 must write ``runtime.json`` (open question in the
-   report — reconcile the default in ``paths.py`` or keep the explicit name here).
 """
 
 from __future__ import annotations
@@ -131,6 +127,7 @@ def discover(
     token_file: str | None = None,
     runtime_path: Path | None = None,
     token_path: Path | None = None,
+    token: str | None = None,
 ) -> Endpoint:
     """Resolve how to reach core.
 
@@ -145,9 +142,12 @@ def discover(
     token_file = token_file or os.environ.get("OAKEN_TOKEN_FILE") or None
     token_src = token_path or (Path(token_file).expanduser() if token_file else _token_path())
 
+    def credential() -> str:
+        return token if token is not None else _read_token(token_src)
+
     if url:
         _require_loopback(url)
-        return Endpoint(base_url=url.rstrip("/"), token=_read_token(token_src))
+        return Endpoint(base_url=url.rstrip("/"), token=credential())
 
     runtime = _read_runtime(runtime_path or _runtime_path())
     pid = runtime.get("pid")
@@ -155,9 +155,25 @@ def discover(
         raise CoreUnavailable("runtime file is stale (process not running)")
     host = runtime.get("host", "127.0.0.1")
     port = runtime.get("port")
+    if port == 0:
+        raise CoreUnavailable("core is still starting (no port yet)")
     if host not in _LOOPBACK or not isinstance(port, int) or not (0 < port <= 65535):
         raise CoreUnavailable("runtime file does not name a loopback host and port")
-    return Endpoint(base_url=f"http://{host}:{port}", token=_read_token(token_src))
+    return Endpoint(base_url=f"http://{host}:{port}", token=credential())
+
+
+def runtime_info(runtime_path: Path | None = None) -> dict[str, object] | None:
+    """The runtime file's contents if the process it names is alive, else ``None`` (absent, stale
+    or unreadable). Unlike :func:`discover` this does not need the port or the token: it answers
+    "is a core running?" for ``oaken status``, including a core that is still starting."""
+    try:
+        data = _read_runtime(runtime_path or _runtime_path())
+    except CoreUnavailable:
+        return None
+    pid = data.get("pid")
+    if not isinstance(pid, int) or not _pid_alive(pid):
+        return None
+    return data
 
 
 def _runtime_path() -> Path:

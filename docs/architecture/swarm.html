@@ -78,7 +78,7 @@
       <a class="nav-link" href="#privacy"><span class="num">5</span>Privacy</a>
       <a class="nav-link" href="#fan-out-and-attribution"><span class="num">6</span>Fan-out and attribution</a>
       <a class="nav-link" href="#matching-ollama-to-the-swarm"><span class="num">7</span>Matching Ollama to the swarm</a>
-      <a class="nav-link" href="#over-http"><span class="num">8</span>Over HTTP</a>
+      <a class="nav-link" href="#over-http-and-the-cli"><span class="num">8</span>Over HTTP and the CLI</a>
       <a class="nav-link" href="#not-built-yet"><span class="num">9</span>Not built yet</a>
     </nav></div>
   </div></div>
@@ -185,7 +185,7 @@ whatever backend serves them, so lower the internal limit to leave room.</p>
 <p>The model itself is a setting, not a default you are stuck with:
 <code>[ai] llm_model = &quot;qwen3:8b&quot;</code> is a starting point, and a larger model is one line away.</p>
 </section>
-<section id="over-http" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>Over HTTP</h2></div>
+<section id="over-http-and-the-cli" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>Over HTTP and the CLI</h2></div>
 <p>A person manages agents with three operations, which are never offered over MCP:
 <code>create_agent</code> (the token is returned once and only its hash is kept), <code>list_agents</code> and
 <code>revoke_agent</code>. An agent then works through four routes on the <a href="daemon.html">local API</a>, each
@@ -216,13 +216,16 @@ authenticated by its own token:</p>
 </tr>
 </tbody>
 </table></div>
+<p>The CLI covers both sides: <code>oaken agents create|list|revoke</code> for the person, and
+<code>oaken jobs claim|heartbeat|complete|fail</code> for a scripted worker, which reads its token from
+<code>OAKEN_AGENT_TOKEN</code> (or <code>--agent-token-file</code>) and never needs the API token.</p>
 <p>An agent token opens only these routes, and no other route accepts one. A claim past the agent's
 quota is a <code>429</code>, a result that does not match the kind's schema is a <code>422</code>, a kind the agent was not
 given is a <code>403</code>, and a lease it no longer holds (expired, or the agent was revoked) is a <code>409</code>.
 Revoking an agent puts its jobs back on the queue at once.</p>
 </section>
 <section id="not-built-yet" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>Not built yet</h2></div>
-<p>The MCP and CLI front ends for agents arrive with the MCP and CLI prompts. Spawn budgets and loop
+<p>The MCP front end for agents arrives with the MCP prompt. Spawn budgets and loop
 guards for agents that create jobs belong with the enrichment work, where the token costs appear.</p>
 </section>
   <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>

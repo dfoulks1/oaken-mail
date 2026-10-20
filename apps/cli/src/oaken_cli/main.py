@@ -39,7 +39,7 @@ DESCRIPTION = "Oaken Mail — a local-first, AI-native mail client. Thin CLI ove
 
 def build_parser() -> argparse.ArgumentParser:
     """Construct the full parser. Kept import-light so ``--help`` is cheap."""
-    parser = argparse.ArgumentParser(prog=PROG, description=DESCRIPTION, parents=[_globals()])
+    parser = argparse.ArgumentParser(prog=PROG, description=DESCRIPTION, parents=[_globals(False)])
     parser.add_argument("--version", action="version", version=f"{PROG} {__version__}")
 
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
@@ -48,34 +48,49 @@ def build_parser() -> argparse.ArgumentParser:
     # Every subcommand inherits the global flags, so ``--json``/``--url``/``--token-file`` work
     # whether they come before or after the command name (argparse otherwise only accepts a
     # top-level option before the subcommand).
-    g = _globals()
+    g = _globals(True)
     _register_daemon(sub, g)
     _register_operation(sub, g)
     _register_status(sub, g)
     _register_mail(sub, g)
     _register_system(sub, g)
+    _register_swarm(sub, g)
+    _register_completion(sub, g)
     # Any registry operation without its own verb above is still reachable through the generic
     # ``oaken operation NAME --json '{...}'`` fallback, so a registry change never needs a release.
     return parser
 
 
-def _globals() -> argparse.ArgumentParser:
+def _globals(on_subcommand: bool) -> argparse.ArgumentParser:
     """A parent parser carrying the flags every command shares. ``add_help=False`` so it does not
-    fight the real parser's ``-h``."""
+    fight the real parser's ``-h``.
+
+    The copy on a subcommand has no defaults (``SUPPRESS``): argparse applies a subparser's
+    defaults after the top-level parse, which would otherwise overwrite ``oaken --token-file X
+    status`` with ``None``. The top-level copy carries the real defaults."""
     parent = argparse.ArgumentParser(add_help=False)
+    unset = argparse.SUPPRESS if on_subcommand else None
     g = parent.add_argument_group("connection")
-    g.add_argument("--url", metavar="URL", help="Base URL of a running core (dev override).")
     g.add_argument(
-        "--token-file", metavar="PATH", help="Read the API token from this file (dev override)."
+        "--url", metavar="URL", default=unset, help="Base URL of a running core (dev override)."
+    )
+    g.add_argument(
+        "--token-file",
+        metavar="PATH",
+        default=unset,
+        help="Read the API token from this file (dev override).",
     )
     parent.add_argument(
-        "--json", action="store_true", help="Emit machine-readable JSON instead of text."
+        "--json",
+        action="store_true",
+        default=argparse.SUPPRESS if on_subcommand else False,
+        help="Emit machine-readable JSON instead of text.",
     )
     parent.add_argument(
         "--verbose",
         "-v",
         action="count",
-        default=0,
+        default=argparse.SUPPRESS if on_subcommand else 0,
         help="Show core log output on stderr (-v for INFO, -vv for DEBUG).",
     )
     return parent
@@ -87,14 +102,16 @@ def _globals() -> argparse.ArgumentParser:
 def _register_daemon(
     sub: argparse._SubParsersAction[argparse.ArgumentParser], g: argparse.ArgumentParser
 ) -> None:
-    start = sub.add_parser("start", help="Start the core daemon (prompt 16).", parents=[g])
+    start = sub.add_parser(
+        "start", help="Start the core daemon (foreground; --detach for background).", parents=[g]
+    )
     start.add_argument("--detach", action="store_true", help="Run in the background.")
     start.set_defaults(func=_lazy("daemon_cmd", "cmd_start"))
 
-    stop = sub.add_parser("stop", help="Stop the core daemon (prompt 16).", parents=[g])
+    stop = sub.add_parser("stop", help="Stop the core daemon.", parents=[g])
     stop.set_defaults(func=_lazy("daemon_cmd", "cmd_stop"))
 
-    restart = sub.add_parser("restart", help="Restart the core daemon (prompt 16).", parents=[g])
+    restart = sub.add_parser("restart", help="Restart the core daemon.", parents=[g])
     restart.add_argument("--detach", action="store_true", help="Run in the background.")
     restart.set_defaults(func=_lazy("daemon_cmd", "cmd_restart"))
 
@@ -126,6 +143,11 @@ def _register_operation(
         help="The operation input as a JSON object. Use '-' or omit to read stdin when piped.",
     )
     op.add_argument(
+        "--describe",
+        action="store_true",
+        help="Show the operation's summary and input and output fields instead of calling it.",
+    )
+    op.add_argument(
         "--yes",
         action="store_true",
         help="Confirm a mutating operation (the person asked for exactly this).",
@@ -137,12 +159,31 @@ def _register_mail(
     sub: argparse._SubParsersAction[argparse.ArgumentParser], g: argparse.ArgumentParser
 ) -> None:
     """Mail and read-state verbs: search, show, summarize, read/unread, undo, sync."""
-    search = sub.add_parser("search", help="Keyword search over the index.", parents=[g])
-    search.add_argument("query", help='Search terms: words, "phrases", -exclude, term*.')
+    search = sub.add_parser(
+        "search",
+        help="Search the mail (keyword and meaning, merged).",
+        parents=[g],
+        description=(
+            "Hybrid search: keyword and vector results merged by rank. Operators in the query: "
+            'from:, before:, after:, label:, in:, -term, "phrase", term*. Each hit says which '
+            "retriever found it; if the vector side was down the result says so."
+        ),
+    )
+    search.add_argument("query", help="Search terms and operators.")
     search.add_argument("--from", dest="from_", metavar="ADDR", help="Only this sender.")
     search.add_argument("--since", metavar="DATE", help="Only after this date (ISO 8601).")
+    search.add_argument("--before", metavar="DATE", help="Only before this date (ISO 8601).")
     search.add_argument("--label", metavar="LABEL", help="Only messages carrying this label.")
     search.add_argument("--account", metavar="ID", help="Restrict to one account.")
+    search.add_argument(
+        "--disposition", metavar="D", help="inbox, archive or discarded (discarded is explicit)."
+    )
+    search.add_argument("--category", metavar="C", help="Only this triage category.")
+    search.add_argument("--min-priority", type=int, metavar="N", help="Only this priority or more.")
+    search.add_argument("--unread", action="store_true", help="Only unread messages.")
+    search.add_argument(
+        "--keyword", action="store_true", help="Keyword search only (no model, no vectors)."
+    )
     search.add_argument("--limit", type=int, metavar="N", help="Maximum results.")
     search.set_defaults(func=_lazy("mail_cmd", "cmd_search"))
 
@@ -181,7 +222,10 @@ def _register_mail(
     sync = sub.add_parser("sync", help="Sync an account (or one folder) now.", parents=[g])
     sync.add_argument("--account", metavar="ID", help="Account to sync; default is all.")
     sync.add_argument("--folder", metavar="NAME", help="One folder; default is the whole account.")
-    sync.add_argument("--wait", action="store_true", help="Stream job events until it finishes.")
+    sync.add_argument("--wait", action="store_true", help="Wait until the sync job finishes.")
+    sync.add_argument(
+        "--timeout", type=float, default=600.0, metavar="S", help="Give up waiting after S seconds."
+    )
     sync.set_defaults(func=_lazy("mail_cmd", "cmd_sync"))
 
 
@@ -190,7 +234,9 @@ def _register_system(
 ) -> None:
     """System, inspection and job verbs: pipeline, usage, plugins, accounts, audit, operations,
     reprocess, rebuild-index, ask, watch."""
-    ask = sub.add_parser("ask", help="Answer a question from the mail (prompt 15).", parents=[g])
+    ask = sub.add_parser(
+        "ask", help="Answer a question from the mail, citing the messages.", parents=[g]
+    )
     ask.add_argument("question", help="The question to answer.")
     ask.set_defaults(func=_lazy("system_cmd", "cmd_ask"))
 
@@ -254,6 +300,79 @@ def _register_system(
 
     watch = sub.add_parser("watch", help="Stream core events as lines (or --json).", parents=[g])
     watch.set_defaults(func=_lazy("system_cmd", "cmd_watch"))
+
+
+def _register_swarm(
+    sub: argparse._SubParsersAction[argparse.ArgumentParser], g: argparse.ArgumentParser
+) -> None:
+    """Agents (managed by a person) and the job protocol (worked by an agent)."""
+    agents = sub.add_parser(
+        "agents",
+        help="Create, list and revoke external agents (the swarm).",
+        parents=[g],
+        description="Agents lease jobs from the queue with a token of their own (the swarm page).",
+    )
+    actions = agents.add_subparsers(dest="action", metavar="ACTION")
+    actions.required = True
+    create = actions.add_parser(
+        "create", parents=[_globals(True)], help="Register an agent and print its token once."
+    )
+    create.add_argument("label", help="A name for the agent.")
+    create.add_argument(
+        "--kind", action="append", required=True, metavar="KIND", help="A job kind it may lease."
+    )
+    create.add_argument(
+        "--account", action="append", metavar="ID", help="Limit it to this account (repeatable)."
+    )
+    create.add_argument("--max-leases", type=int, metavar="N", help="Jobs it may hold at once.")
+    create.add_argument("--max-per-hour", type=int, metavar="N", help="Jobs it may claim per hour.")
+    lst = actions.add_parser("list", parents=[_globals(True)], help="List agents.")
+    lst.add_argument("--all", action="store_true", help="Include revoked agents.")
+    revoke = actions.add_parser(
+        "revoke", parents=[_globals(True)], help="Revoke an agent; its jobs go back on the queue."
+    )
+    revoke.add_argument("agent_id", help="The agent id (see 'oaken agents list').")
+    agents.set_defaults(func=_lazy("agent_cmd", "cmd_agents"))
+
+    jobs = sub.add_parser(
+        "jobs",
+        help="Lease and finish jobs as an agent (OAKEN_AGENT_TOKEN).",
+        parents=[g],
+        description=(
+            "The agent side of the queue. Authenticated by the agent's own token "
+            "(OAKEN_AGENT_TOKEN or --agent-token-file); the API token is not used."
+        ),
+    )
+    jobs.add_argument("--agent-token-file", metavar="PATH", help="Read the agent token from PATH.")
+    verbs = jobs.add_subparsers(dest="action", metavar="ACTION")
+    verbs.required = True
+    claim = verbs.add_parser("claim", parents=[_globals(True)], help="Lease the next job.")
+    claim.add_argument(
+        "--kind", action="append", default=[], metavar="KIND", help="Only this kind."
+    )
+    beat = verbs.add_parser("heartbeat", parents=[_globals(True)], help="Extend a lease.")
+    beat.add_argument("job_id")
+    done = verbs.add_parser("complete", parents=[_globals(True)], help="Hand back a result.")
+    done.add_argument("job_id")
+    done.add_argument("--result", metavar="JSON", help="The result object; '-' reads stdin.")
+    done.add_argument("--produced-by", metavar="NAME", help="The model or tool that made it.")
+    fail = verbs.add_parser("fail", parents=[_globals(True)], help="Report an error.")
+    fail.add_argument("job_id")
+    fail.add_argument("--error", required=True, metavar="TEXT", help="What went wrong (no mail).")
+    fail.add_argument("--permanent", action="store_true", help="Do not retry it.")
+    jobs.set_defaults(func=_lazy("agent_cmd", "cmd_jobs"))
+
+
+def _register_completion(
+    sub: argparse._SubParsersAction[argparse.ArgumentParser], g: argparse.ArgumentParser
+) -> None:
+    completion = sub.add_parser(
+        "completion",
+        help="Print a shell completion script (bash, zsh or fish).",
+        description='Install with, for example: eval "$(oaken completion bash)".',
+    )
+    completion.add_argument("shell", choices=["bash", "zsh", "fish"])
+    completion.set_defaults(func=_lazy("completion", "cmd_completion"))
 
 
 def _lazy(module: str, func: str) -> Handler:

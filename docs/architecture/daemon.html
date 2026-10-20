@@ -106,8 +106,8 @@ any worker (see <a href="jobs.html">jobs</a>).</p>
 <div class="code"><pre class="highlight"><code class="language-text">python -m oaken.daemon      # the foreground process: Ctrl-C or SIGTERM stops it cleanly
 </code></pre></div>
 <p>The same lifecycle is available to Python as <code>oaken.daemon.serve</code>, <code>detach</code>, <code>status</code>, <code>stop</code> and
-<code>restart</code>. The CLI's <code>oaken daemon start [--detach] | stop | status | restart</code> are thin wrappers over
-them (prompt 17).</p>
+<code>restart</code>. The CLI's <code>oaken start [--detach]</code>, <code>stop</code>, <code>status</code> and <code>restart</code> are thin wrappers over
+them. <code>status</code> reads only the runtime file, so it works with no token and never starts anything.</p>
 <p><code>--detach</code> starts the same foreground process in a new session on Linux and macOS (closing the
 terminal does not stop it) and as a detached process in its own group on Windows. Windows has no
 console for it, and it stops on <code>CTRL_BREAK</code>; <code>stop</code> sends that. Standard input and output go to the
@@ -314,7 +314,6 @@ The audit log records what it did.</p>
 <section id="not-built-yet" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>Not built yet</h2></div>
 <ul>
 <li>The MCP mount itself (prompt 18). The surface hook and the <code>[api] mcp</code> setting exist.</li>
-<li>Wiring the CLI's <code>daemon</code> commands and HTTP client to this (prompt 17).</li>
 <li>The ring is in memory: a restart is a <code>gap</code> for every client.</li>
 <li>Per-agent rate limits beyond the lease and hourly quotas in <a href="swarm.html">the swarm</a>.</li>
 </ul>

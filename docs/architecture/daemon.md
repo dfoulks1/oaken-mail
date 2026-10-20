@@ -29,8 +29,8 @@ python -m oaken.daemon      # the foreground process: Ctrl-C or SIGTERM stops it
 ```
 
 The same lifecycle is available to Python as `oaken.daemon.serve`, `detach`, `status`, `stop` and
-`restart`. The CLI's `oaken daemon start [--detach] | stop | status | restart` are thin wrappers over
-them (prompt 17).
+`restart`. The CLI's `oaken start [--detach]`, `stop`, `status` and `restart` are thin wrappers over
+them. `status` reads only the runtime file, so it works with no token and never starts anything.
 
 `--detach` starts the same foreground process in a new session on Linux and macOS (closing the
 terminal does not stop it) and as a detached process in its own group on Windows. Windows has no
@@ -132,6 +132,5 @@ The audit log records what it did.
 ## Not built yet
 
 - The MCP mount itself (prompt 18). The surface hook and the `[api] mcp` setting exist.
-- Wiring the CLI's `daemon` commands and HTTP client to this (prompt 17).
 - The ring is in memory: a restart is a `gap` for every client.
 - Per-agent rate limits beyond the lease and hourly quotas in [the swarm](swarm.md).

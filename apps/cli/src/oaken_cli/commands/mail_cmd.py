@@ -42,11 +42,25 @@ async def _search(client: ApiClient, args: argparse.Namespace) -> int:
         payload["from"] = args.from_
     if args.since:
         payload["after"] = args.since
+    if args.before:
+        payload["before"] = args.before
     if args.label:
         payload["label"] = args.label
+    if args.disposition:
+        payload["disposition"] = args.disposition
     if args.limit is not None:
         payload["limit"] = args.limit
-    result = await client.call("search_keyword", payload)
+    if args.keyword:
+        result = await client.call("search_keyword", payload)
+    else:
+        # The hybrid search (keyword and vectors). The extra filters are its own.
+        if args.category:
+            payload["category"] = args.category
+        if args.min_priority is not None:
+            payload["min_priority"] = args.min_priority
+        if args.unread:
+            payload["unread_only"] = True
+        result = await client.call("search", payload)
     return _render_messages(args, result)
 
 
@@ -115,21 +129,53 @@ async def _sync(client: ApiClient, args: argparse.Namespace) -> int:
     if args.folder:
         payload["folder"] = args.folder
     result = await client.call("sync_now", payload, confirm=True)
+    out = result.output if isinstance(result.output, dict) else {}
+    job = str(out.get("job_id", ""))
+    final = await _wait_for_job(client, job, args.timeout) if args.wait and job else None
     data = {"request_id": result.request_id, "output": result.output}
+    if final is not None:
+        data["status"] = final
 
     def text() -> None:
         from oaken_cli.output import print_text
 
-        out = result.output or {}
-        job = out.get("job_id", "?") if isinstance(out, dict) else "?"
-        created = out.get("created", True) if isinstance(out, dict) else True
-        print_text(f"sync queued (job {job})" if created else f"joined running sync (job {job})")
-        if args.wait:
-            print_text(
-                "(--wait: streaming job events is enabled once the daemon lands — prompt 16)"
-            )
+        created = out.get("created", True)
+        print_text(
+            f"sync queued (job {job or '?'})" if created else f"joined running sync (job {job})"
+        )
+        if final is not None:
+            print_text(f"sync {final}")
 
-    return emit(args, data=data, text=text)
+    code = emit(args, data=data, text=text)
+    return code if final in (None, "succeeded") else int(ExitCode.ERROR)
+
+
+TERMINAL = ("succeeded", "failed", "cancelled")
+
+
+async def _wait_for_job(client: ApiClient, job_id: str, timeout: float) -> str:  # noqa: ASYNC109
+    """Follow the event stream until ``job_id`` reaches a final state. The stream is asked to
+    replay from the start of the daemon's ring, so a job that finished before the connection was
+    made is still seen; job ids are unique, so older events cannot be mistaken for this one."""
+    import asyncio
+
+    async def follow() -> str:
+        async for event in client.stream_events("0"):
+            data = event.data
+            if (
+                event.event == "JobStateChanged"
+                and data.get("job_id") == job_id
+                and data.get("status") in TERMINAL
+            ):
+                return str(data["status"])
+        return "unknown"
+
+    try:
+        return await asyncio.wait_for(follow(), timeout)
+    except TimeoutError:
+        raise CliError(
+            f"sync job {job_id} did not finish within {timeout:.0f}s", ExitCode.ERROR
+        ) from None
 
 
 # --- rendering ------------------------------------------------------------------------------
@@ -144,9 +190,13 @@ def _render_messages(args: argparse.Namespace, result: CallResult) -> int:
             "from": it.get("from_name") or it.get("from_addr", ""),
             "subject": it.get("subject", ""),
             "message_id": it.get("message_id", ""),
+            "found_by": ",".join(it.get("why") or []),
         }
         for it in items
     ]
+    columns = ["date", "from", "subject", "message_id"]
+    if any(r["found_by"] for r in rows):
+        columns.append("found_by")
 
     def text() -> None:
         from oaken_cli.output import print_table, print_text
@@ -154,9 +204,11 @@ def _render_messages(args: argparse.Namespace, result: CallResult) -> int:
         if not rows:
             print_text("no matches")
             return
-        print_table(rows, ["date", "from", "subject", "message_id"])
+        print_table(rows, columns)
         if out.get("truncated"):
             print_text("(results were cut to the limit; narrow the query or raise --limit)")
+        if out.get("degraded"):
+            print_text(f"note: keyword results only ({out.get('degraded_reason', 'vectors down')})")
         for w in out.get("warnings", []) or []:
             print_text(f"warning: {w}")
 

@@ -113,7 +113,7 @@ whatever backend serves them, so lower the internal limit to leave room.
 The model itself is a setting, not a default you are stuck with:
 `[ai] llm_model = "qwen3:8b"` is a starting point, and a larger model is one line away.
 
-## Over HTTP
+## Over HTTP and the CLI
 
 A person manages agents with three operations, which are never offered over MCP:
 `create_agent` (the token is returned once and only its hash is kept), `list_agents` and
@@ -127,6 +127,10 @@ authenticated by its own token:
 | `POST /v1/agent/jobs/{id}/complete` | Hand back `{"result": {...}, "produced_by": "model-name"}` |
 | `POST /v1/agent/jobs/{id}/fail` | Report an error; `queued` if it will be retried, else `failed` |
 
+The CLI covers both sides: `oaken agents create|list|revoke` for the person, and
+`oaken jobs claim|heartbeat|complete|fail` for a scripted worker, which reads its token from
+`OAKEN_AGENT_TOKEN` (or `--agent-token-file`) and never needs the API token.
+
 An agent token opens only these routes, and no other route accepts one. A claim past the agent's
 quota is a `429`, a result that does not match the kind's schema is a `422`, a kind the agent was not
 given is a `403`, and a lease it no longer holds (expired, or the agent was revoked) is a `409`.
@@ -134,5 +138,5 @@ Revoking an agent puts its jobs back on the queue at once.
 
 ## Not built yet
 
-The MCP and CLI front ends for agents arrive with the MCP and CLI prompts. Spawn budgets and loop
+The MCP front end for agents arrives with the MCP prompt. Spawn budgets and loop
 guards for agents that create jobs belong with the enrichment work, where the token costs appear.
