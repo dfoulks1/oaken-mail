@@ -141,7 +141,6 @@ def build(cfg: Config, out: Path, strict: bool = False) -> list[str]:
     footer = f"{cfg.title} {version} · Apache-2.0"
     common: dict[str, Any] = {
         "site": cfg,
-        "favicon": pagebase.FAVICON,
         "head_js": pagebase.HEAD_JS,
         "footer": footer,
     }
@@ -200,6 +199,8 @@ def build(cfg: Config, out: Path, strict: bool = False) -> list[str]:
         )
         .encode("utf-8")
     )
+    for name in pagebase.BRAND_FILES:
+        written[f"assets/brand/{name}"] = (pagebase.BRAND_DIR / name).read_bytes()
     written["assets/site.css"] = pagebase.CSS.encode("utf-8")
     written["assets/site.js"] = pagebase.SITE_JS.encode("utf-8")
     urls = [cfg.site_url] + [cfg.site_url + p.out for p in sorted(pages, key=lambda p: p.id)]

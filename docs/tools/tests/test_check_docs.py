@@ -52,6 +52,14 @@ def seed_missing_alt(tree: Tree) -> None:
     tree.append("docs/alpha.md", "\n![](pic.png)\n")
 
 
+def test_a_decorative_icon_may_have_empty_alt_only_when_hidden(tree: Tree) -> None:
+    tree.write("docs/pic.png", "not really a png")
+    tree.append("docs/alpha.md", '\n<img src="pic.png" alt="" aria-hidden="true">\n')
+    assert not [p for p in problems(tree) if "alt" in p]
+    tree.append("docs/alpha.md", '\n<img src="pic.png" alt="">\n')
+    assert [p for p in problems(tree) if "image without alt" in p]
+
+
 def seed_external_host(tree: Tree) -> None:
     tree.append("docs/alpha.md", "\nSee [x](https://example.com/page).\n")
 

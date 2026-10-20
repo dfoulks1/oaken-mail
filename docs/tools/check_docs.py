@@ -64,7 +64,8 @@ class PageScan(HTMLParser):
             self._in_main = True
         if self._in_main and re.fullmatch(r"h[1-6]", tag):
             self.headings.append(int(tag[1]))
-        if tag == "img" and not (a.get("alt") or "").strip():
+        decorative = a.get("alt") == "" and a.get("aria-hidden") == "true"  # icons beside text
+        if tag == "img" and not (a.get("alt") or "").strip() and not decorative:
             self.images_without_alt.append(str(a.get("src")))
         for attr in ("href", "src"):
             if a.get(attr) is not None and tag in {"a", "link", "script", "img"}:

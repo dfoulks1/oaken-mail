@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The look shared by every page: palette, CSS, scripts, pinned CDN assets and the favicon.
+"""The look shared by every page: palette, CSS, scripts, pinned CDN assets and the logo files.
 
 Re-theming the site is a two-line change: edit ACCENT_LIGHT/ACCENT_SOFT_LIGHT and
 ACCENT_DARK/ACCENT_SOFT_DARK below. Nothing else defines a colour that is not derived from
@@ -39,14 +39,10 @@ def cdn_tags(with_mermaid: bool) -> dict[str, Any]:
     return out
 
 
-# The SVG namespace is percent-encoded so the page contains no literal "http://" (the checker
-# forbids it); browsers decode a data: URI before parsing, so the icon still renders.
-FAVICON = (
-    "data:image/svg+xml,%3Csvg xmlns='http%3A//www.w3.org/2000/svg' viewBox='0 0 32 32'%3E"
-    "%3Crect width='32' height='32' rx='7' fill='%231f4e79'/%3E"
-    "%3Cpath d='M16 5c-4 0-7 3-7 7 0 2 1 3 1 5 0 3-2 4-2 7h16c0-3-2-4-2-7 0-2 1-3 1-5 0-4-3-7-7-7z'"
-    " fill='%23e8f0f8'/%3E%3C/svg%3E"
-)
+# Logo files (docs/tools/brand/) are copied to assets/brand/ on every build. The favicon and touch
+# icon are cut from the logo mark; logo.png is the mark itself, with a transparent background.
+BRAND_DIR = HERE / "brand"
+BRAND_FILES = ("apple-touch-icon.png", "favicon.png", "logo.png")
 
 
 def _pygments_css() -> str:
@@ -68,6 +64,8 @@ _CSS = """
   .cover { padding: 3rem 0 1.5rem; border-bottom: 3px solid var(--accent); margin-bottom: 1rem; }
   .cover h1 { font-weight: 800; letter-spacing: -.01em; color: var(--accent); }
   .cover .lead { max-width: 46rem; }
+  .cover .logo { display: block; width: 10rem; height: auto; margin-bottom: .75rem; }
+  .brand img { vertical-align: -.4em; margin-right: .15rem; }
   .doc-section { padding-top: 1.5rem; margin-top: 1.5rem; border-top: 1px solid var(--bs-border-color); }
   .section-head { display: flex; align-items: baseline; gap: .8rem; margin-bottom: .8rem; }
   .section-num { font-size: 1.1rem; font-weight: 700; color: #fff; background: var(--accent); border-radius: .4rem; padding: .05rem .6rem; }
