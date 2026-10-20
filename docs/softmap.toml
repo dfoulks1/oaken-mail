@@ -350,11 +350,26 @@ untrusted = true
 id = "vectorstore"
 name = "Vector store"
 layer = "plugins"
-status = "planned"
+status = "built"
 prompt = "08"
-summary = "Stores and searches vectors (sqlite-vec first)."
+path = "src/oaken_vec_sqlite"
+summary = "Stores and searches vectors in index.db with sqlite-vec (optional extra oaken[vec]). Filters run before the search, so they are exact."
 uses = []
 ext = ["sqlite-vec"]
+types = [
+  ["SqliteVecStore", "class", "The oaken.vector_stores plugin: upsert, query, stats, health, model lifecycle."],
+  ["UpsertResult", "frozen dataclass", "How many vectors were written and how many skipped (same content hash)."],
+  ["ReembedPlan", "frozen dataclass", "Chunks done and needed for a new model, and an estimated time."],
+  ["ModelInfo", "frozen dataclass", "One embedding model: dimensions, table, active or building."],
+]
+funcs = [
+  ["upsert(items)", "All-or-nothing batch; last wins; skips an unchanged content hash."],
+  ["query(vector, k, filters)", "Cosine nearest chunks; filters by account, model, thread, date, sender; unknown filters refused."],
+  ["begin_model / activate_model / drop_model", "Build a new model beside the old one, then switch."],
+  ["prune_orphans()", "Delete vectors whose chunk is gone (no triggers are used)."],
+  ["reembed_plan(model_id)", "Progress and time estimate for a model swap."],
+]
+notes = ["float32 by default; int8 is a documented later option.", "Measured: 300k x 768 searches in about 0.4 s; see the spike."]
 
 # --- Storage -----------------------------------------------------------------------------
 [[components]]

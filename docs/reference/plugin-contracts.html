@@ -44,6 +44,7 @@
       <a class="doc-link" href="../architecture/sieve.html">Sieve filtering</a>
       <a class="doc-link" href="../architecture/index.html">The search index</a>
       <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <a class="doc-link" href="../architecture/vectors.html">The vector store</a>
       <div class="label">Reference</div>
       <a class="doc-link current" href="plugin-contracts.html" aria-current="page">Plugin contracts</a>
       <div class="label">Project</div>
@@ -493,6 +494,11 @@
 <td><code>str | None</code></td>
 <td><code>None</code></td>
 </tr>
+<tr>
+<td><code>content_hash</code></td>
+<td><code>str</code></td>
+<td><code>''</code></td>
+</tr>
 </tbody>
 </table></div>
 <h3 id="hit"><code>Hit</code></h3>
@@ -624,7 +630,7 @@
 <p>Remove every vector of these messages.</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vector</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">k</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">filters</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Hit</span><span class="p">]</span>
 </code></pre></div>
-<p>The <code>k</code> nearest, best first. <code>filters</code> may name <code>account_id</code> and <code>model_id</code>. Raises if <code>vector</code> does not match the stored dimensions.</p>
+<p>The <code>k</code> nearest, best first. <code>filters</code> may name <code>account_id</code> and <code>model_id</code>; a store that sits beside the index may take more (<code>thread_key</code>, <code>after</code>, <code>before</code>, <code>sender</code>) and must refuse a filter it does not know rather than ignore it. Raises if <code>vector</code> does not match the stored dimensions.</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">stats</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">VectorStats</span>
 </code></pre></div>
 <p>How many vectors, and which model and dimensions they use.</p>

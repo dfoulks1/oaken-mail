@@ -44,6 +44,7 @@
       <a class="doc-link" href="architecture/sieve.html">Sieve filtering</a>
       <a class="doc-link" href="architecture/index.html">The search index</a>
       <a class="doc-link current" href="plugins.html" aria-current="page">Writing a plugin</a>
+      <a class="doc-link" href="architecture/vectors.html">The vector store</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="reference/plugin-contracts.html">Plugin contracts</a>
       <div class="label">Project</div>
@@ -264,9 +265,11 @@ no model and no real mail.</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">oaken.plugins</span><span class="w"> </span><span class="kn">import</span> <span class="n">PluginEvent</span>
 
+
 <span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">QuotaLow</span><span class="p">(</span><span class="n">PluginEvent</span><span class="p">):</span>
     <span class="n">remaining</span><span class="p">:</span> <span class="nb">int</span>
+
 
 <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">QuotaLow</span><span class="p">(</span><span class="n">ts</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">clock</span><span class="o">.</span><span class="n">now</span><span class="p">(),</span> <span class="n">remaining</span><span class="o">=</span><span class="mi">12</span><span class="p">))</span>
 </code></pre></div>

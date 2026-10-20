@@ -179,9 +179,11 @@ Core announces what happens on an event bus, and a plugin can announce its own. 
 from dataclasses import dataclass
 from oaken.plugins import PluginEvent
 
+
 @dataclass(frozen=True, kw_only=True)
 class QuotaLow(PluginEvent):
     remaining: int
+
 
 await self.ctx.publish(QuotaLow(ts=self.ctx.clock.now(), remaining=12))
 ```

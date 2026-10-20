@@ -277,6 +277,7 @@ class VectorItem:
     vector: tuple[float, ...]
     model_id: str
     account_id: str | None = None
+    content_hash: str = ""  # of the chunk text; a store may skip a vector it already holds for it
 
     @property
     def dimensions(self) -> int:
@@ -314,7 +315,9 @@ class VectorStore(Plugin, Protocol):
     async def query(
         self, vector: Sequence[float], k: int, filters: dict[str, str] | None = None
     ) -> list[Hit]:
-        """The ``k`` nearest, best first. ``filters`` may name ``account_id`` and ``model_id``.
+        """The ``k`` nearest, best first. ``filters`` may name ``account_id`` and ``model_id``;
+        a store that sits beside the index may take more (``thread_key``, ``after``, ``before``,
+        ``sender``) and must refuse a filter it does not know rather than ignore it.
         Raises if ``vector`` does not match the stored dimensions."""
         ...
 

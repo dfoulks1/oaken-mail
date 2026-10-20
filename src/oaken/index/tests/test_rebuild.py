@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Rebuilding index.db from raw.db: identical results, resumable, pruning, jobs and events."""
 
-
 import pytest
 import structlog
 

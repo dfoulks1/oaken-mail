@@ -110,4 +110,7 @@ same commit (see `00-context.md`).
 | 07 | Index status | `oaken index status` | Documents and chunks, size next to `raw.db`, `pipeline_version`, whether it belongs to this raw store, how many live messages are missing from it, and whether the chunk settings changed since it was built. |
 | 07 | FTS5 integrity | `oaken index check [--repair]` | FTS5's `integrity-check`; repair is a rebuild of the FTS table from `chunks`, which is cheap and needs no mail. Local. |
 | 07 | `keyword_search` with operators | `oaken search QUERY` | `from:`, `before:`, `after:`, `label:`, `in:`, `-term`, `"phrase"`, `term*`. Warnings the parser returned (an unreadable date, a lone `-term`) are printed, not hidden. |
+| 08 | Vector store status | `oaken vectors status` | Models (active or building), vectors per model, file size, whether the sqlite-vec extension loads. `SqliteVecStore.stats()` and `health()` exist. |
+| 08 | Model swap | `oaken vectors reembed MODEL` | `begin_model`, then embed, then `activate_model`; `reembed_plan` gives progress and a time estimate. `drop_model` for the old one needs a confirm. |
+| 08 | Orphan cleanup | `oaken vectors prune` | `prune_orphans()` after a reindex. Local and cheap. |
 

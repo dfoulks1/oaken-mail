@@ -1,0 +1,178 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The vector store · Oaken Mail</title>
+<meta name="description" content="How Oaken stores and searches embeddings with sqlite-vec: the tables, filters, model swaps, measured speed and size, and why it was chosen.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="The vector store · Oaken Mail">
+<meta property="og:description" content="How Oaken stores and searches embeddings with sqlite-vec: the tables, filters, model swaps, measured speed and size, and why it was chosen.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="../assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">sqlite-vec: embeddings for meaning-based search, beside the keyword index</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="overview.html">Architecture overview</a>
+      <a class="doc-link" href="jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="software-map.html">Software map</a>
+      <a class="doc-link" href="swarm.html">The swarm</a>
+      <a class="doc-link" href="storage.html">Raw storage</a>
+      <a class="doc-link" href="parsing.html">Parsing and cleaning</a>
+      <a class="doc-link" href="sieve.html">Sieve filtering</a>
+      <a class="doc-link" href="index.html">The search index</a>
+      <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <a class="doc-link current" href="vectors.html" aria-current="page">The vector store</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#why-sqlite-vec"><span class="num">1</span>Why sqlite-vec</a>
+      <a class="nav-link" href="#what-it-stores"><span class="num">2</span>What it stores</a>
+      <a class="nav-link" href="#searching"><span class="num">3</span>Searching</a>
+      <a class="nav-link" href="#changing-the-embedding-model"><span class="num">4</span>Changing the embedding model</a>
+      <a class="nav-link" href="#installing"><span class="num">5</span>Installing</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <h1 class="display-6">The vector store</h1>
+    <p class="lead">Vectors let a question find mail by meaning, not just by words. The first vector store is sqlite-vec, inside index.db: one file, one transaction, nothing to run.</p>
+  </header>
+
+<section id="why-sqlite-vec" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>Why sqlite-vec</h2></div>
+<p>A spike measured it on this project's own terms before any code was written (the script is
+<code>docs/spikes/sqlite_vec_bench.py</code>, so you can rerun it). The decision was <strong>go</strong>:</p>
+<ul>
+<li>It loads under a normal Python on Linux; macOS and Windows are checked by CI, not yet by hand.</li>
+<li>FTS5 and the vectors share <code>index.db</code>, so one rollback undoes both. Ten thousand rows were
+written while four readers ran 491 queries with no errors (WAL).</li>
+<li>Search is brute force and exact. That is fast enough for a personal mailbox.</li>
+</ul>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th style="text-align:right">Chunks</th>
+<th style="text-align:right">Dimensions</th>
+<th style="text-align:right">Search p50</th>
+<th style="text-align:right">File size</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right">10,000</td>
+<td style="text-align:right">384</td>
+<td style="text-align:right">6.9 ms</td>
+<td style="text-align:right">16 MB</td>
+</tr>
+<tr>
+<td style="text-align:right">100,000</td>
+<td style="text-align:right">384</td>
+<td style="text-align:right">66.7 ms</td>
+<td style="text-align:right">157 MB</td>
+</tr>
+<tr>
+<td style="text-align:right">300,000</td>
+<td style="text-align:right">384</td>
+<td style="text-align:right">203.6 ms</td>
+<td style="text-align:right">468 MB</td>
+</tr>
+<tr>
+<td style="text-align:right">100,000</td>
+<td style="text-align:right">768</td>
+<td style="text-align:right">142.6 ms</td>
+<td style="text-align:right">311 MB</td>
+</tr>
+<tr>
+<td style="text-align:right">300,000</td>
+<td style="text-align:right">768</td>
+<td style="text-align:right">415.3 ms</td>
+<td style="text-align:right">930 MB</td>
+</tr>
+</tbody>
+</table></div>
+<p>Through the store's own API, 300,000 chunks at 768 dimensions took 79 s to insert (3,800 a second),
+with a p50 of 548 ms, or 360 ms with a filter that keeps a small share of the mail.</p>
+<p><code>int8</code> vectors are 4x smaller and a little faster, but recall at 10 fell to 0.89 at 384 dimensions
+(0.98 at 768). <strong>float32 is the default</strong>; int8 stays a later option.</p>
+</section>
+<section id="what-it-stores" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>What it stores</h2></div>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Table</th>
+<th>Holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>vec_models</code></td>
+<td>Each embedding model: id, dimensions, its <code>vec_N</code> table, and whether it is <code>active</code> or still <code>building</code>.</td>
+</tr>
+<tr>
+<td><code>vec_items</code></td>
+<td>One row per vector: model, message, chunk id, account and the chunk's content hash.</td>
+</tr>
+<tr>
+<td><code>vec_N</code></td>
+<td>A <code>vec0</code> virtual table (cosine, float32), one per model.</td>
+</tr>
+</tbody>
+</table></div>
+<p>There are no triggers (a connection without the extension could not run them). <code>prune_orphans()</code>
+removes vectors whose chunk no longer exists; call it after a reindex.</p>
+</section>
+<section id="searching" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Searching</h2></div>
+<p>Filters are applied <strong>before</strong> the nearest-neighbour search, so a narrow filter is still exact:
+<code>account_id</code>, <code>model_id</code>, and, because the store sits beside the index, <code>thread_key</code>, <code>after</code>,
+<code>before</code> and <code>sender</code>. An unknown filter is refused. Score is <code>1 - cosine distance</code>.</p>
+</section>
+<section id="changing-the-embedding-model" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Changing the embedding model</h2></div>
+<p>Vectors from two models cannot be compared. <code>begin_model</code> starts a new one beside the old,
+<code>activate_model</code> switches search to it once it is full, and <code>drop_model</code> removes the old one.
+<code>reembed_plan</code> reports how many chunks are left and, from the measured speed, how long.</p>
+</section>
+<section id="installing" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Installing</h2></div>
+<p><code>pip install &quot;oaken[vec]&quot;</code>. Without the extra, the store reports a clear error naming it.
+The plugin is registered as <code>sqlite-vec</code> in the <code>oaken.vector_stores</code> group, like any third-party one.</p>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

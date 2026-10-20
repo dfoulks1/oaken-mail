@@ -20,6 +20,15 @@ dependencies = [
 [project.scripts]
 oaken = "oaken.cli:main"
 
+# First-party plugins register exactly as a third party's would.
+[project.entry-points."oaken.vector_stores"]
+sqlite-vec = "oaken_vec_sqlite:SqliteVecStore"
+
+[project.optional-dependencies]
+vec = [
+    "sqlite-vec>=0.1.9",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -28,7 +37,7 @@ build-backend = "hatchling.build"
 path = "src/oaken/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/oaken"]
+packages = ["src/oaken", "src/oaken_vec_sqlite"]
 exclude = ["**/tests/**"]
 
 [dependency-groups]
@@ -40,6 +49,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "ruff",
+    "sqlite-vec>=0.1.9",
 ]
 # Site tooling (docs/tools). The core runtime must not depend on it.
 docs = [
@@ -55,7 +65,8 @@ default-groups = ["dev", "docs"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["src", "docs", "tests"]
-addopts = ["--import-mode=importlib"]
+addopts = ["--import-mode=importlib", "-m", "not slow"]
+markers = ["slow: heavy measurements, off by default (run with -m slow)"]
 
 [tool.ruff]
 line-length = 100
@@ -74,6 +85,7 @@ min-file-size = 0
 "**/tests/**" = ["S101", "S311"]
 "tests/**" = ["S101"]
 "src/oaken/testing/contracts.py" = ["S101"]  # the suites are assertions
+"docs/spikes/**" = ["S311", "S608"]  # measurement scripts: seeded random data, fixed SQL
 "docs/tools/pagebase.py" = ["E501"]  # embedded CSS
 "docs/tools/softmap.py" = ["E501"]  # embedded CSS, JS and HTML
 
@@ -83,5 +95,5 @@ files = ["src", "tests", "docs/tools"]
 mypy_path = "docs/tools"
 
 [[tool.mypy.overrides]]
-module = ["pygments", "pygments.*"]
+module = ["pygments", "pygments.*", "sqlite_vec"]
 ignore_missing_imports = true

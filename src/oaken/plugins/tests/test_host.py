@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 import asyncio
+from importlib.metadata import EntryPoint, entry_points
 
 import pytest
 
@@ -36,6 +37,11 @@ class Good(BaseEmbedder):
 """
 
 
+def _third_party_only(group: str) -> list[EntryPoint]:
+    """The first-party plugins installed in this environment are not under test here."""
+    return [ep for ep in entry_points(group=group) if not ep.value.startswith("oaken_")]
+
+
 def make_host(
     settings: Settings | None = None,
 ) -> tuple[PluginHost, EventBus, list[PluginHealthChanged]]:
@@ -47,7 +53,17 @@ def make_host(
         seen.append(e)
 
     bus.subscribe(PluginHealthChanged, record)
-    return PluginHost(settings or Settings(), FakeClock(), bus, health_interval=3600), bus, seen
+    return (
+        PluginHost(
+            settings or Settings(),
+            FakeClock(),
+            bus,
+            discover=_third_party_only,
+            health_interval=3600,
+        ),
+        bus,
+        seen,
+    )
 
 
 async def test_a_plugin_from_a_real_entry_point_is_discovered_started_checked_and_stopped(

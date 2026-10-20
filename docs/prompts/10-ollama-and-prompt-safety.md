@@ -78,3 +78,8 @@ the plugin contracts (`LLMRequest.user`, `EnrichInput`) already accept `Untruste
 before any model call, so routing (skip a very short message, map-reduce a very long one) can be
 decided deterministically. A token count is a number: it cannot carry an instruction, but it does
 not make text safe either; the `UntrustedText` rules still apply.
+
+## Note from prompt 08
+
+A vector store needs the embedder's `model_id` and `dimensions` for `begin_model`. Raw float32
+insert speed falls about 8x going from 384 to 768 dimensions, so prefer a small embedding model by default.

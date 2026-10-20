@@ -113,3 +113,12 @@ write), and removes a deleted message from the index instead. Wire it like this:
   by an edit that leaves their text alone.
 - Pipeline status can read `IndexStore.stats()` (documents, chunks, stale) for the index stage.
 - `IndexRebuildProgress` is published during a rebuild; the web UI and CLI can show it.
+
+## Note from prompt 08
+
+- The embed stage asks `stored_hashes(model_id, message_id)` and sends only chunks whose hash is
+  missing; `VectorItem.content_hash` makes `upsert` skip an unchanged one too.
+- Call `prune_orphans()` after an index rebuild (chunks of a changed message are replaced).
+- A model change is `begin_model` -> embed everything -> `activate_model` -> `drop_model`. Mixing
+  models without `begin_model` raises `Conflict`. `reembed_plan` feeds the progress display.
+- Call `record_throughput(chunks, seconds)` after each batch so the plan's time estimate is real.
