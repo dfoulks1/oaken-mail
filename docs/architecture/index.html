@@ -82,6 +82,7 @@ cleaning rules, the chunk size or the pipeline reaches old mail: re-derive, neve
                   └── thread key (a reply with no parent joins a recent thread with the same subject)
 </code></pre></div>
 <p><code>index.db</code> has its own migration set, separate from <code>raw.db</code>.</p>
+<p>A chunk's id is never reused, not even after the index is emptied and rebuilt. Anything that refers to a chunk (a vector in any store, a summary) can therefore never be confused with a different, newer chunk.</p>
 </section>
 <section id="what-is-in-it" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>What is in it</h2></div>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">

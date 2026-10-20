@@ -210,9 +210,8 @@ class IndexStore:
         ``pipeline_version``. The raw store link is kept."""
         async with self.db.transaction() as tx:
             await tx.execute("DELETE FROM docs")  # chunks, labels and FTS rows follow
-            # Nothing refers to the old chunk ids now, so numbering starts again instead of
-            # growing for ever.
-            await tx.execute("DELETE FROM sqlite_sequence WHERE name = 'chunks'")
+            # The chunks id counter is deliberately kept: a chunk id is never reused, so a
+            # vector store (there may be several) can never mistake a new chunk for an old one.
             await tx.execute(
                 "UPDATE index_meta SET value = ? WHERE key = 'pipeline_version'",
                 (str(PIPELINE_VERSION),),

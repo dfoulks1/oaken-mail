@@ -22,6 +22,8 @@ raw.db message ──parse──▶ clean ──▶ chunk ──▶ index.db: do
 
 `index.db` has its own migration set, separate from `raw.db`.
 
+A chunk's id is never reused, not even after the index is emptied and rebuilt. Anything that refers to a chunk (a vector in any store, a summary) can therefore never be confused with a different, newer chunk.
+
 ## What is in it
 
 | Table | What it holds |
