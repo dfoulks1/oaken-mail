@@ -415,3 +415,11 @@ async def test_stats_and_fts_integrity(rig: Rig) -> None:
     await rig.index.rebuild_fts()
     assert await ids(rig, "gryphon")
     assert datetime(2020, 1, 1, tzinfo=UTC) < st.created_at
+
+
+async def test_chunk_ids_start_again_after_a_reset(rig: Rig) -> None:
+    mid, _ = await index(rig, "p1", mail(body="Some words here."))
+    first = [r["id"] for r in await rig.index.chunk_rows(mid)]
+    await rig.index.reset()
+    await rig.indexer.index_one(mid)
+    assert [r["id"] for r in await rig.index.chunk_rows(mid)] == first

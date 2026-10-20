@@ -30,14 +30,16 @@ Through the store's own API, 300,000 chunks at 768 dimensions took 79 s to inser
 with a p50 of 548 ms, or 360 ms with a filter that keeps a small share of the mail.
 
 `int8` vectors are 4x smaller and a little faster, but recall at 10 fell to 0.89 at 384 dimensions
-(0.98 at 768). **float32 is the default**; int8 stays a later option.
+(0.98 at 768). **float32 is the default**; int8 is a setting: `dtype = "int8"` in
+`[plugins.sqlite-vec]`. The choice is stored per model, so changing it applies to the next model
+you build (see below), and the old vectors stay as they were.
 
 ## What it stores
 
 | Table | Holds |
 | --- | --- |
 | `vec_models` | Each embedding model: id, dimensions, its `vec_N` table, and whether it is `active` or still `building`. |
-| `vec_items` | One row per vector: model, message, chunk id, account and the chunk's content hash. |
+| `vec_items` | One row per vector: model, message, chunk id, account and the chunk's content hash. The hash is required, so any vector can be traced to the exact text it came from. |
 | `vec_N` | A `vec0` virtual table (cosine, float32), one per model. |
 
 There are no triggers (a connection without the extension could not run them). `prune_orphans()`

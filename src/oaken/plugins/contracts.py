@@ -276,8 +276,12 @@ class VectorItem:
     chunk_id: str
     vector: tuple[float, ...]
     model_id: str
+    content_hash: str  # of the chunk text: required, so every vector can be traced to its text
     account_id: str | None = None
-    content_hash: str = ""  # of the chunk text; a store may skip a vector it already holds for it
+
+    def __post_init__(self) -> None:
+        if not self.content_hash:
+            raise ValueError("a VectorItem needs the content_hash of the chunk it embeds")
 
     @property
     def dimensions(self) -> int:

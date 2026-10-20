@@ -46,6 +46,7 @@ _SCHEMA = (
     """CREATE TABLE IF NOT EXISTS vec_models (
         model_id   TEXT PRIMARY KEY,
         dimensions INTEGER NOT NULL,
+        dtype      TEXT NOT NULL DEFAULT 'float32' CHECK (dtype IN ('float32', 'int8')),
         tbl        TEXT NOT NULL UNIQUE,
         state      TEXT NOT NULL CHECK (state IN ('active', 'building')),
         created_at TEXT NOT NULL
@@ -76,6 +77,7 @@ class ModelInfo:
     dimensions: int
     state: str  # "active" or "building"
     vectors: int
+    dtype: str = "float32"
 
 
 @dataclass(frozen=True)
@@ -106,6 +108,25 @@ def _iso(value: str, name: str) -> str:
     return fmt_ts(when if when.tzinfo else when.replace(tzinfo=UTC))
 
 
+def _dtype(value: str) -> str:
+    if value not in ("float32", "int8"):
+        raise PluginError(f"sqlite-vec: dtype must be float32 or int8, not {value!r}")
+    return value
+
+
+def _wrap(dtype: str) -> str:
+    return "vec_int8(?)" if dtype == "int8" else "?"
+
+
+def _blob(sqlite_vec: Any, vector: Sequence[float], dtype: str) -> bytes:
+    """The vector as sqlite-vec wants it. int8 scales by the largest component first (cosine
+    ignores scale), so the whole -127..127 range is used."""
+    if dtype != "int8":
+        return bytes(sqlite_vec.serialize_float32(list(vector)))
+    peak = max(abs(x) for x in vector)
+    return bytes(sqlite_vec.serialize_int8([round(x / peak * 127) for x in vector]))
+
+
 def _marks(n: int) -> str:
     return ",".join("?" * n)
 
@@ -119,11 +140,13 @@ class SqliteVecStore(BaseVectorStore):
         self._path = path
         self._db: Database | None = None
         self._lock = asyncio.Lock()  # one writer at a time inside this plugin
+        self._dtype = "float32"  # what a new model uses; set by ``config["dtype"]``
         self.last_upsert = UpsertResult(0, 0)
 
     # -- lifecycle --------------------------------------------------------------------------
     async def start(self, ctx: PluginContext) -> None:
         await super().start(ctx)
+        self._dtype = _dtype(str(ctx.config.get("dtype") or "float32"))
         path = self._path or Path(
             ctx.config.get("path") or paths.data_dir() / ctx.settings.storage.index_db
         )
@@ -147,6 +170,11 @@ class SqliteVecStore(BaseVectorStore):
             async with db.transaction() as tx:
                 for statement in _SCHEMA:
                     await tx.execute(statement)
+                columns = {r["name"] for r in await tx.fetchall("PRAGMA table_info(vec_models)")}
+                if "dtype" not in columns:  # a store made before int8 was a choice
+                    await tx.execute(
+                        "ALTER TABLE vec_models ADD COLUMN dtype TEXT NOT NULL DEFAULT 'float32'"
+                    )
                 await tx.execute(
                     "INSERT OR IGNORE INTO vec_meta (key, value) VALUES ('schema_version', ?)",
                     (SCHEMA_VERSION,),
@@ -176,28 +204,31 @@ class SqliteVecStore(BaseVectorStore):
     # -- models -----------------------------------------------------------------------------
     @staticmethod
     async def _models(tx: Tx | Database) -> dict[str, dict[str, Any]]:
-        rows = await tx.fetchall("SELECT model_id, dimensions, tbl, state FROM vec_models")
+        rows = await tx.fetchall("SELECT model_id, dimensions, dtype, tbl, state FROM vec_models")
         return {r["model_id"]: dict(r) for r in rows}
 
     @staticmethod
-    async def _new_model(tx: Tx, model_id: str, dimensions: int, state: str) -> str:
+    async def _new_model(tx: Tx, model_id: str, dimensions: int, dtype: str, state: str) -> str:
         row = await tx.fetchone("SELECT COALESCE(MAX(rowid), 0) + 1 AS n FROM vec_models")
         table = f"vec_{row['n'] if row else 1}"
         await tx.execute(
             f"CREATE VIRTUAL TABLE {table} USING vec0("  # noqa: S608 - table is vec_<int>
-            f"embedding float[{int(dimensions)}] distance_metric=cosine)"
+            f"embedding {'int8' if dtype == 'int8' else 'float'}[{int(dimensions)}]"
+            " distance_metric=cosine)"
         )
         await tx.execute(
-            "INSERT INTO vec_models (model_id, dimensions, tbl, state, created_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (model_id, dimensions, table, state, fmt_ts(datetime.now(UTC))),
+            "INSERT INTO vec_models (model_id, dimensions, dtype, tbl, state, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (model_id, dimensions, dtype, table, state, fmt_ts(datetime.now(UTC))),
         )
         return table
 
-    async def begin_model(self, model_id: str, dimensions: int) -> None:
-        """Make room for vectors of a new model, next to the active one, without touching it."""
+    async def begin_model(self, model_id: str, dimensions: int, dtype: str | None = None) -> None:
+        """Make room for vectors of a new model, next to the active one, without touching it.
+        ``dtype`` (``float32`` or ``int8``) defaults to the plugin's ``dtype`` setting."""
         if dimensions < 1:
             raise PluginError("sqlite-vec: dimensions must be positive")
+        dtype = _dtype(dtype or self._dtype)
         async with self._lock, self._open().transaction() as tx:
             models = await self._models(tx)
             if model_id in models:
@@ -206,7 +237,9 @@ class SqliteVecStore(BaseVectorStore):
                         f"{model_id} is already held with {models[model_id]['dimensions']} dims"
                     )
                 return
-            await self._new_model(tx, model_id, dimensions, "building" if models else "active")
+            await self._new_model(
+                tx, model_id, dimensions, dtype, "building" if models else "active"
+            )
 
     async def activate_model(self, model_id: str) -> None:
         """Make ``model_id`` what queries and stats see. The previous one is kept (as building)
@@ -238,16 +271,18 @@ class SqliteVecStore(BaseVectorStore):
     async def models(self) -> list[ModelInfo]:
         db = self._open()
         rows = await db.fetchall(
-            "SELECT m.model_id, m.dimensions, m.state, COUNT(i.id) AS n FROM vec_models m "
+            "SELECT m.model_id, m.dimensions, m.state, m.dtype, COUNT(i.id) AS n FROM vec_models m "
             "LEFT JOIN vec_items i ON i.model_id = m.model_id GROUP BY m.model_id "
             "ORDER BY m.rowid"
         )
-        return [ModelInfo(r["model_id"], r["dimensions"], r["state"], r["n"]) for r in rows]
+        return [
+            ModelInfo(r["model_id"], r["dimensions"], r["state"], r["n"], r["dtype"]) for r in rows
+        ]
 
     # -- writes -----------------------------------------------------------------------------
     async def upsert(self, items: Sequence[VectorItem]) -> None:
         """Insert or replace by (model, message, chunk). A chunk already stored for the same
-        model with the same non-empty ``content_hash`` is left alone. All or nothing."""
+        model with the same ``content_hash`` is left alone. All or nothing."""
         for item in items:
             _check_vector(item.vector)
         import sqlite_vec  # noqa: PLC0415
@@ -268,10 +303,13 @@ class SqliteVecStore(BaseVectorStore):
                             f"refusing {item.model_id}. Call begin_model() to add a model"
                             " next to it, or clear the store."
                         )
-                    table = await self._new_model(tx, item.model_id, item.dimensions, "active")
+                    table = await self._new_model(
+                        tx, item.model_id, item.dimensions, self._dtype, "active"
+                    )
                     known = models[item.model_id] = {
                         "model_id": item.model_id,
                         "dimensions": item.dimensions,
+                        "dtype": self._dtype,
                         "tbl": table,
                         "state": "active",
                     }
@@ -291,7 +329,7 @@ class SqliteVecStore(BaseVectorStore):
                 created: list[tuple[int, str, str, str, str | None, str]] = []
                 vectors: list[tuple[int, bytes]] = []
                 for item in group:
-                    blob = sqlite_vec.serialize_float32(list(item.vector))
+                    blob = _blob(sqlite_vec, item.vector, models[model_id]["dtype"])
                     row = have.get((item.message_id, item.chunk_id))
                     if row is None:
                         created.append(
@@ -306,7 +344,7 @@ class SqliteVecStore(BaseVectorStore):
                         )
                         vectors.append((next_id, blob))
                         next_id += 1
-                    elif item.content_hash and row[1] == item.content_hash:
+                    elif row[1] == item.content_hash:
                         skipped += 1
                         continue
                     else:
@@ -324,7 +362,7 @@ class SqliteVecStore(BaseVectorStore):
                     created,
                 )
                 await tx.executemany(
-                    f"INSERT INTO {table} (rowid, embedding) VALUES (?, ?)",  # noqa: S608
+                    f"INSERT INTO {table} (rowid, embedding) VALUES (?, {_wrap(models[model_id]['dtype'])})",  # noqa: S608,E501
                     vectors,
                 )
         self.last_upsert = UpsertResult(written, skipped)
@@ -456,10 +494,11 @@ class SqliteVecStore(BaseVectorStore):
         k = min(k, MAX_K)
         rows = await db.fetchall(
             f"SELECT i.message_id, i.chunk_id, m.distance FROM "  # noqa: S608 - vec_<int>
-            f"(SELECT rowid, distance FROM {model['tbl']} WHERE embedding MATCH ? AND k = ? "
+            f"(SELECT rowid, distance FROM {model['tbl']} "
+            f"WHERE embedding MATCH {_wrap(model['dtype'])} AND k = ? "
             f"AND rowid IN (SELECT i.id FROM vec_items i{join} WHERE {' AND '.join(where)})) m "
             f"JOIN vec_items i ON i.id = m.rowid ORDER BY m.distance, i.message_id, i.chunk_id",
-            (sqlite_vec.serialize_float32(list(vector)), k, *params),
+            (_blob(sqlite_vec, vector, model["dtype"]), k, *params),
         )
         return [
             Hit(r["message_id"], r["chunk_id"], 1.0 - float(r["distance"]), model["model_id"])

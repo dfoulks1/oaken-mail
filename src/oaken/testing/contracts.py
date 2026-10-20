@@ -219,7 +219,7 @@ ENRICHER_CHECKS = (check_enricher_valid, check_enricher_output)
 def _item(
     mid: str, vec: tuple[float, ...], model: str = "m-a", account: str = "acct"
 ) -> VectorItem:
-    return VectorItem(mid, "c0", vec, model, account)
+    return VectorItem(mid, "c0", vec, model, f"h-{mid}-{vec}", account)
 
 
 async def check_store_valid(store: Any) -> None:

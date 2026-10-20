@@ -26,7 +26,7 @@ async def fill(store: SqliteVecStore, n: int, d: int, rng: random.Random) -> flo
     t = time.perf_counter()
     for start in range(0, n, 1000):
         batch: Sequence[VectorItem] = [
-            VectorItem(f"m{i}", "c0", pool[i % 500], "bench", f"a{i % 3}")
+            VectorItem(f"m{i}", "c0", pool[i % 500], "bench", f"h{i}", f"a{i % 3}")
             for i in range(start, min(n, start + 1000))
         ]
         await store.upsert(batch)

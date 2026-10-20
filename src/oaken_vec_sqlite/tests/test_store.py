@@ -3,6 +3,7 @@ import asyncio
 import re
 import subprocess
 import sys
+from dataclasses import replace
 from importlib.metadata import entry_points
 from pathlib import Path
 
@@ -11,7 +12,7 @@ import pytest
 from oaken.core.db import Database, migrate
 from oaken.core.errors import Conflict, PluginError
 from oaken.index.store import MIGRATIONS
-from oaken.plugins.contracts import VectorItem
+from oaken.plugins.contracts import PluginContext, VectorItem
 from oaken.testing.contracts import make_context
 from oaken_vec_sqlite import SqliteVecStore
 
@@ -27,7 +28,7 @@ def item(
     acct: str = "a1",
     h: str = "",
 ) -> VectorItem:
-    return VectorItem(mid, chunk, vec, model, acct, h)
+    return VectorItem(mid, chunk, vec, model, h or f"{mid}:{chunk}:{vec}", acct)
 
 
 # -- basics --------------------------------------------------------------------------------
@@ -379,3 +380,40 @@ async def test_the_loader_works_here(started: SqliteVecStore) -> None:
     """The smoke test CI runs on Linux, macOS and Windows: the extension loads and answers."""
     health = await started.health()
     assert health.ok and health.detail.startswith("sqlite-vec v")
+
+
+def _ctx(**config: str) -> PluginContext:
+    return replace(make_context("vector_store"), config=dict(config))
+
+
+# -- int8 and the required content hash -------------------------------------------------------
+async def test_a_vector_item_without_a_content_hash_is_refused() -> None:
+    with pytest.raises(ValueError, match="content_hash"):
+        VectorItem("m", "c", (1.0, 0.0), "x", "")
+
+
+async def test_int8_is_a_setting_and_finds_the_same_nearest_chunk(tmp_path: Path) -> None:
+    store = SqliteVecStore(tmp_path / "i.db")
+    await store.start(_ctx(dtype="int8"))
+    try:
+        await store.upsert([item("a", (1.0, 0.0, 0.1)), item("b", (0.0, 1.0, 0.0))])
+        [first, *_] = await store.query([0.9, 0.1, 0.1], 2)
+        assert first.message_id == "a"
+        assert [m.dtype for m in await store.models()] == ["int8"]
+    finally:
+        await store.stop()
+
+
+async def test_a_bad_dtype_is_refused_at_start(tmp_path: Path) -> None:
+    store = SqliteVecStore(tmp_path / "i.db")
+    with pytest.raises(PluginError, match="dtype"):
+        await store.start(_ctx(dtype="f16"))
+
+
+async def test_a_new_model_can_use_a_different_dtype(started: SqliteVecStore) -> None:
+    await started.upsert([item("a", (1.0, 0.0))])
+    await started.begin_model("m-b", 2, "int8")
+    assert {m.model_id: m.dtype for m in await started.models()} == {
+        "m-a": "float32",
+        "m-b": "int8",
+    }

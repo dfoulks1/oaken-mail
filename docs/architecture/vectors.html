@@ -125,7 +125,9 @@ written while four readers ran 491 queries with no errors (WAL).</li>
 <p>Through the store's own API, 300,000 chunks at 768 dimensions took 79 s to insert (3,800 a second),
 with a p50 of 548 ms, or 360 ms with a filter that keeps a small share of the mail.</p>
 <p><code>int8</code> vectors are 4x smaller and a little faster, but recall at 10 fell to 0.89 at 384 dimensions
-(0.98 at 768). <strong>float32 is the default</strong>; int8 stays a later option.</p>
+(0.98 at 768). <strong>float32 is the default</strong>; int8 is a setting: <code>dtype = &quot;int8&quot;</code> in
+<code>[plugins.sqlite-vec]</code>. The choice is stored per model, so changing it applies to the next model
+you build (see below), and the old vectors stay as they were.</p>
 </section>
 <section id="what-it-stores" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>What it stores</h2></div>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
@@ -142,7 +144,7 @@ with a p50 of 548 ms, or 360 ms with a filter that keeps a small share of the ma
 </tr>
 <tr>
 <td><code>vec_items</code></td>
-<td>One row per vector: model, message, chunk id, account and the chunk's content hash.</td>
+<td>One row per vector: model, message, chunk id, account and the chunk's content hash. The hash is required, so any vector can be traced to the exact text it came from.</td>
 </tr>
 <tr>
 <td><code>vec_N</code></td>

@@ -205,6 +205,6 @@ async def test_fake_provider_reports_deletes_server_flags_and_injected_failures(
 
 async def test_store_conflict_is_a_conflict_error() -> None:
     s = InMemoryVectorStore()
-    await s.upsert([VectorItem("m", "c", (1.0, 0.0), "a")])
+    await s.upsert([VectorItem("m", "c", (1.0, 0.0), "a", "h")])
     with pytest.raises(Conflict):
-        await s.upsert([VectorItem("n", "c", (1.0, 0.0), "b")])
+        await s.upsert([VectorItem("n", "c", (1.0, 0.0), "b", "h")])
