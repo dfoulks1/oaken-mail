@@ -180,6 +180,15 @@ model server. It reads its own `[plugins.<entry-point-name>]` table through `ctx
 points to offer two differently configured instances. See [prompt safety and
 workspaces](architecture/ai-safety.html).
 
+## A first-party example: Gmail
+
+`oaken_gmail` is the reference for a provider that has its own auth. It keeps its credentials in the
+OS keyring (never in `ctx.config`), renews them through a `TokenManager`, reports a dead
+credential as an unhealthy `health()` plus a plugin event instead of crashing, and overrides
+`authenticate`, `pull`, `set_flags` and `send`, so it declares all four capabilities. Its tests run
+the shared `ProviderContract` against an in-memory fake Google. See [Connect
+Gmail](providers/gmail.html).
+
 ## Plugin events
 
 Core announces what happens on an event bus, and a plugin can announce its own. Subclass

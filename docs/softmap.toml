@@ -553,6 +553,31 @@ funcs = [
 ]
 notes = ["Retries only connection errors and 5xx. Error messages never carry request or response bodies.", "Default models nomic-embed-text and qwen2.5:3b are unverified placeholders; test live later.", "Fixtures are written from the API docs, not recorded."]
 
+[[components]]
+id = "gmail"
+name = "Gmail plugin"
+layer = "plugins"
+status = "built"
+prompt = "11"
+path = "src/oaken_gmail"
+summary = "The first-party Gmail provider: full and incremental sync, flags, labels, trash, archive, star and send, over Google's REST API with a bring-your-own OAuth client. The refresh token lives only in the OS keyring."
+uses = []
+ext = ["Gmail API", "OS keyring"]
+types = [
+  ["GmailProvider", "class", "The oaken.providers plugin: authenticate, pull, set_flags, send, plus labels, trash, archive and star."],
+  ["TokenManager", "class", "Keeps an access token valid: proactive renewal, one shared refresh, 401 retry, rotation, invalid_grant becomes a health state."],
+  ["KeyringStore", "class", "The refresh token in the OS keyring (service oaken, user gmail:ACCOUNT); no keyring means a clear error, never a file."],
+  ["GmailApi", "class", "REST client: timeouts, a concurrency cap, backoff on 429, rate-limit 403 and 5xx, Retry-After, one 401 retry."],
+  ["Cursor", "dataclass", "Sync position: a full sync's page (with the history id read before listing) or an incremental history id."],
+  ["GmailConfig", "pydantic model", "[plugins.gmail]: client_secret_file, account, include and exclude labels, page_size, concurrency, timeout, retries."],
+]
+funcs = [
+  ["GmailProvider.authorize(show_url)", "PKCE loopback OAuth in the browser; stores the refresh token in the keyring."],
+  ["GmailProvider.set_flags(ids, add, remove)", "Seen is the UNREAD label's absence, Flagged is STARRED; one batchModify, per-id fallback with PartialFailure."],
+  ["GmailProvider.send(raw)", "messages.send; never retried after a timeout or 5xx, since the mail may have gone."],
+]
+notes = ["Scope is gmail.modify only; no permanent delete and no drafts.", "invalid_grant sets needs re-authorization, publishes an event and stops asking until the token changes. A Testing-mode Google app expires tokens in 7 days.", "Spam and Trash are never synced; moving a message there reports it deleted.", "Test live later: the fake server proves the requests, not that Google accepts them."]
+
 # --- Project tooling ---------------------------------------------------------------------
 [[components]]
 id = "tooling"

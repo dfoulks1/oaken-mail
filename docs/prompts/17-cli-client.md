@@ -124,4 +124,9 @@ same commit (see `00-context.md`).
 | 10 | `Workspaces` | `oaken workspaces [--json]` | Each workspace with its trust level, backend, and whether that backend is local; flags a secure workspace whose backend is remote. |
 | 10 | `LLMCache.clear(workspace)` | `oaken ai cache clear [--workspace NAME]` | Confirm first. The cache can hold text derived from mail. |
 | 10 | Ollama startup check | `oaken ai check` | Starts the configured embedder and LLM backend and reports the model, dimensions, context window and locality, or the exact `ollama pull` to run. Never pulls. |
+| 11 | Gmail authorize (`GmailProvider.authorize`) | `oaken auth gmail [--account NAME]` | Prints the Google consent URL (or opens a browser), waits on the loopback port, and says whether the refresh token reached the keyring. Never prints a token. |
+| 11 | Gmail health (`needs re-authorization`) | `oaken doctor` / `oaken accounts` | Shows the needs-re-authorization state with the cause list (Testing-mode app, password change, revoked access) and the command to fix it. |
+| 11 | `list_labels`, `create_label`, `rename_label`, `delete_label` | `oaken labels [list\|create\|rename\|delete]` | Gmail labels; system labels refuse rename and delete. Confirm before delete. |
+| 11 | `trash`, `untrash`, `archive`, `star`, `set_flags` | `oaken mail trash\|untrash\|archive\|star ID...` | Per-id results; a partial failure lists the ids that did not change. |
+| 11 | `send` | (not in 11) | Sending goes through the outbox, audit and confirm step in a later prompt; never over MCP. |
 

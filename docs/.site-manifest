@@ -30,6 +30,7 @@ demo/search.html
 demo/settings.html
 index.html
 plugins.html
+providers/gmail.html
 reference/plugin-contracts.html
 robots.txt
 security.html

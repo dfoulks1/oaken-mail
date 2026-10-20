@@ -9,6 +9,7 @@ requires-python = ">=3.11"
 dependencies = [
     "aiosqlite>=0.22.1",
     "httpx2>=2.15.1",
+    "keyring>=25.7.0",
     "platformdirs>=4.13.5",
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.1",
@@ -29,6 +30,9 @@ ollama = "oaken_ollama:OllamaEmbedder"
 ollama = "oaken_ollama:OllamaLLM"
 ollama-remote = "oaken_ollama:OllamaLLM"
 
+[project.entry-points."oaken.providers"]
+gmail = "oaken_gmail:GmailProvider"
+
 [project.entry-points."oaken.vector_stores"]
 sqlite-vec = "oaken_vec_sqlite:SqliteVecStore"
 
@@ -45,7 +49,7 @@ build-backend = "hatchling.build"
 path = "src/oaken/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/oaken", "src/oaken_vec_sqlite", "src/oaken_ollama"]
+packages = ["src/oaken", "src/oaken_vec_sqlite", "src/oaken_ollama", "src/oaken_gmail"]
 exclude = ["**/tests/**"]
 
 [dependency-groups]
@@ -73,10 +77,11 @@ default-groups = ["dev", "docs"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["src", "docs", "tests"]
-addopts = ["--import-mode=importlib", "-m", "not slow and not live_ollama"]
+addopts = ["--import-mode=importlib", "-m", "not slow and not live_ollama and not live_gmail"]
 markers = [
     "slow: heavy measurements, off by default (run with -m slow)",
     "live_ollama: needs a running local Ollama with the models pulled, off by default",
+    "live_gmail: needs a real Google account and OAuth client, off by default",
 ]
 
 [tool.ruff]
@@ -93,7 +98,7 @@ notice-rgx = "SPDX-License-Identifier: Apache-2\\.0"
 min-file-size = 0
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**" = ["S101", "S311"]
+"**/tests/**" = ["S101", "S105", "S106", "S311"]  # S105/6: fake tokens
 "tests/**" = ["S101"]
 "src/oaken/testing/contracts.py" = ["S101"]  # the suites are assertions
 "docs/spikes/**" = ["S311", "S608"]  # measurement scripts: seeded random data, fixed SQL

@@ -1,0 +1,228 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connect Gmail · Oaken Mail</title>
+<meta name="description" content="Create a Google Cloud OAuth client, publish it so tokens do not expire after 7 days, authorize, configure the Gmail plugin, and run a read-only first sync. Covers scopes, the token design and what to do when Google revokes a token.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Connect Gmail · Oaken Mail">
+<meta property="og:description" content="Create a Google Cloud OAuth client, publish it so tokens do not expire after 7 days, authorize, configure the Gmail plugin, and run a read-only first sync. Covers scopes, the token design and what to do when Google revokes a token.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="../assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">Bring your own Google OAuth client, authorize once, and stay signed in</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Start</div>
+      <a class="doc-link current" href="gmail.html" aria-current="page">Connect Gmail</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="../architecture/overview.html">Architecture overview</a>
+      <a class="doc-link" href="../architecture/jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="../architecture/software-map.html">Software map</a>
+      <a class="doc-link" href="../architecture/swarm.html">The swarm</a>
+      <a class="doc-link" href="../architecture/storage.html">Raw storage</a>
+      <a class="doc-link" href="../architecture/parsing.html">Parsing and cleaning</a>
+      <a class="doc-link" href="../architecture/sieve.html">Sieve filtering</a>
+      <a class="doc-link" href="../architecture/index.html">The search index</a>
+      <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <a class="doc-link" href="../architecture/vectors.html">The vector store</a>
+      <a class="doc-link" href="../architecture/ingest-pipeline.html">The ingest pipeline</a>
+      <a class="doc-link" href="../architecture/ai-safety.html">Prompt safety and workspaces</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#what-the-plugin-does"><span class="num">1</span>What the plugin does</a>
+      <a class="nav-link" href="#create-the-google-cloud-oauth-client"><span class="num">2</span>Create the Google Cloud OAuth client</a>
+      <a class="nav-link" href="#configure-and-authorize"><span class="num">3</span>Configure and authorize</a>
+      <a class="nav-link" href="#how-tokens-stay-valid"><span class="num">4</span>How tokens stay valid</a>
+      <a class="nav-link" href="#what-is-synced-and-how"><span class="num">5</span>What is synced and how</a>
+      <a class="nav-link" href="#scopes"><span class="num">6</span>Scopes</a>
+      <a class="nav-link" href="#first-live-sync-by-hand"><span class="num">7</span>First live sync, by hand</a>
+      <a class="nav-link" href="#limits"><span class="num">8</span>Limits</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <h1 class="display-6">Connect Gmail</h1>
+    <p class="lead">Oaken reads and writes your Gmail through Google&#39;s REST API with an OAuth client that you create. The refresh token lives only in your operating system&#39;s keyring, and it is renewed quietly for as long as Google allows.</p>
+  </header>
+
+<section id="what-the-plugin-does" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>What the plugin does</h2></div>
+<p><code>oaken-gmail</code> is a provider plugin. It:</p>
+<ul>
+<li><strong>reads</strong>: a full first sync of All Mail (never Spam or Trash), then incremental syncs from
+Gmail's history, handing core the raw RFC 822 bytes, the labels, and the read and starred state;</li>
+<li><strong>writes back</strong>: mark read or unread, star, archive, add and remove labels, create, rename and
+delete your own labels, move to Trash and back, and <strong>send</strong> (including from a send-as alias you
+have set up in Gmail);</li>
+<li><strong>never</strong> deletes permanently and never touches drafts in this version.</li>
+</ul>
+<p>Sending is only a method on the plugin. Nothing in Oaken calls it on its own, and it is never
+exposed over MCP; the outbox, audit and confirmation step come in a later prompt. An account can
+also send through a different provider (a plain SMTP server) with <code>send_via</code>, described in that
+later work.</p>
+</section>
+<section id="create-the-google-cloud-oauth-client" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Create the Google Cloud OAuth client</h2></div>
+<p>Oaken ships no client, so there is no shared secret and nobody else's quota to compete for.</p>
+<ol>
+<li>In the <a href="https://console.cloud.google.com/">Google Cloud console</a> create a project (any name).</li>
+<li><strong>APIs and services, Library</strong>: enable the <strong>Gmail API</strong>.</li>
+<li><strong>OAuth consent screen</strong>: choose <strong>External</strong>, fill in an app name and your email, and add
+yourself under <strong>Test users</strong>. Add the scope <code>https://www.googleapis.com/auth/gmail.modify</code>.</li>
+<li><strong>Publish the app</strong> (the step that matters most, below): on the consent screen press
+<strong>Publish app</strong> so the status reads <strong>In production</strong>.</li>
+<li><strong>Credentials, Create credentials, OAuth client ID</strong>, application type <strong>Desktop app</strong>. Download
+the JSON and keep it somewhere private, outside this repository. Oaken reads it when it starts
+and never copies it.</li>
+</ol>
+<h3 id="why-in-production-even-for-an-app-only-you-use">Why &quot;In production&quot;, even for an app only you use</h3>
+<p>While an app is in <strong>Testing</strong>, Google expires its refresh tokens after <strong>7 days</strong>. That is the
+&quot;log in again every week&quot; problem. In production there is no 7-day limit. You do not need Google's
+verification for your own use: an unverified app works for its owner, behind an &quot;unverified app&quot;
+warning the first time you authorize, which you click through. (Verification, and a paid security
+assessment, are only needed to give a client to other people, because <code>gmail.modify</code> is a
+<em>restricted</em> scope.)</p>
+</section>
+<section id="configure-and-authorize" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Configure and authorize</h2></div>
+<div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[plugins.gmail]</span>
+<span class="n">client_secret_file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"~/secrets/oaken-google-client.json"</span><span class="w">   </span><span class="c1"># the JSON you downloaded</span>
+<span class="n">account</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"default"</span><span class="w">          </span><span class="c1"># names the keyring entry: oaken / gmail:default</span>
+<span class="c1"># include_labels = []        # label names or ids; empty means all mail</span>
+<span class="c1"># exclude_labels = ["Newsletters"]</span>
+<span class="c1"># page_size = 100            # messages per batch of the first sync</span>
+<span class="c1"># concurrency = 8            # requests in flight at once</span>
+</code></pre></div>
+<p>Authorizing opens Google's consent page in your browser, with a PKCE challenge and a redirect to a
+random free port on <code>127.0.0.1</code>. Oaken listens there once, checks the <code>state</code>, exchanges the code,
+confirms Google granted <code>gmail.modify</code>, and stores the refresh token in the keyring. The CLI
+command for this arrives with the CLI work (see the audit table in prompt 17); until then the
+plugin's <code>authorize()</code> method is the entry point.</p>
+<p>Without a keyring service (Secret Service on Linux, Keychain on macOS, Credential Locker on
+Windows) Oaken stops with a clear message. It never falls back to a file.</p>
+</section>
+<section id="how-tokens-stay-valid" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>How tokens stay valid</h2></div>
+<ul>
+<li>The <strong>refresh token</strong> is in the keyring only. The <strong>access token</strong> is in memory only.</li>
+<li>The access token is renewed about five minutes before it expires, measured on a monotonic clock.</li>
+<li>Many tasks asking at once share <strong>one</strong> renewal. A <code>401</code> renews once and retries once; a second
+<code>401</code> is a clear authorization error, not a loop.</li>
+<li>If Google sends a rotated refresh token it is written back at once. The keyring is read again
+before every renewal, so a token written by another process, or by authorizing again, is used
+without a restart.</li>
+<li>Network errors, <code>5xx</code> and <code>429</code> from Google's token endpoint are retried with backoff and never
+mark the account as broken.</li>
+<li>Only <code>invalid_grant</code> does. Then the plugin reports <strong>needs re-authorization</strong> in its health,
+publishes a <code>GmailNeedsReauthorization</code> event, and stops asking Google until the stored token
+changes. Authorize again and the next sync tick carries on, no restart.</li>
+</ul>
+<h3 id="why-google-revokes-a-token">Why Google revokes a token</h3>
+<p><code>invalid_grant</code> means Google no longer honours the refresh token:</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The app is still in <strong>Testing</strong> (tokens last 7 days)</td>
+<td>Publish it to <strong>In production</strong>, then authorize again</td>
+</tr>
+<tr>
+<td>The Google account password changed (for a token with mail scopes)</td>
+<td>Authorize again</td>
+</tr>
+<tr>
+<td>You removed Oaken at your Google account's third-party access page</td>
+<td>Authorize again</td>
+</tr>
+<tr>
+<td>More than 100 live tokens for this account and client</td>
+<td>Authorize again; older ones are dropped</td>
+</tr>
+<tr>
+<td>The token went unused for six months</td>
+<td>Authorize again</td>
+</tr>
+</tbody>
+</table></div>
+</section>
+<section id="what-is-synced-and-how" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>What is synced and how</h2></div>
+<p>The first sync lists All Mail in pages (Spam and Trash are never included) and fetches each message
+as raw bytes with a capped number of requests at once, backing off on <code>429</code>, rate-limit <code>403</code> and
+<code>5xx</code> and honouring <code>Retry-After</code>. The mailbox <code>historyId</code> is read <strong>before</strong> listing, so mail that
+arrives meanwhile is picked up by the next incremental sync. The cursor records the page, so an
+interrupted first sync resumes where it stopped.</p>
+<p>Later syncs ask for what changed: new mail, deletions, and label changes. A message moved to Spam
+or Trash is reported as deleted (it is out of scope); one brought back is delivered again. Read and
+starred changes become <code>\Seen</code> and <code>\Flagged</code> flag changes. If Google answers <code>404</code> because the
+history id is too old, Oaken does a full resync on its own and publishes <code>GmailFullResync</code>.
+Deletions that happened while the history had expired are not seen by that resync.</p>
+</section>
+<section id="scopes" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Scopes</h2></div>
+<p>One scope: <code>https://www.googleapis.com/auth/gmail.modify</code>. Google describes it as &quot;read, compose,
+and send emails&quot; and it excludes only immediate permanent deletion, which would need the full
+<code>https://mail.google.com/</code> scope; Oaken deliberately does not ask for that. Labels, Trash,
+batch changes, history and sending are within it.</p>
+<p>Listing your send-as aliases reads Gmail <em>settings</em>. Google's scope page does not say whether
+<code>gmail.modify</code> covers that call, so <code>list_send_as()</code> may answer <code>403</code> on some accounts. Sending as
+an alias does not depend on it: Gmail keeps the <code>From</code> header when it is a verified alias.</p>
+</section>
+<section id="first-live-sync-by-hand" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>First live sync, by hand</h2></div>
+<p>Do this once, read-only first. The test is skipped unless you ask for it.</p>
+<ol>
+<li>Publish the app (above), create the client, and set <code>client_secret_file</code>.</li>
+<li>Authorize. Check the keyring now has an entry <code>gmail:default</code> under the service <code>oaken</code>.</li>
+<li>Run <code>uv run pytest -m live_gmail</code>. It checks the token and scope, lists ten messages and writes
+nothing.</li>
+<li>Only then let a real sync run. Watch for <code>GmailNeedsReauthorization</code> and <code>GmailFullResync</code>.</li>
+<li>Rotate any older OAuth client secret you used with other tools.</li>
+</ol>
+</section>
+<section id="limits" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>Limits</h2></div>
+<p>Gmail's quota is per user and per project; a first sync of a large mailbox takes a while by design.
+Push notifications (Pub/Sub) are not used: Oaken polls on the scheduler. Threading is computed by
+core from headers, not taken from Gmail. Drafts, permanent delete and the IMAP provider are
+separate work.</p>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

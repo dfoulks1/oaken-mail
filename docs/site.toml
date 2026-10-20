@@ -32,7 +32,7 @@ name = "Project"
 
 # Extra hosts that outbound <a> links may point at, beyond github.com.
 [check]
-allow_hosts = ["www.contributor-covenant.org", "www.jwz.org", "www.rfc-editor.org"]
+allow_hosts = ["console.cloud.google.com", "www.contributor-covenant.org", "www.jwz.org", "www.rfc-editor.org"]
 
 [[pages]]
 id = "architecture/overview"
@@ -73,6 +73,10 @@ file = "architecture/ingest-pipeline.md"
 [[pages]]
 id = "architecture/ai-safety"
 file = "architecture/ai-safety.md"
+
+[[pages]]
+id = "providers/gmail"
+file = "providers/gmail.md"
 
 [[pages]]
 id = "plugins"
