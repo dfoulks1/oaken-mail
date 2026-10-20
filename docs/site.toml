@@ -91,6 +91,10 @@ id = "architecture/retrieval"
 file = "architecture/retrieval.md"
 
 [[pages]]
+id = "architecture/daemon"
+file = "architecture/daemon.md"
+
+[[pages]]
 id = "providers/gmail"
 file = "providers/gmail.md"
 
@@ -116,6 +120,10 @@ generated = true
 
 [[pages]]
 id = "reference/cli"
+generated = true
+
+[[pages]]
+id = "reference/api"
 generated = true
 
 [[pages]]

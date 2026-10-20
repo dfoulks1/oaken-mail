@@ -13,6 +13,7 @@ import pytest
 from pydantic import BaseModel
 
 from oaken.ai import LLMCache, LLMService, Workspaces
+from oaken.core.agents import AgentRegistry
 from oaken.core.clock import FakeClock
 from oaken.core.ids import MessageId
 from oaken.core.operations import (
@@ -25,7 +26,7 @@ from oaken.core.operations import (
 from oaken.core.operations.builtin import core_registry
 from oaken.core.operations.plugin_ops import plugin_operations
 from oaken.core.operations.registry import AnyOperation
-from oaken.core.settings import OperationsSettings, Settings, SyncSettings
+from oaken.core.settings import OperationsSettings, Settings, SwarmSettings, SyncSettings
 from oaken.ingest.schedule import SyncService
 from oaken.plugins.accounts import AccountProviders
 from oaken.plugins.base import BaseEnricher, BaseProvider
@@ -168,6 +169,7 @@ async def build_ops(
         settings = Settings(
             operations=operations or OperationsSettings(),
             sync=SyncSettings(backoff_jitter=0.0),
+            swarm=SwarmSettings(enabled=True, allowed_kinds=["enrich"]),
         )
         host = PluginHost(settings, rig.clock, rig.bus, discover=discover, health_interval=3600)
         if with_plugins:
@@ -192,6 +194,7 @@ async def build_ops(
             settings=settings, clock=rig.clock, bus=rig.bus, readstate=rs.rs,
             pipeline=rig.pipeline, indexer=rig.indexer, usage=rig.usage, sync=sync,
             plugins=host, llm=llm, version="test",
+            agents=AgentRegistry(rig.raw_db, rig.clock, settings.swarm, rig.bus),
         )  # fmt: skip
         registry = core_registry()
         registry.attach_plugins(_plugin_source(host))

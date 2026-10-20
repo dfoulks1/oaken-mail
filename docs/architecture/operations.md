@@ -106,11 +106,11 @@ the same ceiling rules, with these differences:
 - A **generic plugin settings store** for the UI. `list_plugins` shows each plugin's settings
   schema, but nothing yet writes them.
 - `search` is on over MCP and `ask` is off until the user turns it on; both read through
-  [retrieval](retrieval.md), which a running process only gets once the daemon (prompt 16)
-  attaches the index, vectors and model service to the registry.
+  [retrieval](retrieval.md), which the [daemon](daemon.md) attaches to the registry along with the index, vectors and model
+  service.
 - **Summaries run inline**, one after another, capped per call. They are not a job.
 - The registry's audit row is written just after the change, not in the same transaction. A crash in
   between loses the row, not the change. Operations that already audit atomically (read state,
   schedules, exposure) are not affected.
 - Plugin operations come from a plugin's shared instance, not from per-account instances.
-- There is no HTTP server yet. The in-process client is what the tests and later the daemon use.
+- The HTTP surface is built (the [daemon](daemon.md)), the MCP mount is not (prompt 18).

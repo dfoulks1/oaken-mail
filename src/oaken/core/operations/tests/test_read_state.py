@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from oaken.core.errors import InvalidInput, NotImplementedYet, PermissionDenied
+from oaken.core.errors import InvalidInput, NotFound, NotImplementedYet, PermissionDenied
 from oaken.core.ids import MessageId
 from oaken.core.operations.builtin import core_operations
 from oaken.core.operations.tests.conftest import CLI, UI, Ops, agent
@@ -29,6 +29,8 @@ def examples(a: MessageId) -> dict[str, Any]:
         "remove_schedule": {"account_id": "main"},
         "set_operation_exposure": {"scope": "operation", "name": "status", "mcp": True},
         "summarize_message": {"message_ids": [a]},  # mark_read defaults to False
+        "create_agent": {"label": "x", "kinds": ["enrich"]}, "list_agents": {},
+        "revoke_agent": {"agent_id": "none"},
     }  # fmt: skip
 
 
@@ -47,6 +49,8 @@ async def test_no_operation_that_does_not_mark_read_changes_read_state(ops: Ops)
             await ops.call(name, payload, CLI)
         except NotImplementedYet:
             assert name in {"search", "ask"}
+        except NotFound:
+            assert name == "revoke_agent"  # there is no such agent to revoke
         assert await ops.read_count() == 0, f"{name} changed read state"
         assert ops.rs.writes() == [], f"{name} wrote a flag to the server"
     assert ops.rs.writes() == [] and await ops.rs.marker(a) is None

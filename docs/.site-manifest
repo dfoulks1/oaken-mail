@@ -2,6 +2,7 @@
 404.html
 adr/index.html
 architecture/ai-safety.html
+architecture/daemon.html
 architecture/index.html
 architecture/ingest-pipeline.html
 architecture/jobs.html
@@ -37,6 +38,7 @@ plugins.html
 providers/gmail.html
 providers/imap.html
 providers/smtp.html
+reference/api.html
 reference/cli.html
 reference/evaluation.html
 reference/operations.html

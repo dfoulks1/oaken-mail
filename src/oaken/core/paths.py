@@ -35,7 +35,7 @@ def config_dir() -> Path:
     return _ensure(home / "config" if home else Path(platformdirs.user_config_dir(APP)))
 
 
-def runtime_file(name: str = "core.json") -> Path:
+def runtime_file(name: str = "runtime.json") -> Path:
     """A file for the running core (port and token). Its directory is created, the file is not."""
     home = _home()
     base = home / "run" if home else Path(platformdirs.user_runtime_dir(APP, ensure_exists=False))

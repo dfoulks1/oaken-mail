@@ -103,12 +103,35 @@ uses = ["api"]
 id = "api"
 name = "API daemon"
 layer = "api"
-status = "planned"
+status = "built"
 prompt = "16"
-summary = "General local API for the CLI and web UI: HTTP and server-sent events on 127.0.0.1 with token auth; start, stop and status."
-uses = ["operations"]
+path = "src/oaken/api"
+summary = "General local API for the CLI and web UI: HTTP and server-sent events on 127.0.0.1 with token auth. Routes are generated from the operation registry; a guard checks Host, Origin, content type, token, rate and size before any route runs."
+uses = ["operations", "swarm"]
 untrusted = true
-notes = ["Binds to loopback only. The token file is mode 0600 under the config directory."]
+types = [
+  ["Api", "class", "The ASGI application: generated operation routes, events, the agent job routes, static files, and a mount point for more surfaces."],
+  ["Surface", "dataclass", "A path prefix with its own token check, size and concurrency limits and caller class. General, agent, and later MCP."],
+  ["EventRing", "class", "Numbers bus events and keeps the last N so Last-Event-ID can resume; says gap when it cannot."],
+  ["RuntimeFile", "class", "runtime.json: pid, port, version. Owner-only, and the single-instance lock."],
+]
+notes = ["Binds to loopback only; configuration cannot say otherwise. The token file and runtime file are mode 0600.", "uvicorn and Starlette, chosen in ADR 0005. The MCP mount is prompt 18."]
+
+[[components]]
+id = "daemon"
+name = "Core daemon"
+layer = "api"
+status = "built"
+prompt = "16"
+path = "src/oaken/daemon"
+summary = "Opens and wires every store and service in order, serves the API, and stops cleanly on SIGINT or SIGTERM. Runs in the foreground or detached."
+uses = ["api", "operations", "pluginhost", "jobs", "syncsched"]
+funcs = [
+  ["serve(core, runtime) -> None", "Claim the runtime file, start core, wait for a stop, shut down in reverse order, remove the file."],
+  ["detach() -> dict", "Start core in the background and return its runtime file once it is listening."],
+  ["stop() -> bool", "Signal the running core and wait for it to exit."],
+]
+notes = ["Single instance: the runtime file is created exclusively before anything is opened.", "A killed process leaves a stale file, replaced by the next start; its leases expire like any dead worker's."]
 
 [[components]]
 id = "mcp"
@@ -136,7 +159,7 @@ types = [
   ["CoreClient", "class", "The one path every call takes: exposure, input, class, confirm gate, handler, audit."],
   ["Proposal", "model", "What a mutation would change, with a single-use token an agent redeems."],
 ]
-notes = ["Anything that mutates mail is gated here, in code, not in a prompt.", "31 core operations, plus those plugins offer as <plugin>.<name>. Retrieval (search, ask) is built (prompt 15).", "No HTTP server yet; the in-process client is what tests use. Exposure to MCP is a ceiling in code and a user setting in operation_settings."]
+notes = ["Anything that mutates mail is gated here, in code, not in a prompt.", "34 core operations, plus those plugins offer as <plugin>.<name>. Retrieval (search, ask) is built (prompt 15).", "The HTTP surface is the API component. Exposure to MCP is a ceiling in code and a user setting in operation_settings."]
 
 [[components]]
 id = "retrieval"

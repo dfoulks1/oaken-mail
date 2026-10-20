@@ -1,0 +1,549 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HTTP API · Oaken Mail</title>
+<meta name="description" content="The local HTTP API: auth, Host and Origin rules, routes, events.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="HTTP API · Oaken Mail">
+<meta property="og:description" content="The local HTTP API: auth, Host and Origin rules, routes, events.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="../assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">HTTP API</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Start</div>
+      <a class="doc-link" href="../providers/gmail.html">Connect Gmail</a>
+      <a class="doc-link" href="../providers/smtp.html">Send through your own SMTP server</a>
+      <a class="doc-link" href="../providers/imap.html">Connect any IMAP server</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="../architecture/overview.html">Architecture overview</a>
+      <a class="doc-link" href="../architecture/jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="../architecture/software-map.html">Software map</a>
+      <a class="doc-link" href="../architecture/swarm.html">The swarm</a>
+      <a class="doc-link" href="../architecture/storage.html">Raw storage</a>
+      <a class="doc-link" href="../architecture/daemon.html">The daemon and the local API</a>
+      <a class="doc-link" href="../architecture/parsing.html">Parsing and cleaning</a>
+      <a class="doc-link" href="../architecture/sieve.html">Sieve filtering</a>
+      <a class="doc-link" href="../architecture/index.html">The search index</a>
+      <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <a class="doc-link" href="../architecture/vectors.html">The vector store</a>
+      <a class="doc-link" href="../architecture/ingest-pipeline.html">The ingest pipeline</a>
+      <a class="doc-link" href="../architecture/ai-safety.html">Prompt safety and workspaces</a>
+      <a class="doc-link" href="../architecture/read-state.html">Read state</a>
+      <a class="doc-link" href="../architecture/sync-schedule.html">Sync schedule</a>
+      <a class="doc-link" href="../architecture/operations.html">Operations</a>
+      <a class="doc-link" href="../architecture/retrieval.html">Retrieval and ask</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="plugin-contracts.html">Plugin contracts</a>
+      <a class="doc-link" href="operations.html">Operations</a>
+      <a class="doc-link" href="cli.html">CLI</a>
+      <a class="doc-link" href="evaluation.html">Evaluation results</a>
+      <a class="doc-link current" href="api.html" aria-current="page">HTTP API</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#reaching-it"><span class="num">1</span>Reaching it</a>
+      <a class="nav-link" href="#routes"><span class="num">2</span>Routes</a>
+      <a class="nav-link" href="#calling-an-operation"><span class="num">3</span>Calling an operation</a>
+      <a class="nav-link" href="#events"><span class="num">4</span>Events</a>
+      <a class="nav-link" href="#agent-job-routes"><span class="num">5</span>Agent job routes</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-secondary">Generated</span></div>
+    <h1 class="display-6">HTTP API</h1>
+    <p class="lead">The loopback API: authentication, the Host and Origin rules, every operation route, the event stream and the agent job routes, from the OpenAPI document.</p>
+  </header>
+<p>The local API core serves on <code>127.0.0.1</code>. The CLI and the web UI use it, and the OpenAPI document
+this page is built from is served at <code>GET /v1/openapi.json</code>.
+<a href="../architecture/daemon.html">How it is kept safe</a>.</p>
+
+<section id="reaching-it" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>Reaching it</h2></div>
+<ul>
+<li><strong>Where.</strong> <code>127.0.0.1</code> and the port in <code>runtime.json</code> (<code>[api] port</code>, 0 for a free one).</li>
+<li><strong>Auth.</strong> <code>Authorization: Bearer &lt;token&gt;</code>, the token in <code>api_token</code> in the config directory.
+Only <code>GET /v1/health</code> is open, and it returns <code>{&quot;status&quot;: &quot;ok&quot;}</code>. Agent routes take an agent
+token (<code>oaken_agent_...</code>) instead, and no other route accepts one.</li>
+<li><strong>Host.</strong> Must be <code>127.0.0.1:&lt;port&gt;</code> or <code>localhost:&lt;port&gt;</code>, else <code>400</code>.</li>
+<li><strong>Origin.</strong> A <code>POST</code> from another origin, or with <code>Sec-Fetch-Site: cross-site</code>, is <code>403</code>.
+There are no CORS headers unless one development origin is configured.</li>
+<li><strong>Content type.</strong> A <code>POST</code> must be <code>application/json</code>, else <code>415</code>.</li>
+<li><strong>Limits.</strong> Body size (<code>413</code>), request rate on mutating calls (<code>429</code>), concurrent calls (<code>429</code>).</li>
+<li><strong>Caller class.</strong> <code>X-Oaken-Client: cli</code> (the default), <code>ui</code> or <code>mcp</code>. It can lower privilege and
+never raise it: <code>mcp</code> makes the call an agent's, so it cannot confirm by saying so. Anything else
+is <code>400</code>.</li>
+<li><strong>Errors.</strong> <code>{&quot;code&quot;: &quot;...&quot;, &quot;message&quot;: &quot;...&quot;}</code>. Messages never contain mail text.</li>
+</ul>
+</section>
+<section id="routes" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Routes</h2></div>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Auth</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/v1/health</code></td>
+<td>none</td>
+<td>Liveness. Needs no token and reveals nothing else.</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/v1/operations</code></td>
+<td>API token</td>
+<td>The operations this caller may call, with their schemas.</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/v1/openapi.json</code></td>
+<td>API token</td>
+<td>This document.</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/v1/events</code></td>
+<td>API token</td>
+<td>Server-Sent Events: what core does, as it happens.</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/v1/agent/jobs/claim</code></td>
+<td>agent token</td>
+<td>Lease the best runnable job of the agent's kinds, or none.</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/v1/agent/jobs/{job_id}/heartbeat</code></td>
+<td>agent token</td>
+<td>Extend the lease; says whether the job was cancelled.</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/v1/agent/jobs/{job_id}/complete</code></td>
+<td>agent token</td>
+<td>Finish the job with a result that matches its kind's schema.</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/v1/agent/jobs/{job_id}/fail</code></td>
+<td>agent token</td>
+<td>Give the job back with an error; core decides whether to retry.</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/v1/operations/{name}</code></td>
+<td>API token</td>
+<td>Call one operation. 34 exist.</td>
+</tr>
+</tbody>
+</table></div>
+</section>
+<section id="calling-an-operation" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Calling an operation</h2></div>
+<p><code>POST /v1/operations/{name}</code> takes <code>input</code> and answers ``request_id<code>, </code>status<code>, </code>output<code>?</code>.</p>
+<p><code>status</code> is <code>ok</code> when the operation ran, or <code>confirmation_required</code> for a mutation that was not
+confirmed: nothing has changed, and <code>proposal</code> says what would, with a <code>confirmation_token</code>.
+A person at the CLI or UI may send <code>confirm: true</code>. An agent calls again with the token.
+Status codes: <code>422</code> input or result does not validate, <code>403</code> not permitted, <code>404</code> unknown,
+<code>409</code> conflict, <code>429</code> quota, <code>502</code> a plugin or provider failed.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Operation</th>
+<th>Permission</th>
+<th>MCP</th>
+<th>Route</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ask</code></td>
+<td>read</td>
+<td>off until turned on</td>
+<td><code>POST /v1/operations/ask</code></td>
+</tr>
+<tr>
+<td><code>create_agent</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/create_agent</code></td>
+</tr>
+<tr>
+<td><code>get_message</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/get_message</code></td>
+</tr>
+<tr>
+<td><code>get_message_rules</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/get_message_rules</code></td>
+</tr>
+<tr>
+<td><code>get_raw</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/get_raw</code></td>
+</tr>
+<tr>
+<td><code>list_accounts</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/list_accounts</code></td>
+</tr>
+<tr>
+<td><code>list_agents</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/list_agents</code></td>
+</tr>
+<tr>
+<td><code>list_audit</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/list_audit</code></td>
+</tr>
+<tr>
+<td><code>list_labels</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/list_labels</code></td>
+</tr>
+<tr>
+<td><code>list_messages</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/list_messages</code></td>
+</tr>
+<tr>
+<td><code>list_operations</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/list_operations</code></td>
+</tr>
+<tr>
+<td><code>list_plugins</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/list_plugins</code></td>
+</tr>
+<tr>
+<td><code>list_schedules</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/list_schedules</code></td>
+</tr>
+<tr>
+<td><code>mark_read</code></td>
+<td>mutate</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/mark_read</code></td>
+</tr>
+<tr>
+<td><code>mark_unread</code></td>
+<td>mutate</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/mark_unread</code></td>
+</tr>
+<tr>
+<td><code>message_dismissed</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/message_dismissed</code></td>
+</tr>
+<tr>
+<td><code>message_presented</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/message_presented</code></td>
+</tr>
+<tr>
+<td><code>pause_schedule</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/pause_schedule</code></td>
+</tr>
+<tr>
+<td><code>pipeline_status</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/pipeline_status</code></td>
+</tr>
+<tr>
+<td><code>plugin_health</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/plugin_health</code></td>
+</tr>
+<tr>
+<td><code>rebuild_index</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/rebuild_index</code></td>
+</tr>
+<tr>
+<td><code>remove_schedule</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/remove_schedule</code></td>
+</tr>
+<tr>
+<td><code>reprocess</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/reprocess</code></td>
+</tr>
+<tr>
+<td><code>resume_schedule</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/resume_schedule</code></td>
+</tr>
+<tr>
+<td><code>revoke_agent</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/revoke_agent</code></td>
+</tr>
+<tr>
+<td><code>search</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/search</code></td>
+</tr>
+<tr>
+<td><code>search_keyword</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/search_keyword</code></td>
+</tr>
+<tr>
+<td><code>set_operation_exposure</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/set_operation_exposure</code></td>
+</tr>
+<tr>
+<td><code>set_schedule</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/set_schedule</code></td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/status</code></td>
+</tr>
+<tr>
+<td><code>summarize_message</code></td>
+<td>mutate</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/summarize_message</code></td>
+</tr>
+<tr>
+<td><code>sync_now</code></td>
+<td>mutate</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/sync_now</code></td>
+</tr>
+<tr>
+<td><code>undo</code></td>
+<td>mutate</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/undo</code></td>
+</tr>
+<tr>
+<td><code>usage_summary</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/usage_summary</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Each operation's input and output are in <a href="operations.html">Reference: Operations</a>, and as JSON Schema in the OpenAPI document and in <code>GET /v1/operations</code>.</p>
+</section>
+<section id="events" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Events</h2></div>
+<p><code>GET /v1/events</code> is server-sent events. Each frame has an <code>id</code> (a number), an <code>event</code> (the type
+below) and <code>data</code> (one line of JSON: ids and counts, never message text). Send <code>Last-Event-ID</code> to
+resume from the in-memory ring. If that id is older than the ring, or from before core restarted, a
+<code>gap</code> event comes first, meaning fetch state again. A quiet stream sends <code>: heartbeat</code> comments.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Event type</th>
+<th>Meaning</th>
+<th>Fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AttachmentQuarantined</code></td>
+<td>Flagged attachments of a message were written to the quarantine folder (never opened).</td>
+<td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>message_id</code>, <code>count</code></td>
+</tr>
+<tr>
+<td><code>IndexRebuildProgress</code></td>
+<td>A rebuild of <code>index.db</code> is under way. <code>total</code> is the live messages in scope when it started; <code>done</code> counts the ones looked at (changed or not). <code>finished</code> is the last event.</td>
+<td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>done</code>, <code>total</code>, <code>indexed</code>, <code>failed</code>, <code>finished</code></td>
+</tr>
+<tr>
+<td><code>JobStateChanged</code></td>
+<td>Job state changed.</td>
+<td><code>ts</code>, <code>event_id</code>, <code>job_id</code>, <code>kind</code>, <code>status</code>, <code>account_id</code></td>
+</tr>
+<tr>
+<td><code>LargeMessageStored</code></td>
+<td>A message was too big for <code>raw.db</code> and went to the LFS folder, whole. <code>oversize</code> is set when it is also past <code>storage.max_message_bytes</code> (worth a warning in a UI).</td>
+<td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>message_id</code>, <code>size_bytes</code>, <code>oversize</code></td>
+</tr>
+<tr>
+<td><code>MessageEmbedded</code></td>
+<td>Message embedded.</td>
+<td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>message_id</code>, <code>model</code></td>
+</tr>
+<tr>
+<td><code>MessageEnriched</code></td>
+<td>Message enriched.</td>
+<td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>message_id</code>, <code>enricher</code></td>
+</tr>
+<tr>
+<td><code>MessageFiltered</code></td>
+<td>Sieve ran on a message and its organization attributes were written.</td>
+<td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>message_id</code>, <code>disposition</code></td>
+</tr>
+<tr>
+<td><code>MessageIndexed</code></td>
+<td>Message indexed.</td>
+<td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>message_id</code></td>
+</tr>
+<tr>
+<td><code>MessageParsed</code></td>
+<td>Message parsed.</td>
+<td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>message_id</code></td>
+</tr>
+<tr>
+<td><code>MessageReadChanged</code></td>
+<td>Message read changed.</td>
+<td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>message_id</code>, <code>read</code>, <code>reason</code>, <code>audit_id</code>, <code>local_only</code>, <code>error</code></td>
+</tr>
+<tr>
+<td><code>MessageStored</code></td>
+<td><code>is_new</code>: first time seen. <code>changed</code>: an existing message got different bytes (or came back after a delete), so anything derived from it is stale. A no-op put publishes nothing.</td>
+<td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>message_id</code>, <code>is_new</code>, <code>changed</code></td>
+</tr>
+<tr>
+<td><code>PluginEvent</code></td>
+<td>Base for events a plugin defines itself: subclass it, add plain-data fields, and publish with <code>ctx.publish(...)</code>. <code>plugin</code> names the sender (the host fills it in).</td>
+<td><code>ts</code>, <code>event_id</code>, <code>plugin</code></td>
+</tr>
+<tr>
+<td><code>PluginHealthChanged</code></td>
+<td>Plugin health changed.</td>
+<td><code>ts</code>, <code>event_id</code>, <code>plugin</code>, <code>healthy</code>, <code>detail</code></td>
+</tr>
+<tr>
+<td><code>SyncFinished</code></td>
+<td>Sync finished.</td>
+<td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>new_messages</code>, <code>error</code>, <code>quiet</code>, <code>folder</code></td>
+</tr>
+<tr>
+<td><code>SyncPaused</code></td>
+<td>An account's scheduled sync stopped until the user acts (for example, the password was refused). <code>quiet</code> is as on <code>SyncFinished</code>.</td>
+<td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>reason</code>, <code>quiet</code></td>
+</tr>
+<tr>
+<td><code>SyncProgress</code></td>
+<td>Sync progress.</td>
+<td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>done</code>, <code>total</code></td>
+</tr>
+<tr>
+<td><code>SyncScheduleChanged</code></td>
+<td>A sync schedule was added, edited, paused, resumed or removed (<code>change</code> says which).</td>
+<td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>folder</code>, <code>change</code></td>
+</tr>
+<tr>
+<td><code>SyncStarted</code></td>
+<td>Sync started.</td>
+<td><code>ts</code>, <code>event_id</code>, <code>account_id</code></td>
+</tr>
+<tr>
+<td><code>gap</code></td>
+<td>That id is no longer available; fetch state again.</td>
+<td><code>first_available</code></td>
+</tr>
+</tbody>
+</table></div>
+</section>
+<section id="agent-job-routes" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Agent job routes</h2></div>
+<p>Authenticated by an agent token, never by the API token. See <a href="../architecture/swarm.html">the swarm</a>.</p>
+<h3 id="post-v1agentjobsclaim"><code>POST /v1/agent/jobs/claim</code></h3>
+<p>Lease the best runnable job of the agent's kinds, or none.</p>
+<ul>
+<li>Request: <code>kinds</code>?</li>
+<li>Response: <code>job</code></li>
+</ul>
+<h3 id="post-v1agentjobsjob-idheartbeat"><code>POST /v1/agent/jobs/{job_id}/heartbeat</code></h3>
+<p>Extend the lease; says whether the job was cancelled.</p>
+<ul>
+<li>Request: none</li>
+<li>Response: <code>ok</code>?, <code>cancel_requested</code></li>
+</ul>
+<h3 id="post-v1agentjobsjob-idcomplete"><code>POST /v1/agent/jobs/{job_id}/complete</code></h3>
+<p>Finish the job with a result that matches its kind's schema.</p>
+<ul>
+<li>Request: <code>result</code>?, <code>produced_by</code>?</li>
+<li>Response: <code>ok</code>?</li>
+</ul>
+<h3 id="post-v1agentjobsjob-idfail"><code>POST /v1/agent/jobs/{job_id}/fail</code></h3>
+<p>Give the job back with an error; core decides whether to retry.</p>
+<ul>
+<li>Request: <code>error</code>, <code>permanent</code>?</li>
+<li>Response: <code>status</code></li>
+</ul>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

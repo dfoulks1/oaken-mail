@@ -44,6 +44,7 @@
       <a class="doc-link" href="software-map.html">Software map</a>
       <a class="doc-link" href="swarm.html">The swarm</a>
       <a class="doc-link" href="storage.html">Raw storage</a>
+      <a class="doc-link" href="daemon.html">The daemon and the local API</a>
       <a class="doc-link" href="parsing.html">Parsing and cleaning</a>
       <a class="doc-link" href="sieve.html">Sieve filtering</a>
       <a class="doc-link" href="index.html">The search index</a>
@@ -60,6 +61,7 @@
       <a class="doc-link" href="../reference/operations.html">Operations</a>
       <a class="doc-link" href="../reference/cli.html">CLI</a>
       <a class="doc-link" href="../reference/evaluation.html">Evaluation results</a>
+      <a class="doc-link" href="../reference/api.html">HTTP API</a>
       <div class="label">Project</div>
       <a class="doc-link" href="../contributing.html">Contributing</a>
       <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
@@ -239,14 +241,14 @@ the same ceiling rules, with these differences:</p>
 <li>A <strong>generic plugin settings store</strong> for the UI. <code>list_plugins</code> shows each plugin's settings
 schema, but nothing yet writes them.</li>
 <li><code>search</code> is on over MCP and <code>ask</code> is off until the user turns it on; both read through
-<a href="retrieval.html">retrieval</a>, which a running process only gets once the daemon (prompt 16)
-attaches the index, vectors and model service to the registry.</li>
+<a href="retrieval.html">retrieval</a>, which the <a href="daemon.html">daemon</a> attaches to the registry along with the index, vectors and model
+service.</li>
 <li><strong>Summaries run inline</strong>, one after another, capped per call. They are not a job.</li>
 <li>The registry's audit row is written just after the change, not in the same transaction. A crash in
 between loses the row, not the change. Operations that already audit atomically (read state,
 schedules, exposure) are not affected.</li>
 <li>Plugin operations come from a plugin's shared instance, not from per-account instances.</li>
-<li>There is no HTTP server yet. The in-process client is what the tests and later the daemon use.</li>
+<li>The HTTP surface is built (the <a href="daemon.html">daemon</a>), the MCP mount is not (prompt 18).</li>
 </ul>
 </section>
   <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>

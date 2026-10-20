@@ -3,6 +3,7 @@
   <url><loc>https://dfoulks1.github.io/oaken-mail/</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/adr/index.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/architecture/ai-safety.html</loc></url>
+  <url><loc>https://dfoulks1.github.io/oaken-mail/architecture/daemon.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/architecture/index.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/architecture/ingest-pipeline.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/architecture/jobs.html</loc></url>
@@ -23,6 +24,7 @@
   <url><loc>https://dfoulks1.github.io/oaken-mail/providers/gmail.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/providers/imap.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/providers/smtp.html</loc></url>
+  <url><loc>https://dfoulks1.github.io/oaken-mail/reference/api.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/reference/cli.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/reference/evaluation.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/reference/operations.html</loc></url>

@@ -44,6 +44,7 @@
       <a class="doc-link" href="software-map.html">Software map</a>
       <a class="doc-link" href="swarm.html">The swarm</a>
       <a class="doc-link" href="storage.html">Raw storage</a>
+      <a class="doc-link" href="daemon.html">The daemon and the local API</a>
       <a class="doc-link" href="parsing.html">Parsing and cleaning</a>
       <a class="doc-link" href="sieve.html">Sieve filtering</a>
       <a class="doc-link" href="index.html">The search index</a>
@@ -60,6 +61,7 @@
       <a class="doc-link" href="../reference/operations.html">Operations</a>
       <a class="doc-link" href="../reference/cli.html">CLI</a>
       <a class="doc-link" href="../reference/evaluation.html">Evaluation results</a>
+      <a class="doc-link" href="../reference/api.html">HTTP API</a>
       <div class="label">Project</div>
       <a class="doc-link" href="../contributing.html">Contributing</a>
       <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
@@ -225,7 +227,7 @@ schedule, then start the loop. Accounts with no usable provider are returned wit
 </section>
 <section id="still-to-come" class="doc-section"><div class="section-head"><span class="section-num">10</span><h2>Still to come</h2></div>
 <p>IMAP IDLE and Gmail push can call <code>SyncService.request()</code> for &quot;sync now&quot; without any change to the
-scheduler. The daemon entry point (prompt 16) and <code>oaken auth</code> (prompt 17) are what connect all this to a
+scheduler. The <a href="daemon.html">daemon</a> now starts all this, and <code>oaken auth</code> (prompt 17) is what connects it to a
 real mailbox.</p>
 </section>
   <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>

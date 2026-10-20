@@ -1,0 +1,330 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The daemon and the local API · Oaken Mail</title>
+<meta name="description" content="The core daemon: startup and shutdown order, the runtime file, the API token, the Host, Origin and content-type guards, event streaming, and the threat model.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="The daemon and the local API · Oaken Mail">
+<meta property="og:description" content="The core daemon: startup and shutdown order, the runtime file, the API token, the Host, Origin and content-type guards, event streaming, and the threat model.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="../assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">One process, one loopback port, three ways in</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Start</div>
+      <a class="doc-link" href="../providers/gmail.html">Connect Gmail</a>
+      <a class="doc-link" href="../providers/smtp.html">Send through your own SMTP server</a>
+      <a class="doc-link" href="../providers/imap.html">Connect any IMAP server</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="overview.html">Architecture overview</a>
+      <a class="doc-link" href="jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="software-map.html">Software map</a>
+      <a class="doc-link" href="swarm.html">The swarm</a>
+      <a class="doc-link" href="storage.html">Raw storage</a>
+      <a class="doc-link current" href="daemon.html" aria-current="page">The daemon and the local API</a>
+      <a class="doc-link" href="parsing.html">Parsing and cleaning</a>
+      <a class="doc-link" href="sieve.html">Sieve filtering</a>
+      <a class="doc-link" href="index.html">The search index</a>
+      <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <a class="doc-link" href="vectors.html">The vector store</a>
+      <a class="doc-link" href="ingest-pipeline.html">The ingest pipeline</a>
+      <a class="doc-link" href="ai-safety.html">Prompt safety and workspaces</a>
+      <a class="doc-link" href="read-state.html">Read state</a>
+      <a class="doc-link" href="sync-schedule.html">Sync schedule</a>
+      <a class="doc-link" href="operations.html">Operations</a>
+      <a class="doc-link" href="retrieval.html">Retrieval and ask</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
+      <a class="doc-link" href="../reference/operations.html">Operations</a>
+      <a class="doc-link" href="../reference/cli.html">CLI</a>
+      <a class="doc-link" href="../reference/evaluation.html">Evaluation results</a>
+      <a class="doc-link" href="../reference/api.html">HTTP API</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#one-process"><span class="num">1</span>One process</a>
+      <a class="nav-link" href="#finding-it-the-runtime-file"><span class="num">2</span>Finding it: the runtime file</a>
+      <a class="nav-link" href="#the-token"><span class="num">3</span>The token</a>
+      <a class="nav-link" href="#what-a-request-passes-through"><span class="num">4</span>What a request passes through</a>
+      <a class="nav-link" href="#who-is-calling"><span class="num">5</span>Who is calling</a>
+      <a class="nav-link" href="#the-routes"><span class="num">6</span>The routes</a>
+      <a class="nav-link" href="#threat-model"><span class="num">7</span>Threat model</a>
+      <a class="nav-link" href="#not-built-yet"><span class="num">8</span>Not built yet</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <h1 class="display-6">The daemon and the local API</h1>
+    <p class="lead">Core runs as one process that owns the databases, the plugins and the job queue, and serves a small HTTP API on 127.0.0.1. The CLI and the web UI are clients of it; MCP mounts on the same port. This page covers how it starts and stops, and how it keeps a web page or another program from using it.</p>
+  </header>
+
+<section id="one-process" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>One process</h2></div>
+<p><code>oaken.daemon</code> is the composition root. It opens every store and service once and wires them in a
+fixed order:</p>
+<ol>
+<li>settings;</li>
+<li>the databases, running migrations;</li>
+<li>the plugin host (providers, embedder, model backends, enrichers);</li>
+<li>the job runner and the sync schedule;</li>
+<li>the API, last, so nothing is asked of a half-started core.</li>
+</ol>
+<p>Stopping runs the other way: the API stops accepting and ends its event streams, jobs get
+<code>[api] shutdown_grace_seconds</code> to finish or hand their leases back, the sync schedule and plugins
+stop, then the databases close. A process that is killed instead is covered by lease expiry, as for
+any worker (see <a href="jobs.html">jobs</a>).</p>
+<div class="code"><pre class="highlight"><code class="language-text">python -m oaken.daemon      # the foreground process: Ctrl-C or SIGTERM stops it cleanly
+</code></pre></div>
+<p>The same lifecycle is available to Python as <code>oaken.daemon.serve</code>, <code>detach</code>, <code>status</code>, <code>stop</code> and
+<code>restart</code>. The CLI's <code>oaken daemon start [--detach] | stop | status | restart</code> are thin wrappers over
+them (prompt 17).</p>
+<p><code>--detach</code> starts the same foreground process in a new session on Linux and macOS (closing the
+terminal does not stop it) and as a detached process in its own group on Windows. Windows has no
+console for it, and it stops on <code>CTRL_BREAK</code>; <code>stop</code> sends that. Standard input and output go to the
+null device either way.</p>
+</section>
+<section id="finding-it-the-runtime-file" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Finding it: the runtime file</h2></div>
+<p>While core runs, <code>runtime.json</code> in the runtime directory holds <code>pid</code>, <code>host</code>, <code>port</code>, <code>version</code> and
+<code>started_at</code>. It is created owner-only (<code>0600</code>), and it is the single-instance lock: it is created
+exclusively, with port 0 meaning &quot;starting&quot;, before anything is opened. If it already exists and its
+process is alive, the second start stops with &quot;core is already running&quot;. If that process is gone the
+file is stale and is replaced. A clean shutdown removes it, and only the process that wrote it
+removes it.</p>
+<p>The API port defaults to 0, a free port the kernel chooses, and the file is how clients find it.
+Set <code>[api] port</code> for a fixed one.</p>
+</section>
+<section id="the-token" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>The token</h2></div>
+<p>On first start core makes a random 256-bit token and stores it in <code>api_token</code> in the config
+directory, mode <code>0600</code>. Every request but one needs <code>Authorization: Bearer &lt;token&gt;</code>. The token is
+compared in constant time. <code>GET /v1/health</code> is open and answers <code>{&quot;status&quot;: &quot;ok&quot;}</code>, nothing more.</p>
+<p>Agents have tokens of their own (<code>oaken_agent_...</code>, made by <code>create_agent</code>) that open only
+<code>/v1/agent/</code>. See <a href="swarm.html">the swarm</a>.</p>
+</section>
+<section id="what-a-request-passes-through" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>What a request passes through</h2></div>
+<p>A browser can send a request to <code>127.0.0.1:PORT</code> from any page the user has open, so being
+on loopback is not protection. Each request is checked in this order, by one guard that wraps every
+route:</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Check</th>
+<th>Refusal</th>
+<th>Stops</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Host</code> is <code>127.0.0.1:&lt;port&gt;</code> or <code>localhost:&lt;port&gt;</code></td>
+<td>400</td>
+<td>DNS rebinding</td>
+</tr>
+<tr>
+<td>Preflight answered only for the one configured dev origin</td>
+<td>no CORS headers</td>
+<td>a page reading responses</td>
+</tr>
+<tr>
+<td>A mutating request with a foreign <code>Origin</code> or <code>Sec-Fetch-Site: cross-site</code></td>
+<td>403</td>
+<td>cross-site request forgery, even with a leaked token</td>
+</tr>
+<tr>
+<td>A <code>POST</code> has <code>Content-Type: application/json</code></td>
+<td>415</td>
+<td>form and <code>text/plain</code> posts a page can send without a preflight</td>
+</tr>
+<tr>
+<td>A bearer token for the surface being addressed</td>
+<td>401</td>
+<td>another process or page without the token</td>
+</tr>
+<tr>
+<td>A per-client token bucket on mutating requests</td>
+<td>429</td>
+<td>a loop, a runaway agent</td>
+</tr>
+<tr>
+<td>Body size</td>
+<td>413</td>
+<td>memory exhaustion</td>
+</tr>
+<tr>
+<td>Concurrent requests per surface</td>
+<td>429</td>
+<td>one door starving another</td>
+</tr>
+</tbody>
+</table></div>
+<p>Responses carry <code>X-Content-Type-Options: nosniff</code>, <code>Referrer-Policy: no-referrer</code>,
+<code>Cache-Control: no-store</code> on the API, and a strict <code>Content-Security-Policy</code> on static pages. Requests
+are never logged, because a URL can hold a search.</p>
+</section>
+<section id="who-is-calling" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Who is calling</h2></div>
+<p>The registry has a caller class, which decides whether a person's <code>confirm</code> is accepted (see
+<a href="operations.html">operations</a>). Over HTTP:</p>
+<ul>
+<li>a request is <code>cli</code> unless it says otherwise;</li>
+<li><code>X-Oaken-Client: ui</code> is the web UI, the same privileges;</li>
+<li><code>X-Oaken-Client: mcp</code> makes the request an agent's: it cannot confirm by saying so, only with the
+token from its own proposal, and operations closed to MCP are hidden and refused;</li>
+<li>anything else, including <code>internal</code>, is a 400. A header can lower privilege and never raise it.</li>
+</ul>
+<p>The MCP server (prompt 18) mounts at <code>/mcp</code> on this listener as its own surface with its own token
+and limits, and the mount, not a header, sets its class (<a href="https://github.com/dfoulks1/oaken-mail/blob/main/docs/adr/0004-mcp-server-in-core.md">ADR 0004</a>).
+<code>[api] mcp</code> is off.</p>
+</section>
+<section id="the-routes" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>The routes</h2></div>
+<p>Operations are not routed by hand. <code>GET /v1/operations</code> lists the registry with JSON Schemas and
+<code>POST /v1/operations/{name}</code> calls one through the same client the CLI uses in-process. The
+<a href="../reference/api.html">HTTP API reference</a> is generated from the OpenAPI document, which is served at
+<code>/v1/openapi.json</code>. Everything else is small:</p>
+<ul>
+<li><code>GET /v1/events</code>: server-sent events. Each has an id, a type and a JSON body of ids and counts, never
+message text. Send <code>Last-Event-ID</code> to resume from the in-memory ring (<code>[api] event_ring_size</code>). An id
+older than the ring, or from before core restarted, gets a <code>gap</code> event, which means &quot;fetch again&quot;.
+A quiet stream sends a <code>: heartbeat</code> comment.</li>
+<li><code>/v1/agent/jobs/...</code>: claim, heartbeat, complete and fail, for the swarm.</li>
+<li><code>/</code>: files from <code>[api] static_dir</code> when set, otherwise a placeholder page. The web UI will live here.</li>
+</ul>
+</section>
+<section id="threat-model" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>Threat model</h2></div>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Attacker</th>
+<th>Vector</th>
+<th>Mitigation</th>
+<th>Test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A web page the user visits</td>
+<td><code>fetch</code> to <code>127.0.0.1:PORT</code></td>
+<td>No CORS headers, so it cannot read a response; JSON-only <code>POST</code>; Origin and <code>Sec-Fetch-Site</code> refused; the token is not in the page's reach</td>
+<td><code>test_guard.py</code></td>
+</tr>
+<tr>
+<td>A web page, by DNS rebinding</td>
+<td>A name that resolves to 127.0.0.1</td>
+<td>Host allowlist, checked first</td>
+<td><code>test_a_wrong_host_is_refused_before_anything_else</code></td>
+</tr>
+<tr>
+<td>A web page, by a plain form</td>
+<td><code>text/plain</code> or form <code>POST</code></td>
+<td>415, and Origin refused</td>
+<td><code>test_a_post_must_be_json</code></td>
+</tr>
+<tr>
+<td>Another machine</td>
+<td>Connecting to the port</td>
+<td>Binds 127.0.0.1 only; configuration cannot say otherwise; the server refuses another address</td>
+<td><code>test_a_non_loopback_bind_cannot_be_configured</code></td>
+</tr>
+<tr>
+<td>Another local user</td>
+<td>Reading the token or runtime file</td>
+<td>Both <code>0600</code> from creation; the directories are <code>0700</code></td>
+<td><code>test_the_token_file_is_private</code>, <code>test_the_file_is_private_from_the_first_byte</code></td>
+</tr>
+<tr>
+<td>Anything on the machine without the token</td>
+<td>Guessing it</td>
+<td>256 random bits; constant-time compare; the rate limit</td>
+<td><code>test_the_token_is_compared_in_constant_time</code></td>
+</tr>
+<tr>
+<td>A compromised or confused agent</td>
+<td>Using its token on the general API</td>
+<td>Agent tokens open <code>/v1/agent/</code> only, and the API token opens no agent route</td>
+<td><code>test_an_agent_token_is_accepted_by_no_other_route</code></td>
+</tr>
+<tr>
+<td>An MCP client</td>
+<td>Claiming to be a person</td>
+<td><code>X-Oaken-Client: mcp</code> only lowers; a confirmation token is bound to the class that was given it</td>
+<td><code>test_the_header_can_only_lower_privilege</code></td>
+</tr>
+<tr>
+<td>An agent</td>
+<td>Revoked but still holding a lease</td>
+<td>The lease goes back to the queue; its next call is a 401</td>
+<td><code>test_a_revoked_agent_is_refused_at_once</code></td>
+</tr>
+<tr>
+<td>A caller</td>
+<td>Huge bodies, floods, many parallel calls</td>
+<td>Size, rate and concurrency limits per surface</td>
+<td><code>test_a_body_over_the_limit_is_refused</code>, <code>test_mutating_requests_are_rate_limited_per_client</code></td>
+</tr>
+<tr>
+<td>A second core</td>
+<td>Starting on the same data</td>
+<td>Runtime file as an exclusive lock</td>
+<td><code>test_a_second_process_exits_with_a_clear_error</code></td>
+</tr>
+<tr>
+<td>A crash</td>
+<td>A stale runtime file</td>
+<td>Replaced when its pid is gone</td>
+<td><code>test_a_stale_runtime_file_is_replaced_by_a_start</code></td>
+</tr>
+<tr>
+<td>A log reader</td>
+<td>Message text in logs or events</td>
+<td>Events and errors carry ids only; requests are not logged</td>
+<td><code>test_event_payloads_carry_ids_and_never_message_text</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Not covered: a process running as the same user can read the token file and do what the user can.
+The audit log records what it did.</p>
+</section>
+<section id="not-built-yet" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>Not built yet</h2></div>
+<ul>
+<li>The MCP mount itself (prompt 18). The surface hook and the <code>[api] mcp</code> setting exist.</li>
+<li>Wiring the CLI's <code>daemon</code> commands and HTTP client to this (prompt 17).</li>
+<li>The ring is in memory: a restart is a <code>gap</code> for every client.</li>
+<li>Per-agent rate limits beyond the lease and hourly quotas in <a href="swarm.html">the swarm</a>.</li>
+</ul>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

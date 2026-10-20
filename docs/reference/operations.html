@@ -44,6 +44,7 @@
       <a class="doc-link" href="../architecture/software-map.html">Software map</a>
       <a class="doc-link" href="../architecture/swarm.html">The swarm</a>
       <a class="doc-link" href="../architecture/storage.html">Raw storage</a>
+      <a class="doc-link" href="../architecture/daemon.html">The daemon and the local API</a>
       <a class="doc-link" href="../architecture/parsing.html">Parsing and cleaning</a>
       <a class="doc-link" href="../architecture/sieve.html">Sieve filtering</a>
       <a class="doc-link" href="../architecture/index.html">The search index</a>
@@ -60,6 +61,7 @@
       <a class="doc-link current" href="operations.html" aria-current="page">Operations</a>
       <a class="doc-link" href="cli.html">CLI</a>
       <a class="doc-link" href="evaluation.html">Evaluation results</a>
+      <a class="doc-link" href="api.html">HTTP API</a>
       <div class="label">Project</div>
       <a class="doc-link" href="../contributing.html">Contributing</a>
       <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
@@ -101,6 +103,13 @@
 <td>Answer a question from the mail, citing the messages and quoting the lines it came from.</td>
 </tr>
 <tr>
+<td><code>create_agent</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Register an external agent and show its token once.</td>
+</tr>
+<tr>
 <td><code>get_message</code></td>
 <td>read</td>
 <td>on by default</td>
@@ -127,6 +136,13 @@
 <td>on by default</td>
 <td>no</td>
 <td>The configured accounts: id, provider and display name (never credentials).</td>
+</tr>
+<tr>
+<td><code>list_agents</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>List the registered agents (never their tokens).</td>
 </tr>
 <tr>
 <td><code>list_audit</code></td>
@@ -248,6 +264,13 @@
 <td>Resume a paused sync schedule: it is due now and its failure count is cleared.</td>
 </tr>
 <tr>
+<td><code>revoke_agent</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Revoke an agent at once; the jobs it holds go back to the queue.</td>
+</tr>
+<tr>
 <td><code>search</code></td>
 <td>read</td>
 <td>on by default</td>
@@ -321,6 +344,12 @@
 <li>Input: <code>account_id</code>?, <code>label</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>question</code>, <code>thread_key</code>?</li>
 <li>Output: <code>answer</code>, <code>message_ids</code>?, <code>citations</code>?, <code>confidence</code>?, <code>insufficient_evidence</code>?, <code>dropped_claims</code>?, <code>degraded</code>?, <code>degraded_reason</code>?, <code>evidence_tokens</code>?, <code>full_body_tokens</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
 </ul>
+<h3 id="create-agent"><code>create_agent</code></h3>
+<p>The swarm must be enabled and every kind listed in <code>[swarm] allowed_kinds</code>.</p>
+<ul>
+<li>Input: <code>label</code>, <code>kinds</code>, <code>account_ids</code>?, <code>max_leases</code>?, <code>max_per_hour</code>?</li>
+<li>Output: <code>agent</code>, <code>token</code></li>
+</ul>
 <h3 id="get-message"><code>get_message</code></h3>
 <p>The cleaned text (quotes and signatures removed), cut to the caller's limit. Reading a message here does not change read state: only opening or summarizing it, by the user, does.</p>
 <ul>
@@ -344,6 +373,12 @@
 <ul>
 <li>Input: none</li>
 <li>Output: <code>accounts</code></li>
+</ul>
+<h3 id="list-agents"><code>list_agents</code></h3>
+<p>List the registered agents (never their tokens).</p>
+<ul>
+<li>Input: <code>include_revoked</code>?</li>
+<li>Output: <code>agents</code></li>
 </ul>
 <h3 id="list-audit"><code>list_audit</code></h3>
 <p>The newest audit-log rows: who changed what, why, and whether it can be undone.</p>
@@ -446,6 +481,12 @@
 <ul>
 <li>Input: <code>account_id</code>, <code>folder</code>?</li>
 <li>Output: <code>schedule</code></li>
+</ul>
+<h3 id="revoke-agent"><code>revoke_agent</code></h3>
+<p>Revoke an agent at once; the jobs it holds go back to the queue.</p>
+<ul>
+<li>Input: <code>agent_id</code></li>
+<li>Output: <code>revoked</code></li>
 </ul>
 <h3 id="search"><code>search</code></h3>
 <p>Each hit says which retrievers found it (<code>why</code>). When the embedder or the vectors are unavailable the keyword results still come back, with <code>degraded</code> set. Never marks read.</p>

@@ -22,6 +22,7 @@ GENERATOR_MODULES: list[str] = [
     "gen_plugin_contracts",
     "gen_operations",
     "gen_cli_reference",
+    "gen_api_reference",
     "gen_evaluation",
 ]
 

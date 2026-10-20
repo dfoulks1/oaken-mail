@@ -5,10 +5,11 @@ Nested keys use a double underscore in the environment: ``OAKEN_API__PORT=8123``
 are an error, in the file and in code. No secrets live here: tokens belong in the OS keyring.
 """
 
+import re
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from pydantic_settings import (
     BaseSettings,
     EnvSettingsSource,
@@ -340,6 +341,30 @@ class UISettings(_Section):
 class APISettings(_Section):
     host: Literal["127.0.0.1"] = "127.0.0.1"  # fixed: the API is never exposed off-host
     port: int = Field(default=0, ge=0, le=65535)  # 0 = pick a free port
+    # The MCP server (prompt 18) mounts on this listener when true; nothing mounts yet.
+    mcp: bool = False
+    # A folder of static files served at ``/`` (the web UI, a later phase). Empty or missing: a
+    # placeholder page.
+    static_dir: str = ""
+    # One browser origin allowed to call the API cross-origin, for UI development only, for
+    # example ``http://localhost:5173``. Empty means no CORS headers at all.
+    dev_origin: str = ""
+    max_body_bytes: int = Field(default=1024 * 1024, ge=1024)
+    # Mutating requests per client per minute (a token bucket; the burst is a tenth of it, at
+    # least ten).
+    rate_limit_per_minute: int = Field(default=600, ge=1)
+    # Events kept for ``Last-Event-ID`` resume, and the quiet time before a keep-alive comment.
+    event_ring_size: int = Field(default=1000, ge=1, le=100_000)
+    heartbeat_seconds: float = Field(default=15.0, gt=0)
+    # Seconds in-flight jobs get to finish when the daemon is told to stop.
+    shutdown_grace_seconds: float = Field(default=30.0, ge=0)
+
+    @field_validator("dev_origin")
+    @classmethod
+    def _dev_origin_is_one_origin(cls, value: str) -> str:
+        if value and not re.fullmatch(r"https?://[A-Za-z0-9.\-]+(:[0-9]{1,5})?", value):
+            raise ValueError("dev_origin must be one origin like http://localhost:5173")
+        return value
 
 
 class LogSettings(_Section):

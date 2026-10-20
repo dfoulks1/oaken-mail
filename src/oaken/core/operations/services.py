@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import TypeVar
 
 from oaken.ai.generate import LLMService
+from oaken.core.agents import AgentRegistry
 from oaken.core.attrs import AttrStore
 from oaken.core.clock import Clock
 from oaken.core.errors import Unavailable
@@ -51,6 +52,7 @@ class Services:
     plugins: PluginHost | None = None
     llm: LLMService | None = None
     retrieval: Retrieval | None = None  # built from the pipeline when not given
+    agents: AgentRegistry | None = None
     version: str = ""
 
     def need_readstate(self) -> ReadState:
@@ -70,6 +72,9 @@ class Services:
 
     def need_plugins(self) -> PluginHost:
         return need(self.plugins, "the plugin host")
+
+    def need_agents(self) -> AgentRegistry:
+        return need(self.agents, "the agent registry")
 
     def need_llm(self) -> LLMService:
         return need(self.llm, "the language model service")
