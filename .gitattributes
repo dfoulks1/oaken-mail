@@ -1,0 +1,2 @@
+# Generated site files must be byte-identical on every OS (check_docs compares bytes).
+docs/** text eol=lf

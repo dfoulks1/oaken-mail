@@ -34,4 +34,7 @@ jobs:
       - run: uv sync
       - name: detect-secrets
         shell: bash
-        run: git ls-files -z | xargs -0 uv run detect-secrets-hook --baseline .secrets.baseline
+        run: |
+          # generated site HTML carries SRI hashes, which look like secrets
+          git ls-files -z | grep -zvE '^docs/(.*\.html|sitemap\.xml)$' \
+            | xargs -0 uv run detect-secrets-hook --baseline .secrets.baseline

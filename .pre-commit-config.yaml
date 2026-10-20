@@ -8,4 +8,5 @@ repos:
     rev: v1.5.0
     hooks:
       - id: detect-secrets
+        exclude: ^docs/(.*\.html|sitemap\.xml)$  # generated; SRI hashes look like secrets
         args: ["--baseline", ".secrets.baseline"]
