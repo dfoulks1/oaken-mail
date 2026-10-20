@@ -125,7 +125,7 @@ write), and removes a deleted message from the index instead. Wire it like this:
 
 ## Note from prompt 08: more than one vector store
 
-The user wants several stores (files). Decisions so far:
+The user wants several stores (files) one day. **Nothing here is built now: the job in 09 is only to leave room** (keep the vector store behind one seam in core, and never assume a single store). Decisions so far:
 
 - **Size cap is optional.** A store may have `max_mb`; with none it grows without limit. When the
   active store reaches its cap, new vectors go to the next store.
@@ -145,7 +145,7 @@ The user wants several stores (files). Decisions so far:
 - A store outside `index.db` has no `docs` table, so the router resolves `thread_key`, `after`,
   `before` and `sender` in the index and passes an allow-list of message ids. That is a small
   addition to the `query` contract.
-- Only the size cap and the manual split are built first; other rules (by account, by year) go
-  behind the same interface later.
+- The cap and the manual split are the first rules; others (by account, by year) go behind the
+  same interface later.
 - Status, health and stats are reported per store.
 

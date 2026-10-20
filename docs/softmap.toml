@@ -369,7 +369,7 @@ funcs = [
   ["prune_orphans()", "Delete vectors whose chunk is gone (no triggers are used)."],
   ["reembed_plan(model_id)", "Progress and time estimate for a model swap."],
 ]
-notes = ["float32 by default; int8 is the dtype setting, chosen per model.", "content_hash is required on every VectorItem.", "Several stores (optional size cap, manual split) are routed by core in prompt 09.", "Measured: 300k x 768 searches in about 0.4 s; see the spike."]
+notes = ["float32 by default; int8 is the dtype setting, chosen per model.", "content_hash is required on every VectorItem.", "Several stores (optional size cap, manual split) are planned: room is left in 09, nothing is built yet.", "Measured: 300k x 768 searches in about 0.4 s; see the spike."]
 
 # --- Storage -----------------------------------------------------------------------------
 [[components]]
