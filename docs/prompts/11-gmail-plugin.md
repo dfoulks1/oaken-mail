@@ -20,6 +20,15 @@ never touches the databases.
    Document the Google-side realities in `docs/providers/gmail.md`: creating the OAuth
    client, "Testing" mode refresh tokens expiring after 7 days, restricted-scope
    verification requirements for anyone distributing a shared client.
+   **Token handling must not force a daily re-login (user requirement).** Before
+   building, ask the user whether their Google OAuth app is in "Testing" mode (refresh
+   tokens expire after 7 days) or published to "In production" (no 7-day expiry; an
+   unverified app still works for its owner behind a warning screen). Then: refresh the
+   access token silently and reuse the stored refresh token without prompting; persist a
+   rotated refresh token if Google returns one; treat `invalid_grant` as "re-authorize
+   needed", fail with a clear message and a health state, never a crash loop; and document
+   the cause and the fix in `docs/providers/gmail.md`. Add a test with a fake token
+   endpoint covering expiry, rotation and `invalid_grant`.
 2. **Sync scope:** All Mail **excluding Spam and Trash** (configurable label include/
    exclude lists). Gmail labels are passed through as `provider_labels`; folder-like
    semantics are core's concern, not the plugin's.
