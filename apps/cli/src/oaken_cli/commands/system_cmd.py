@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import argparse
 
-from oaken.cli.client import ApiClient, CallResult
-from oaken.cli.commands.runtime import emit, run
-from oaken.cli.exits import ExitCode
+from oaken_cli.client import ApiClient, CallResult
+from oaken_cli.commands.runtime import emit, run
+from oaken_cli.exits import ExitCode
 
 # --- inspection (read ops) ------------------------------------------------------------------
 
@@ -39,7 +39,7 @@ async def _pipeline(client: ApiClient, args: argparse.Namespace) -> int:
     ]
 
     def text() -> None:
-        from oaken.cli.output import print_table, print_text
+        from oaken_cli.output import print_table, print_text
 
         print_table(rows, ["stage", "pending", "running", "failed", "per_second"], title="pipeline")
         print_text(
@@ -68,7 +68,7 @@ async def _usage(client: ApiClient, args: argparse.Namespace) -> int:
     rows = out.get("rows", []) if isinstance(out, dict) else []
 
     def text() -> None:
-        from oaken.cli.output import print_table, print_text
+        from oaken_cli.output import print_table, print_text
 
         if not rows:
             print_text("no usage recorded")
@@ -104,7 +104,7 @@ async def _plugins(client: ApiClient, args: argparse.Namespace) -> int:
     ]
 
     def text() -> None:
-        from oaken.cli.output import print_table, print_text
+        from oaken_cli.output import print_table, print_text
 
         if not rows:
             print_text("no plugins")
@@ -126,7 +126,7 @@ async def _accounts(client: ApiClient, args: argparse.Namespace) -> int:
     rows = out.get("accounts", []) if isinstance(out, dict) else []
 
     def text() -> None:
-        from oaken.cli.output import print_table, print_text
+        from oaken_cli.output import print_table, print_text
 
         if not rows:
             print_text("no accounts configured")
@@ -158,7 +158,7 @@ async def _audit(client: ApiClient, args: argparse.Namespace) -> int:
     ]
 
     def text() -> None:
-        from oaken.cli.output import print_table, print_text
+        from oaken_cli.output import print_table, print_text
 
         if not rows:
             print_text("no audit entries")
@@ -186,7 +186,7 @@ async def _operations(client: ApiClient, args: argparse.Namespace) -> int:
     ]
 
     def text() -> None:
-        from oaken.cli.output import print_table
+        from oaken_cli.output import print_table
 
         print_table(rows, ["name", "permission", "mcp", "summary"], title="operations")
 
@@ -229,7 +229,7 @@ async def _ask(client: ApiClient, args: argparse.Namespace) -> int:
     out = result.output if isinstance(result.output, dict) else {}
 
     def text() -> None:
-        from oaken.cli.output import print_text
+        from oaken_cli.output import print_text
 
         print_text(out.get("answer", "") if isinstance(out, dict) else "")
         ids = out.get("message_ids", []) if isinstance(out, dict) else []
@@ -247,7 +247,7 @@ def cmd_watch(args: argparse.Namespace) -> int:
 
 
 async def _watch(client: ApiClient, args: argparse.Namespace) -> int:
-    from oaken.cli.output import print_json, print_text
+    from oaken_cli.output import print_json, print_text
 
     try:
         async for event in client.stream_events():
@@ -268,7 +268,7 @@ def _render_queued(args: argparse.Namespace, result: CallResult, what: str) -> i
     data = {"request_id": result.request_id, "output": result.output}
 
     def text() -> None:
-        from oaken.cli.output import print_text
+        from oaken_cli.output import print_text
 
         job = out.get("job_id", "?") if isinstance(out, dict) else "?"
         created = out.get("created", True) if isinstance(out, dict) else True

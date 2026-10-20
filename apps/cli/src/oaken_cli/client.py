@@ -12,10 +12,10 @@ against :class:`ApiClient`, an abstract interface with exactly the operations a 
 
 Two implementations exist (or will):
 
-* :class:`~oaken.cli.inprocess.InProcessApiClient` wraps the in-process ``CoreClient``. It needs no
+* :class:`~oaken_cli.inprocess.InProcessApiClient` wraps the in-process ``CoreClient``. It needs no
   daemon and no socket, so the CLI's whole command surface is testable today (prompt 17).
 * ``HttpApiClient`` speaks to the running daemon. **It is a stub until prompt 16** builds the
-  server; see :mod:`oaken.cli.http`.
+  server; see :mod:`oaken_cli.http`.
 
 The two results a mutation can have — it ran, or it needs confirming first — are modelled by
 :class:`CallResult`, which mirrors core's own ``CallResult`` without importing it, so the HTTP

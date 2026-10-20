@@ -24,9 +24,6 @@ dependencies = [
     "zstandard>=0.25.0",
 ]
 
-[project.scripts]
-oaken = "oaken.cli:main"
-
 # First-party plugins register exactly as a third party's would.
 [project.entry-points."oaken.embedders"]
 ollama = "oaken_ollama:OllamaEmbedder"
@@ -76,6 +73,7 @@ dev = [
     "openapi-spec-validator>=0.9.0",
     "pytest",
     "pytest-asyncio",
+    "oaken-cli",
     "ruff",
     "sqlite-vec>=0.1.9",
 ]
@@ -90,9 +88,15 @@ docs = [
 [tool.uv]
 default-groups = ["dev", "docs"]
 
+[tool.uv.workspace]
+members = ["apps/cli"]
+
+[tool.uv.sources]
+oaken-cli = { workspace = true }
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["src", "docs", "tests"]
+testpaths = ["src", "apps/cli", "docs", "tests"]
 addopts = ["--import-mode=importlib", "-m", "not slow and not live_ollama and not live_gmail and not live_smtp and not live_imap"]
 markers = [
     "slow: heavy measurements, off by default (run with -m slow)",
@@ -109,7 +113,7 @@ filterwarnings = [
 
 [tool.ruff]
 line-length = 100
-src = ["src", "tests"]
+src = ["src", "apps/cli/src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "CPY"]
@@ -130,8 +134,8 @@ min-file-size = 0
 
 [tool.mypy]
 strict = true
-files = ["src", "tests", "docs/tools"]
-mypy_path = "docs/tools"
+files = ["src", "apps/cli/src", "tests", "docs/tools"]
+mypy_path = "docs/tools:apps/cli/src"
 
 [[tool.mypy.overrides]]
 module = ["pygments", "pygments.*", "sqlite_vec", "imapclient", "imapclient.*", "rich", "rich.*"]

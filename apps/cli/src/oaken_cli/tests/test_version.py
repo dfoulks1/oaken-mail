@@ -2,9 +2,11 @@
 import pytest
 
 from oaken import __version__
-from oaken.cli import main
+from oaken_cli import main
 
 
 def test_cli_prints_version(capsys: pytest.CaptureFixture[str]) -> None:
-    main()
+    with pytest.raises(SystemExit) as stop:
+        main(["--version"])
+    assert stop.value.code == 0
     assert capsys.readouterr().out.strip() == f"oaken {__version__}"

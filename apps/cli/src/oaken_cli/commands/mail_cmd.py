@@ -19,9 +19,9 @@ from __future__ import annotations
 
 import argparse
 
-from oaken.cli.client import ApiClient, CallResult
-from oaken.cli.commands.runtime import emit, run
-from oaken.cli.exits import CliError, ExitCode
+from oaken_cli.client import ApiClient, CallResult
+from oaken_cli.commands.runtime import emit, run
+from oaken_cli.exits import CliError, ExitCode
 
 # More than this many ids in one read-state change needs an explicit --yes (prompt 17, req 4).
 BULK_LIMIT = 25
@@ -118,7 +118,7 @@ async def _sync(client: ApiClient, args: argparse.Namespace) -> int:
     data = {"request_id": result.request_id, "output": result.output}
 
     def text() -> None:
-        from oaken.cli.output import print_text
+        from oaken_cli.output import print_text
 
         out = result.output or {}
         job = out.get("job_id", "?") if isinstance(out, dict) else "?"
@@ -149,7 +149,7 @@ def _render_messages(args: argparse.Namespace, result: CallResult) -> int:
     ]
 
     def text() -> None:
-        from oaken.cli.output import print_table, print_text
+        from oaken_cli.output import print_table, print_text
 
         if not rows:
             print_text("no matches")
@@ -168,7 +168,7 @@ def _render_message(args: argparse.Namespace, result: CallResult) -> int:
     out = result.output if isinstance(result.output, dict) else {}
 
     def text() -> None:
-        from oaken.cli.output import print_text
+        from oaken_cli.output import print_text
 
         subject = out.get("subject", "") if isinstance(out, dict) else ""
         sender = out.get("from_name") or out.get("from_addr", "") if isinstance(out, dict) else ""
@@ -186,7 +186,7 @@ def _render_raw(args: argparse.Namespace, result: CallResult) -> int:
     out = result.output if isinstance(result.output, dict) else {}
 
     def text() -> None:
-        from oaken.cli.output import print_text
+        from oaken_cli.output import print_text
 
         print_text(out.get("headers", "") if isinstance(out, dict) else "")
         if isinstance(out, dict) and out.get("raw_base64"):
@@ -200,7 +200,7 @@ def _render_summary(args: argparse.Namespace, result: CallResult) -> int:
     out = result.output if isinstance(result.output, dict) else {}
 
     def text() -> None:
-        from oaken.cli.output import print_text
+        from oaken_cli.output import print_text
 
         for item in out.get("items", []) if isinstance(out, dict) else []:
             mid = item.get("message_id", "?")
@@ -226,7 +226,7 @@ def _render_mark(args: argparse.Namespace, result: CallResult) -> int:
     out = result.output if isinstance(result.output, dict) else {}
 
     def text() -> None:
-        from oaken.cli.output import print_text
+        from oaken_cli.output import print_text
 
         changed = out.get("changed", []) if isinstance(out, dict) else []
         unchanged = out.get("unchanged", []) if isinstance(out, dict) else []

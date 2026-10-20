@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import json
 
-from oaken.cli.exits import ExitCode
-from oaken.cli.tests.conftest import Cli
+from oaken_cli.exits import ExitCode
+from oaken_cli.tests.conftest import Cli
 
 
 async def test_operations_lists_registered_ops(cli: Cli) -> None:

@@ -6,19 +6,19 @@ Design choices (prompt 17 asks us to pick and justify a framework):
 * **argparse, from the standard library.** No third-party parser is added to the core runtime, so
   ``oaken --help`` starts fast (the <300 ms budget) and the dependency surface stays small — the
   context rules discourage dependencies a prompt does not call for. ``rich`` *is* called for and is
-  used only for human output, imported lazily (see :mod:`oaken.cli.output`).
+  used only for human output, imported lazily (see :mod:`oaken_cli.output`).
 * **Lazy imports.** This module imports almost nothing at module load: building the parser and
   printing ``--help`` must not import core, pydantic models, httpx or rich. The heavy work happens
   inside command functions, which are imported only when their command runs.
-* **Thin commands.** Every command resolves to one or more :class:`~oaken.cli.client.ApiClient`
+* **Thin commands.** Every command resolves to one or more :class:`~oaken_cli.client.ApiClient`
   calls. No command contains business logic; new registry operations are reachable immediately via
   the generic ``oaken operation NAME --json '{...}'`` fallback, so a registry change never needs a
   CLI release.
 
-Exit codes are the contract in :mod:`oaken.cli.exits`. The dispatcher turns a raised
-:class:`~oaken.cli.exits.CliError` into a clean one-line message and that exit code; an operation
+Exit codes are the contract in :mod:`oaken_cli.exits`. The dispatcher turns a raised
+:class:`~oaken_cli.exits.CliError` into a clean one-line message and that exit code; an operation
 that failed on the core side is turned into the right code by the command via
-:func:`oaken.cli.exits.exit_for_error_code`.
+:func:`oaken_cli.exits.exit_for_error_code`.
 """
 
 from __future__ import annotations
@@ -257,7 +257,7 @@ def _register_system(
 
 
 def _lazy(module: str, func: str) -> Handler:
-    """Return a handler that imports ``oaken.cli.commands.<module>.<func>`` only when called.
+    """Return a handler that imports ``oaken_cli.commands.<module>.<func>`` only when called.
 
     This keeps ``--help`` and argument parsing free of command imports (core, httpx, rich), which
     is what holds the startup budget.
@@ -266,7 +266,7 @@ def _lazy(module: str, func: str) -> Handler:
     def run(args: argparse.Namespace) -> int:
         import importlib
 
-        mod = importlib.import_module(f"oaken.cli.commands.{module}")
+        mod = importlib.import_module(f"oaken_cli.commands.{module}")
         handler: Handler = getattr(mod, func)
         return handler(args)
 
@@ -285,7 +285,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     _configure_logging(getattr(args, "verbose", 0))
-    from oaken.cli.exits import CliError, ExitCode
+    from oaken_cli.exits import CliError, ExitCode
 
     try:
         return int(args.func(args))

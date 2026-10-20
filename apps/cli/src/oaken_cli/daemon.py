@@ -13,8 +13,8 @@ actually exist.
 
 from __future__ import annotations
 
-from oaken.cli.discovery import discover
-from oaken.cli.exits import CliError, CoreUnavailable, ExitCode
+from oaken_cli.discovery import discover
+from oaken_cli.exits import CliError, CoreUnavailable, ExitCode
 
 _PROMPT16 = "building and supervising the core process is not implemented yet (prompt 16)"
 

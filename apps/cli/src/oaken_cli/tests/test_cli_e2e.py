@@ -31,7 +31,7 @@ def test_help_startup_under_budget() -> None:
 def _time_help() -> float:
     start = time.perf_counter()
     proc = subprocess.run(
-        [sys.executable, "-m", "oaken.cli", "--help"],
+        [sys.executable, "-m", "oaken_cli", "--help"],
         capture_output=True,
         text=True,
         check=False,

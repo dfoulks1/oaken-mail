@@ -8,13 +8,13 @@ import json
 
 import pytest
 
-from oaken.cli.exits import (
+from oaken_cli.exits import (
     CORE_DOWN_MESSAGE,
     CoreUnavailable,
     ExitCode,
     exit_for_error_code,
 )
-from oaken.cli.sanitize import sanitize
+from oaken_cli.sanitize import sanitize
 
 
 def test_sanitize_neutralizes_ansi_and_osc() -> None:
@@ -65,8 +65,8 @@ def test_core_unavailable_carries_exact_message_and_code() -> None:
 def test_core_down_status_reports_not_running(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
     # With OAKEN_HOME pointed at an empty dir there is no runtime.json, so status says "down".
     monkeypatch.setenv("OAKEN_HOME", str(tmp_path))
-    from oaken.cli.commands.runtime import set_client_factory
-    from oaken.cli.main import main
+    from oaken_cli.commands.runtime import set_client_factory
+    from oaken_cli.main import main
 
     set_client_factory(None)
     code = main(["status"])

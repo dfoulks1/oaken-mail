@@ -17,11 +17,25 @@ uv run pytest
 Install the git hooks (lint plus secret scan) with `uv run pre-commit install` if you use
 pre-commit, or run `uv run detect-secrets-hook --baseline .secrets.baseline <files>`.
 
+## Repository layout
+
+```text
+src/oaken/           core: the daemon, API, operations, storage, ingest (the `oaken` package)
+src/oaken_*/         first-party plugins (providers, embedder, enrichers, vector store)
+apps/cli/            the `oaken` command, a separate package (`oaken-cli`, import `oaken_cli`)
+apps/webui/          the web UI (templates today; its own app later)
+docs/                the documentation site sources and generators
+```
+
+Core knows nothing about the apps. An app is a client of core's HTTP API and lives in its own
+uv workspace member with its own `pyproject.toml`, so it can be built, versioned and tested on its
+own (`uv run pytest apps/cli`). See [ADR 0006](docs/adr/0006-clients-live-in-apps.md).
+
 ## Ground rules
 
 - Every Python file starts with `# SPDX-License-Identifier: Apache-2.0`.
 - Tests live in a `tests/` directory next to the code they cover (`src/oaken/core/tests/` for
-  `src/oaken/core/`). Run `uv run pytest` from the repo root for everything, or from any
+  `src/oaken/core/`, `apps/cli/src/oaken_cli/tests/` for the CLI). Run `uv run pytest` from the repo root for everything, or from any
   subdirectory to run only the tests below it. `tests/` at the root holds repo-wide checks.
 - Tests never use the network, Ollama, Gmail, Docker or real mail. Use synthetic fixtures.
 - Never commit real email content, addresses, databases or tokens.

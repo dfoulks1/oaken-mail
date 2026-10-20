@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""An :class:`~oaken.cli.client.ApiClient` that calls core in process.
+"""An :class:`~oaken_cli.client.ApiClient` that calls core in process.
 
 This is how the CLI runs in tests, and how anyone can drive the whole command surface without a
 daemon or a socket. It wraps a ``CoreClient`` (prompt 13) — the same object the HTTP server will
@@ -8,7 +8,7 @@ wrap later — so the two transports share one definition of what an operation d
 The CLI stays ignorant of core's internals: it hands this adapter a built ``CoreClient`` (the test
 rig builds one over the fakes) and then speaks only the :class:`ApiClient` protocol. The adapter's
 only job is to translate between core's in-process types (``registry`` operations, the gate
-``Proposal``, event dataclasses) and the transport-neutral shapes in :mod:`oaken.cli.client`.
+``Proposal``, event dataclasses) and the transport-neutral shapes in :mod:`oaken_cli.client`.
 """
 
 from __future__ import annotations
@@ -17,8 +17,8 @@ import dataclasses
 from collections.abc import AsyncIterator, Mapping
 from typing import TYPE_CHECKING, Any
 
-from oaken.cli.client import ApiClient, CallResult, Event, OpInfo, Proposal
 from oaken.core.operations.caller import CallerContext
+from oaken_cli.client import ApiClient, CallResult, Event, OpInfo, Proposal
 
 if TYPE_CHECKING:
     from oaken.core.events import Event as CoreEvent

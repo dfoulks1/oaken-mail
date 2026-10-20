@@ -52,8 +52,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
-from oaken.cli.exits import CliError, CoreUnavailable, ExitCode
 from oaken.core import paths
+from oaken_cli.exits import CliError, CoreUnavailable, ExitCode
 
 RUNTIME_FILE = "runtime.json"
 TOKEN_FILE = "api_token"  # noqa: S105  — a filename, not a secret

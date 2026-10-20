@@ -108,7 +108,8 @@ Key rules:
 
 ## Tech baseline
 
-- Python **>=3.11**, managed with **uv**, `src/` layout, package `oaken`.
+- Python **>=3.11**, managed with **uv**, `src/` layout, package `oaken`. Clients live in `apps/` (the CLI is `apps/cli`, package
+  `oaken_cli`), each a uv workspace member (ADR 0006).
 - `ruff` (lint+format), `mypy --strict`, `pytest` + `pytest-asyncio`.
 - Async everywhere in core. SQLite via the stdlib `sqlite3` driver run in a
   dedicated executor/thread (or `aiosqlite`; choose in prompt 02 and record an ADR).

@@ -3,7 +3,7 @@
 
 The CLI is tested exactly as prompt 17 asks: against the in-process ``CoreClient`` the operations
 rig already builds over the fakes — no daemon, no socket, no network. We install an
-:class:`~oaken.cli.inprocess.InProcessApiClient` through :func:`set_client_factory`, run the real
+:class:`~oaken_cli.inprocess.InProcessApiClient` through :func:`set_client_factory`, run the real
 argparse ``main`` with an argv, and capture what a user would see (stdout, stderr, exit code).
 
 A single end-to-end test against a real booted daemon on a free port is the other half of the
@@ -22,12 +22,11 @@ from pathlib import Path
 
 import pytest
 
-from oaken.cli.commands.runtime import set_client_factory
-from oaken.cli.inprocess import InProcessApiClient
-from oaken.cli.main import main
-
 # Reuse the operations rig verbatim: it yields an ``Ops`` holding a CoreClient over the fakes.
 from oaken.core.operations.tests.conftest import Ops, build_ops
+from oaken_cli.commands.runtime import set_client_factory
+from oaken_cli.inprocess import InProcessApiClient
+from oaken_cli.main import main
 
 
 @dataclass

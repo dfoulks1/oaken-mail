@@ -2,7 +2,7 @@
 """``oaken start | stop | status | restart`` handlers.
 
 ``status`` is real now: it reports whether a live core is reachable, without starting anything.
-``start``, ``stop`` and ``restart`` defer to :mod:`oaken.cli.daemon`, whose process management is a
+``start``, ``stop`` and ``restart`` defer to :mod:`oaken_cli.daemon`, whose process management is a
 stub until prompt 16.
 """
 
@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import argparse
 
-from oaken.cli import daemon
-from oaken.cli.commands.runtime import emit
-from oaken.cli.exits import ExitCode
+from oaken_cli import daemon
+from oaken_cli.commands.runtime import emit
+from oaken_cli.exits import ExitCode
 
 
 def cmd_status(args: argparse.Namespace) -> int:
@@ -21,7 +21,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     )
 
     def text() -> None:
-        from oaken.cli.output import print_text
+        from oaken_cli.output import print_text
 
         if info.get("running"):
             print_text(f"core is running at {info.get('url', '')}")

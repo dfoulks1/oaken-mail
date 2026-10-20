@@ -7,7 +7,7 @@ Two modes, chosen by ``--json``:
   data, unchanged. A script must get the bytes as core produced them, so **nothing is sanitized
   here** — a consumer of JSON is not a terminal (prompt 17, requirement 3).
 * **Human**: text for a person at a terminal. Every string that came from mail is passed through
-  :func:`oaken.cli.sanitize.sanitize` first, because a terminal will act on control/escape
+  :func:`oaken_cli.sanitize.sanitize` first, because a terminal will act on control/escape
   sequences. Colour and tables are used only when stdout is a TTY.
 
 ``rich`` is imported lazily and only for the human path, so it never costs anything on ``--json``
@@ -22,7 +22,7 @@ import sys
 from collections.abc import Mapping, Sequence
 from typing import Any, TextIO
 
-from oaken.cli.sanitize import sanitize, sanitize_line
+from oaken_cli.sanitize import sanitize, sanitize_line
 
 
 def is_tty(stream: TextIO | None = None) -> bool:

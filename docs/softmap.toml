@@ -73,11 +73,11 @@ name = "CLI"
 layer = "clients"
 status = "partial"
 prompt = "17"
-path = "src/oaken/cli"
+path = "apps/cli/src/oaken_cli"
 summary = "Thin command-line client of the local API: daemon control, mail commands, the generic operation fallback and the event stream. Commands are lazy-loaded; most are one registry operation each."
 uses = ["api"]
 funcs = [["main(argv: Sequence[str] | None = None) -> int", "Parses the command line and runs one command; returns the exit code."]]
-notes = ["Does not auto-start core. If the daemon is not running it says so and exits."]
+notes = ["Does not auto-start core. If the daemon is not running it says so and exits.", "A separate package, `oaken-cli` (import `oaken_cli`), in the uv workspace under apps/cli (ADR 0006)."]
 
 [[components]]
 id = "mcpbridge"

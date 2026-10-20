@@ -2,7 +2,7 @@
 """Shared plumbing for the command handlers: get an :class:`ApiClient`, and run an async body.
 
 A command does not care whether it is talking to a daemon over HTTP or to an in-process
-``CoreClient``; it asks :func:`make_client` for an :class:`~oaken.cli.client.ApiClient` and uses the
+``CoreClient``; it asks :func:`make_client` for an :class:`~oaken_cli.client.ApiClient` and uses the
 protocol. By default :func:`make_client` builds the HTTP client from discovery (the normal path,
 talking to the running daemon). Tests — and a future embedded mode — install a different factory
 with :func:`set_client_factory`, so the same command code runs against the in-process client with
@@ -10,7 +10,7 @@ the fakes, no socket involved.
 
 :func:`run` wraps ``asyncio.run`` with the one piece of error translation every command shares:
 turning a core-side :class:`~oaken.core.errors.OakenError` (reached as an HTTP error body or, in
-process, a real exception) into a :class:`~oaken.cli.exits.CliError` with the right exit code.
+process, a real exception) into a :class:`~oaken_cli.exits.CliError` with the right exit code.
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from oaken.cli.client import ApiClient
-from oaken.cli.exits import CliError, CoreUnavailable, ExitCode, exit_for_error_code
+from oaken_cli.client import ApiClient
+from oaken_cli.exits import CliError, CoreUnavailable, ExitCode, exit_for_error_code
 
 # A factory the process can override (tests, embedded mode). Takes the parsed args so it can read
 # --url / --token-file; returns an ApiClient (an async context manager).
@@ -44,8 +44,8 @@ def make_client(args: argparse.Namespace) -> ApiClient:
     """
     if _factory is not None:
         return _factory(args)
-    from oaken.cli.discovery import discover
-    from oaken.cli.http import HttpApiClient
+    from oaken_cli.discovery import discover
+    from oaken_cli.http import HttpApiClient
 
     endpoint = discover(
         url=getattr(args, "url", None), token_file=getattr(args, "token_file", None)
@@ -89,7 +89,7 @@ def emit(args: argparse.Namespace, *, data: Any, text: Callable[[], None]) -> in
     human form (so its cost is paid only when not in JSON mode).
     """
     if getattr(args, "json", False):
-        from oaken.cli.output import print_json
+        from oaken_cli.output import print_json
 
         print_json(data)
     else:

@@ -72,8 +72,9 @@
       <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
     <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
       <a class="nav-link" href="#development-setup"><span class="num">1</span>Development setup</a>
-      <a class="nav-link" href="#ground-rules"><span class="num">2</span>Ground rules</a>
-      <a class="nav-link" href="#documentation"><span class="num">3</span>Documentation</a>
+      <a class="nav-link" href="#repository-layout"><span class="num">2</span>Repository layout</a>
+      <a class="nav-link" href="#ground-rules"><span class="num">3</span>Ground rules</a>
+      <a class="nav-link" href="#documentation"><span class="num">4</span>Documentation</a>
     </nav></div>
   </div></div>
 </nav>
@@ -96,18 +97,29 @@ uv<span class="w"> </span>run<span class="w"> </span>pytest
 <p>Install the git hooks (lint plus secret scan) with <code>uv run pre-commit install</code> if you use
 pre-commit, or run <code>uv run detect-secrets-hook --baseline .secrets.baseline &lt;files&gt;</code>.</p>
 </section>
-<section id="ground-rules" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Ground rules</h2></div>
+<section id="repository-layout" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Repository layout</h2></div>
+<div class="code"><pre class="highlight"><code class="language-text">src/oaken/           core: the daemon, API, operations, storage, ingest (the `oaken` package)
+src/oaken_*/         first-party plugins (providers, embedder, enrichers, vector store)
+apps/cli/            the `oaken` command, a separate package (`oaken-cli`, import `oaken_cli`)
+apps/webui/          the web UI (templates today; its own app later)
+docs/                the documentation site sources and generators
+</code></pre></div>
+<p>Core knows nothing about the apps. An app is a client of core's HTTP API and lives in its own
+uv workspace member with its own <code>pyproject.toml</code>, so it can be built, versioned and tested on its
+own (<code>uv run pytest apps/cli</code>). See <a href="https://github.com/dfoulks1/oaken-mail/blob/main/docs/adr/0006-clients-live-in-apps.md">ADR 0006</a>.</p>
+</section>
+<section id="ground-rules" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Ground rules</h2></div>
 <ul>
 <li>Every Python file starts with <code># SPDX-License-Identifier: Apache-2.0</code>.</li>
 <li>Tests live in a <code>tests/</code> directory next to the code they cover (<code>src/oaken/core/tests/</code> for
-<code>src/oaken/core/</code>). Run <code>uv run pytest</code> from the repo root for everything, or from any
+<code>src/oaken/core/</code>, <code>apps/cli/src/oaken_cli/tests/</code> for the CLI). Run <code>uv run pytest</code> from the repo root for everything, or from any
 subdirectory to run only the tests below it. <code>tests/</code> at the root holds repo-wide checks.</li>
 <li>Tests never use the network, Ollama, Gmail, Docker or real mail. Use synthetic fixtures.</li>
 <li>Never commit real email content, addresses, databases or tokens.</li>
 <li>Use Conventional Commits for commit messages.</li>
 </ul>
 </section>
-<section id="documentation" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Documentation</h2></div>
+<section id="documentation" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Documentation</h2></div>
 <p>The project website is generated <strong>locally</strong> from the Markdown in <code>docs/</code> and the generated
 HTML is committed beside it; GitHub Pages serves the <code>main</code> branch's <code>/docs</code> folder. CI does not
 build it. After changing docs (or the software map), regenerate, check and commit the result:</p>

@@ -17,9 +17,9 @@ import argparse
 import json
 import sys
 
-from oaken.cli.client import ApiClient, CallResult
-from oaken.cli.commands.runtime import emit, run
-from oaken.cli.exits import CliError, ExitCode
+from oaken_cli.client import ApiClient, CallResult
+from oaken_cli.commands.runtime import emit, run
+from oaken_cli.exits import CliError, ExitCode
 
 
 def cmd_operation(args: argparse.Namespace) -> int:
@@ -41,7 +41,7 @@ async def _list(client: ApiClient, args: argparse.Namespace) -> int:
     ]
 
     def text() -> None:
-        from oaken.cli.output import print_table
+        from oaken_cli.output import print_table
 
         print_table(data, ["name", "permission", "summary"], title="operations")
 
@@ -80,7 +80,7 @@ def render_result(args: argparse.Namespace, result: CallResult) -> int:
     data = {"request_id": result.request_id, "output": result.output}
 
     def text() -> None:
-        from oaken.cli.output import print_json, print_text
+        from oaken_cli.output import print_json, print_text
 
         if result.output is None:
             print_text("ok")
@@ -105,7 +105,7 @@ def _render_proposal(args: argparse.Namespace, result: CallResult) -> int:
     }
 
     def text() -> None:
-        from oaken.cli.output import print_text
+        from oaken_cli.output import print_text
 
         print_text(f"would {p.summary}")
         print_text(f"{p.total_changes} change(s); re-run with --yes to confirm.")
