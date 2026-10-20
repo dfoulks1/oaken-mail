@@ -122,6 +122,20 @@ BM25 index with no raw bytes. It is **not** migrated. It is backed up and left a
 - Do not add dependencies the prompt doesn't call for without saying why in the report.
 - If you are blocked by an ambiguity that changes the design, **stop and ask**.
 
+## Decisions from checkpoints (the user's answers; prompts must follow them)
+
+- **Event log:** a plain file (append-only, cheap), not a database table. Decide the format and retention in 17 with the CLI `events` command.
+- **Index:** `from:` matches name or address; a non-Sieve disposition beats a script's; `in:any` stays; rebuilds are deterministic for a given order.
+- **Sieve `\Seen`:** decide in prompt 12. **`discarded` mail is not hidden from MCP** (it is hidden from default search only).
+- **Starter `10-lists.sieve`:** yes, ship one.
+- **`tokenizer.json`:** a command must be able to fetch it (17).
+- **Quarantine folder:** required, with permissions that reflect it (owner-only, no execute bit, files never opened by core). Attachments flagged for quarantine go there, never analysed. Build it with prompt 05/06 follow-up or 09.
+- **LFS:** not encrypted for now.
+- **`oaken admin`:** is a CLI command (17).
+- **Plugins may subscribe to core events** (read-only, through the plugin host), so core stays extensible. Settle the contract in prompt 04's follow-up or 09.
+- **Re-enrich:** a separate job from the index rebuild (the index is keyword-only); it belongs to `reprocess("enrich")` in 09.
+- **OAuth app mode:** discuss near prompt 11.
+
 ## Report-back checkpoint (end of every prompt)
 
 End your final message with exactly these sections:
