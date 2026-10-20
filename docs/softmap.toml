@@ -73,10 +73,10 @@ name = "CLI"
 layer = "clients"
 status = "partial"
 prompt = "17"
-path = "src/oaken/cli.py"
-summary = "Thin command-line client of the local API. Today it only prints the version."
+path = "src/oaken/cli"
+summary = "Thin command-line client of the local API: daemon control, mail commands, the generic operation fallback and the event stream. Commands are lazy-loaded; most are one registry operation each."
 uses = ["api"]
-funcs = [["main() -> None", "Entry point of the `oaken` command; prints the version for now."]]
+funcs = [["main(argv: Sequence[str] | None = None) -> int", "Parses the command line and runs one command; returns the exit code."]]
 notes = ["Does not auto-start core. If the daemon is not running it says so and exits."]
 
 [[components]]
