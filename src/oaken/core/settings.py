@@ -156,10 +156,25 @@ class AttachmentSettings(_Section):
     exempt_extensions: list[str] = Field(default_factory=list)  # never quarantined by extension
 
 
+class SieveSettings(_Section):
+    """Sieve filtering (RFC 5228). Scripts are ``*.sieve`` files in ``dir``, run in name order.
+    The limits bound what a script can cost; hostile mail is the input they run against."""
+
+    enabled: bool = True
+    dir: str = "sieve"  # relative to the config folder unless absolute
+    max_script_bytes: int = Field(default=256 * 1024, ge=1024)
+    max_steps: int = Field(default=100_000, ge=100)
+    max_actions: int = Field(default=200, ge=1)
+    max_match_chars: int = Field(default=10_000, ge=100)  # text cut before a ``:matches`` glob
+    max_regex_chars: int = Field(default=4096, ge=100)  # text cut before a ``:regex`` match
+    max_variable_chars: int = Field(default=4096, ge=1)
+
+
 class MailSettings(_Section):
     threading: ThreadingSettings = ThreadingSettings()
     cleaning: CleaningSettings = CleaningSettings()
     attachments: AttachmentSettings = AttachmentSettings()
+    sieve: SieveSettings = SieveSettings()
     # A local Hugging Face tokenizer.json for exact token counts (for example the file that ships
     # with your Qwen model). Unset, counts are a cheap estimate. Nothing is ever downloaded.
     tokenizer_file: str | None = None

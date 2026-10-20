@@ -67,3 +67,13 @@ report the equivalent FTS5 size for a similarly sized synthetic corpus.
 reference headers to the thread with the same `ThreadInfo.subject_key`. A time limit on that
 subject join (so a recurring subject does not merge across months) is the index's job.
 Quarantined attachments are flags in `ParsedMessage.attachments`; store the metadata, never the bytes.
+
+## Note from prompt 06c
+
+Organization (labels, flags, a disposition) is **in `raw.db`**, in `message_attrs`, written by
+`FilterEngine` (`oaken.mail.filtering`) from the user's Sieve scripts. `index.db` has its own migration
+set; the next `raw.db` migration is `0006`. Keep the index's copy of it simple: store the disposition
+and the label list on `docs`, refresh them on `MessageFiltered`, and make `keyword_search` filter by
+`label` and `disposition` (exclude `discarded` unless asked). A discarded message is hidden, not
+deleted, so it must still be rebuildable and findable on request. A message flagged `skip_enrich`
+(`kind = 'analysis'`) is still indexed for keywords; only embedding and enrichment skip it.

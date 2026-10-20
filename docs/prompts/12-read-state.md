@@ -74,3 +74,10 @@ must pass.
 
 Standard report. Include the state-machine table (local state × server state ×
 dirty marker → action).
+
+## Note from prompt 06c
+
+Sieve flags (`\Seen`, `\Flagged`) are **local organization** in `message_attrs`, not read-state. They do
+not change `message_state` and are never written back to a provider by themselves. Whether a Sieve
+`\Seen` should mark the message read, or sync a label to the provider, is a decision for this prompt
+and needs the user's go-ahead.

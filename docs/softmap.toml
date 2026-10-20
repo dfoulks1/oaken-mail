@@ -167,7 +167,7 @@ layer = "ingest"
 status = "planned"
 prompt = "09"
 summary = "Staged, idempotent, resumable: a message is keyword-searchable first, then embedded and enriched asynchronously."
-uses = ["parsing", "jobs", "events", "pluginhost", "rawstore", "index"]
+uses = ["parsing", "sieve", "jobs", "events", "pluginhost", "rawstore", "index"]
 untrusted = true
 
 [[components]]
@@ -378,6 +378,31 @@ funcs = [
 notes = ["Large messages (over storage.inline_max_bytes) live whole in the lfs/ folder; raw.db keeps a header stub and a link.", "Database files and the LFS folder are owner-only. Encrypting LFS is a possible later option."]
 
 [[components]]
+id = "sieve"
+name = "Sieve filtering"
+layer = "ingest"
+status = "built"
+prompt = "06c"
+path = "src/oaken/mail/sieve"
+summary = "The user's Sieve (RFC 5228) scripts organize mail as it lands: a disposition, labels, flags and an analysis marker, stored as attributes in raw.db. A small engine of our own; sending actions are recorded and never executed."
+uses = ["parsing", "rawstore"]
+untrusted = true
+types = [
+  ["Script", "frozen dataclass", "A compiled, validated script with its required extensions and a content hash."],
+  ["SieveResult", "frozen dataclass", "The disposition (inbox, filed, discarded), the rule that decided it and the effects, each with script:line."],
+  ["MessageView", "dataclass", "What a script may look at: headers, envelope, size and body text. Never attachments."],
+  ["FilterEngine", "class", "Loads the scripts, filters a message and stores the attributes, or refilters stale messages."],
+  ["AttrStore", "class", "message_attrs in raw.db: replace per source, list by label or disposition, counts, stale detection."],
+]
+funcs = [
+  ["compile_script(name, text) -> Script", "Parse and validate; raises SieveError with a line number."],
+  ["run(scripts, view, settings) -> SieveResult", "Run scripts in order; a failing script loses only its own actions."],
+  ["FilterEngine.filter_message(message_id) -> SieveResult", "Read, parse, run and store in one transaction; publishes MessageFiltered."],
+  ["FilterEngine.refilter(account_id, limit) -> RefilterResult", "Filter every message whose last run is missing or made by other scripts. Resumable."],
+]
+notes = ["redirect, reject, ereject and vacation are recorded as suppressed intents and never executed.", "editheader, include, notify and anything that opens a MIME part are refused.", "Scripts are *.sieve files in the sieve folder next to config.toml, run in name order."]
+
+[[components]]
 id = "index"
 name = "index.db"
 layer = "storage"
@@ -462,6 +487,7 @@ steps = [
   ["pluginhost", "provider", "fetch new messages", "Returns raw bytes and provider ids."],
   ["ingest", "rawstore", "store the raw message", "Content-addressed, so a retry is idempotent."],
   ["ingest", "parsing", "parse and clean", "Treated as untrusted input."],
+  ["ingest", "sieve", "run the user's Sieve scripts", "Labels, flags and a disposition, saved in raw.db. Nothing is sent or deleted."],
   ["ingest", "index", "write fields and FTS5", "Searchable by keyword from here."],
   ["ingest", "jobs", "enqueue embed and enrich", "Asynchronous, resumable, cached."],
   ["ingest", "events", "emit message.ingested", "Clients watching the SSE stream see it."],

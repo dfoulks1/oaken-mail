@@ -65,3 +65,9 @@ Publish `docs/security/threat-model.md` and `docs/security/ui-requirements.md` i
 ## Checkpoint
 
 Standard report. Findings table first.
+
+## Note from prompt 06c
+
+Add hostile-script and hostile-mail cases for Sieve: step and action limits, regular expressions
+built from variables, huge string lists, and a check that nothing in `oaken.mail.sieve` can send,
+open a socket or run a process. `redirect`, `reject` and `vacation` must stay suppressed intents.

@@ -1,0 +1,262 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sieve filtering · Oaken Mail</title>
+<meta name="description" content="Sieve (RFC 5228) in Oaken: where scripts live, what is supported and refused, how actions map to labels, flags and a disposition, what is stored in raw.db, and the limits that keep hostile mail harmless.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Sieve filtering · Oaken Mail">
+<meta property="og:description" content="Sieve (RFC 5228) in Oaken: where scripts live, what is supported and refused, how actions map to labels, flags and a disposition, what is stored in raw.db, and the limits that keep hostile mail harmless.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="../assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">Rules that organize mail as it lands, in the language mail people already know</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="overview.html">Architecture overview</a>
+      <a class="doc-link" href="jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="software-map.html">Software map</a>
+      <a class="doc-link" href="swarm.html">The swarm</a>
+      <a class="doc-link" href="storage.html">Raw storage</a>
+      <a class="doc-link" href="parsing.html">Parsing and cleaning</a>
+      <a class="doc-link current" href="sieve.html" aria-current="page">Sieve filtering</a>
+      <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#what-it-is-for"><span class="num">1</span>What it is for</a>
+      <a class="nav-link" href="#scripts"><span class="num">2</span>Scripts</a>
+      <a class="nav-link" href="#what-an-action-does"><span class="num">3</span>What an action does</a>
+      <a class="nav-link" href="#supported-and-refused"><span class="num">4</span>Supported and refused</a>
+      <a class="nav-link" href="#what-is-stored"><span class="num">5</span>What is stored</a>
+      <a class="nav-link" href="#limits"><span class="num">6</span>Limits</a>
+      <a class="nav-link" href="#settings"><span class="num">7</span>Settings</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <h1 class="display-6">Sieve filtering</h1>
+    <p class="lead">Your Sieve scripts run on every message once it is stored, and decide a disposition, labels and flags. Those are saved in raw.db as attributes, so a UI can show a sane mailbox. Nothing is ever sent, deleted or opened.</p>
+  </header>
+
+<section id="what-it-is-for" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>What it is for</h2></div>
+<p>A mailbox needs structure: this is a newsletter, that is from the list, this one can be hidden.
+<a href="https://www.rfc-editor.org/rfc/rfc5228">Sieve</a> is the standard language for exactly that, so rules
+are portable, readable and already known to people who run mail servers. Oaken has its own small
+Sieve engine (<code>oaken.mail.sieve</code>), pure like the parser: no database, no network, no model.</p>
+<div class="code"><pre class="highlight"><code class="language-text">raw.db message ──parse──▶ ParsedMessage ──sieve scripts──▶ disposition + labels + flags
+                                                              │
+                                                              └─▶ message_attrs in raw.db
+</code></pre></div>
+<p>Filtering runs <strong>after</strong> the message is stored and before it is indexed. Because the raw message is
+kept, changing a script re-derives the attributes with no new download.</p>
+</section>
+<section id="scripts" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Scripts</h2></div>
+<p>Scripts are <code>*.sieve</code> files in the <code>sieve</code> folder next to <code>config.toml</code> (<code>mail.sieve.dir</code> changes
+it). They run <strong>in name order</strong> (<code>10-lists.sieve</code>, <code>20-work.sieve</code>), and <code>stop</code> ends them all.</p>
+<div class="code"><pre class="highlight"><code class="language-sieve"><span class="kn">require</span> <span class="p">[</span><span class="s">"fileinto"</span><span class="p">,</span> <span class="s">"imap4flags"</span><span class="p">,</span> <span class="s">"vnd.oaken.analysis"</span><span class="p">];</span>
+
+<span class="c1"># Mailing lists get a label and are marked read.</span>
+<span class="nb">if</span> <span class="nb">exists</span> <span class="s">"list-id"</span> <span class="p">{</span>
+    <span class="nb">fileinto</span> <span class="s">"Lists"</span><span class="p">;</span>
+    <span class="nb">addflag</span> <span class="s">"\\Seen"</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="c1"># Newsletters never go to a model.</span>
+<span class="nb">if</span> <span class="nb">header</span> <span class="nt">:contains</span> <span class="s">"list-unsubscribe"</span> <span class="s">""</span> <span class="p">{</span>
+    <span class="err">skip_enrich</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="c1"># Mail from people I work with stays in the inbox.</span>
+<span class="nb">if</span> <span class="nb">address</span> <span class="nt">:domain</span> <span class="nt">:is</span> <span class="s">"from"</span> <span class="s">"example.com"</span> <span class="p">{</span> <span class="nb">keep</span><span class="p">;</span> <span class="p">}</span>
+</code></pre></div>
+<p>A script with an error is <strong>reported and skipped</strong>, so one typo does not switch off the rest. A
+script that fails while running (a bad regular expression built from a variable, a limit reached)
+loses its own actions only, and the message stays in the inbox.</p>
+</section>
+<section id="what-an-action-does" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>What an action does</h2></div>
+<p>Oaken reads and organizes mail. It does not deliver it, so Sieve actions map onto a mailbox view:</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Action</th>
+<th>In Oaken</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>keep</code>, or nothing decided</td>
+<td>disposition <code>inbox</code></td>
+</tr>
+<tr>
+<td><code>fileinto &quot;X&quot;</code></td>
+<td>label <code>X</code>, disposition <code>filed</code> (the implicit keep is cancelled). <code>fileinto &quot;INBOX&quot;</code> is a keep.</td>
+</tr>
+<tr>
+<td><code>fileinto :copy &quot;X&quot;</code></td>
+<td>label <code>X</code> and disposition <code>inbox</code></td>
+</tr>
+<tr>
+<td><code>discard</code></td>
+<td>disposition <code>discarded</code>: <strong>hidden from default views, never deleted</strong></td>
+</tr>
+<tr>
+<td><code>addflag</code>, <code>setflag</code>, <code>removeflag</code></td>
+<td>flags on the message (<code>\Seen</code>, <code>\Flagged</code> or a keyword)</td>
+</tr>
+<tr>
+<td><code>redirect</code>, <code>reject</code>, <code>ereject</code>, <code>vacation</code></td>
+<td>a <strong>suppressed intent</strong>, recorded and shown, <strong>never executed</strong></td>
+</tr>
+<tr>
+<td><code>skip_enrich</code> (<code>vnd.oaken.analysis</code>)</td>
+<td>the message is never sent to a model</td>
+</tr>
+<tr>
+<td><code>stop</code></td>
+<td>ends all scripts</td>
+</tr>
+</tbody>
+</table></div>
+<p>The disposition is one of three values. Another action beats <code>discard</code>, and an explicit <code>keep</code> beats
+everything. A message is <strong>one object</strong>, so unlike a delivery agent, flags are the flags in effect when
+the scripts finish (a discarded message carries none).</p>
+</section>
+<section id="supported-and-refused" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Supported and refused</h2></div>
+<p>Everything in RFC 5228 (<code>header</code>, <code>address</code>, <code>envelope</code>, <code>exists</code>, <code>size</code>, <code>allof</code>, <code>anyof</code>, <code>not</code>,
+<code>if</code>/<code>elsif</code>/<code>else</code>, <code>stop</code>, <code>keep</code>, <code>discard</code>, <code>fileinto</code>, <code>redirect</code>) plus these extensions:
+<code>fileinto</code>, <code>copy</code>, <code>imap4flags</code>, <code>envelope</code>, <code>body</code> (<code>:text</code>), <code>relational</code>, <code>regex</code>, <code>variables</code>
+(including match variables), <code>date</code>, <code>subaddress</code>, <code>reject</code>, <code>ereject</code>, <code>vacation</code>, the comparators
+<code>i;ascii-casemap</code> (default), <code>i;octet</code> and <code>i;ascii-numeric</code>, and <code>vnd.oaken.analysis</code>.</p>
+<p>A <code>require</code> of anything below is an error with the reason:</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Extension</th>
+<th>Why not</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>editheader</code></td>
+<td>The raw message is the source of truth and is never rewritten.</td>
+</tr>
+<tr>
+<td><code>include</code></td>
+<td>Scripts already run in name order; use several files.</td>
+</tr>
+<tr>
+<td><code>notify</code></td>
+<td>Oaken sends nothing.</td>
+</tr>
+<tr>
+<td><code>mime</code>, <code>foreverypart</code>, <code>extracttext</code>, <code>body :raw</code>/<code>:content</code></td>
+<td>Attachments and MIME parts are never opened.</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>body</code> looks at the message text only: the text parts, or the HTML turned into text when there is
+no plain part. An attachment's contents are never visible to a script.</p>
+<p>The SMTP <strong>envelope</strong> is not available from a provider, so <code>envelope</code> is derived from <code>Return-Path</code>
+(sender) and <code>X-Original-To</code> or <code>Delivered-To</code> (recipient), falling back to <code>From</code> and the first <code>To</code>.
+The <code>date</code> tests use UTC unless you pass <code>:zone</code>.</p>
+</section>
+<section id="what-is-stored" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>What is stored</h2></div>
+<p>Attributes live in <code>raw.db</code> (<code>message_attrs</code>), because organization is what the user sees and a
+backup of <code>raw.db</code> should keep it.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Column</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>disposition</code>, <code>label</code>, <code>flag</code>, <code>intent</code> or <code>analysis</code></td>
+</tr>
+<tr>
+<td><code>value</code></td>
+<td><code>filed</code>, <code>Lists</code>, <code>\Seen</code>, <code>redirect x@example.net</code>, <code>skip_enrich</code></td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td><code>sieve</code> (a person's own attributes can use another source later)</td>
+</tr>
+<tr>
+<td><code>rule</code></td>
+<td><code>10-lists.sieve:4</code>, the file and line, so a UI can say <strong>why</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p>A re-run replaces only the <code>sieve</code> rows of that message, in one transaction. <code>message_filters</code>
+records the hash of the script set that last ran on each message. Edit a script and the hash changes,
+every message becomes stale, and <code>FilterEngine.refilter()</code> walks them oldest first, resumably. A
+<code>MessageFiltered</code> event is published for each message.</p>
+</section>
+<section id="limits" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Limits</h2></div>
+<p>Mail is hostile input, and a script is code, so both are bounded:</p>
+<ul>
+<li>A <strong>step limit</strong> (<code>max_steps</code>) counts every command, test and key comparison, and an <strong>action limit</strong>
+(<code>max_actions</code>) caps what one script can produce.</li>
+<li>A <code>:matches</code> pattern is matched by dynamic programming, so it cannot backtrack, and the text is cut
+to <code>max_match_chars</code>. A <code>:regex</code> is checked when the script is compiled and refused if it repeats a
+repetition (<code>(a+)+</code>), and the text is cut to <code>max_regex_chars</code>. The check is best effort.</li>
+<li>Scripts are size-limited, nesting is limited, and numbers are bounded.</li>
+<li>The package imports no network, process or mail-sending code, and a test checks that.</li>
+</ul>
+</section>
+<section id="settings" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>Settings</h2></div>
+<div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[mail.sieve]</span>
+<span class="n">enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"sieve"</span><span class="w">                 </span><span class="c1"># relative to the config folder, or an absolute path</span>
+<span class="n">max_script_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">262144</span>
+<span class="n">max_steps</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">100000</span>
+<span class="n">max_actions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">200</span>
+<span class="n">max_match_chars</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10000</span>
+<span class="n">max_regex_chars</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4096</span>
+<span class="n">max_variable_chars</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4096</span>
+</code></pre></div>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

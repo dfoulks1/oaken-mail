@@ -84,3 +84,10 @@ queue/lease parameters chosen.
 `MessageStored` carries `is_new` and `changed`. Re-parse and re-index when `changed` is set (the
 bytes differ, or a deleted message came back). `LargeMessageStored` marks a message kept in the LFS
 folder. `RawStore.get_stub()` returns just the headers without opening a large message's file.
+
+## Note from prompt 06c
+
+Add a filter stage after parsing: `FilterEngine.filter_message(message_id)` (it re-reads the raw bytes,
+so it can run on its own job). A script change makes messages stale (`AttrStore.stale`), so register a
+resumable `refilter` job that calls `FilterEngine.refilter()`. Embedding and enrichment must skip a
+message that has an `analysis` / `skip_enrich` attribute. Filtering publishes `MessageFiltered`.

@@ -86,6 +86,15 @@ class MessageParsed(Event):
 
 
 @dataclass(frozen=True, kw_only=True)
+class MessageFiltered(Event):
+    """Sieve ran on a message and its organization attributes were written."""
+
+    account_id: AccountId
+    message_id: MessageId
+    disposition: str
+
+
+@dataclass(frozen=True, kw_only=True)
 class MessageIndexed(Event):
     account_id: AccountId
     message_id: MessageId

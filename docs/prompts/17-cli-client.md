@@ -70,3 +70,8 @@ Add an **administrative sub-section** (`oaken admin ...`) with an account wizard
 questions, then **stores** the answers through `RawStore.create_account` / `set_account_config`,
 so the user never edits a file by hand. Only non-secret settings go in `config_json`; credentials go
 to the OS keyring (the store refuses secret-looking keys).
+
+## Note from prompt 06c
+
+Add `oaken sieve check FILE` (`compile_script`), `oaken sieve test FILE --message ID|--eml PATH`
+(`run`, showing each effect and its `script:line`), and `oaken sieve refilter` (a job).

@@ -374,6 +374,16 @@ class RawStore:
             )
         return message_id, is_new
 
+    async def get_message(self, message_id: MessageId) -> StoredMessage:
+        row = await self.db.fetchone(
+            "SELECT m.*, b.size_raw, b.codec FROM messages m"
+            " JOIN blobs b ON b.sha256 = m.blob_sha256 WHERE m.id = ?",
+            (message_id,),
+        )
+        if row is None:
+            raise NotFound(f"no such message: {message_id}")
+        return _stored(row)
+
     async def get_raw(self, message_id: MessageId, *, verify: bool = False) -> bytes:
         """The exact bytes that were stored. ``verify=True`` also re-hashes them against the
         blob's sha256 and raises ``StorageError`` on any mismatch."""

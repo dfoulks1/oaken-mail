@@ -4,6 +4,7 @@ deterministic: no database, no network, no model."""
 
 from oaken.mail.attachments import AttachmentExtractor, AttachmentInfo, is_quarantined
 from oaken.mail.clean import CleanedText, Segment, clean, clean_text, select_body
+from oaken.mail.filtering import FilterEngine, LoadReport, RefilterResult, load_scripts
 from oaken.mail.html import html_to_text
 from oaken.mail.parse import Address, ParsedMessage, parse, read_attachment
 from oaken.mail.threading import ThreadInfo, normalize_subject, thread_key
@@ -15,8 +16,11 @@ __all__ = [
     "AttachmentInfo",
     "CleanedText",
     "EstimateTokenizer",
+    "FilterEngine",
     "FileTokenizer",
+    "LoadReport",
     "ParsedMessage",
+    "RefilterResult",
     "Segment",
     "ThreadInfo",
     "Tokenizer",
@@ -24,6 +28,7 @@ __all__ = [
     "clean_text",
     "html_to_text",
     "is_quarantined",
+    "load_scripts",
     "load_tokenizer",
     "normalize_subject",
     "parse",

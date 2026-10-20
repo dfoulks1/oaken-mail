@@ -65,3 +65,10 @@ schema). `check_docs.py` must pass.
 
 Standard report. Include the full operation table (name, permission, mcp_exposed,
 marks_read) for the user to review before the transports are built.
+
+## Note from prompt 06c
+
+Read operations over organization: list labels with counts (`AttrStore.counts("label")`), list
+messages by label or disposition (`AttrStore.message_ids`), and "which rule put this message here"
+(the `rule` column). **Writing or editing Sieve scripts is not an operation exposed over MCP**: an
+agent that can write rules can hide mail. Scripts are edited as files, and the CLI checks and tests them.

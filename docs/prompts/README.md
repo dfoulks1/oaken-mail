@@ -15,6 +15,7 @@ review it before starting the next.
 | 04 | [plugin-host](04-plugin-host.md) | Plugin contracts (5), host, fakes, contract tests | 03 |
 | 05 | [raw-store](05-raw-store.md) | `raw.db`, blob store, migrations, accounts/messages/cursors | 02 |
 | 06 | [parsing-and-cleaning](06-parsing-and-cleaning.md) | RFC 822 → structured, cleaned text; threading keys | 05 |
+| 06c | [sieve-filtering](06c-sieve-filtering.md) | Sieve scripts organize mail into labels, flags and a disposition, stored in `raw.db` | 05, 06 |
 | 07 | [index-and-fts](07-index-and-fts.md) | `index.db`, chunks, FTS5, rebuild-from-raw | 06 |
 | 08 | [vector-store](08-vector-store.md) | sqlite-vec spike + VectorStore plugin | 04, 07 |
 | 09 | [ingest-pipeline](09-ingest-pipeline.md) | Staged, resumable pipeline orchestrating the AI backend | 03–08 |

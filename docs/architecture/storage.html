@@ -41,6 +41,7 @@
       <a class="doc-link" href="swarm.html">The swarm</a>
       <a class="doc-link current" href="storage.html" aria-current="page">Raw storage</a>
       <a class="doc-link" href="parsing.html">Parsing and cleaning</a>
+      <a class="doc-link" href="sieve.html">Sieve filtering</a>
       <a class="doc-link" href="../plugins.html">Writing a plugin</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
@@ -74,7 +75,8 @@
 <section id="one-source-of-truth" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>One source of truth</h2></div>
 <p><code>raw.db</code> holds the original RFC 822 bytes of every message plus the little a provider needs to
 sync again. The search index, vectors and enrichments live elsewhere and are rebuilt from it, so
-losing them costs time, never mail. Back up <code>raw.db</code> (and the <code>lfs/</code> folder beside it) and you have
+losing them costs time, never mail. Organization attributes live here too, because they are what
+you see in the mailbox and a backup should keep them; they are re-derivable from your scripts. Back up <code>raw.db</code> (and the <code>lfs/</code> folder beside it) and you have
 backed up everything.</p>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
 <thead>
@@ -99,6 +101,14 @@ backed up everything.</p>
 <tr>
 <td><code>message_state</code></td>
 <td>Read, starred, labels, and what still has to be written back to the server.</td>
+</tr>
+<tr>
+<td><code>message_attrs</code></td>
+<td>Organization: a disposition, labels, flags, suppressed intents and analysis markers, set by Sieve scripts (see <a href="sieve.html">Sieve filtering</a>) and later by the user.</td>
+</tr>
+<tr>
+<td><code>message_filters</code></td>
+<td>Which script set last ran on each message, so a changed script marks mail stale.</td>
 </tr>
 <tr>
 <td><code>sync_cursors</code></td>

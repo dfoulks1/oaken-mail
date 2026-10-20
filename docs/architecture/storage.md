@@ -12,7 +12,8 @@ description = "raw.db: content-addressed zstd messages, the LFS folder for large
 
 `raw.db` holds the original RFC 822 bytes of every message plus the little a provider needs to
 sync again. The search index, vectors and enrichments live elsewhere and are rebuilt from it, so
-losing them costs time, never mail. Back up `raw.db` (and the `lfs/` folder beside it) and you have
+losing them costs time, never mail. Organization attributes live here too, because they are what
+you see in the mailbox and a backup should keep them; they are re-derivable from your scripts. Back up `raw.db` (and the `lfs/` folder beside it) and you have
 backed up everything.
 
 | Table | What it holds |
@@ -21,6 +22,8 @@ backed up everything.
 | `blobs` | One compressed message per distinct content, keyed by its sha256. |
 | `messages` | A provider's id for a message, pointing at a blob, with a soft-delete mark. |
 | `message_state` | Read, starred, labels, and what still has to be written back to the server. |
+| `message_attrs` | Organization: a disposition, labels, flags, suppressed intents and analysis markers, set by Sieve scripts (see [Sieve filtering](sieve.html)) and later by the user. |
+| `message_filters` | Which script set last ran on each message, so a changed script marks mail stale. |
 | `sync_cursors` | Where each provider's sync left off, per scope. |
 
 ## Stored once
