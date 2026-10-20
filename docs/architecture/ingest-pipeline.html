@@ -1,0 +1,295 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The ingest pipeline · Oaken Mail</title>
+<meta name="description" content="The stages mail passes through (store, filter and index, embed, enrich), how each is made idempotent, what happens when a model is down, how tokens are counted, and the quarantine folder.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="The ingest pipeline · Oaken Mail">
+<meta property="og:description" content="The stages mail passes through (store, filter and index, embed, enrich), how each is made idempotent, what happens when a model is down, how tokens are counted, and the quarantine folder.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="../assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">From a message on the server to a message you can search, ask about and enrich</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="overview.html">Architecture overview</a>
+      <a class="doc-link" href="jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="software-map.html">Software map</a>
+      <a class="doc-link" href="swarm.html">The swarm</a>
+      <a class="doc-link" href="storage.html">Raw storage</a>
+      <a class="doc-link" href="parsing.html">Parsing and cleaning</a>
+      <a class="doc-link" href="sieve.html">Sieve filtering</a>
+      <a class="doc-link" href="index.html">The search index</a>
+      <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <a class="doc-link" href="vectors.html">The vector store</a>
+      <a class="doc-link current" href="ingest-pipeline.html" aria-current="page">The ingest pipeline</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#the-stages"><span class="num">1</span>The stages</a>
+      <a class="nav-link" href="#priorities-and-backlogs"><span class="num">2</span>Priorities and backlogs</a>
+      <a class="nav-link" href="#idempotent-by-content"><span class="num">3</span>Idempotent by content</a>
+      <a class="nav-link" href="#when-something-is-down"><span class="num">4</span>When something is down</a>
+      <a class="nav-link" href="#reprocessing"><span class="num">5</span>Reprocessing</a>
+      <a class="nav-link" href="#token-accounting"><span class="num">6</span>Token accounting</a>
+      <a class="nav-link" href="#the-quarantine-folder"><span class="num">7</span>The quarantine folder</a>
+      <a class="nav-link" href="#plugins-and-events"><span class="num">8</span>Plugins and events</a>
+      <a class="nav-link" href="#settings"><span class="num">9</span>Settings</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <h1 class="display-6">The ingest pipeline</h1>
+    <p class="lead">Mail is stored first, filtered and indexed second, and only then embedded and enriched. Every step can be repeated safely, so a crash, a model outage or a power cut costs time and never mail.</p>
+  </header>
+
+<section id="the-stages" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>The stages</h2></div>
+<pre class="mermaid">flowchart LR
+    S[Provider sync] --&gt;|raw.put| R[(raw.db)]
+    R --&gt; F
+    subgraph PARSE[ingest.parse]
+        F[Sieve filter] --&gt; I[Index: fields and FTS5] --&gt; Q[Quarantine flagged attachments]
+    end
+    Q --&gt;|priority - 1| E[ingest.embed]
+    Q --&gt;|priority - 2| N[ingest.enrich]
+    E --&gt; V[(vector store)]
+    N --&gt; X[(enrichments in raw.db)]
+</pre><noscript><pre><code>flowchart LR
+    S[Provider sync] --&gt;|raw.put| R[(raw.db)]
+    R --&gt; F
+    subgraph PARSE[ingest.parse]
+        F[Sieve filter] --&gt; I[Index: fields and FTS5] --&gt; Q[Quarantine flagged attachments]
+    end
+    Q --&gt;|priority - 1| E[ingest.embed]
+    Q --&gt;|priority - 2| N[ingest.enrich]
+    E --&gt; V[(vector store)]
+    N --&gt; X[(enrichments in raw.db)]
+</code></pre></noscript>
+<ol>
+<li><strong>Store.</strong> The sync runner writes the exact bytes to <code>raw.db</code> and queues a parse job. The cursor
+is saved only after the whole batch is stored, so a crash re-pulls the batch and the second
+write changes nothing.</li>
+<li><strong>Parse</strong> (<code>ingest.parse</code>). The user's Sieve scripts run <strong>first</strong>, so a message that is
+discarded or marked <code>skip_enrich</code> never reaches the expensive stages. Then the message is
+indexed (fields and FTS5), flagged attachments are written to the quarantine folder, and the
+embed and enrich jobs are queued. From here on the message is <strong>searchable by keyword</strong>.</li>
+<li><strong>Embed</strong> (<code>ingest.embed</code>). Chunk text goes to the embedder and the vectors to the vector store.</li>
+<li><strong>Enrich</strong> (<code>ingest.enrich</code>). Each configured enricher runs on the cleaned text.</li>
+</ol>
+<p>Embedding and enrichment are separate jobs because they are slow, can fail for different reasons,
+and can be switched off on their own. With no embedder configured the pipeline is just store, filter
+and index, and everything keyword-related works.</p>
+</section>
+<section id="priorities-and-backlogs" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Priorities and backlogs</h2></div>
+<p>A job's priority is that of the parse job minus 1 (embed) or minus 2 (enrich). New mail is
+priority 50 and a backfill is 10, so a backlog of parsing always runs ahead of a backlog of
+embedding, and new mail overtakes a backfill at every stage. Concurrency per stage is set with
+<code>ingest.embed_concurrency</code> and <code>ingest.enrich_concurrency</code> (default 1: one local GPU).</p>
+<p><strong>Backpressure.</strong> A first sync of a large mailbox is a <em>backfill</em>. When the queued and running
+<code>ingest.*</code> jobs reach <code>ingest.backfill_queue_cap</code> (default 2000), the backfill pauses, keeping its
+cursor, and picks up on the next sync. The paused state is saved (<code>mail.backfill</code>), so a paused
+backfill stays a backfill. New mail is never held back.</p>
+</section>
+<section id="idempotent-by-content" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Idempotent by content</h2></div>
+<p>Every stage is skipped when its input has not changed.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Stage</th>
+<th>Skipped when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Store</td>
+<td>the message with this provider id already exists with the same bytes</td>
+</tr>
+<tr>
+<td>Parse</td>
+<td>the content hash and the pipeline version match what is indexed</td>
+</tr>
+<tr>
+<td>Embed</td>
+<td>the store already holds a vector for this chunk's <code>content_hash</code> under this model</td>
+</tr>
+<tr>
+<td>Enrich</td>
+<td>a result exists for <code>(content hash, enricher, enricher version, model)</code>; one produced for <em>another message with identical content</em> is copied</td>
+</tr>
+</tbody>
+</table></div>
+<p>So running the same sync again, or <code>reprocess</code>, makes no model calls and costs no tokens.</p>
+</section>
+<section id="when-something-is-down" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>When something is down</h2></div>
+<p>A stage job that fails is retried with exponential backoff (<code>jobs.backoff_base_seconds</code>, doubling,
+with jitter) for <code>ingest.stage_max_attempts</code> attempts (default 8). A job whose worker died is
+reclaimed when its lease (120 s by default) runs out. After the last attempt the job is <strong>parked</strong>:
+it stays in the queue as failed and shows in <code>pipeline_status().parked</code> with the reason, so one
+poison message never blocks the rest. Keyword search works throughout, because indexing never waits
+for a model.</p>
+<p>If the embedder's model differs from the one the store holds, embed jobs report <code>stale</code> and do
+nothing, rather than mixing models. Run <code>reprocess(&quot;embed&quot;)</code> to switch (see below).</p>
+</section>
+<section id="reprocessing" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Reprocessing</h2></div>
+<p><code>Pipeline.reprocess(stage)</code> re-runs one stage over everything, as one low-priority job per stage
+and account (asking twice queues once):</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Stage</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>parse</code></td>
+<td>queues <code>index.rebuild</code></td>
+</tr>
+<tr>
+<td><code>filter</code></td>
+<td>re-runs Sieve over messages whose scripts changed</td>
+</tr>
+<tr>
+<td><code>embed</code></td>
+<td>builds the new model's vectors beside the old ones, then activates it, then drops the old. The old vectors are never removed first, so search keeps working throughout</td>
+</tr>
+<tr>
+<td><code>enrich</code></td>
+<td>re-runs enrichers whose version, model or input changed; the rest are cache hits</td>
+</tr>
+</tbody>
+</table></div>
+</section>
+<section id="token-accounting" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Token accounting</h2></div>
+<p>Every call a stage makes, or avoids, is recorded in <code>ai_usage</code>: stage, model, tokens in and out,
+and whether it was a cache hit. <code>usage_summary(since)</code> adds them up per stage and model and
+reports <strong>tokens saved</strong>: what the cached calls would have cost. Embedding tokens are counted
+from the text sent. Enrichment tokens are <em>estimates</em> from the tokenizer, because the enricher
+contract does not report them.</p>
+<p>Enrichment results live in <code>raw.db</code>, not <code>index.db</code>, because they cost model time and <code>index.db</code>
+can be thrown away and rebuilt.</p>
+</section>
+<section id="the-quarantine-folder" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>The quarantine folder</h2></div>
+<p>Attachments flagged by name or type (executables, scripts, archives that hide them) are written to
+<code>quarantine/</code> inside the data folder by the parse stage:</p>
+<ul>
+<li>The folder is mode 0700 and the files 0600, with no execute bit, named
+<code>&lt;part&gt;_&lt;safe-name&gt;.quarantined</code> so the name cannot escape the folder or mean anything to a shell.</li>
+<li>Core <strong>only writes</strong> there. It never opens, parses, analyses or runs what it wrote.</li>
+<li>Writing is atomic (a temporary <code>.part</code> file, then a rename) and idempotent.</li>
+<li>An attachment over <code>mail.attachments.quarantine_max_bytes</code> (50 MiB) is left in the message, which
+<code>raw.db</code> keeps whole.</li>
+<li>Turn it off with <code>mail.attachments.quarantine = false</code>. Unflagged attachments are never
+extracted.</li>
+</ul>
+<p><code>Quarantine.problems()</code> reports loose permissions from file modes alone.</p>
+</section>
+<section id="plugins-and-events" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>Plugins and events</h2></div>
+<p>Each step publishes an event (<code>MessageIndexed</code>, <code>MessageEmbedded</code>, <code>MessageEnriched</code>,
+<code>AttachmentQuarantined</code>, <code>SyncStarted</code>, <code>SyncProgress</code>, <code>SyncFinished</code>). A plugin can listen with
+<code>ctx.subscribe(EventType, handler)</code>; see <a href="../plugins.html">Plugins</a>. Handlers are read-only, and a
+handler that raises cannot disturb the pipeline.</p>
+<p>The pipeline reaches a vector store only through one small seam (<code>Vectors</code>), so more than one
+store can sit behind it later.</p>
+</section>
+<section id="settings" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>Settings</h2></div>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ai.embedder</code></td>
+<td>empty</td>
+<td>Embedder plugin to use; empty turns embedding off</td>
+</tr>
+<tr>
+<td><code>ingest.embed_batch</code></td>
+<td>32</td>
+<td>Chunks per embedder call</td>
+</tr>
+<tr>
+<td><code>ingest.backfill_queue_cap</code></td>
+<td>2000</td>
+<td>Queued <code>ingest.*</code> jobs at which a backfill pauses</td>
+</tr>
+<tr>
+<td><code>ingest.stage_max_attempts</code></td>
+<td>8</td>
+<td>Attempts before a stage job is parked</td>
+</tr>
+<tr>
+<td><code>ingest.embed_concurrency</code> / <code>enrich_concurrency</code></td>
+<td>1</td>
+<td>Jobs of each stage at once</td>
+</tr>
+<tr>
+<td><code>ingest.throughput_window_seconds</code></td>
+<td>600</td>
+<td>Window for the embedding speed shown in status</td>
+</tr>
+<tr>
+<td><code>mail.attachments.quarantine</code></td>
+<td>true</td>
+<td>Write flagged attachments to the quarantine folder</td>
+</tr>
+<tr>
+<td><code>mail.attachments.quarantine_dir</code></td>
+<td><code>quarantine</code></td>
+<td>Folder, relative to the data folder</td>
+</tr>
+<tr>
+<td><code>mail.attachments.quarantine_max_bytes</code></td>
+<td>50 MiB</td>
+<td>Largest attachment to write</td>
+</tr>
+</tbody>
+</table></div>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js" integrity="sha384-rbtjAdnIQE/aQJGEgXrVUlMibdfTSa4PQju4HDhN3sR2PmaKFzhEafuePsl9H/9I" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

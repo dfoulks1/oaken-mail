@@ -45,6 +45,7 @@
       <a class="doc-link" href="architecture/index.html">The search index</a>
       <a class="doc-link current" href="plugins.html" aria-current="page">Writing a plugin</a>
       <a class="doc-link" href="architecture/vectors.html">The vector store</a>
+      <a class="doc-link" href="architecture/ingest-pipeline.html">The ingest pipeline</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="reference/plugin-contracts.html">Plugin contracts</a>
       <div class="label">Project</div>
@@ -276,6 +277,19 @@ no model and no real mail.</p>
 <p>The host fills in <code>plugin</code> with your plugin's name, so a listener can tell who sent it, and
 <code>publish</code> accepts only <code>PluginEvent</code> subclasses, so a plugin can't forge a core event. Clients that
 stream events (the web UI, an MCP client) receive yours alongside core's.</p>
+<h3 id="listening">Listening</h3>
+<p>A plugin can also listen. <code>ctx.subscribe(event_type, handler)</code> calls <code>handler(event)</code> for every core
+or plugin event of that type (<code>Event</code> for all of them) and returns a function that ends the
+subscription:</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_indexed</span><span class="p">(</span><span class="n">event</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pending</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">message_id</span><span class="p">)</span>  <span class="c1"># queue real work; keep the handler quick</span>
+
+    <span class="n">ctx</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">MessageIndexed</span><span class="p">,</span> <span class="n">on_indexed</span><span class="p">)</span>
+</code></pre></div>
+<p>Events are frozen, so a handler can read but not change what happened, and one that raises is logged
+and skipped without affecting core or other listeners. The host ends every subscription when the
+plugin stops.</p>
 </section>
 <section id="not-sandboxed" class="doc-section"><div class="section-head"><span class="section-num">10</span><h2>Not sandboxed</h2></div>
 <p>Plugins run in the same process as core, with full access to the machine and to whatever core can

@@ -357,7 +357,9 @@ def _decode_text(part: Message, cfg: MailSettings, warnings: list[str]) -> str:
 
 def read_attachment(raw: bytes, part_path: str) -> bytes:
     """The decoded bytes of one attachment, found by its ``part_path``. This is the explicit,
-    on-demand door to attachment content; nothing in ingest calls it. Raises ``NotFound``."""
+    on-demand door to attachment content. The only thing in ingest that calls it is the
+    quarantine step, which writes a flagged attachment to the quarantine folder and never reads
+    it back. Raises ``NotFound``."""
     try:
         part: Message = message_from_bytes(raw, policy=policy.default)
         indexes = [int(p) for p in part_path.split(".")]

@@ -10,14 +10,14 @@ Core is lenient in what it receives from plugins (see ``oaken.plugins.adapt``: d
 tuples are accepted and coerced into these types) and strict about what it hands on.
 """
 
-from collections.abc import AsyncIterator, Collection, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any, Literal, Protocol, runtime_checkable
 
 from oaken.core.clock import Clock
 from oaken.core.errors import PluginError
-from oaken.core.events import EventBus, PluginEvent
+from oaken.core.events import Event, EventBus, PluginEvent
 from oaken.core.settings import Settings
 from oaken.core.untrusted import UntrustedText
 
@@ -87,6 +87,9 @@ class PluginContext:
     log: Any
     config: dict[str, Any] = field(default_factory=dict)
     bus: EventBus | None = None
+    _subscriptions: list[Callable[[], None]] = field(
+        default_factory=list, repr=False, compare=False
+    )
 
     async def publish(self, event: PluginEvent) -> None:
         """Announce a plugin-defined event (a ``PluginEvent`` subclass) on the event bus. Core
@@ -95,6 +98,26 @@ class PluginContext:
             raise PluginError(f"{self.name}: publish() takes a PluginEvent subclass")
         if self.bus is not None:
             await self.bus.publish(replace(event, plugin=self.name))
+
+    def subscribe(
+        self, event_type: type[Event], handler: Callable[[Any], Awaitable[None]]
+    ) -> Callable[[], None]:
+        """Call ``handler(event)`` for every core or plugin event of ``event_type`` (``Event``
+        for all). Read-only: events are frozen, and a handler that raises is logged and skipped
+        without touching core. Subscriptions end when the plugin stops (the host calls
+        ``release``); the returned function ends one earlier. Handlers should be quick: queue
+        real work instead of doing it inline. A context without a bus (tests) has no events."""
+        if self.bus is None:
+            return lambda: None
+        unsubscribe = self.bus.subscribe(event_type, handler)
+        self._subscriptions.append(unsubscribe)
+        return unsubscribe
+
+    def release(self) -> None:
+        """End every subscription this plugin made. Called by the host when the plugin stops."""
+        subs, self._subscriptions[:] = list(self._subscriptions), []
+        for unsubscribe in subs:
+            unsubscribe()
 
 
 @dataclass(frozen=True)

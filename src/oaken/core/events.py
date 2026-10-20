@@ -128,6 +128,15 @@ class MessageEnriched(Event):
 
 
 @dataclass(frozen=True, kw_only=True)
+class AttachmentQuarantined(Event):
+    """Flagged attachments of a message were written to the quarantine folder (never opened)."""
+
+    account_id: AccountId
+    message_id: MessageId
+    count: int
+
+
+@dataclass(frozen=True, kw_only=True)
 class MessageReadChanged(Event):
     account_id: AccountId
     message_id: MessageId

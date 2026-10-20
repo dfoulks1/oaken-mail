@@ -66,6 +66,24 @@ class AISettings(_Section):
         return self
 
 
+class IngestSettings(_Section):
+    """How the ingest pipeline paces itself (prompt 09)."""
+
+    # Chunks sent to the embedder in one call.
+    embed_batch: int = Field(default=32, ge=1, le=1024)
+    # While this many ingest jobs are queued, a backfill sync stops (cursor kept) and tries again
+    # at its next run. New mail is never held back.
+    backfill_queue_cap: int = Field(default=2000, ge=1)
+    # Embedding and enrichment attempts before a message is parked as failed. Higher than
+    # [jobs] max_attempts because a model outage is expected to end.
+    stage_max_attempts: int = Field(default=8, ge=1)
+    # How many of each model-bound job run at once (one local GPU: leave at 1).
+    embed_concurrency: int = Field(default=1, ge=1)
+    enrich_concurrency: int = Field(default=1, ge=1)
+    # Rolling window for the throughput the status ETA uses.
+    throughput_window_seconds: float = Field(default=600.0, gt=0)
+
+
 class JobsSettings(_Section):
     workers: int = Field(default=4, ge=1, le=64)
     lease_seconds: float = Field(default=120.0, gt=0)
@@ -164,6 +182,10 @@ class AttachmentSettings(_Section):
     extra_quarantine_extensions: list[str] = Field(default_factory=list)
     extra_quarantine_types: list[str] = Field(default_factory=list)
     exempt_extensions: list[str] = Field(default_factory=list)  # never quarantined by extension
+    # Flagged attachments are written, never opened, to a folder only the owner can use.
+    quarantine: bool = True
+    quarantine_dir: str = "quarantine"  # relative to the data folder unless absolute
+    quarantine_max_bytes: int = Field(default=50 * 1024 * 1024, ge=0)  # per attachment
 
 
 class SieveSettings(_Section):
@@ -227,6 +249,7 @@ class Settings(BaseSettings):
     storage: StorageSettings = StorageSettings()
     ai: AISettings = AISettings()
     jobs: JobsSettings = JobsSettings()
+    ingest: IngestSettings = IngestSettings()
     swarm: SwarmSettings = SwarmSettings()
     mail: MailSettings = MailSettings()
     index: IndexSettings = IndexSettings()

@@ -134,6 +134,7 @@ BM25 index with no raw bytes. It is **not** migrated. It is backed up and left a
 - **`oaken admin`:** is a CLI command (17).
 - **Plugins may subscribe to core events** (read-only, through the plugin host), so core stays extensible. Settle the contract in prompt 04's follow-up or 09.
 - **Re-enrich:** a separate job from the index rebuild (the index is keyword-only); it belongs to `reprocess("enrich")` in 09.
+- **Chunk text:** stays duplicated in `chunks.text` for now. Storing chunks as offsets into `docs.cleaned_text` is a later prompt (generated with the UI); not 09.
 - **OAuth app mode:** discuss near prompt 11.
 
 ## Report-back checkpoint (end of every prompt)

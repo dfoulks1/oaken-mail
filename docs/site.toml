@@ -67,6 +67,10 @@ id = "architecture/vectors"
 file = "architecture/vectors.md"
 
 [[pages]]
+id = "architecture/ingest-pipeline"
+file = "architecture/ingest-pipeline.md"
+
+[[pages]]
 id = "plugins"
 file = "plugins.md"
 

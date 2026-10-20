@@ -114,4 +114,10 @@ same commit (see `00-context.md`).
 | 08 | Model swap | `oaken vectors reembed MODEL` | `begin_model`, then embed, then `activate_model`; `reembed_plan` gives progress and a time estimate. `drop_model` for the old one needs a confirm. |
 | 08 | Orphan cleanup | `oaken vectors prune` | `prune_orphans()` after a reindex. Local and cheap. |
 | 08 | Several vector stores | `oaken vectors stores`, `oaken vectors split` | List each store with its size, cap, vector count and whether it is active or closed; `split` closes the active one and starts another, whenever the user says. Setting or clearing a cap (`max_mb`) belongs here too. Planned, not built; see the 09 notes. |
+| 09 | `Pipeline.pipeline_status()` | `oaken pipeline status` | Queued, running, done and failed per stage, the embedding speed and a time estimate, whether a backfill is paused, and the parked jobs with their reasons. |
+| 09 | Parked jobs | `oaken pipeline parked [--retry ID\|--all]` | Retrying re-queues a failed stage job. Needs a confirm for `--all`. |
+| 09 | `Pipeline.reprocess(stage)` | `oaken reprocess parse\|filter\|embed\|enrich [--account A]` | One job per stage and account, at backfill priority, with progress. `embed` after an embedder change is how the model swap happens. |
+| 09 | `UsageStore.usage_summary(since)` | `oaken usage [--since DATE] [--json]` | Calls, cached calls, tokens in and out and tokens saved, per stage and model. Enrichment tokens are estimates. |
+| 09 | Quarantine folder | `oaken quarantine list\|stats\|check` | Files and bytes, and `problems()` for loose permissions. Never opens a file; there is no `show`. |
+| 09 | `SyncRunner.sync` | `oaken sync [--account A] [--wait]` | Prints stored, unchanged, deleted, whether a backfill paused and any error. |
 

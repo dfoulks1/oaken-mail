@@ -58,6 +58,7 @@ class _Record:
     healthy: bool = False
     detail: str = ""
     announced: bool | None = None  # the last health state published
+    ctx: PluginContext | None = None
 
 
 @dataclass(frozen=True)
@@ -159,6 +160,7 @@ class PluginHost:
             config=dict(self.settings.plugins.get(rec.name, {})),
             bus=self.bus,
         )
+        rec.ctx = ctx
         try:
             await self._call(rec.instance, "start", ctx)
             rec.started, rec.healthy, rec.detail = True, True, ""
@@ -180,6 +182,8 @@ class PluginHost:
                 except Exception as exc:
                     log.error("plugin failed to stop", kind=rec.kind, name=rec.name, error=str(exc))
                 rec.started = False
+            if rec.ctx is not None:
+                rec.ctx.release()
 
     # -- health ------------------------------------------------------------------------------
     async def check_health(self) -> None:
@@ -292,6 +296,11 @@ class PluginHost:
         """Every healthy enricher, in name order."""
         usable = self._usable("enricher")
         return [cast(Enricher, usable[n].instance) for n in sorted(usable)]
+
+    def named_enrichers(self) -> dict[str, Enricher]:
+        """Every healthy enricher by its entry-point name (the name results are cached under)."""
+        usable = self._usable("enricher")
+        return {n: cast(Enricher, usable[n].instance) for n in sorted(usable)}
 
     def get(self, kind: PluginKind, name: str | None = None) -> Any:
         """The started, healthy plugin of ``kind`` called ``name`` (default: the configured one)."""

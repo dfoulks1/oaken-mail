@@ -192,6 +192,24 @@ The host fills in `plugin` with your plugin's name, so a listener can tell who s
 `publish` accepts only `PluginEvent` subclasses, so a plugin can't forge a core event. Clients that
 stream events (the web UI, an MCP client) receive yours alongside core's.
 
+### Listening
+
+A plugin can also listen. `ctx.subscribe(event_type, handler)` calls `handler(event)` for every core
+or plugin event of that type (`Event` for all of them) and returns a function that ends the
+subscription:
+
+```python
+async def start(self, ctx):
+    async def on_indexed(event):
+        self.pending.append(event.message_id)  # queue real work; keep the handler quick
+
+    ctx.subscribe(MessageIndexed, on_indexed)
+```
+
+Events are frozen, so a handler can read but not change what happened, and one that raises is logged
+and skipped without affecting core or other listeners. The host ends every subscription when the
+plugin stops.
+
 ## Not sandboxed
 
 Plugins run in the same process as core, with full access to the machine and to whatever core can

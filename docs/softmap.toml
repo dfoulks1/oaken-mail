@@ -22,7 +22,7 @@ layers = ["clients"]
 
 [[stacks]]
 id = "core"
-name = "Core daemon (one asyncio process)"
+name = "Oaken daemon (one asyncio process)"
 layers = ["api", "services", "ingest", "runtime", "plugins", "storage", "foundation"]
 
 [[stacks]]
@@ -164,12 +164,40 @@ uses = ["rawstore"]
 id = "ingest"
 name = "Ingest pipeline"
 layer = "ingest"
-status = "planned"
+status = "built"
 prompt = "09"
-summary = "Staged, idempotent, resumable: a message is keyword-searchable first, then embedded and enriched asynchronously."
-uses = ["parsing", "sieve", "jobs", "events", "pluginhost", "rawstore", "index"]
+path = "src/oaken/ingest"
+summary = "Staged, idempotent, resumable: store, then Sieve filter and index (keyword-searchable from here), then embed and enrich asynchronously. Every stage skips work whose content hash it has already done."
+uses = ["parsing", "sieve", "jobs", "events", "pluginhost", "rawstore", "index", "vectorstore"]
 untrusted = true
-notes = ["Planned parse stage is Indexer.index_one (07), run after filtering; call Indexer.follow_filtering() and register_index_jobs() at startup.", "reprocess of the parse stage enqueues index.rebuild."]
+types = [
+  ["Pipeline", "class", "Registers the ingest.parse, .embed, .enrich and .reprocess jobs; embed_message, enrich_message, reprocess, backfill_paused and pipeline_status."],
+  ["SyncRunner", "class", "Pulls from a provider, stores each message, queues parse, saves the cursor only after the batch. A backfill pauses at the queue cap; new mail never does."],
+  ["Backends", "dataclass", "Callables for the embedder, LLM, enrichers and vector store, so plugins can come and go while the pipeline runs."],
+  ["Vectors", "class", "The one seam between core and a vector store. Optional store capabilities (stored_hashes, begin_model, activate_model, drop_model, prune_orphans) are detected, not required."],
+  ["UsageStore", "class", "ai_usage in raw.db: calls, cached calls, tokens in and out, and tokens saved by caching."],
+  ["Quarantine", "class", "Writes flagged attachments to an owner-only folder. Never reads, parses or runs them."],
+  ["PipelineStatus", "frozen dataclass", "Per-stage counts, embedding speed, backfill state and the parked (failed) jobs with reasons."],
+]
+funcs = [
+  ["Pipeline.reprocess(stage) -> job id", "One low-priority job per stage and account; parse queues index.rebuild, embed swaps models without removing the old vectors first."],
+  ["SyncRunner.sync(account, provider) -> SyncResult", "Stored, unchanged, deleted, flag changes, paused and errors. Provider errors are reported, not raised."],
+  ["UsageStore.usage_summary(since) -> list[UsageRow]", "Per stage and model; enrichment tokens are estimates."],
+  ["PluginContext.subscribe(event_type, handler)", "Plugins listen to core and plugin events, read-only; the host ends them when the plugin stops."],
+]
+notes = ["Order is filter first, so discarded or skip_enrich mail never reaches the model stages. Embed runs at priority-1 and enrich at priority-2 of the parse job.", "Failures retry with backoff up to ingest.stage_max_attempts, then are parked and shown in pipeline_status. Keyword search works throughout an outage.", "A changed embedder model leaves embed jobs 'stale' until reprocess('embed'); new mail during a swap is embedded to the building model only.", "Enrichments live in raw.db (they cost model time); index.db stays disposable.", "Several vector stores: only the Vectors seam exists; split and caps are planned (see 08 notes).", "docs.cleaned_text is duplicated with chunks.text for now; pointers are a later prompt."]
+
+[[components]]
+id = "quarantine"
+name = "Attachment quarantine"
+layer = "ingest"
+status = "built"
+prompt = "09"
+path = "src/oaken/ingest/quarantine.py"
+summary = "Flagged attachments are written, never read back, to a 0700 folder as 0600 .quarantined files named so they cannot escape or execute. Over-size attachments stay in the message."
+uses = ["parsing"]
+untrusted = true
+notes = ["The one place attachment bytes leave raw.db without being asked for; the user chose this in 09. Switch off with mail.attachments.quarantine = false.", "problems() checks modes only."]
 
 [[components]]
 id = "parsing"
@@ -451,7 +479,7 @@ funcs = [
   ["rebuild_index(raw, index, ...) -> RebuildResult", "Walk raw.db oldest first and index again. Checkpointed, resumable, prunes deleted messages and publishes IndexRebuildProgress."],
   ["register_index_jobs(runner, indexer)", "Handle the index.rebuild job (one at a time, backfill priority, one per account)."],
 ]
-notes = ["External-content FTS5 (not contentless) so snippet() works; triggers keep it in step with the chunks table.", "index.db records the raw.db store_id and refuses a different store; a lower pipeline_version marks it stale for rebuild.", "Message text never reaches a log, and attachment bytes are never indexed."]
+notes = ["External-content FTS5 (not contentless) so snippet() works; triggers keep it in step with the chunks table.", "index.db records the raw.db store_id and refuses a different store; a lower pipeline_version marks it stale for rebuild.", "Message text never reaches a log, and attachment bytes are never indexed.", "Planned, later prompt (with the UI): chunk text as offsets into docs.cleaned_text instead of a second copy. Deferred: it saves about one copy of the text and costs a join on every FTS rebuild."]
 
 # --- Foundation --------------------------------------------------------------------------
 [[components]]

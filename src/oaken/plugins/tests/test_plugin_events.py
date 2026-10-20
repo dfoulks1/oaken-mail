@@ -7,6 +7,7 @@ from oaken.core.errors import PluginError
 from oaken.core.events import Event, EventBus, MessageStored
 from oaken.core.ids import AccountId, MessageId
 from oaken.plugins import PluginEvent
+from oaken.plugins.contracts import PluginContext
 from oaken.plugins.host import PluginHost
 from oaken.plugins.tests.conftest import Installer
 from oaken.testing.contracts import make_context
@@ -46,6 +47,7 @@ async def test_publish_without_a_bus_is_quietly_dropped() -> None:
 PLUGIN = """
 from dataclasses import dataclass
 from oaken.plugins import PluginEvent
+from oaken.plugins.contracts import PluginContext
 from oaken.plugins.base import BaseEmbedder
 
 @dataclass(frozen=True, kw_only=True)
@@ -80,3 +82,103 @@ async def test_the_host_gives_installed_plugins_the_bus(install_plugin: Installe
             await host.stop()
     assert isinstance(got, PluginEvent) and got.plugin == "chatty"
     assert getattr(got, "note") == "started"  # noqa: B009 (the class lives in the plugin)
+
+
+def with_bus(bus: EventBus | None) -> "PluginContext":
+    ctx = make_context("provider", "listener")
+    return type(ctx)(**{**ctx.__dict__, "bus": bus, "_subscriptions": []})
+
+
+async def test_a_plugin_can_subscribe_to_core_events_and_release_ends_it() -> None:
+    bus = EventBus()
+    ctx = with_bus(bus)
+    seen: list[Event] = []
+
+    async def on_stored(event: MessageStored) -> None:
+        seen.append(event)
+
+    ctx.subscribe(MessageStored, on_stored)
+    stored = MessageStored(ts=ctx.clock.now(), account_id=AccountId("a"), message_id=MessageId("m"))
+    await bus.publish(stored)
+    assert seen == [stored]
+    ctx.release()
+    await bus.publish(stored)
+    assert seen == [stored], "a released subscription must not be called again"
+    ctx.release()  # twice is fine
+
+
+async def test_a_subscription_can_be_ended_early_and_a_failing_handler_is_isolated() -> None:
+    bus = EventBus()
+    ctx = with_bus(bus)
+    calls: list[str] = []
+
+    async def bad(_e: Event) -> None:
+        calls.append("bad")
+        raise RuntimeError("handler bug")
+
+    async def good(_e: Event) -> None:
+        calls.append("good")
+
+    off = ctx.subscribe(Event, bad)
+    ctx.subscribe(Event, good)
+    event = MessageStored(ts=ctx.clock.now(), account_id=AccountId("a"), message_id=MessageId("m"))
+    await bus.publish(event)
+    assert sorted(calls) == ["bad", "good"]
+    off()
+    calls.clear()
+    await bus.publish(event)
+    assert calls == ["good"]
+
+
+async def test_subscribe_without_a_bus_is_a_noop() -> None:
+    ctx = with_bus(None)
+
+    async def never(_e: Event) -> None:
+        raise AssertionError
+
+    ctx.subscribe(Event, never)()
+    ctx.release()
+
+
+SUBSCRIBER = """
+from oaken.core.events import MessageStored
+from oaken.plugins.base import BaseEmbedder
+
+SEEN = []
+
+class Listener(BaseEmbedder):
+    model_id = "listener"
+    dimensions = 2
+
+    async def start(self, ctx):
+        await super().start(ctx)
+        async def on(event):
+            SEEN.append(event.message_id)
+        ctx.subscribe(MessageStored, on)
+
+    async def embed(self, texts):
+        return [[0.0, 0.0] for _ in texts]
+"""
+
+
+async def test_the_host_ends_a_plugins_subscriptions_when_it_stops(
+    install_plugin: Installer,
+) -> None:
+    import sys
+
+    install_plugin("listener_plug", SUBSCRIBER, [("oaken.embedders", "listener", "Listener")])
+    from oaken.core.clock import FakeClock
+    from oaken.core.settings import AISettings, Settings
+
+    bus = EventBus()
+    host = PluginHost(Settings(ai=AISettings(embedder="listener")), FakeClock(), bus)
+    await host.start()
+    seen = sys.modules["listener_plug"].SEEN
+    event = MessageStored(
+        ts=FakeClock().now(), account_id=AccountId("a"), message_id=MessageId("m")
+    )
+    await bus.publish(event)
+    assert seen == ["m"]
+    await host.stop()
+    await bus.publish(event)
+    assert seen == ["m"]

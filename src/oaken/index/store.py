@@ -473,6 +473,14 @@ class IndexStore:
         )
         return [r["message_id"] for r in rows]
 
+    async def get_doc(self, message_id: MessageId) -> sqlite3.Row | None:
+        """The indexed fields enrichment needs: account, subject, sender, cleaned text and hash."""
+        return await self.db.fetchone(
+            "SELECT message_id, account_id, subject, from_addr, from_name, cleaned_text,"
+            " content_hash, thread_key, attachments_json FROM docs WHERE message_id = ?",
+            (message_id,),
+        )
+
     async def chunk_rows(self, message_id: MessageId) -> list[sqlite3.Row]:
         return await self.db.fetchall(
             "SELECT id, ordinal, source, subject, sender, text, token_estimate, content_hash"

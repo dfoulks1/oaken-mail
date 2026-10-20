@@ -264,45 +264,93 @@ class _Row:
 
 
 class InMemoryVectorStore(BaseVectorStore):
-    """Brute-force cosine similarity. Refuses to mix models or dimensions."""
+    """Brute-force cosine similarity. Refuses to mix models or dimensions, and supports the same
+    optional model-swap methods as the sqlite-vec store (``begin_model``, ``activate_model``,
+    ``drop_model``, ``stored_hashes``, ``prune_orphans``), so the pipeline can use them."""
 
     version = "1"
 
     def __init__(self) -> None:
-        self._rows: dict[tuple[str, str], _Row] = {}
+        # (model_id, message_id, chunk_id) -> row
+        self._rows: dict[tuple[str, str, str], _Row] = {}
+        self._models: dict[str, tuple[int, str]] = {}  # model_id -> (dimensions, state)
+        self.upserts: list[int] = []  # items per upsert call, for assertions
 
-    def _held(self) -> tuple[str, int] | None:
-        for row in self._rows.values():
-            return row.item.model_id, row.item.dimensions
+    def _active(self) -> tuple[str, int] | None:
+        for model_id, (dims, state) in self._models.items():
+            if state == "active":
+                return model_id, dims
         return None
 
+    async def begin_model(self, model_id: str, dimensions: int, dtype: str | None = None) -> None:
+        if model_id in self._models:
+            if self._models[model_id][0] != dimensions:
+                raise Conflict(f"{model_id} is already stored with other dimensions")
+            return
+        self._models[model_id] = (dimensions, "active" if not self._models else "building")
+
+    async def activate_model(self, model_id: str) -> None:
+        if model_id not in self._models:
+            raise Conflict(f"unknown model {model_id}")
+        self._models = {
+            m: (d, "active" if m == model_id else "building") for m, (d, _s) in self._models.items()
+        }
+
+    async def drop_model(self, model_id: str) -> int:
+        if self._models.get(model_id, (0, ""))[1] == "active":
+            raise Conflict("cannot drop the active model")
+        self._models.pop(model_id, None)
+        gone = [k for k in self._rows if k[0] == model_id]
+        for k in gone:
+            del self._rows[k]
+        return len(gone)
+
+    async def stored_hashes(self, model_id: str, message_id: str) -> dict[str, str]:
+        return {
+            k[2]: r.item.content_hash
+            for k, r in self._rows.items()
+            if k[0] == model_id and k[1] == message_id
+        }
+
+    async def prune_orphans(self) -> int:
+        return 0
+
     async def upsert(self, items: Sequence[VectorItem]) -> None:
-        held = self._held()
+        self.upserts.append(len(items))
+        new: dict[str, int] = {}
         for item in items:
-            want = held or (item.model_id, item.dimensions)
-            if (item.model_id, item.dimensions) != want:
+            held = self._models.get(item.model_id)
+            if held is None and self._models:
                 raise Conflict(
-                    f"store holds {want[0]} ({want[1]} dims); refusing {item.model_id}"
-                    f" ({item.dimensions} dims). Clear the store before changing model."
+                    f"store holds {sorted(self._models)}; refusing {item.model_id}"
+                    f" ({item.dimensions} dims). Begin the new model first."
                 )
-            held = want
-        for item in items:  # validated first, so a bad batch changes nothing
+            dims = held[0] if held else new.setdefault(item.model_id, item.dimensions)
+            if item.dimensions != dims:
+                raise Conflict(f"{item.model_id} holds {dims} dims; refusing {item.dimensions}")
+        for model_id, dims in new.items():  # validated first, so a bad batch changes nothing
+            self._models[model_id] = (dims, "active")
+        for item in items:
             norm = math.sqrt(sum(x * x for x in item.vector)) or 1.0
-            self._rows[(item.message_id, item.chunk_id)] = _Row(item, norm)
+            self._rows[(item.model_id, item.message_id, item.chunk_id)] = _Row(item, norm)
 
     async def delete(self, message_ids: Sequence[str]) -> None:
         gone = set(message_ids)
-        self._rows = {k: r for k, r in self._rows.items() if k[0] not in gone}
+        self._rows = {k: r for k, r in self._rows.items() if k[1] not in gone}
 
     async def query(
         self, vector: Sequence[float], k: int, filters: dict[str, str] | None = None
     ) -> list[Hit]:
         filters = filters or {}
-        held = self._held()
-        if held and len(vector) != held[1]:
-            raise Conflict(f"query has {len(vector)} dims, the store holds {held[1]}")
-        if held and "model_id" in filters and filters["model_id"] != held[0]:
-            raise Conflict(f"store holds {held[0]}, not {filters['model_id']}")
+        active = self._active()
+        model = filters.get("model_id") or (active[0] if active else None)
+        if model is None:
+            return []
+        dims = self._models[model][0] if model in self._models else None
+        if dims is not None and len(vector) != dims:
+            raise Conflict(f"query has {len(vector)} dims, the store holds {dims}")
+        if "model_id" in filters and model not in self._models:
+            raise Conflict(f"store holds {sorted(self._models)}, not {model}")
         qn = math.sqrt(sum(x * x for x in vector)) or 1.0
         hits = [
             Hit(
@@ -311,12 +359,16 @@ class InMemoryVectorStore(BaseVectorStore):
                 sum(a * b for a, b in zip(vector, r.item.vector, strict=True)) / (qn * r.norm),
                 r.item.model_id,
             )
-            for r in self._rows.values()
-            if "account_id" not in filters or r.item.account_id == filters["account_id"]
+            for key, r in self._rows.items()
+            if key[0] == model
+            and ("account_id" not in filters or r.item.account_id == filters["account_id"])
         ]
         hits.sort(key=lambda h: (-h.score, h.message_id, h.chunk_id))
         return hits[:k]
 
     async def stats(self) -> VectorStats:
-        held = self._held()
-        return VectorStats(len(self._rows), held[0] if held else None, held[1] if held else None)
+        active = self._active()
+        if active is None:
+            return VectorStats(0)
+        count = sum(1 for k in self._rows if k[0] == active[0])
+        return VectorStats(count, active[0], active[1])

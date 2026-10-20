@@ -160,7 +160,7 @@ async def test_vector_store_suite_fails_a_store_that_mixes_models() -> None:
             from oaken.testing.fakes import _Row
 
             for item in items:
-                self._rows[(item.message_id, item.chunk_id)] = _Row(item, 1.0)
+                self._rows[(item.model_id, item.message_id, item.chunk_id)] = _Row(item, 1.0)
 
         async def query(self, vector: Sequence[float], k: int, filters: Any = None) -> Any:
             return []

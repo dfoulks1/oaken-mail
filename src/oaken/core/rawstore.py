@@ -71,6 +71,13 @@ class MessageMeta:
 
 
 @dataclass(frozen=True)
+class PutResult:
+    message_id: MessageId
+    is_new: bool
+    changed: bool
+
+
+@dataclass(frozen=True)
 class Account:
     id: AccountId
     provider: str
@@ -272,6 +279,18 @@ class RawStore:
     ) -> tuple[MessageId, bool]:
         """Store ``raw``. Returns ``(message_id, is_new)``; ``is_new`` is False when the provider
         id was already stored (whether or not its bytes changed)."""
+        res = await self.put(account_id, provider_id, raw, meta)
+        return res.message_id, res.is_new
+
+    async def put(
+        self,
+        account_id: AccountId,
+        provider_id: str,
+        raw: bytes,
+        meta: MessageMeta | None = None,
+    ) -> PutResult:
+        """``put_message`` that also says whether anything changed: ``changed`` is True for a new
+        message, new bytes, or a deleted message that came back, and False for a no-op."""
         meta = meta or MessageMeta()
         size = len(raw)
         to_lfs = size > self.settings.inline_max_bytes
@@ -372,7 +391,7 @@ class RawStore:
                     oversize=oversize,
                 )
             )
-        return message_id, is_new
+        return PutResult(message_id, is_new, changed)
 
     async def get_message(self, message_id: MessageId) -> StoredMessage:
         row = await self.db.fetchone(
@@ -414,6 +433,14 @@ class RawStore:
                 )
                 > 0
             )
+
+    async def message_id_for(self, account_id: AccountId, provider_id: str) -> MessageId | None:
+        """The message with this provider id (deleted or not), or None."""
+        row = await self.db.fetchone(
+            "SELECT id FROM messages WHERE account_id = ? AND provider_id = ?",
+            (account_id, provider_id),
+        )
+        return MessageId(row["id"]) if row else None
 
     async def mark_deleted_by_provider_id(self, account_id: AccountId, provider_id: str) -> bool:
         """Soft delete by the provider's id. False if unknown or already deleted."""
