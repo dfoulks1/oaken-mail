@@ -47,6 +47,14 @@ id = "architecture/swarm"
 file = "architecture/swarm.md"
 
 [[pages]]
+id = "plugins"
+file = "plugins.md"
+
+[[pages]]
+id = "reference/plugin-contracts"
+generated = true
+
+[[pages]]
 id = "architecture/software-map"
 generated = true
 

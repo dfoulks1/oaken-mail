@@ -67,3 +67,7 @@ Enrichers themselves (14), Q&A (15), remote/cloud backends.
 ## Checkpoint
 
 Standard report. Include the exact default model names you propose and why.
+
+**Note from prompt 04:** `core/untrusted.py` already exists with the bare type (immutable, no
+`__str__`, `unwrap()`, no text in `repr`). Add `render(label=...)` and the prompt builder to it;
+the plugin contracts (`LLMRequest.user`, `EnrichInput`) already accept `UntrustedText`.

@@ -70,6 +70,7 @@ in-process and are first-party only.
 | Enricher | Derive summaries, triage, actions, header inspection | Built in |
 | Vector store | Store and search vectors | sqlite-vec |
 
+Plugins are optional-base-class subclasses (or any object with the right members) registered as Python entry points; see [Writing a plugin](../plugins.md).
 The core never imports provider code, and a provider plugin never touches the databases.
 They meet only through the contract: return values and events.
 

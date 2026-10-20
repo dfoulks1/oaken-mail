@@ -78,3 +78,8 @@ must pass.
 
 Standard report. Include the Google Cloud setup steps you documented, and flag anything
 about the first live sync the user must do by hand.
+
+**Note from prompt 04:** write the Gmail provider as a `BaseProvider` subclass (override
+`authenticate`, `pull`, `set_flags`; do not override `send`) and register it in `pyproject.toml`
+under `oaken.providers`. Run `ProviderContract` against it with a recorded or faked Gmail client,
+and read credentials from `ctx`/the keyring, never from `ctx.config`.

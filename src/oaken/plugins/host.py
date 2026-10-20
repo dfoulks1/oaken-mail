@@ -1,0 +1,308 @@
+# SPDX-License-Identifier: Apache-2.0
+"""The plugin host: discover, validate, start, watch and stop plugins.
+
+A plugin that fails anywhere (import, validation, ``start()``, a health check) is recorded as
+unhealthy, logged, announced with ``PluginHealthChanged`` and left out of lookups. Core goes on
+running. A plugin whose ``start()`` failed is tried again at each health tick.
+
+Plugins run in-process with full access and are not sandboxed in v1.
+"""
+
+import asyncio
+import contextlib
+import inspect
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+from importlib.metadata import EntryPoint, entry_points
+from typing import Any, cast
+
+from oaken.core.clock import Clock
+from oaken.core.errors import NotFound, PluginError
+from oaken.core.events import EventBus, PluginHealthChanged
+from oaken.core.logging import get_logger
+from oaken.core.settings import Settings
+from oaken.plugins.contracts import (
+    ENTRY_POINT_GROUPS,
+    PLUGIN_KINDS,
+    Embedder,
+    Enricher,
+    Health,
+    LLMBackend,
+    PluginContext,
+    PluginInfo,
+    PluginKind,
+    Provider,
+    VectorStore,
+)
+from oaken.plugins.validate import check_plugin
+
+log = get_logger("oaken.plugins")
+
+# Sending is a declared capability but unimplemented in v1: the host never routes it.
+SEND_ROUTING_ENABLED = False
+
+Discover = Callable[[str], Iterable[EntryPoint]]
+
+
+def discover_entry_points(group: str) -> Iterable[EntryPoint]:
+    return entry_points(group=group)
+
+
+@dataclass
+class _Record:
+    kind: PluginKind
+    name: str
+    info: PluginInfo | None = None
+    instance: Any = None
+    started: bool = False
+    healthy: bool = False
+    detail: str = ""
+    announced: bool | None = None  # the last health state published
+
+
+@dataclass(frozen=True)
+class PluginStatus:
+    kind: PluginKind
+    name: str
+    version: str
+    capabilities: frozenset[str]
+    started: bool
+    healthy: bool
+    detail: str
+
+
+class PluginHost:
+    def __init__(
+        self,
+        settings: Settings,
+        clock: Clock,
+        bus: EventBus | None = None,
+        *,
+        discover: Discover = discover_entry_points,
+        health_interval: float = 30.0,
+        call_timeout: float = 30.0,
+    ) -> None:
+        self.settings = settings
+        self.clock = clock
+        self.bus = bus
+        self._discover = discover
+        self.health_interval = health_interval
+        self.call_timeout = call_timeout
+        self._records: dict[tuple[PluginKind, str], _Record] = {}
+        self._task: asyncio.Task[None] | None = None
+        self._stop = asyncio.Event()
+
+    # -- lifecycle ---------------------------------------------------------------------------
+    async def load(self) -> None:
+        """Find every installed plugin and validate it. Nothing is started yet."""
+        for kind in PLUGIN_KINDS:
+            for ep in sorted(self._discover(ENTRY_POINT_GROUPS[kind]), key=lambda e: e.name):
+                key = (kind, ep.name)
+                if key in self._records:
+                    log.error("duplicate plugin name ignored", kind=kind, name=ep.name)
+                    continue
+                self._records[key] = self._load_one(kind, ep)
+
+    def _load_one(self, kind: PluginKind, ep: EntryPoint) -> _Record:
+        rec = _Record(kind, ep.name)
+        try:
+            obj = ep.load()
+            rec.instance = self._instantiate(obj)
+            declared = getattr(rec.instance, "name", None)
+            if isinstance(declared, str) and declared and declared != ep.name:
+                log.warning(
+                    "plugin name differs from its entry point; using the entry point",
+                    kind=kind,
+                    entry_point=ep.name,
+                    declared=declared,
+                )
+            info, problems = check_plugin(kind, ep.name, rec.instance)
+            if info is not None and not info.version and ep.dist is not None:
+                info = PluginInfo(
+                    info.name, ep.dist.version, kind, info.capabilities, info.api_version
+                )
+            if problems:
+                raise PluginError("; ".join(problems))
+            rec.info = info
+        except Exception as exc:  # a broken plugin must never take core down
+            rec.instance = None
+            rec.healthy = False
+            rec.detail = f"failed to load: {exc}"
+            log.error("plugin failed to load", kind=kind, name=ep.name, error=str(exc))
+        return rec
+
+    @staticmethod
+    def _instantiate(obj: Any) -> Any:
+        if isinstance(obj, type) or inspect.isfunction(obj):
+            return obj()
+        return obj
+
+    async def start(self) -> None:
+        """Load (if not yet), start every valid plugin, and begin health checks."""
+        if not self._records:
+            await self.load()
+        for rec in self._records.values():
+            if rec.instance is not None:
+                await self._start_one(rec)
+            else:
+                await self._announce(rec)
+        self._stop.clear()
+        self._task = asyncio.create_task(self._health_loop())
+
+    async def _start_one(self, rec: _Record) -> None:
+        ctx = PluginContext(
+            name=rec.name,
+            kind=rec.kind,
+            settings=self.settings,
+            clock=self.clock,
+            log=get_logger(f"oaken.plugin.{rec.kind}.{rec.name}"),
+            config=dict(self.settings.plugins.get(rec.name, {})),
+        )
+        try:
+            await self._call(rec.instance, "start", ctx)
+            rec.started, rec.healthy, rec.detail = True, True, ""
+        except Exception as exc:
+            rec.started, rec.healthy = False, False
+            rec.detail = f"start() failed: {exc}"
+            log.error("plugin failed to start", kind=rec.kind, name=rec.name, error=str(exc))
+        await self._announce(rec)
+
+    async def stop(self) -> None:
+        self._stop.set()
+        task, self._task = self._task, None
+        if task:
+            await task
+        for rec in self._records.values():
+            if rec.started:
+                try:
+                    await self._call(rec.instance, "stop")
+                except Exception as exc:
+                    log.error("plugin failed to stop", kind=rec.kind, name=rec.name, error=str(exc))
+                rec.started = False
+
+    # -- health ------------------------------------------------------------------------------
+    async def check_health(self) -> None:
+        """One health pass: poll started plugins, retry the ones whose start failed."""
+        for rec in list(self._records.values()):
+            if rec.instance is None:
+                continue
+            if not rec.started:
+                await self._start_one(rec)
+                continue
+            try:
+                result = await self._call(rec.instance, "health")
+                health = result if isinstance(result, Health) else Health(True)
+                rec.healthy, rec.detail = health.ok, health.detail
+            except Exception as exc:
+                rec.healthy, rec.detail = False, f"health check failed: {exc}"
+                log.error(
+                    "plugin health check failed", kind=rec.kind, name=rec.name, error=str(exc)
+                )
+            await self._announce(rec)
+
+    async def _health_loop(self) -> None:
+        while not self._stop.is_set():
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(self._stop.wait(), self.health_interval)
+            if not self._stop.is_set():
+                await self.check_health()
+
+    async def _call(self, obj: Any, method: str, *args: Any) -> Any:
+        """Call an optional lifecycle method (a plugin need not define it), with a timeout."""
+        fn = getattr(obj, method, None)
+        if fn is None:
+            return None
+        result = fn(*args)
+        if inspect.isawaitable(result):
+            return await asyncio.wait_for(result, self.call_timeout)
+        return result
+
+    async def _announce(self, rec: _Record) -> None:
+        if rec.announced == rec.healthy:
+            return
+        rec.announced = rec.healthy
+        if self.bus:
+            await self.bus.publish(
+                PluginHealthChanged(
+                    ts=self.clock.now(),
+                    plugin=f"{rec.kind}:{rec.name}",
+                    healthy=rec.healthy,
+                    detail=rec.detail,
+                )
+            )
+
+    # -- lookup ------------------------------------------------------------------------------
+    def statuses(self) -> list[PluginStatus]:
+        return [
+            PluginStatus(
+                kind=r.kind,
+                name=r.name,
+                version=r.info.version if r.info else "",
+                capabilities=r.info.capabilities if r.info else frozenset(),
+                started=r.started,
+                healthy=r.healthy,
+                detail=r.detail,
+            )
+            for r in sorted(self._records.values(), key=lambda r: (r.kind, r.name))
+        ]
+
+    def active_name(self, kind: PluginKind) -> str | None:
+        """The name config selects for ``kind`` (None for enrichers: every one is used)."""
+        s = self.settings
+        return {
+            "provider": s.sync.provider,
+            "embedder": s.ai.embedder,
+            "llm_backend": s.ai.llm_backend,
+            "vector_store": s.ai.vector_store,
+        }.get(kind)
+
+    def _usable(self, kind: PluginKind) -> dict[str, _Record]:
+        return {
+            r.name: r
+            for r in self._records.values()
+            if r.kind == kind and r.started and r.healthy and r.instance is not None
+        }
+
+    def _get(self, kind: PluginKind, name: str | None) -> Any:
+        name = name or self.active_name(kind)
+        if name is None:
+            raise PluginError(f"give the name of the {kind} to use")
+        rec = self._records.get((kind, name))
+        if rec is None:
+            known = ", ".join(sorted(n for k, n in self._records if k == kind)) or "none installed"
+            raise NotFound(f"no {kind} named {name!r} (found: {known})")
+        if not (rec.started and rec.healthy):
+            raise PluginError(f"{kind} {name!r} is unhealthy: {rec.detail or 'not started'}")
+        return rec.instance
+
+    def provider(self, name: str | None = None) -> Provider:
+        return cast(Provider, self._get("provider", name))
+
+    def embedder(self, name: str | None = None) -> Embedder:
+        return cast(Embedder, self._get("embedder", name))
+
+    def llm_backend(self, name: str | None = None) -> LLMBackend:
+        return cast(LLMBackend, self._get("llm_backend", name))
+
+    def vector_store(self, name: str | None = None) -> VectorStore:
+        return cast(VectorStore, self._get("vector_store", name))
+
+    def enrichers(self) -> list[Enricher]:
+        """Every healthy enricher, in name order."""
+        usable = self._usable("enricher")
+        return [cast(Enricher, usable[n].instance) for n in sorted(usable)]
+
+    def get(self, kind: PluginKind, name: str | None = None) -> Any:
+        """The started, healthy plugin of ``kind`` called ``name`` (default: the configured one)."""
+        return self._get(kind, name)
+
+    def providers_with(self, capability: str) -> list[Provider]:
+        """Healthy providers that implement ``capability``. Sending is never routed (v1)."""
+        if capability == "send" and not SEND_ROUTING_ENABLED:
+            return []
+        usable = self._usable("provider")
+        return [
+            cast(Provider, usable[n].instance)
+            for n in sorted(usable)
+            if (info := usable[n].info) and capability in info.capabilities
+        ]

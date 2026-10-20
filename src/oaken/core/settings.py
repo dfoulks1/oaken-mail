@@ -6,7 +6,7 @@ are an error, in the file and in code. No secrets live here: tokens belong in th
 """
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from pydantic_settings import (
@@ -100,6 +100,8 @@ class Settings(BaseSettings):
     sync: SyncSettings = SyncSettings()
     api: APISettings = APISettings()
     log: LogSettings = LogSettings()
+    # Free-form, per plugin: [plugins.gmail] ... reaches that plugin as ``ctx.config``.
+    plugins: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
     @classmethod
     def settings_customise_sources(

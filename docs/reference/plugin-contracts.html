@@ -1,0 +1,699 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plugin contracts · Oaken Mail</title>
+<meta name="description" content="Every plugin contract: Protocol methods, data types, capabilities and base classes.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Plugin contracts · Oaken Mail">
+<meta property="og:description" content="Every plugin contract: Protocol methods, data types, capabilities and base classes.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="../assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">Plugin contracts</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="../architecture/overview.html">Architecture overview</a>
+      <a class="doc-link" href="../architecture/jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="../architecture/software-map.html">Software map</a>
+      <a class="doc-link" href="../architecture/swarm.html">The swarm</a>
+      <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <div class="label">Reference</div>
+      <a class="doc-link current" href="plugin-contracts.html" aria-current="page">Plugin contracts</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#kinds-entry-points-and-capabilities"><span class="num">1</span>Kinds, entry points and capabilities</a>
+      <a class="nav-link" href="#data-types"><span class="num">2</span>Data types</a>
+      <a class="nav-link" href="#protocols"><span class="num">3</span>Protocols</a>
+      <a class="nav-link" href="#base-classes"><span class="num">4</span>Base classes</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-secondary">Generated</span></div>
+    <h1 class="display-6">Plugin contracts</h1>
+    <p class="lead">The signatures, data types and capabilities of the five plugin kinds, generated from the code.</p>
+  </header>
+<p>This page is generated from <code>src/oaken/plugins/contracts.py</code> and
+<code>src/oaken/plugins/base.py</code>, so it always matches the code. For a walkthrough, see
+<a href="../plugins.html">Writing a plugin</a>.</p>
+<p>The plugin API version is <strong>1</strong>. A plugin whose <code>api_version</code> differs is rejected at load.</p>
+
+<section id="kinds-entry-points-and-capabilities" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>Kinds, entry points and capabilities</h2></div>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Kind</th>
+<th>Entry-point group</th>
+<th>Capabilities (and the method each needs)</th>
+<th>Required members</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>provider</code></td>
+<td><code>oaken.providers</code></td>
+<td><code>auth</code> (authenticate()), <code>sync.pull</code> (pull()), <code>flags.write</code> (set_flags()), <code>send</code> (send())</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>embedder</code></td>
+<td><code>oaken.embedders</code></td>
+<td>none</td>
+<td><code>model_id</code>, <code>dimensions</code>, <code>embed</code></td>
+</tr>
+<tr>
+<td><code>llm_backend</code></td>
+<td><code>oaken.llm_backends</code></td>
+<td>none</td>
+<td><code>model_id</code>, <code>context_window</code>, <code>generate</code></td>
+</tr>
+<tr>
+<td><code>enricher</code></td>
+<td><code>oaken.enrichers</code></td>
+<td>none</td>
+<td><code>version</code>, <code>needs_llm</code>, <code>enrich</code></td>
+</tr>
+<tr>
+<td><code>vector_store</code></td>
+<td><code>oaken.vector_stores</code></td>
+<td>none</td>
+<td><code>upsert</code>, <code>delete</code>, <code>query</code>, <code>stats</code></td>
+</tr>
+</tbody>
+</table></div>
+</section>
+<section id="data-types" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Data types</h2></div>
+<p>Frozen dataclasses of plain data. These cross the boundary.</p>
+<h3 id="plugininfo"><code>PluginInfo</code></h3>
+<p>What the host knows about a loaded plugin.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>version</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>kind</code></td>
+<td><code>PluginKind</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>capabilities</code></td>
+<td><code>frozenset[str]</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>api_version</code></td>
+<td><code>int</code></td>
+<td><code>required</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="plugincontext"><code>PluginContext</code></h3>
+<p>Handed to <code>start()</code>. <code>config</code> is the plugin's own <code>[plugins.&lt;name&gt;]</code> table.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>kind</code></td>
+<td><code>PluginKind</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>settings</code></td>
+<td><code>Settings</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>clock</code></td>
+<td><code>Clock</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>log</code></td>
+<td><code>Any</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>config</code></td>
+<td><code>dict[str, Any]</code></td>
+<td><code>empty</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="health"><code>Health</code></h3>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ok</code></td>
+<td><code>bool</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>detail</code></td>
+<td><code>str</code></td>
+<td><code>''</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="rawmessage"><code>RawMessage</code></h3>
+<p>One message exactly as the server holds it.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>provider_id</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>raw_bytes</code></td>
+<td><code>bytes</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>provider_labels</code></td>
+<td><code>tuple[str, ...]</code></td>
+<td><code>()</code></td>
+</tr>
+<tr>
+<td><code>provider_flags</code></td>
+<td><code>frozenset[str]</code></td>
+<td><code>frozenset()</code></td>
+</tr>
+<tr>
+<td><code>internal_date</code></td>
+<td><code>datetime | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="flagchange"><code>FlagChange</code></h3>
+<p>A flag change made on the server side (for example, read on another device).</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>provider_id</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>add</code></td>
+<td><code>frozenset[str]</code></td>
+<td><code>frozenset()</code></td>
+</tr>
+<tr>
+<td><code>remove</code></td>
+<td><code>frozenset[str]</code></td>
+<td><code>frozenset()</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="pullbatch"><code>PullBatch</code></h3>
+<p>One page of changes. <code>next_cursor</code> is opaque: core stores it and hands it back.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>messages</code></td>
+<td><code>tuple[RawMessage, ...]</code></td>
+<td><code>()</code></td>
+</tr>
+<tr>
+<td><code>deleted_provider_ids</code></td>
+<td><code>tuple[str, ...]</code></td>
+<td><code>()</code></td>
+</tr>
+<tr>
+<td><code>flag_changes</code></td>
+<td><code>tuple[FlagChange, ...]</code></td>
+<td><code>()</code></td>
+</tr>
+<tr>
+<td><code>next_cursor</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="llmrequest"><code>LLMRequest</code></h3>
+<p><code>system</code> is a static instruction. Mail content only ever appears in <code>user</code>, as <code>UntrustedText</code> (plain <code>str</code> parts are for the application's own words).</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>system</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>user</code></td>
+<td><code>tuple[str | UntrustedText, ...]</code></td>
+<td><code>()</code></td>
+</tr>
+<tr>
+<td><code>json_schema</code></td>
+<td><code>dict[str, Any] | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>max_output_tokens</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>temperature</code></td>
+<td><code>float</code></td>
+<td><code>0.0</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="llmresponse"><code>LLMResponse</code></h3>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>text</code></td>
+<td><code>str</code></td>
+<td><code>''</code></td>
+</tr>
+<tr>
+<td><code>data</code></td>
+<td><code>dict[str, Any] | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>input_tokens</code></td>
+<td><code>int</code></td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td><code>output_tokens</code></td>
+<td><code>int</code></td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td><code>model_id</code></td>
+<td><code>str</code></td>
+<td><code>''</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="enrichinput"><code>EnrichInput</code></h3>
+<p>A cleaned message. Everything derived from the mail is <code>UntrustedText</code>.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>message_id</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>account_id</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>subject</code></td>
+<td><code>UntrustedText</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>body</code></td>
+<td><code>UntrustedText</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>headers</code></td>
+<td><code>dict[str, UntrustedText]</code></td>
+<td><code>empty</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="enrichoutput"><code>EnrichOutput</code></h3>
+<p>A JSON-serializable result, which must match the enricher's <code>output_schema</code>.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>data</code></td>
+<td><code>dict[str, Any]</code></td>
+<td><code>required</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="vectoritem"><code>VectorItem</code></h3>
+<p>One vector. The model and dimensions are recorded per vector; a store never mixes them.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>message_id</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>chunk_id</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>vector</code></td>
+<td><code>tuple[float, ...]</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>model_id</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>account_id</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="hit"><code>Hit</code></h3>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>message_id</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>chunk_id</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>score</code></td>
+<td><code>float</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>model_id</code></td>
+<td><code>str</code></td>
+<td><code>''</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="vectorstats"><code>VectorStats</code></h3>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>count</code></td>
+<td><code>int</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>model_id</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>dimensions</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+</section>
+<section id="protocols" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Protocols</h2></div>
+<p>A plugin satisfies a contract by having these members.</p>
+<h3 id="plugin"><code>Plugin</code></h3>
+<p>Lifecycle, shared by every kind. All three are optional for a plugin to define.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">PluginContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+<p>Acquire resources. Raising marks the plugin unhealthy; core carries on.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+<p>Release resources. Called once at shutdown.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">health</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Health</span>
+</code></pre></div>
+<p>A cheap liveness check, polled periodically by the host.</p>
+<h3 id="provider"><code>Provider</code></h3>
+<p>A mail source. Capabilities: <code>auth</code>, <code>sync.pull</code>, <code>flags.write</code>, <code>send</code>.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">authenticate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">PluginContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+<p>Make sure the plugin can talk to the service (capability <code>auth</code>).</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">def</span><span class="w"> </span><span class="nf">pull</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cursor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AsyncIterator</span><span class="p">[</span><span class="n">PullBatch</span><span class="p">]</span>
+</code></pre></div>
+<p>Yield batches of changes since <code>cursor</code> (None: from the start). Capability <code>sync.pull</code>. Re-pulling from the last cursor returns nothing new.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">set_flags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">provider_ids</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">add</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">remove</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+<p>Write flags back to the server (capability <code>flags.write</code>).</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">send</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw_bytes</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+</code></pre></div>
+<p>Send a message and return its provider id. Declared for the future; unimplemented in v1, and the host never routes sending to a plugin (capability <code>send</code>).</p>
+<h3 id="embedder"><code>Embedder</code></h3>
+<p>Turns text into vectors.</p>
+<p>Attributes:</p>
+<ul>
+<li><code>model_id: str</code></li>
+<li><code>dimensions: int</code></li>
+<li><code>max_input_tokens: int</code></li>
+</ul>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">embed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">texts</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]]</span>
+</code></pre></div>
+<p>One vector of <code>dimensions</code> floats per text, in order.</p>
+<h3 id="llmbackend"><code>LLMBackend</code></h3>
+<p>Runs a language model.</p>
+<p>Attributes:</p>
+<ul>
+<li><code>model_id: str</code></li>
+<li><code>context_window: int</code></li>
+</ul>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">generate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">LLMRequest</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LLMResponse</span>
+</code></pre></div>
+<p>Answer <code>request</code>. With a <code>json_schema</code>, <code>data</code> carries the parsed result.</p>
+<h3 id="enricher"><code>Enricher</code></h3>
+<p>Derives something from one message. <code>version</code> is part of the cache key: bump it when the output could change.</p>
+<p>Attributes:</p>
+<ul>
+<li><code>version: str</code></li>
+<li><code>needs_llm: bool</code></li>
+<li><code>output_schema: dict[str, Any]</code></li>
+</ul>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">enrich</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span> <span class="n">EnrichInput</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EnrichOutput</span>
+</code></pre></div>
+<p>Derive this enricher's result for <code>msg</code>.</p>
+<h3 id="vectorstore"><code>VectorStore</code></h3>
+<p>Stores vectors and finds the nearest ones.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">upsert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">items</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">VectorItem</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+<p>Insert or replace by (message_id, chunk_id). Raises if an item's model or dimensions differ from what the store already holds, leaving the store unchanged.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message_ids</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+<p>Remove every vector of these messages.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vector</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">k</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">filters</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Hit</span><span class="p">]</span>
+</code></pre></div>
+<p>The <code>k</code> nearest, best first. <code>filters</code> may name <code>account_id</code> and <code>model_id</code>. Raises if <code>vector</code> does not match the stored dimensions.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">stats</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">VectorStats</span>
+</code></pre></div>
+<p>How many vectors, and which model and dimensions they use.</p>
+</section>
+<section id="base-classes" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Base classes</h2></div>
+<p>Optional. They supply defaults so a plugin overrides only what it does.</p>
+<h3 id="baseprovider"><code>BaseProvider</code></h3>
+<p>Override <code>pull</code> at least. Add <code>authenticate</code> and <code>set_flags</code> as the service allows. Capabilities come from what you override (<code>pull</code> is <code>sync.pull</code>, <code>set_flags</code> is <code>flags.write</code>). To state them yourself, set <code>capabilities = frozenset({...})</code>; the host rejects a capability whose method you did not write.</p>
+<p>Set:</p>
+<ul>
+<li><code>kind: ClassVar[PluginKind] = 'provider'</code></li>
+</ul>
+<p>Override:</p>
+<ul>
+<li><code>async def authenticate(self, ctx: PluginContext) -&gt; None</code></li>
+<li><code>def pull(self, cursor: str | None) -&gt; AsyncIterator[PullBatch]</code></li>
+<li><code>async def set_flags(self, provider_ids: Sequence[str], add: Collection[str], remove: Collection[str]) -&gt; None</code></li>
+<li><code>async def send(self, raw_bytes: bytes) -&gt; str</code></li>
+</ul>
+<h3 id="baseembedder"><code>BaseEmbedder</code></h3>
+<p>Set:</p>
+<ul>
+<li><code>kind: ClassVar[PluginKind] = 'embedder'</code></li>
+<li><code>model_id: str = ''</code></li>
+<li><code>dimensions: int = 0</code></li>
+<li><code>max_input_tokens: int = 8192</code></li>
+</ul>
+<p>Override:</p>
+<ul>
+<li><code>async def embed(self, texts: Sequence[str]) -&gt; list[list[float]]</code></li>
+</ul>
+<h3 id="basellmbackend"><code>BaseLLMBackend</code></h3>
+<p>Set:</p>
+<ul>
+<li><code>kind: ClassVar[PluginKind] = 'llm_backend'</code></li>
+<li><code>model_id: str = ''</code></li>
+<li><code>context_window: int = 0</code></li>
+</ul>
+<p>Override:</p>
+<ul>
+<li><code>async def generate(self, request: LLMRequest) -&gt; LLMResponse</code></li>
+</ul>
+<h3 id="baseenricher"><code>BaseEnricher</code></h3>
+<p>Set <code>version</code> and, ideally, <code>output_model</code> (a pydantic model): the host then checks the result against it and publishes its JSON schema. Override <code>enrich</code>.</p>
+<p>Set:</p>
+<ul>
+<li><code>kind: ClassVar[PluginKind] = 'enricher'</code></li>
+<li><code>version: ClassVar[str] = '1'</code></li>
+<li><code>needs_llm: bool = False</code></li>
+<li><code>output_model: ClassVar[type[BaseModel] | None] = None</code></li>
+</ul>
+<p>Override:</p>
+<ul>
+<li><code>async def enrich(self, msg: EnrichInput) -&gt; EnrichOutput</code></li>
+</ul>
+<h3 id="basevectorstore"><code>BaseVectorStore</code></h3>
+<p>Set:</p>
+<ul>
+<li><code>kind: ClassVar[PluginKind] = 'vector_store'</code></li>
+</ul>
+<p>Override:</p>
+<ul>
+<li><code>async def upsert(self, items: Sequence[VectorItem]) -&gt; None</code></li>
+<li><code>async def delete(self, message_ids: Sequence[str]) -&gt; None</code></li>
+<li><code>async def query(self, vector: Sequence[float], k: int, filters: dict[str, str] | None=None) -&gt; list[Hit]</code></li>
+<li><code>async def stats(self) -&gt; VectorStats</code></li>
+</ul>
+<h3 id="the-enricher-decorator">The <code>@enricher</code> decorator</h3>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">def</span><span class="w"> </span><span class="nf">enricher</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">version</span><span class="p">:</span> <span class="nb">str</span><span class="o">=</span><span class="s1">'1'</span><span class="p">,</span> <span class="n">needs_llm</span><span class="p">:</span> <span class="nb">bool</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Callable</span><span class="p">[[</span><span class="n">EnrichInput</span><span class="p">],</span> <span class="n">Awaitable</span><span class="p">[</span><span class="nb">object</span><span class="p">]]],</span> <span class="nb">type</span><span class="p">[</span><span class="n">BaseEnricher</span><span class="p">]]</span>
+</code></pre></div>
+<p>Turn one async function into an enricher class, ready to register as an entry point: class Result(BaseModel): words: int @enricher(&quot;word-count&quot;, output=Result) async def word_count(msg: EnrichInput) -&gt; Result: return Result(words=len(msg.body.unwrap().split())) The function may return the model, a dict or an <code>EnrichOutput</code>; the host coerces it.</p>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

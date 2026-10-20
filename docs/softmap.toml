@@ -262,11 +262,22 @@ funcs = [
 id = "pluginhost"
 name = "Plugin host"
 layer = "runtime"
-status = "planned"
+status = "built"
 prompt = "04"
-summary = "Entry-point discovery, lifecycle, capabilities and health for the five plugin contracts, plus the fakes used in tests."
+path = "src/oaken/plugins/host.py"
+summary = "Entry-point discovery, validation, lifecycle, capabilities and health for the five plugin contracts. Fakes and reusable contract suites live in oaken.testing."
 uses = ["events", "provider", "embedder", "llm", "enrichers", "vectorstore"]
-notes = ["Core never imports provider code; a plugin never touches the databases."]
+types = [
+  ["PluginHost", "class", "Loads, starts, health-checks and stops plugins; looks them up by kind and name."],
+  ["PluginInfo", "frozen dataclass", "Name, version, kind, capabilities and api_version of a loaded plugin."],
+  ["BaseProvider, BaseEmbedder, ...", "classes", "Optional base classes with defaults; capabilities are inferred from the methods overridden."],
+]
+funcs = [
+  ["PluginHost.providers_with(capability)", "Healthy providers that implement a capability. Sending is never routed."],
+  ["adapt.to_batch(obj, who)", "Accept a dict, list or dataclass from a plugin and return the strict type, or a readable PluginError."],
+  ["verify_provider(make, ids)", "Run the whole provider contract suite in one call (one verify_* per kind)."],
+]
+notes = ["Core never imports provider code; a plugin never touches the databases.", "Plugins run in-process and are not sandboxed in v1."]
 
 # --- Plugins -----------------------------------------------------------------------------
 [[components]]

@@ -39,6 +39,9 @@
       <a class="doc-link" href="jobs.html">Events, jobs and the scheduler</a>
       <a class="doc-link" href="software-map.html">Software map</a>
       <a class="doc-link" href="swarm.html">The swarm</a>
+      <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
       <div class="label">Project</div>
       <a class="doc-link" href="../contributing.html">Contributing</a>
       <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
@@ -175,7 +178,8 @@ in-process and are first-party only.</p>
 </tr>
 </tbody>
 </table></div>
-<p>The core never imports provider code, and a provider plugin never touches the databases.
+<p>Plugins are optional-base-class subclasses (or any object with the right members) registered as Python entry points; see <a href="../plugins.html">Writing a plugin</a>.
+The core never imports provider code, and a provider plugin never touches the databases.
 They meet only through the contract: return values and events.</p>
 </section>
 <section id="principles" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Principles</h2></div>

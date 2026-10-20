@@ -67,3 +67,8 @@ Draft replies, auto-labeling, contact memory, attachment text analysis (later ph
 
 Standard report. Include the prompt templates (text) for the three LLM enrichers so
 the user can review them.
+
+**Note from prompt 04:** `enrich(msg)` takes no model argument, so an enricher with
+`needs_llm = True` has no way to reach the LLM yet. Decide here how it gets one (suggested: the
+host passes the configured backend through `PluginContext` at `start()`, and enrichers call it only
+through `generate_cached()`). Use `BaseEnricher` / `@enricher`, and run `EnricherContract`.
