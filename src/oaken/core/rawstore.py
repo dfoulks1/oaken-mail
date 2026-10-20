@@ -21,7 +21,7 @@ import os
 import re
 import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -431,10 +431,13 @@ class RawStore:
         *,
         since: datetime | None = None,
         include_deleted: bool = False,
+        after_id: MessageId | None = None,
     ) -> AsyncIterator[StoredMessage]:
-        """Messages first seen after ``since`` (all if None), oldest first, in pages."""
+        """Messages first seen at or after ``since`` (all if None), oldest first, in pages. With
+        ``after_id`` the walk resumes strictly after that message among those first seen at the
+        same instant (a checkpoint is ``(first_seen_at, id)``)."""
         after_ts = fmt_ts(_aware(since)) if since else ""
-        after_id = ""
+        after_id = after_id or MessageId("")
         while True:
             rows = await self.db.fetchall(
                 _ITER_SQL_ALL if include_deleted else _ITER_SQL_LIVE,
@@ -445,6 +448,28 @@ class RawStore:
             if len(rows) < PAGE:
                 return
             after_ts, after_id = rows[-1]["first_seen_at"], rows[-1]["id"]
+
+    async def count_messages(self, account_id: AccountId, *, since: datetime | None = None) -> int:
+        """Live messages of an account (first seen at or after ``since``, if given)."""
+        row = await self.db.fetchone(
+            "SELECT COUNT(*) AS n FROM messages WHERE account_id = ? AND deleted_at IS NULL"
+            " AND first_seen_at >= ?",
+            (account_id, fmt_ts(_aware(since)) if since else ""),
+        )
+        return int(row["n"]) if row else 0
+
+    async def live_message_ids(self, ids: Sequence[str]) -> set[str]:
+        """Which of ``ids`` are messages that exist and are not deleted (for pruning an index)."""
+        found: set[str] = set()
+        for i in range(0, len(ids), 500):
+            part = list(ids[i : i + 500])
+            marks = ",".join("?" * len(part))
+            rows = await self.db.fetchall(
+                f"SELECT id FROM messages WHERE deleted_at IS NULL AND id IN ({marks})",  # noqa: S608 (placeholders only)
+                part,
+            )
+            found.update(r["id"] for r in rows)
+        return found
 
     # -- sync cursors -----------------------------------------------------------------------
     async def get_cursor(self, account_id: AccountId, scope: str) -> str | None:
@@ -466,6 +491,14 @@ class RawStore:
             )
 
     # -- housekeeping -----------------------------------------------------------------------
+    async def store_id(self) -> str:
+        """The random id of this raw store (migration 0006). A derived index records it so it is
+        never attached to a different store."""
+        row = await self.db.fetchone("SELECT value FROM raw_meta WHERE key = 'store_id'")
+        if row is None:
+            raise StorageError("raw.db has no store id; run the migrations")
+        return str(row["value"])
+
     async def stats(self) -> StoreStats:
         row = await self.db.fetchone(
             "SELECT (SELECT COUNT(*) FROM accounts) AS accounts,"

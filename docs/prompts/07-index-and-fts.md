@@ -77,3 +77,20 @@ and the label list on `docs`, refresh them on `MessageFiltered`, and make `keywo
 `label` and `disposition` (exclude `discarded` unless asked). A discarded message is hidden, not
 deleted, so it must still be rebuildable and findable on request. A message flagged `skip_enrich`
 (`kind = 'analysis'`) is still indexed for keywords; only embedding and enrichment skip it.
+
+## Decisions made when building (agreed with the user before the build)
+
+- **FTS5 is external-content, not contentless-delete.** The first idea was contentless-delete, but a
+  contentless table cannot produce `snippet()` or `highlight()`, and the requirements ask for
+  highlighted snippets. `chunks` therefore carries `subject`, `sender` and `text` columns (the
+  separate context fields the requirements want) and the FTS table reads from it, kept in step by
+  triggers. The cost is the subject and sender repeated on each chunk row of one message.
+- **Raw store identity:** `raw.db` migration `0006` adds `raw_meta` with a random `store_id`;
+  `RawStore.store_id()` reads it. `index_meta` records it and an index from another store is refused.
+- **Chunk settings** are `ai.chunk_tokens` (256) and `ai.chunk_overlap` (32); **index settings** are
+  `index.subject_join_days` (30), `max_query_chars` and `max_query_terms`.
+- **`rebuild_index` is a plain async function** that a registered job handler calls, so prompt 09 can
+  call it without the queue.
+- **`from:` matches the sender's name or address.**
+- **Only the CLI audit table in `17-cli-client.md` was extended** for the operator commands this
+  prompt implies (rebuild, status, integrity check); the commands themselves are decided in 17.

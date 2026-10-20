@@ -54,6 +54,16 @@ class AISettings(_Section):
     llm_backend: str = "ollama"
     llm_model: str = "qwen3:8b"  # a starting point; set a larger model for better analysis
     vector_store: str = "sqlite-vec"
+    # Chunking (prompt 07): the target size of a chunk and how much of the previous one a chunk
+    # repeats, both in tokens as the configured tokenizer counts them.
+    chunk_tokens: int = Field(default=256, ge=16, le=8192)
+    chunk_overlap: int = Field(default=32, ge=0)
+
+    @model_validator(mode="after")
+    def _overlap_is_smaller(self) -> "AISettings":
+        if self.chunk_overlap * 2 > self.chunk_tokens:
+            raise ValueError("chunk_overlap cannot be more than half of chunk_tokens")
+        return self
 
 
 class JobsSettings(_Section):
@@ -182,6 +192,16 @@ class MailSettings(_Section):
     max_text_chars: int = Field(default=2_000_000, ge=1000)
 
 
+class IndexSettings(_Section):
+    """The derived search index (``index.db``)."""
+
+    # A reply that names no parent joins the thread of an earlier message with the same subject,
+    # but only if that message is this recent, so a recurring subject does not merge across months.
+    subject_join_days: int = Field(default=30, ge=0, le=3650)
+    max_query_chars: int = Field(default=1000, ge=10, le=100_000)
+    max_query_terms: int = Field(default=32, ge=1, le=256)
+
+
 class SyncSettings(_Section):
     provider: str = "gmail"
     interval_seconds: int = Field(default=300, ge=1)
@@ -209,6 +229,7 @@ class Settings(BaseSettings):
     jobs: JobsSettings = JobsSettings()
     swarm: SwarmSettings = SwarmSettings()
     mail: MailSettings = MailSettings()
+    index: IndexSettings = IndexSettings()
     sync: SyncSettings = SyncSettings()
     api: APISettings = APISettings()
     log: LogSettings = LogSettings()

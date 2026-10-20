@@ -42,6 +42,7 @@
       <a class="doc-link current" href="storage.html" aria-current="page">Raw storage</a>
       <a class="doc-link" href="parsing.html">Parsing and cleaning</a>
       <a class="doc-link" href="sieve.html">Sieve filtering</a>
+      <a class="doc-link" href="index.html">The search index</a>
       <a class="doc-link" href="../plugins.html">Writing a plugin</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
@@ -105,6 +106,10 @@ backed up everything.</p>
 <tr>
 <td><code>message_attrs</code></td>
 <td>Organization: a disposition, labels, flags, suppressed intents and analysis markers, set by Sieve scripts (see <a href="sieve.html">Sieve filtering</a>) and later by the user.</td>
+</tr>
+<tr>
+<td><code>raw_meta</code></td>
+<td>Facts about this store. <code>store_id</code> is a random id made once; <code>index.db</code> records it and refuses to open against a different <code>raw.db</code>.</td>
 </tr>
 <tr>
 <td><code>message_filters</code></td>

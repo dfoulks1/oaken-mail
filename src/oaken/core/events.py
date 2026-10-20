@@ -101,6 +101,19 @@ class MessageIndexed(Event):
 
 
 @dataclass(frozen=True, kw_only=True)
+class IndexRebuildProgress(Event):
+    """A rebuild of ``index.db`` is under way. ``total`` is the live messages in scope when it
+    started; ``done`` counts the ones looked at (changed or not). ``finished`` is the last event."""
+
+    account_id: AccountId
+    done: int
+    total: int
+    indexed: int
+    failed: int
+    finished: bool = False
+
+
+@dataclass(frozen=True, kw_only=True)
 class MessageEmbedded(Event):
     account_id: AccountId
     message_id: MessageId

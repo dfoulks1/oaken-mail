@@ -75,3 +75,39 @@ to the OS keyring (the store refuses secret-looking keys).
 
 Add `oaken sieve check FILE` (`compile_script`), `oaken sieve test FILE --message ID|--eml PATH`
 (`run`, showing each effect and its `script:line`), and `oaken sieve refilter` (a job).
+
+## CLI audit (kept up to date by every prompt, so 17 needs no audit of its own)
+
+Everything an operator would want to run, collected from each prompt as it was built. **None of it
+is decided**: each row is a question for the user when we get here. "Op" means it should be a
+registry operation first (the CLI only calls it); "local" means it has to work with core stopped,
+because it repairs or inspects files core would hold open. Each new prompt adds its own rows in the
+same commit (see `00-context.md`).
+
+| From | Capability (what is built) | Candidate command | Notes for the discussion |
+|---|---|---|---|
+| 02 | Settings with precedence and a source for each value | `oaken config show\|path\|check` | Show the effective value and where it came from. Never print secrets (there are none in settings). `check` validates a `config.toml` without starting anything. Local. |
+| 02 | Platform paths, `OAKEN_HOME` | `oaken paths` | Where data, config and the runtime file are. Local. |
+| 02 | Migrations with checksums, refuse a newer database | `oaken db status\|check` | Schema version of `raw.db` and `index.db`, file sizes and modes (0600), `PRAGMA integrity_check`. Local. A `db backup` (`VACUUM INTO` plus the LFS folder) is worth discussing: the user keeps the one copy of their mail here. |
+| 03 | Job queue: enqueue, claim, cancel, retry, dedupe, parents and children | `oaken jobs list\|show\|cancel\|retry` | **The user wants the queue exposed.** Filter by kind, status, account and actor. Show attempts, the scrubbed last error and the children of a fan-out. Retry of a failed or parked job and a purge of finished jobs are not built: the queue has no `list`, `retry` or retention yet, so these are new operations. Decide whether cancel and retry need a confirmation. |
+| 03 | Scheduler with `every` and cron (UTC) | `oaken schedules list\|add\|remove\|run-now` | `Scheduler` has `add`, `remove` and `next_run` but no `list`; `run-now` is new. Cron is UTC only. |
+| 03 | Event bus (in memory, typed) | `oaken watch`, `oaken events` | **The user wants the event log exposed.** The bus keeps no history, so first decide: a durable event table (kept how long, which events, what is redacted) or only the live stream with a ring buffer. Either way an event never carries a message body. |
+| 03b | Agents and leases | `oaken agents ...`, `oaken jobs claim\|heartbeat\|complete\|fail` | Already specified above. |
+| 04 | Plugin host: statuses, health, capabilities | `oaken plugins [check]` | List with kind, version, capabilities and health; `check` runs the health probe now. Enable and disable per plugin is not built. |
+| 05 | Accounts, non-secret config | `oaken admin account ...` | Wizard noted above. Also `list` and `show`. |
+| 05 | `RawStore.stats()` | `oaken store stats` | Messages, blobs, LFS count, raw and stored bytes, ratio. |
+| 05 | `gc_blobs()` | `oaken store gc [--dry-run]` | Deletes data, so `--dry-run` and a confirmation. `gc_blobs` has no dry run yet. |
+| 05 | `get_raw(verify=True)` | `oaken store verify` | Re-hash every blob and report mismatches and missing LFS files. Slow on a big store, so a job. |
+| 05 | Soft delete (`mark_deleted`) | `oaken message delete\|undelete ID` | There is no undelete in the store. Deleting mail is destructive to the user's view, so it needs the confirm gate. |
+| 05 | Raw bytes | `oaken message export ID --eml PATH` | The only place raw bytes leave the store; **never over MCP**. Terminal output of a body is sanitized (see requirement 3). |
+| 05 | Sync cursors | `oaken sync cursors [--reset ...]` | Reset forces a full resync: confirm. |
+| 06 | `parse`, `clean`, `thread_key`, token counts | `oaken message parse\|clean ID` (and `--eml PATH`) | A debugging view: the headers, each segment with the rule that tagged it, the thread key and how it was derived, token counts before and after, warnings, attachment metadata and the quarantine flag. Reads from the store or a file. The most useful tool for tuning `[mail.cleaning]`. |
+| 06 | Cleaner rules and `disabled_rules` | `oaken clean rules` | Name and one line for each rule, and which are disabled. |
+| 06 | Tokenizer (estimate or a local `tokenizer.json`) | `oaken tokenizer info` | Which one is active and whether counts are exact. A command that fetches a `tokenizer.json` is an open question from 06 (it would be the only network call here). |
+| 06c | Sieve scripts | `oaken sieve check\|test\|refilter` | Specified above. Add `oaken sieve list` (each script, its hash, and any that were skipped with the reason). |
+| 06c | Labels, dispositions, flags | `oaken labels`, `oaken messages --label X --disposition Y` | `AttrStore.counts` and `message_ids` exist. Showing `discarded` mail must be explicit (`--disposition discarded`). |
+| 07 | `rebuild_index` | `oaken rebuild-index` | **The user asked for this one by name.** A resumable job with progress. Candidates: `--account`, `--since`, `--wait`, `--force` (ignore the content hashes), `--dry-run` (what would be re-indexed). |
+| 07 | Index status | `oaken index status` | Documents and chunks, size next to `raw.db`, `pipeline_version`, whether it belongs to this raw store, how many live messages are missing from it, and whether the chunk settings changed since it was built. |
+| 07 | FTS5 integrity | `oaken index check [--repair]` | FTS5's `integrity-check`; repair is a rebuild of the FTS table from `chunks`, which is cheap and needs no mail. Local. |
+| 07 | `keyword_search` with operators | `oaken search QUERY` | `from:`, `before:`, `after:`, `label:`, `in:`, `-term`, `"phrase"`, `term*`. Warnings the parser returned (an unreadable date, a lone `-term`) are printed, not hidden. |
+

@@ -91,3 +91,25 @@ Add a filter stage after parsing: `FilterEngine.filter_message(message_id)` (it 
 so it can run on its own job). A script change makes messages stale (`AttrStore.stale`), so register a
 resumable `refilter` job that calls `FilterEngine.refilter()`. Embedding and enrichment must skip a
 message that has an `analysis` / `skip_enrich` attribute. Filtering publishes `MessageFiltered`.
+
+## Note from prompt 07
+
+The `parse` stage is `Indexer.index_one(message_id)` (in `oaken.index`). It parses, cleans, chunks
+and writes `index.db` in one call, is idempotent (an unchanged `content_hash` costs a parse and no
+write), and removes a deleted message from the index instead. Wire it like this:
+
+- Run it **after** the filter stage so the disposition and labels are known; if filtering runs later,
+  call `Indexer.follow_filtering()` once at startup. It listens for `MessageFiltered` and refreshes
+  the index's copy of the organization with no re-parse. It needs the event bus.
+- Call `register_index_jobs(runner, indexer)` at startup. It handles the `index.rebuild` job, which is
+  resumable (checkpoint in `index_meta`), runs one at a time and is queued at backfill priority with
+  `enqueue_rebuild()` (deduplicated per account).
+- `reprocess("parse", ...)` should enqueue `index.rebuild`, not a loop of its own. `PIPELINE_VERSION`
+  in `oaken.index.store` is bumped when a change makes old index rows wrong; a stale index is emptied
+  and rebuilt on the next rebuild.
+- Provider-reported deletions call `Indexer.index_one`, which de-indexes a soft-deleted message.
+- Embedding reads chunks through `IndexStore.chunk_rows(message_id)`; each has a `content_hash`, so a
+  vector is skipped when `(content_hash, model_id)` already has one. Chunks are never reordered
+  by an edit that leaves their text alone.
+- Pipeline status can read `IndexStore.stats()` (documents, chunks, stale) for the index stage.
+- `IndexRebuildProgress` is published during a rebuild; the web UI and CLI can show it.

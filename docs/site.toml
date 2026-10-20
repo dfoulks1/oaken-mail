@@ -59,6 +59,10 @@ id = "architecture/sieve"
 file = "architecture/sieve.md"
 
 [[pages]]
+id = "architecture/index"
+file = "architecture/index.md"
+
+[[pages]]
 id = "plugins"
 file = "plugins.md"
 

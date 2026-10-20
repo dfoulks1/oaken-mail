@@ -23,6 +23,7 @@ backed up everything.
 | `messages` | A provider's id for a message, pointing at a blob, with a soft-delete mark. |
 | `message_state` | Read, starred, labels, and what still has to be written back to the server. |
 | `message_attrs` | Organization: a disposition, labels, flags, suppressed intents and analysis markers, set by Sieve scripts (see [Sieve filtering](sieve.html)) and later by the user. |
+| `raw_meta` | Facts about this store. `store_id` is a random id made once; `index.db` records it and refuses to open against a different `raw.db`. |
 | `message_filters` | Which script set last ran on each message, so a changed script marks mail stale. |
 | `sync_cursors` | Where each provider's sync left off, per scope. |
 

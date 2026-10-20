@@ -23,6 +23,13 @@ class StorageError(OakenError):
     code = "storage_error"
 
 
+class IndexMismatch(StorageError):
+    """``index.db`` was built from a different raw store, or by an unknown format. It is refused,
+    never repaired in place: delete it and rebuild."""
+
+    code = "index_mismatch"
+
+
 class PluginError(OakenError):
     code = "plugin_error"
 

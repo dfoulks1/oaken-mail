@@ -169,6 +169,7 @@ prompt = "09"
 summary = "Staged, idempotent, resumable: a message is keyword-searchable first, then embedded and enriched asynchronously."
 uses = ["parsing", "sieve", "jobs", "events", "pluginhost", "rawstore", "index"]
 untrusted = true
+notes = ["Planned parse stage is Indexer.index_one (07), run after filtering; call Indexer.follow_filtering() and register_index_jobs() at startup.", "reprocess of the parse stage enqueues index.rebuild."]
 
 [[components]]
 id = "parsing"
@@ -212,6 +213,8 @@ types = [
   ["EventStream", "async iterator", "Bounded drop-oldest queue for one client; counts what it dropped."],
   ["PluginEvent", "frozen dataclass", "Base for events a plugin defines itself; the host stamps the sender's name."],
   ["MessageStored, LargeMessageStored", "frozen dataclasses", "Raised by the raw store after commit: is_new/changed, and a large message kept in LFS."],
+  ["MessageParsed, MessageIndexed", "frozen dataclasses", "Raised by the Indexer when a message is parsed and when its index entry changed."],
+  ["IndexRebuildProgress", "frozen dataclass", "Done, total, indexed and failed counts during an index rebuild; finished=True at the end."],
 ]
 funcs = [
   ["EventBus.subscribe(type, handler)", "Internal handler for an event type; failures are logged, never propagated."],
@@ -368,11 +371,16 @@ types = [
   ["RawStore", "class", "Idempotent, transactional put; get_raw with sha256 verification; soft delete; cursors; stats; gc_blobs; account create and config."],
   ["MessageMeta", "frozen dataclass", "What a provider knows besides the bytes: internal date, read, starred, labels."],
   ["StoredMessage", "frozen dataclass", "A message row as listed by iter_messages, with its size and whether it lives in LFS."],
+  ["raw_meta", "table", "Key/value facts about this store. Holds store_id, a random id the index records so it can refuse a different raw.db."],
 ]
 funcs = [
   ["RawStore.put_message(account_id, provider_id, raw, meta) -> (MessageId, is_new)", "Store one message. Same provider id and bytes is a no-op; changed bytes move the pointer."],
   ["RawStore.get_raw(message_id, verify=False) -> bytes", "The exact stored bytes; verify=True re-hashes and raises StorageError on corruption."],
   ["RawStore.get_stub(message_id) -> bytes", "The headers only, without opening the LFS file of a large message."],
+  ["RawStore.iter_messages(account_id, since, after_id) -> AsyncIterator[StoredMessage]", "Oldest first; after_id resumes strictly after a checkpointed message."],
+  ["RawStore.count_messages(account_id, since) -> int", "Live messages, for rebuild progress."],
+  ["RawStore.live_message_ids(ids) -> set[str]", "Which of these ids still exist and are not deleted; the index uses it to prune."],
+  ["RawStore.store_id() -> str", "The id of this raw.db (migration 0006), recorded by index.db."],
   ["RawStore.gc_blobs() -> GcResult", "Remove unreferenced blobs and their LFS files. A referenced blob is never removed."],
 ]
 notes = ["Large messages (over storage.inline_max_bytes) live whole in the lfs/ folder; raw.db keeps a header stub and a link.", "Database files and the LFS folder are owner-only. Encrypting LFS is a possible later option."]
@@ -406,10 +414,29 @@ notes = ["redirect, reject, ereject and vacation are recorded as suppressed inte
 id = "index"
 name = "index.db"
 layer = "storage"
-status = "planned"
+status = "built"
 prompt = "07"
-summary = "Everything derived and rebuildable from raw.db: parsed fields, cleaned text, chunks, FTS5, enrichments."
-uses = ["dbaccess"]
+path = "src/oaken/index"
+summary = "Everything derived and rebuildable from raw.db: cleaned text split into chunks and an FTS5 keyword index with ranked, highlighted search. Disposable: it is bound to one raw.db and can always be rebuilt."
+uses = ["dbaccess", "rawstore"]
+untrusted = true
+types = [
+  ["IndexStore", "class", "index.db: documents, chunks, labels and the external-content FTS5 table. Hash-skipped writes, keyword search, check and repair, stats."],
+  ["Indexer", "class", "Reads raw.db and writes index.db: index_one, follow_filtering and a resumable rebuild."],
+  ["ParsedQuery", "frozen dataclass", "A user query read into a safe FTS5 expression plus from, date, label and disposition filters, with warnings."],
+  ["Chunk", "frozen dataclass", "One piece of cleaned text with its ordinal, token count and content hash (oaken.mail.chunk)."],
+  ["SearchHit", "frozen dataclass", "One message: its best chunk, a highlighted snippet, rank, thread, disposition and labels."],
+]
+funcs = [
+  ["parse_query(text, settings) -> ParsedQuery", "Quote every term so FTS5 syntax is plain text; never raises. Supports phrases, -not, prefix*, from:, before:, after:, label: and in:."],
+  ["chunk_text(text, target, overlap, tokenizer) -> list[Chunk]", "Split on paragraphs, then sentences, then words, with whole-unit overlap."],
+  ["IndexStore.index_message(...) -> IndexResult", "Write one message's document and chunks; an unchanged content hash writes nothing, an edit rewrites only the chunks that changed."],
+  ["IndexStore.keyword_search(query, filters, k) -> SearchResult", "BM25 with subject and sender weighted up, one hit per message, snippets; discarded mail hidden unless asked for."],
+  ["Indexer.index_one(message_id) -> IndexResult | None", "Parse, clean, chunk and index one message; a deleted message is removed instead."],
+  ["rebuild_index(raw, index, ...) -> RebuildResult", "Walk raw.db oldest first and index again. Checkpointed, resumable, prunes deleted messages and publishes IndexRebuildProgress."],
+  ["register_index_jobs(runner, indexer)", "Handle the index.rebuild job (one at a time, backfill priority, one per account)."],
+]
+notes = ["External-content FTS5 (not contentless) so snippet() works; triggers keep it in step with the chunks table.", "index.db records the raw.db store_id and refuses a different store; a lower pipeline_version marks it stale for rebuild.", "Message text never reaches a log, and attachment bytes are never indexed."]
 
 # --- Foundation --------------------------------------------------------------------------
 [[components]]
