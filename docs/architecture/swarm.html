@@ -1,0 +1,176 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The swarm · Oaken Mail</title>
+<meta name="description" content="External agents that lease jobs: opt-in config, scoped tokens, quotas, validated results, and matching Ollama parallelism.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="The swarm · Oaken Mail">
+<meta property="og:description" content="External agents that lease jobs: opt-in config, scoped tokens, quotas, validated results, and matching Ollama parallelism.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=&#39;http%3A//www.w3.org/2000/svg&#39; viewBox=&#39;0 0 32 32&#39;%3E%3Crect width=&#39;32&#39; height=&#39;32&#39; rx=&#39;7&#39; fill=&#39;%231f4e79&#39;/%3E%3Cpath d=&#39;M16 5c-4 0-7 3-7 7 0 2 1 3 1 5 0 3-2 4-2 7h16c0-3-2-4-2-7 0-2 1-3 1-5 0-4-3-7-7-7z&#39; fill=&#39;%23e8f0f8&#39;/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand">OAKEN</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html">OAKEN</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">Optional extra workers, local or not</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="overview.html">Architecture overview</a>
+      <a class="doc-link" href="jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="software-map.html">Software map</a>
+      <a class="doc-link current" href="swarm.html" aria-current="page">The swarm</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#two-kinds-of-parallelism"><span class="num">1</span>Two kinds of parallelism</a>
+      <a class="nav-link" href="#turning-it-on"><span class="num">2</span>Turning it on</a>
+      <a class="nav-link" href="#agents-and-their-tokens"><span class="num">3</span>Agents and their tokens</a>
+      <a class="nav-link" href="#results-are-untrusted"><span class="num">4</span>Results are untrusted</a>
+      <a class="nav-link" href="#privacy"><span class="num">5</span>Privacy</a>
+      <a class="nav-link" href="#fan-out-and-attribution"><span class="num">6</span>Fan-out and attribution</a>
+      <a class="nav-link" href="#matching-ollama-to-the-swarm"><span class="num">7</span>Matching Ollama to the swarm</a>
+      <a class="nav-link" href="#not-built-yet"><span class="num">8</span>Not built yet</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <h1 class="display-6">The swarm</h1>
+    <p class="lead">Core runs its own parallel workers. If you have the tokens and the hardware, you can also let external AI agents lease work from the same queue. It is off by default and you choose what they may touch.</p>
+  </header>
+
+<section id="two-kinds-of-parallelism" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>Two kinds of parallelism</h2></div>
+<ul>
+<li><strong>Internal workers.</strong> <code>[jobs] workers</code> sets how many jobs core runs at once, and
+<code>[jobs] kind_limits</code> caps a kind of job (for example one <code>embed</code> job at a time on a single
+GPU). This is all most people need.</li>
+<li><strong>External agents (the swarm).</strong> A separate program, such as a larger model driven from the
+command line or an MCP client, leases jobs from the same queue, does the work, and hands back a
+result. A laptop might run no agents. A workstation with a big model, or someone with lots of
+tokens to spend, might run several.</li>
+</ul>
+<p>An agent uses exactly the rules internal workers do: leases with heartbeats, retries, fencing so
+a stalled agent cannot overwrite the next one's result, and dead-worker recovery. Claiming work
+goes through core, so nothing here lets an agent touch the databases.</p>
+</section>
+<section id="turning-it-on" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Turning it on</h2></div>
+<div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[swarm]</span>
+<span class="n">enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w">          </span><span class="c1"># nothing is offered to agents unless this is true</span>
+<span class="n">allowed_kinds</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span><span class="w">       </span><span class="c1"># job kinds an agent may ever lease, for example ["enrich"]</span>
+<span class="n">max_agents</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">8</span><span class="w">           </span><span class="c1"># active (unrevoked) agents</span>
+<span class="n">default_max_leases</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="w">   </span><span class="c1"># jobs one agent may hold at once</span>
+<span class="n">default_max_per_hour</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">600</span><span class="w">  </span><span class="c1"># jobs one agent may claim per hour</span>
+
+<span class="k">[jobs]</span>
+<span class="n">workers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span><span class="w">              </span><span class="c1"># internal workers</span>
+<span class="n">max_result_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">262144</span>
+</code></pre></div>
+<p>Each setting can also be given as an environment variable, for example
+<code>OAKEN_SWARM__ENABLED=true</code>. Both <code>enabled</code> and <code>allowed_kinds</code> have to be set, so turning the
+swarm on does not hand any work to anyone by itself.</p>
+</section>
+<section id="agents-and-their-tokens" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Agents and their tokens</h2></div>
+<p>Each agent has its own token, its own list of job kinds, optionally the accounts it may see, and
+its own quotas. The token is random, shown <strong>once</strong> when the agent is created, and only its
+SHA-256 is stored. Revoking an agent takes effect at once: the jobs it held go back to the queue
+without counting the attempt, and anything it sends afterwards is refused because it no longer
+holds the lease. An agent token works only for the agent operations, never for the general API.</p>
+<p>A claim is checked inside the same transaction that leases the job. The agent must not be
+revoked, the kind must be in both the agent's list and <code>allowed_kinds</code>, the account must be one
+the agent may see, and the agent must be under its limits (<code>quota_exceeded</code> otherwise). Quotas
+are per agent, so one runaway agent cannot starve another.</p>
+</section>
+<section id="results-are-untrusted" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Results are untrusted</h2></div>
+<p>An agent's output is data from an outside party, and could come from a model that read a hostile
+email. So a result is checked <strong>before</strong> anything is stored:</p>
+<ul>
+<li>it must match the schema registered for that job kind (jobs of a kind with no schema accept no
+result at all, so a job cannot be used to store arbitrary data),</li>
+<li>it must be under <code>max_result_bytes</code>,</li>
+<li>and a bad result is rejected with <code>invalid_result</code> and the job stays leased, so the agent can
+fix it or fail the job.</li>
+</ul>
+<p>Each finished job records who finished it (<code>completed_by</code>) and which model the finisher says
+produced the result (<code>produced_by</code>). The second is self-reported, and is a label for people, not
+a guarantee. Results from the internal handlers go through the same validation.</p>
+</section>
+<section id="privacy" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Privacy</h2></div>
+<p>Oaken Mail's promise is that mail leaves your machine only to clients you connect. Giving a job
+to an agent sends that job's mail text to that agent, and if the agent is a hosted model, to its
+provider. So:</p>
+<ul>
+<li>core never offers a job kind to an agent unless you listed it in <code>allowed_kinds</code>,</li>
+<li>you choose per kind, so you can let an agent summarize newsletters and never touch anything
+else,</li>
+<li>an agent can be limited to certain accounts,</li>
+<li>sending mail is never available to agents.</li>
+</ul>
+<p>A local agent, for example a second Ollama instance on another machine you own, is under the same
+rules. Whether it is &quot;local&quot; is your call, not something core can tell.</p>
+</section>
+<section id="fan-out-and-attribution" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Fan-out and attribution</h2></div>
+<p>A job can name a <strong>parent</strong>, and <code>JobQueue.children()</code> lists the children, so a coordinator can
+split work into pieces and collect the results. There is no waiting on children in the scheduler
+yet. Every job also records its <strong>actor</strong>: the user, an agent (with its label), or the system.
+That attribution carries into the audit log and the rules for what an agent may change.</p>
+</section>
+<section id="matching-ollama-to-the-swarm" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>Matching Ollama to the swarm</h2></div>
+<p>Core's limits and Ollama's limits are separate, and the smaller one wins.</p>
+<ul>
+<li><code>OLLAMA_NUM_PARALLEL</code> is how many requests Ollama works on at once <strong>per loaded model</strong>. The
+default is chosen automatically (up to 4, or 1 when memory is tight). Each extra slot raises
+memory use, because the context is multiplied by it. Set it in the environment of the Ollama
+server, not in Oaken's config.</li>
+<li><code>OLLAMA_MAX_LOADED_MODELS</code> limits how many models stay in memory together (for example an
+embedding model and a chat model).</li>
+<li><code>OLLAMA_MAX_QUEUE</code> is how many requests it will hold before it answers busy.</li>
+</ul>
+<p>A good starting point is to set <code>[jobs] kind_limits</code> for the model-using kinds equal to
+<code>OLLAMA_NUM_PARALLEL</code>. Setting it higher only queues requests inside Ollama, and setting it lower
+leaves capacity unused. For example, a machine that runs a large model with room for two
+concurrent requests would use <code>OLLAMA_NUM_PARALLEL=2</code> and <code>kind_limits = { enrich = 2 }</code>. On a
+small laptop, leave both at 1. If you also run agents, each agent's <code>max_leases</code> counts toward
+whatever backend serves them, so lower the internal limit to leave room.</p>
+<p>The model itself is a setting, not a default you are stuck with:
+<code>[ai] llm_model = &quot;qwen3:8b&quot;</code> is a starting point, and a larger model is one line away.</p>
+</section>
+<section id="not-built-yet" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>Not built yet</h2></div>
+<p>The HTTP, MCP and CLI operations that let an agent claim work arrive with the API, MCP and CLI
+prompts. Spawn budgets and loop guards for agents that create jobs belong with the enrichment
+work, where the token costs appear.</p>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

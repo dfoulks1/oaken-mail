@@ -53,6 +53,22 @@ class JobsSettings(_Section):
     backoff_jitter: float = Field(default=0.2, ge=0, le=1)
     # Per-kind cap on jobs running at once, e.g. {"embed": 1, "enrich": 1} for one local GPU.
     kind_limits: dict[str, int] = Field(default_factory=dict)
+    max_result_bytes: int = Field(default=256 * 1024, ge=1024)
+
+
+class SwarmSettings(_Section):
+    """Optional external workers (agents) that lease jobs over the API, the CLI or MCP.
+
+    Off by default, and a kind of job is never offered to an agent unless it is listed in
+    ``allowed_kinds``: handing a job to an external model sends it that mail's text, so the
+    user opts in kind by kind. Internal parallelism is ``[jobs] workers`` and ``kind_limits``.
+    """
+
+    enabled: bool = False
+    allowed_kinds: list[str] = Field(default_factory=list)
+    max_agents: int = Field(default=8, ge=1, le=256)  # active (unrevoked) agents
+    default_max_leases: int = Field(default=2, ge=1)  # jobs one agent may hold at once
+    default_max_per_hour: int = Field(default=600, ge=1)  # jobs one agent may claim per hour
 
 
 class SyncSettings(_Section):
@@ -80,6 +96,7 @@ class Settings(BaseSettings):
     storage: StorageSettings = StorageSettings()
     ai: AISettings = AISettings()
     jobs: JobsSettings = JobsSettings()
+    swarm: SwarmSettings = SwarmSettings()
     sync: SyncSettings = SyncSettings()
     api: APISettings = APISettings()
     log: LogSettings = LogSettings()

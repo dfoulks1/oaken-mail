@@ -225,6 +225,26 @@ funcs = [
 notes = ["Delivery is at least once, so handlers must be idempotent.", "See architecture/jobs for the lifecycle."]
 
 [[components]]
+id = "swarm"
+name = "Agents and the swarm"
+layer = "runtime"
+status = "built"
+prompt = "03b"
+path = "src/oaken/core/agents.py"
+summary = "Optional external workers with their own scoped tokens and quotas. Opt-in per job kind, results validated before they are stored."
+uses = ["jobs", "dbaccess", "events"]
+types = [
+  ["Agent", "frozen dataclass", "An external worker: label, kinds, accounts, quotas, revocation."],
+  ["AgentRegistry", "class", "Create (token shown once, only its hash stored), authenticate, list, revoke."],
+  ["Actor", "frozen dataclass", "Who did something: user, agent or system."],
+]
+funcs = [
+  ["JobQueue.claim(..., agent=agent)", "Scope and quota checks inside the claim transaction."],
+  ["JobQueue.complete(job, worker, result, produced_by=)", "Validates the result against the kind's schema before storing it."],
+]
+notes = ["Off by default; a kind is offered to agents only if listed in [swarm] allowed_kinds.", "The HTTP, MCP and CLI claim operations come with prompts 16 to 18."]
+
+[[components]]
 id = "scheduler"
 name = "Scheduler"
 layer = "runtime"

@@ -43,6 +43,10 @@ id = "architecture/jobs"
 file = "architecture/jobs.md"
 
 [[pages]]
+id = "architecture/swarm"
+file = "architecture/swarm.md"
+
+[[pages]]
 id = "architecture/software-map"
 generated = true
 

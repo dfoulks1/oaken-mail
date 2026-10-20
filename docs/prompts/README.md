@@ -11,6 +11,7 @@ review it before starting the next.
 | 01a | [docs-site-scaffold](01a-docs-site-scaffold.md) | Generated GitHub Pages site (Libra look), build/check tooling, Pages deploy | 01 |
 | 02 | [core-foundation](02-core-foundation.md) | Settings, paths, logging, errors, IDs, clock, DB access layer | 01 |
 | 03 | [events-and-jobs](03-events-and-jobs.md) | Event bus, durable job queue, scheduler | 02 |
+| 03b | [swarm-foundations](03b-swarm-foundations.md) | Optional external agents: scoped tokens, quotas, validated results, fan-out and attribution | 03 |
 | 04 | [plugin-host](04-plugin-host.md) | Plugin contracts (5), host, fakes, contract tests | 03 |
 | 05 | [raw-store](05-raw-store.md) | `raw.db`, blob store, migrations, accounts/messages/cursors | 02 |
 | 06 | [parsing-and-cleaning](06-parsing-and-cleaning.md) | RFC 822 → structured, cleaned text; threading keys | 05 |

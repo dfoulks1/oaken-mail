@@ -75,3 +75,10 @@ generated exposed-tool table, the two-phase confirm explanation and the privacy 
 
 Standard report. Include the exposed-tool table and a transcript of a two-phase
 mutate against the fakes.
+
+## Swarm tools (from prompt 03b)
+
+Expose the agent job operations (`jobs.claim`, `heartbeat`, `complete`, `fail`) as MCP tools
+under the agent's own token, so an external model can take work. Sending stays unexposed. Remind
+the user in the tool descriptions that a claimed job contains mail text. See
+`docs/architecture/swarm.md`.

@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Typed internal identifiers.
 
-``MessageId``, ``ThreadId`` and ``JobId`` are UUIDv7 strings (time-ordered, so they sort by
-creation). ``AccountId`` is a short slug chosen by the user or by account setup. Provider-native
-ids are opaque strings and are never used as internal keys.
+``MessageId``, ``ThreadId``, ``JobId`` and ``AgentId`` are UUIDv7 strings (time-ordered, so they
+sort by creation). ``AccountId`` is a short slug chosen by the user or by account setup.
+Provider-native ids are opaque strings and are never used as internal keys.
 """
 
 import os
@@ -15,6 +15,7 @@ AccountId = NewType("AccountId", str)
 MessageId = NewType("MessageId", str)
 ThreadId = NewType("ThreadId", str)
 JobId = NewType("JobId", str)
+AgentId = NewType("AgentId", str)
 
 
 def uuid7(unix_ms: int | None = None) -> uuid.UUID:
@@ -39,3 +40,7 @@ def new_thread_id() -> ThreadId:
 
 def new_job_id() -> JobId:
     return JobId(str(uuid7()))
+
+
+def new_agent_id() -> AgentId:
+    return AgentId(str(uuid7()))

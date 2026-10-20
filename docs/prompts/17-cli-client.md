@@ -57,3 +57,9 @@ the real CLI definition (commands, options, exit codes) — not a hand-written c
 ## Checkpoint
 
 Standard report. Include sample sessions (copy-paste of real CLI output against the fakes).
+
+## Swarm commands (from prompt 03b)
+
+Add `oaken agents create|list|revoke` and `oaken jobs claim|heartbeat|complete|fail` so a
+scripted worker can lease jobs. `agents create` prints the token once, with a warning that it
+cannot be shown again. See `docs/architecture/swarm.md`.

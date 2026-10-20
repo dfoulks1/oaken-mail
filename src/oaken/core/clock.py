@@ -4,6 +4,17 @@
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
+_TS = "%Y-%m-%dT%H:%M:%S.%fZ"
+
+
+def fmt_ts(dt: datetime) -> str:
+    """UTC, fixed width, so the text sorts the same as the time."""
+    return dt.strftime(_TS)
+
+
+def parse_ts(text: str) -> datetime:
+    return datetime.strptime(text, _TS).replace(tzinfo=UTC)
+
 
 class Clock(Protocol):
     def now(self) -> datetime:

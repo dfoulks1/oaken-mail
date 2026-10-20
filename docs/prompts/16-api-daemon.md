@@ -73,3 +73,12 @@ event stream and event types). This generated page is the API documentation; the
 
 Standard report. Include the threat-model table (attacker → vector → mitigation → test)
 you implemented against.
+
+## Swarm operations (from prompt 03b)
+
+The registry (prompt 13) and this server must expose the agent surface that core already
+implements: `agents.create/list/revoke` (user-only), and, authenticated with an **agent
+token** (not the general API token), `jobs.claim`, `jobs.heartbeat`, `jobs.complete`
+(with `result` and `produced_by`) and `jobs.fail`. Map `QuotaExceeded` to 429,
+`InvalidResult` to 422, `PermissionDenied` to 403. Agent tokens are never accepted by any other
+route. See `docs/architecture/swarm.md`.

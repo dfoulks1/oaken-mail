@@ -45,3 +45,13 @@ class NotFound(OakenError):
 
 class Conflict(OakenError):
     code = "conflict"
+
+
+class QuotaExceeded(OakenError):
+    code = "quota_exceeded"
+
+
+class InvalidResult(OakenError):
+    """A job result that fails its schema or size limit. The job is left leased."""
+
+    code = "invalid_result"

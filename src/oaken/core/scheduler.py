@@ -16,12 +16,12 @@ from datetime import datetime, timedelta
 
 from pydantic import BaseModel
 
-from oaken.core.clock import Clock
+from oaken.core.clock import Clock, fmt_ts, parse_ts
 from oaken.core.cron import parse_cron
 from oaken.core.db import Database
 from oaken.core.errors import ConfigError
 from oaken.core.ids import AccountId
-from oaken.core.jobs import PRIORITY_INGEST, JobQueue, fmt_ts, parse_ts
+from oaken.core.jobs import PRIORITY_INGEST, JobQueue
 
 MAX_SLEEP_SECONDS = 30.0
 

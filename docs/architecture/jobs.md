@@ -91,6 +91,13 @@ listener:
   and, if a consumer falls behind, the **oldest** events are dropped and counted. A slow stream
   never blocks the publisher.
 
+## Results, parents and actors
+
+A job can store a **result**, which is checked against a schema for its kind before it is
+saved. It can name a **parent** job, for splitting work into pieces, and it records its **actor**
+(user, agent or system). Besides core's own workers, external agents can lease jobs too: see
+[the swarm](swarm.html).
+
 ## The scheduler
 
 A schedule is either a fixed interval or a five-field cron expression, evaluated in UTC (no

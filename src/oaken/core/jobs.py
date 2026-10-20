@@ -19,19 +19,28 @@ import random
 import re
 from collections.abc import Awaitable, Callable, Collection, Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from sqlite3 import Row
 from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from oaken.core.clock import Clock
+from oaken.core.actors import SYSTEM, Actor, ActorKind
+from oaken.core.agents import Agent
+from oaken.core.clock import Clock, fmt_ts, parse_ts
 from oaken.core.db import Database, Tx
-from oaken.core.errors import NotFound, OakenError, StorageError
+from oaken.core.errors import (
+    InvalidResult,
+    NotFound,
+    OakenError,
+    PermissionDenied,
+    QuotaExceeded,
+    StorageError,
+)
 from oaken.core.events import EventBus, JobStateChanged
 from oaken.core.ids import AccountId, JobId, new_job_id, uuid7
 from oaken.core.logging import get_logger
-from oaken.core.settings import JobsSettings
+from oaken.core.settings import JobsSettings, SwarmSettings
 
 log = get_logger("oaken.jobs")
 
@@ -42,7 +51,6 @@ PRIORITY_INGEST = 50
 PRIORITY_BACKFILL = 10
 
 MAX_ERROR_CHARS = 500
-_TS = "%Y-%m-%dT%H:%M:%S.%fZ"
 _SECRET_TEXT = re.compile(
     r"""(?ix)
     \b(?P<name>[\w-]*(?:token|secret|passw(?:or)?d|api[_-]?key|authorization|credential)[\w-]*)
@@ -72,14 +80,6 @@ def scrub_error(error: BaseException | str) -> str:
     return text
 
 
-def fmt_ts(dt: datetime) -> str:
-    return dt.strftime(_TS)
-
-
-def parse_ts(text: str) -> datetime:
-    return datetime.strptime(text, _TS).replace(tzinfo=UTC)
-
-
 @dataclass(frozen=True)
 class Job:
     id: JobId
@@ -98,6 +98,13 @@ class Job:
     dedupe_key: str | None
     created_at: datetime
     updated_at: datetime
+    parent_job_id: JobId | None
+    actor: Actor  # who enqueued it
+    agent_id: str | None  # the last external agent to lease it
+    claimed_at: datetime | None
+    result_json: str | None
+    completed_by: str | None  # the worker or agent that finished it
+    produced_by: str | None  # the model the finisher says produced the result (self-reported)
 
     @classmethod
     def from_row(cls, r: Row) -> "Job":
@@ -118,7 +125,22 @@ class Job:
             dedupe_key=r["dedupe_key"],
             created_at=parse_ts(r["created_at"]),
             updated_at=parse_ts(r["updated_at"]),
+            parent_job_id=JobId(r["parent_job_id"]) if r["parent_job_id"] else None,
+            actor=Actor(_actor_kind(r["actor_kind"]), r["actor_label"]),
+            agent_id=r["agent_id"],
+            claimed_at=parse_ts(r["claimed_at"]) if r["claimed_at"] else None,
+            result_json=r["result_json"],
+            completed_by=r["completed_by"],
+            produced_by=r["produced_by"],
         )
+
+
+def _actor_kind(value: str) -> ActorKind:
+    if value == "user":
+        return "user"
+    if value == "agent":
+        return "agent"
+    return "system"
 
 
 @dataclass(frozen=True)
@@ -145,12 +167,16 @@ class JobQueue:
         bus: EventBus | None = None,
         *,
         settings: JobsSettings | None = None,
+        swarm: SwarmSettings | None = None,
         rng: random.Random | None = None,
     ) -> None:
         self.db = db
         self.clock = clock
         self.bus = bus
         self.settings = settings or JobsSettings()
+        self.swarm = swarm or SwarmSettings()
+        # Result schema per kind. A job's result is accepted only if its kind has one.
+        self.result_models: dict[str, type[BaseModel]] = {}
         self._rng = rng or random.Random()  # noqa: S311 (retry jitter, not security)
         self.wake = asyncio.Event()  # set whenever work may have become runnable
 
@@ -165,6 +191,8 @@ class JobQueue:
         dedupe_key: str | None = None,
         run_after: datetime | None = None,
         max_attempts: int | None = None,
+        actor: Actor = SYSTEM,
+        parent_job_id: JobId | None = None,
     ) -> Enqueued:
         """Queue a job. With a ``dedupe_key`` that is already queued or running, nothing is
         added and the existing job is returned (``created=False``)."""
@@ -178,6 +206,8 @@ class JobQueue:
                 dedupe_key=dedupe_key,
                 run_after=run_after,
                 max_attempts=max_attempts,
+                actor=actor,
+                parent_job_id=parent_job_id,
             )
         await self.announce(change)
         return result
@@ -193,6 +223,8 @@ class JobQueue:
         dedupe_key: str | None = None,
         run_after: datetime | None = None,
         max_attempts: int | None = None,
+        actor: Actor = SYSTEM,
+        parent_job_id: JobId | None = None,
     ) -> tuple[Enqueued, _Change | None]:
         """``enqueue`` inside the caller's transaction (``payload`` may be already-serialised
         JSON). Call ``announce`` after it commits."""
@@ -203,11 +235,16 @@ class JobQueue:
             )
             if row:
                 return Enqueued(JobId(row["id"]), created=False), None
+        if parent_job_id is not None and not await tx.fetchone(
+            "SELECT 1 FROM jobs WHERE id = ?", (parent_job_id,)
+        ):
+            raise NotFound(f"no such parent job: {parent_job_id}")
         now = self.clock.now()
         job_id = new_job_id()
         await tx.execute(
             "INSERT INTO jobs (id, account_id, kind, payload_json, priority, max_attempts,"
-            " run_after, dedupe_key, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            " run_after, dedupe_key, created_at, updated_at, parent_job_id, actor_kind,"
+            " actor_label) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 job_id,
                 account_id,
@@ -219,6 +256,9 @@ class JobQueue:
                 dedupe_key,
                 fmt_ts(now),
                 fmt_ts(now),
+                parent_job_id,
+                actor.kind,
+                actor.label,
             ),
         )
         return Enqueued(job_id, created=True), _Change(job_id, kind, "queued", account_id)
@@ -245,18 +285,39 @@ class JobQueue:
         worker: str,
         kinds: Collection[str],
         limits: Mapping[str, int] | None = None,
+        *,
+        agent: Agent | None = None,
     ) -> Job | None:
         """Atomically take the best runnable job of one of ``kinds`` and lease it to ``worker``.
 
         Best = highest priority, then earliest ``run_after``. Kinds already running at their
         ``limits`` cap are skipped. Jobs whose lease has expired are reclaimed first.
+
+        With ``agent`` the claim is made on behalf of an external agent (``worker`` is then
+        ``agent.worker``), and the agent's row is re-read inside the transaction: it must not be
+        revoked, only kinds it is scoped to and ``[swarm] allowed_kinds`` permit are considered,
+        only its accounts are visible, and ``QuotaExceeded`` is raised at its lease or hourly
+        limit.
         """
+        now = self.clock.now()
+        extra = ""
+        extra_args: tuple[str, ...] = ()
+        if agent is not None:
+            worker = agent.worker
+            if not self.swarm.enabled:
+                raise PermissionDenied("the swarm is disabled ([swarm] enabled = false)")
         if not kinds:
             return None
-        now = self.clock.now()
         changes: list[_Change] = []
         async with self.db.transaction() as tx:
             changes += await self._reclaim_expired(tx, now)
+            if agent is not None:
+                scoped = await self._agent_scope(tx, agent, now)
+                kinds = [k for k in kinds if k in scoped.kinds and k in self.swarm.allowed_kinds]
+                if scoped.account_ids is not None:
+                    marks = ",".join("?" * len(scoped.account_ids))
+                    extra = f" AND account_id IN ({marks})"
+                    extra_args = tuple(sorted(scoped.account_ids))
             blocked = await self._blocked_kinds(tx, limits or {})
             allowed = [k for k in kinds if k not in blocked]
             if not allowed:
@@ -265,17 +326,25 @@ class JobQueue:
                 marks = ",".join("?" * len(allowed))
                 row = await tx.fetchone(
                     "SELECT id FROM jobs WHERE status = 'queued' AND run_after <= ?"  # noqa: S608
-                    f" AND kind IN ({marks})"  # only "?" placeholders are interpolated
+                    f" AND kind IN ({marks}){extra}"  # only "?" placeholders are interpolated
                     " ORDER BY priority DESC, run_after, id LIMIT 1",
-                    (fmt_ts(now), *allowed),
+                    (fmt_ts(now), *allowed, *extra_args),
                 )
             job: Job | None = None
             if row:
                 lease = now + timedelta(seconds=self.settings.lease_seconds)
                 await tx.execute(
                     "UPDATE jobs SET status = 'running', locked_by = ?, locked_until = ?,"
-                    " attempts = attempts + 1, updated_at = ? WHERE id = ?",
-                    (worker, fmt_ts(lease), fmt_ts(now), row["id"]),
+                    " attempts = attempts + 1, updated_at = ?, agent_id = ?, claimed_at = ?"
+                    " WHERE id = ?",
+                    (
+                        worker,
+                        fmt_ts(lease),
+                        fmt_ts(now),
+                        agent.id if agent else None,
+                        fmt_ts(now) if agent else None,
+                        row["id"],
+                    ),
                 )
                 got = await tx.fetchone("SELECT * FROM jobs WHERE id = ?", (row["id"],))
                 if got is None:
@@ -284,6 +353,27 @@ class JobQueue:
                 changes.append(_Change(job.id, job.kind, "running", job.account_id))
         await self.announce(*changes)
         return job
+
+    async def _agent_scope(self, tx: Tx, agent: Agent, now: datetime) -> Agent:
+        """The agent as stored right now, after checking it may claim at all."""
+        row = await tx.fetchone("SELECT * FROM agents WHERE id = ?", (agent.id,))
+        fresh = Agent.from_row(row) if row else None
+        if fresh is None or fresh.revoked:
+            raise PermissionDenied("invalid or revoked agent token")
+        held = await tx.fetchone(
+            "SELECT COUNT(*) AS n FROM jobs WHERE status = 'running' AND agent_id = ?",
+            (agent.id,),
+        )
+        if held and held["n"] >= fresh.max_leases:
+            raise QuotaExceeded(f"agent already holds {fresh.max_leases} jobs")
+        recent = await tx.fetchone(
+            "SELECT COUNT(*) AS n FROM jobs WHERE agent_id = ? AND claimed_at > ?",
+            (agent.id, fmt_ts(now - timedelta(hours=1))),
+        )
+        if recent and recent["n"] >= fresh.max_per_hour:
+            raise QuotaExceeded(f"agent reached {fresh.max_per_hour} jobs in the last hour")
+        await tx.execute("UPDATE agents SET last_seen_at = ? WHERE id = ?", (fmt_ts(now), agent.id))
+        return fresh
 
     async def _reclaim_expired(self, tx: Tx, now: datetime) -> list[_Change]:
         rows = await tx.fetchall(
@@ -331,8 +421,50 @@ class JobQueue:
             row = await tx.fetchone("SELECT cancel_requested FROM jobs WHERE id = ?", (job_id,))
         return changed > 0, bool(row and row["cancel_requested"])
 
-    async def complete(self, job_id: JobId, worker: str) -> bool:
-        return await self._finish(job_id, worker, "succeeded")
+    def register_result(self, kind: str, model: type[BaseModel]) -> None:
+        """Declare the schema of the result that jobs of ``kind`` produce."""
+        self.result_models[kind] = model
+
+    async def complete(
+        self,
+        job_id: JobId,
+        worker: str,
+        result: BaseModel | Mapping[str, Any] | None = None,
+        *,
+        produced_by: str | None = None,
+    ) -> bool:
+        """Mark a job succeeded, storing its ``result``. Returns False if the lease was lost.
+
+        A result is validated against the schema registered for the job's kind and size-limited
+        *before* anything is stored. A bad result raises ``InvalidResult`` and the job stays
+        leased, so the worker can correct it or fail the job. A kind with no registered schema
+        accepts no result at all, so an agent cannot use a job to store arbitrary data.
+        ``produced_by`` is the finisher's own claim about which model did the work.
+        """
+        current = await self.get(job_id)
+        if current is None or current.locked_by != worker or current.status != "running":
+            return False
+        result_json = self._check_result(current.kind, result)
+        return await self._finish(
+            job_id, worker, "succeeded", result_json=result_json, produced_by=produced_by
+        )
+
+    def _check_result(self, kind: str, result: BaseModel | Mapping[str, Any] | None) -> str | None:
+        model = self.result_models.get(kind)
+        if result is None:
+            if model is not None:
+                raise InvalidResult(f"jobs of kind {kind!r} must return a result")
+            return None
+        if model is None:
+            raise InvalidResult(f"jobs of kind {kind!r} take no result")
+        try:
+            data = result.model_dump() if isinstance(result, BaseModel) else dict(result)
+            text = model.model_validate(data).model_dump_json()
+        except ValueError as exc:  # pydantic's ValidationError is a ValueError
+            raise InvalidResult(f"result does not match the schema for {kind!r}: {exc}") from exc
+        if len(text.encode()) > self.settings.max_result_bytes:
+            raise InvalidResult(f"result is larger than {self.settings.max_result_bytes} bytes")
+        return text
 
     async def mark_cancelled(self, job_id: JobId, worker: str) -> bool:
         return await self._finish(job_id, worker, "cancelled")
@@ -375,6 +507,8 @@ class JobQueue:
         *,
         run_now: bool = False,
         undo_attempt: bool = False,
+        result_json: str | None = None,
+        produced_by: str | None = None,
     ) -> bool:
         now = self.clock.now()
         async with self.db.transaction() as tx:
@@ -388,8 +522,19 @@ class JobQueue:
             await tx.execute(
                 "UPDATE jobs SET status = ?, locked_by = NULL, locked_until = NULL,"
                 " attempts = attempts - ?, run_after = CASE WHEN ? THEN ? ELSE run_after END,"
-                " updated_at = ? WHERE id = ?",
-                (status, int(undo_attempt), int(run_now), fmt_ts(now), fmt_ts(now), job_id),
+                " updated_at = ?, result_json = ?, produced_by = ?, completed_by = ?"
+                " WHERE id = ?",
+                (
+                    status,
+                    int(undo_attempt),
+                    int(run_now),
+                    fmt_ts(now),
+                    fmt_ts(now),
+                    result_json,
+                    produced_by,
+                    worker if status == "succeeded" else None,
+                    job_id,
+                ),
             )
         await self.announce(_Change(job_id, row["kind"], status, _acct(row["account_id"])))
         return True
@@ -431,6 +576,14 @@ class JobQueue:
         row = await self.db.fetchone("SELECT * FROM jobs WHERE id = ?", (job_id,))
         return Job.from_row(row) if row else None
 
+    async def children(self, parent_id: JobId) -> list[Job]:
+        """The jobs enqueued with this parent, oldest first (order within a millisecond is
+        arbitrary)."""
+        rows = await self.db.fetchall(
+            "SELECT * FROM jobs WHERE parent_job_id = ? ORDER BY created_at, id", (parent_id,)
+        )
+        return [Job.from_row(r) for r in rows]
+
     async def next_due(self) -> datetime | None:
         """When the queue next needs attention: the earliest queued ``run_after`` or the earliest
         lease expiry (whichever is first), or None if idle."""
@@ -446,7 +599,7 @@ def _acct(value: str | None) -> AccountId | None:
 
 
 # -- the runtime ----------------------------------------------------------------------------
-Handler = Callable[[Any, Job], Awaitable[None]]
+Handler = Callable[[Any, Job], Awaitable[BaseModel | None]]
 
 
 @dataclass(frozen=True)
@@ -458,7 +611,7 @@ class _Registration:
 
 @dataclass
 class _Running:
-    task: "asyncio.Task[None]"
+    task: "asyncio.Task[BaseModel | None]"
     user_cancelled: bool = False
 
 
@@ -486,16 +639,21 @@ class JobRunner:
         self,
         kind: str,
         model: type[M],
-        handler: Callable[[M, Job], Awaitable[None]],
+        handler: Callable[[M, Job], Awaitable[BaseModel | None]],
         *,
         concurrency: int | None = None,
+        result_model: type[BaseModel] | None = None,
     ) -> None:
         """Run ``handler(payload, job)`` for jobs of ``kind``. The payload is validated against
         ``model``; a job that does not validate fails at once. ``concurrency`` caps how many of
-        this kind run at once (``[jobs] kind_limits`` in config takes precedence)."""
+        this kind run at once (``[jobs] kind_limits`` in config takes precedence). With
+        ``result_model`` the handler must return a result of that shape, which is stored on the
+        job; external agents completing the same kind are held to the same schema."""
         if kind in self._registry:
             raise ValueError(f"a handler for {kind!r} is already registered")
         self._registry[kind] = _Registration(model, handler, concurrency)
+        if result_model is not None:
+            self.queue.register_result(kind, result_model)
 
     def _limits(self) -> dict[str, int]:
         limits = {k: r.concurrency for k, r in self._registry.items() if r.concurrency}
@@ -580,21 +738,20 @@ class JobRunner:
         self._running[job.id] = entry
         beat = asyncio.create_task(self._heartbeat(job, worker, entry))
         try:
-            await task
+            result = await task
+            if not await q.complete(job.id, worker, result):
+                log.warning("job finished after losing its lease", job_id=job.id, kind=job.kind)
         except asyncio.CancelledError:
             if entry.user_cancelled:
                 await q.mark_cancelled(job.id, worker)
                 return
             await q.release(job.id, worker)  # shutting down
             raise
-        except PermanentJobError as exc:
+        except (PermanentJobError, InvalidResult) as exc:  # a retry would only repeat it
             await q.fail(job.id, worker, exc, permanent=True)
         except Exception as exc:
             log.warning("job failed", job_id=job.id, kind=job.kind, attempt=job.attempts)
             await q.fail(job.id, worker, exc)
-        else:
-            if not await q.complete(job.id, worker):
-                log.warning("job finished after losing its lease", job_id=job.id, kind=job.kind)
         finally:
             beat.cancel()
             self._running.pop(job.id, None)
@@ -613,5 +770,5 @@ class JobRunner:
                 return
 
 
-async def _call(handler: Handler, payload: Any, job: Job) -> None:
-    await handler(payload, job)
+async def _call(handler: Handler, payload: Any, job: Job) -> BaseModel | None:
+    return await handler(payload, job)

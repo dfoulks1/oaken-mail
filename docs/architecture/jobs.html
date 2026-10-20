@@ -37,6 +37,7 @@
       <a class="doc-link" href="overview.html">Architecture overview</a>
       <a class="doc-link current" href="jobs.html" aria-current="page">Events, jobs and the scheduler</a>
       <a class="doc-link" href="software-map.html">Software map</a>
+      <a class="doc-link" href="swarm.html">The swarm</a>
       <div class="label">Project</div>
       <a class="doc-link" href="../contributing.html">Contributing</a>
       <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
@@ -50,8 +51,9 @@
       <a class="nav-link" href="#the-job-lifecycle"><span class="num">2</span>The job lifecycle</a>
       <a class="nav-link" href="#guarantees-and-rules"><span class="num">3</span>Guarantees and rules</a>
       <a class="nav-link" href="#events"><span class="num">4</span>Events</a>
-      <a class="nav-link" href="#the-scheduler"><span class="num">5</span>The scheduler</a>
-      <a class="nav-link" href="#testing"><span class="num">6</span>Testing</a>
+      <a class="nav-link" href="#results-parents-and-actors"><span class="num">5</span>Results, parents and actors</a>
+      <a class="nav-link" href="#the-scheduler"><span class="num">6</span>The scheduler</a>
+      <a class="nav-link" href="#testing"><span class="num">7</span>Testing</a>
     </nav></div>
   </div></div>
 </nav>
@@ -189,7 +191,13 @@ and, if a consumer falls behind, the <strong>oldest</strong> events are dropped 
 never blocks the publisher.</li>
 </ul>
 </section>
-<section id="the-scheduler" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>The scheduler</h2></div>
+<section id="results-parents-and-actors" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Results, parents and actors</h2></div>
+<p>A job can store a <strong>result</strong>, which is checked against a schema for its kind before it is
+saved. It can name a <strong>parent</strong> job, for splitting work into pieces, and it records its <strong>actor</strong>
+(user, agent or system). Besides core's own workers, external agents can lease jobs too: see
+<a href="swarm.html">the swarm</a>.</p>
+</section>
+<section id="the-scheduler" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>The scheduler</h2></div>
 <p>A schedule is either a fixed interval or a five-field cron expression, evaluated in UTC (no
 daylight-saving surprises). Its <code>next_run</code> is stored in <code>raw.db</code>. A tick enqueues the due jobs
 and advances <code>next_run</code> in one transaction, so a restart neither repeats a run nor skips one.
@@ -198,7 +206,7 @@ If the process was down for several periods, the missed runs collapse into a sin
 and month and weekday names, which is everything &quot;sync every five minutes&quot; or &quot;nightly backfill&quot;
 needs; a full library would add a dependency and time-zone handling that nothing here uses.</p>
 </section>
-<section id="testing" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Testing</h2></div>
+<section id="testing" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>Testing</h2></div>
 <p>Everything above is tested with a fake clock and no sleeping: advance the clock, call <code>drain()</code>
 on the runner or <code>tick()</code> on the scheduler, and look at the database. The tests live in
 <code>src/oaken/core/tests/</code>.</p>
