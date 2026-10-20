@@ -218,3 +218,18 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Oaken Mail: never commit data, mail or secrets ---
+*.db
+*.db-*
+*.sqlite*
+*.eml
+*.mbox
+.env.*
+!.env.example
+token*.json
+credentials*.json
+client_secret*.json
+node_modules/
+site/
+.claude/settings.local.json

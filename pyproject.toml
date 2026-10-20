@@ -1,0 +1,58 @@
+[project]
+name = "oaken"
+dynamic = ["version"]
+description = "Oaken Mail: a local-first, AI-native mail client."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+oaken = "oaken.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/oaken/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/oaken"]
+
+[dependency-groups]
+dev = [
+    "coverage",
+    "detect-secrets",
+    "mypy",
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+]
+# Populated by prompt 01a (site tooling). The core runtime must not depend on it.
+docs = []
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "CPY"]
+preview = true
+explicit-preview-rules = true
+
+[tool.ruff.lint.flake8-copyright]
+notice-rgx = "SPDX-License-Identifier: Apache-2\\.0"
+min-file-size = 0
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.mypy]
+strict = true
+files = ["src", "tests"]
