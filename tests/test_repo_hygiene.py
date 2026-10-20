@@ -22,6 +22,9 @@ FORBIDDEN = [
     "client_secret*.json",
 ]
 ALLOWED = {".env.example"}
+# Hand-written, synthetic mail on reserved example domains (see the 06 fixtures). Real mail is
+# still refused everywhere else, and anything else under these folders is still checked.
+SYNTHETIC_MAIL_DIRS = ("src/oaken/mail/tests/fixtures/",)
 
 
 def _tracked() -> list[str]:
@@ -43,6 +46,7 @@ def test_no_sensitive_files_tracked() -> None:
         p
         for p in _tracked()
         if Path(p).name not in ALLOWED
+        and not (p.endswith(".eml") and p.startswith(SYNTHETIC_MAIL_DIRS))
         and any(fnmatch.fnmatch(Path(p).name, pat) for pat in FORBIDDEN)
     ]
     assert not bad, f"sensitive files are tracked: {bad}"
