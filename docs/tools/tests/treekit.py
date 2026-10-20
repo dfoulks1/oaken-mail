@@ -1,13 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Fixtures for the docs tooling tests: a throwaway content tree, never the real docs."""
+"""A throwaway docs content tree for the docs tooling tests (never the real docs)."""
 
 import sys
-from collections.abc import Callable
 from pathlib import Path
 
-import pytest
-
-TOOLS = Path(__file__).resolve().parents[2] / "docs" / "tools"
+TOOLS = Path(__file__).resolve().parents[1]
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
@@ -131,21 +128,3 @@ class Tree:
 
     def cfg(self) -> Config:
         return load_config(self.docs, self.root)
-
-
-@pytest.fixture
-def tree(tmp_path: Path) -> Tree:
-    return Tree(tmp_path / "repo")
-
-
-@pytest.fixture
-def built(tree: Tree, tmp_path: Path) -> Callable[[], Path]:
-    """Build the fixture tree and return the output directory."""
-    import build_site
-
-    def _build() -> Path:
-        out = tmp_path / "out"
-        build_site.build(tree.cfg(), out)
-        return out
-
-    return _build

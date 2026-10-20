@@ -12,8 +12,7 @@ import generated
 import pagebase
 import pytest
 from model import BuildError, Config
-
-from tests.docs.conftest import Tree
+from treekit import Tree
 
 
 def read(out: Path, rel: str) -> str:

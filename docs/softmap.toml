@@ -288,10 +288,27 @@ uses = ["dbaccess"]
 id = "dbaccess"
 name = "Core foundation"
 layer = "foundation"
-status = "planned"
+status = "built"
 prompt = "02"
+path = "src/oaken/core"
 summary = "Settings, platform paths, logging, errors, ids, clock and the database access layer."
 uses = []
+types = [
+  ["Settings", "pydantic model", "Defaults < config.toml < OAKEN_* env; unknown keys are an error."],
+  ["Database", "class", "Write broker plus a pool of read-only WAL connections (ADR 0003)."],
+  ["Tx", "class", "The writer, lent out inside a transaction() block."],
+  ["OakenError", "exception", "Base of the error taxonomy; every subclass has a stable machine code."],
+  ["MessageId / AccountId / ThreadId / JobId", "NewType", "Typed internal ids; message, thread and job ids are UUIDv7."],
+  ["Clock", "Protocol", "SystemClock in production, FakeClock in tests."],
+]
+funcs = [
+  ["Settings.load() -> Settings", "Apply the full precedence; raises ConfigError on a bad file or value."],
+  ["Database.open(path) -> Database", "Open a WAL database with a writer and a read pool."],
+  ["Database.transaction()", "Async context manager: BEGIN IMMEDIATE, commit, or roll back on error."],
+  ["migrate(db, directory) -> list[int]", "Forward-only migrations with checksums; refuses a newer database."],
+  ["configure_logging(settings)", "structlog to stderr; redacts secrets and truncates long fields."],
+]
+notes = ["OAKEN_HOME relocates every path under one root; tests rely on it."]
 
 [[components]]
 id = "safety"

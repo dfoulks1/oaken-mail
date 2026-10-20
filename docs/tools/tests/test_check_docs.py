@@ -7,8 +7,7 @@ from pathlib import Path
 import build_site
 import check_docs
 import pytest
-
-from tests.docs.conftest import Tree
+from treekit import Tree
 
 
 def problems(tree: Tree) -> list[str]:

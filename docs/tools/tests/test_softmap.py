@@ -6,8 +6,7 @@ from pathlib import Path
 import build_site
 import pytest
 from model import BuildError
-
-from tests.docs.conftest import Tree
+from treekit import Tree
 
 MAP = """\
 [[stacks]]

@@ -7,7 +7,7 @@ import build_site
 import check_docs
 from model import load_config
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_real_docs_pass_check() -> None:

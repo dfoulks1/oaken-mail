@@ -20,6 +20,9 @@ pre-commit, or run `uv run detect-secrets-hook --baseline .secrets.baseline <fil
 ## Ground rules
 
 - Every Python file starts with `# SPDX-License-Identifier: Apache-2.0`.
+- Tests live in a `tests/` directory next to the code they cover (`src/oaken/core/tests/` for
+  `src/oaken/core/`). Run `uv run pytest` from the repo root for everything, or from any
+  subdirectory to run only the tests below it. `tests/` at the root holds repo-wide checks.
 - Tests never use the network, Ollama, Gmail, Docker or real mail. Use synthetic fixtures.
 - Never commit real email content, addresses, databases or tokens.
 - Use Conventional Commits for commit messages.
