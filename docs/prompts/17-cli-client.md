@@ -113,4 +113,5 @@ same commit (see `00-context.md`).
 | 08 | Vector store status | `oaken vectors status` | Models (active or building), vectors per model, file size, whether the sqlite-vec extension loads. `SqliteVecStore.stats()` and `health()` exist. |
 | 08 | Model swap | `oaken vectors reembed MODEL` | `begin_model`, then embed, then `activate_model`; `reembed_plan` gives progress and a time estimate. `drop_model` for the old one needs a confirm. |
 | 08 | Orphan cleanup | `oaken vectors prune` | `prune_orphans()` after a reindex. Local and cheap. |
+| 08 | Several vector stores | `oaken vectors stores`, `oaken vectors split` | List each store with its size, cap, vector count and whether it is active or closed; `split` closes the active one and starts another, whenever the user says. Setting or clearing a cap (`max_mb`) belongs here too. Specified in the 09 notes. |
 

@@ -122,3 +122,30 @@ write), and removes a deleted message from the index instead. Wire it like this:
 - A model change is `begin_model` -> embed everything -> `activate_model` -> `drop_model`. Mixing
   models without `begin_model` raises `Conflict`. `reembed_plan` feeds the progress display.
 - Call `record_throughput(chunks, seconds)` after each batch so the plan's time estimate is real.
+
+## Note from prompt 08: more than one vector store
+
+The user wants several stores (files). Decisions so far:
+
+- **Size cap is optional.** A store may have `max_mb`; with none it grows without limit. When the
+  active store reaches its cap, new vectors go to the next store.
+- **The user can split whenever they like** (`oaken vectors split`), cap or no cap: close the
+  active store to new vectors and start another.
+- A closed store stays searchable and takes updates and deletes for messages it already holds.
+- Chunk ids are never reused (done in 08), so an id means one chunk in every store.
+- Settings: `ai.vector_store` becomes an ordered list of named stores with their own config. The
+  host needs instance names separate from the plugin name (`[plugins.sqlite-vec.archive]`); the
+  plugin already takes a `path`.
+- A small router in core: write to the active store, query all and merge by score, send deletes
+  and `prune_orphans` to all, and run `stored_hashes`, `reembed_plan` and model swaps per store
+  (a swap runs on every store together). Every store must hold the same `model_id` and
+  dimensions, or the router refuses.
+- A `message_id -> store` table in `index.db` (rebuildable from the stores) sends an update or
+  delete to the right store.
+- A store outside `index.db` has no `docs` table, so the router resolves `thread_key`, `after`,
+  `before` and `sender` in the index and passes an allow-list of message ids. That is a small
+  addition to the `query` contract.
+- Only the size cap and the manual split are built first; other rules (by account, by year) go
+  behind the same interface later.
+- Status, health and stats are reported per store.
+
