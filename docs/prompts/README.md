@@ -24,6 +24,7 @@ review it before starting the next.
 | 11b | [smtp-send](11b-smtp-send.md) | SMTP send-as provider: sends only, password in the keyring, TLS required | 04, 11 |
 | 11c | [imap-provider](11c-imap-provider.md) | Plain IMAP provider (to be settled in discussion) | 04, 05, 09 |
 | 12 | [read-state](12-read-state.md) | `mark_read` on open/summarize, write-back, audit + undo | 11 |
+| 12b | [sync-scheduling](12b-sync-scheduling.md) | Core loads providers and syncs on a per-account schedule held in the database | 03, 11c, 12 |
 | 13 | [operation-registry](13-operation-registry.md) | Typed operations; permission classes; confirm gate | 09, 12 |
 | 14 | [enrichers](14-enrichers.md) | Summary, triage, actions, header/MIME inspector | 10, 13 |
 | 15 | [retrieval-and-ask](15-retrieval-and-ask.md) | Hybrid search, token-budgeted context, cited Q&A, eval harness | 08, 14 |
