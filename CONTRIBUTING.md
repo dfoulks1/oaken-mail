@@ -4,7 +4,7 @@ Pull requests are welcome. There is no DCO or CLA yet.
 
 ## Development setup
 
-You need Python 3.11 or newer and [uv](https://docs.astral.sh/uv/).
+You need Python 3.11 or newer and uv.
 
 ```bash
 uv sync
@@ -23,3 +23,16 @@ pre-commit, or run `uv run detect-secrets-hook --baseline .secrets.baseline <fil
 - Tests never use the network, Ollama, Gmail, Docker or real mail. Use synthetic fixtures.
 - Never commit real email content, addresses, databases or tokens.
 - Use Conventional Commits for commit messages.
+
+## Documentation
+
+The project website is generated from `docs/` and published to GitHub Pages. If you change
+user-visible behaviour, add or change a page, then check it before committing:
+
+```bash
+uv run --group docs python docs/tools/check_docs.py      # build + link check
+uv run --group docs python docs/tools/build_site.py --serve   # preview on 127.0.0.1:8000
+```
+
+Register new pages in `docs/site.toml`. Generated output goes to `site/` and is not
+committed.

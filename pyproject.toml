@@ -30,8 +30,16 @@ dev = [
     "pytest-asyncio",
     "ruff",
 ]
-# Populated by prompt 01a (site tooling). The core runtime must not depend on it.
-docs = []
+# Site tooling (docs/tools). The core runtime must not depend on it.
+docs = [
+    "jinja2",
+    "markdown-it-py",
+    "mdit-py-plugins",
+    "pygments",
+]
+
+[tool.uv]
+default-groups = ["dev", "docs"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -52,7 +60,13 @@ min-file-size = 0
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
+"docs/tools/pagebase.py" = ["E501"]  # embedded CSS
 
 [tool.mypy]
 strict = true
-files = ["src", "tests"]
+files = ["src", "tests", "docs/tools"]
+mypy_path = "docs/tools"
+
+[[tool.mypy.overrides]]
+module = ["pygments", "pygments.*"]
+ignore_missing_imports = true

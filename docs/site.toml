@@ -1,0 +1,76 @@
+# Site registry. Every Markdown file under docs/ must be listed here or excluded below,
+# otherwise check_docs.py reports it as an orphan.
+
+# Globs (relative to docs/, '*' crosses '/') that are not site content. docs/prompts/** and
+# docs/tools/** are always excluded; the ADR sources are summarised by the generated ADR index.
+exclude = ["adr/0*.md"]
+
+[site]
+title = "Oaken Mail"
+description = "A local-first, AI-native mail client."
+repo = "https://github.com/dfoulks1/oaken-mail"
+url = "https://dfoulks1.github.io/oaken-mail/"
+branch = "main"
+home = "index.md"
+
+# Navigation groups, in display order.
+[[groups]]
+id = "start"
+name = "Start"
+
+[[groups]]
+id = "concepts"
+name = "Concepts"
+
+[[groups]]
+id = "reference"
+name = "Reference"
+
+[[groups]]
+id = "project"
+name = "Project"
+
+# Extra hosts that outbound <a> links may point at, beyond github.com.
+[check]
+allow_hosts = ["www.contributor-covenant.org"]
+
+[[pages]]
+id = "architecture/overview"
+file = "architecture/overview.md"
+
+[[pages]]
+id = "adr/index"
+generated = true
+
+[[pages]]
+id = "contributing"
+source = "CONTRIBUTING.md"
+title = "Contributing"
+subtitle = "How to contribute"
+lead = "Pull requests are welcome. Here is how to set up, what the checks are, and the ground rules."
+description = "Set up a development environment and the rules for contributions."
+badges = [["text-bg-primary", "Open source"]]
+group = "project"
+order = 10
+
+[[pages]]
+id = "security"
+source = "SECURITY.md"
+title = "Security policy"
+subtitle = "Reporting vulnerabilities"
+lead = "How to report a suspected vulnerability privately."
+description = "How to report a security problem."
+badges = [["text-bg-warning", "Pre-alpha"]]
+group = "project"
+order = 30
+
+[[pages]]
+id = "code-of-conduct"
+source = "CODE_OF_CONDUCT.md"
+title = "Code of conduct"
+subtitle = "Community standards"
+lead = "The standards we hold ourselves to, and what happens when they are not met."
+description = "The Contributor Covenant code of conduct."
+badges = [["text-bg-primary", "Open source"]]
+group = "project"
+order = 40

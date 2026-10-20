@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+"""Build the Oaken Mail website from docs/ into site/.
+
+    uv run --group docs python docs/tools/build_site.py [--out site] [--serve] [--strict]
+
+Output is deterministic: no timestamps, sorted iteration, LF newlines, so two builds of the
+same tree are byte-identical. All internal links are relative, so the site works under
+/oaken-mail/, from file://, and from --serve.
+"""
+
+import argparse
+import functools
+import http.server
+import shutil
+import sys
+from pathlib import Path
+from typing import Any
+from xml.sax.saxutils import escape
+
+import generated
+import pagebase
+from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
+from model import (
+    BuildError,
+    Config,
+    Page,
+    git_info,
+    load_config,
+    page_from_markdown,
+    project_version,
+)
+from render import Renderer, asset_prefix, rel_href
+
+HERE = Path(__file__).resolve().parent
+CARDS_MARKER = "<p>{{doc-cards}}</p>"
+HOME_ID = "index"
+TODO_MARKER = "TODO(user)"
+
+
+def make_env() -> Environment:
+    return Environment(
+        loader=FileSystemLoader(str(HERE / "templates")),
+        autoescape=select_autoescape(["html"], default=True),
+        undefined=StrictUndefined,
+        keep_trailing_newline=True,
+    )
+
+
+def collect_pages(cfg: Config) -> list[Page]:
+    """Every registered page, in registry order. Raises BuildError on any registry problem."""
+    generated.load_all()
+    group_ids = {g.id for g in cfg.groups}
+    pages: list[Page] = []
+    seen: set[str] = set()
+    for entry in cfg.entries:
+        pid = entry["id"]
+        if pid in seen or pid == HOME_ID:
+            raise BuildError(f"site.toml: duplicate or reserved page id {pid!r}")
+        seen.add(pid)
+        if entry.get("generated"):
+            page = generated.get(pid)(cfg)
+            for key in ("title", "subtitle", "lead", "group", "order", "description"):
+                if key in entry:
+                    setattr(page, key, entry[key])
+        else:
+            page = page_from_markdown(cfg, entry)
+        if page.group not in group_ids:
+            raise BuildError(f"page {pid!r}: group {page.group!r} is not declared in site.toml")
+        pages.append(page)
+    return pages
+
+
+def check_todos(pages: list[Page]) -> None:
+    hits = [p.id for p in pages if TODO_MARKER in p.body_md or TODO_MARKER in p.lead]
+    if hits:
+        raise BuildError(f"--strict: {TODO_MARKER} is still present in: {', '.join(sorted(hits))}")
+
+
+def _nav(cfg: Config, pages: list[Page], current: Page | None) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for g in cfg.groups:
+        members = sorted((p for p in pages if p.group == g.id), key=lambda p: (p.order, p.title))
+        if not members:
+            continue
+        out.append(
+            {
+                "name": g.name,
+                "pages": [
+                    {
+                        "title": p.title,
+                        "href": rel_href(current.id if current else HOME_ID, p.id),
+                        "current": current is not None and p.id == current.id,
+                    }
+                    for p in members
+                ],
+            }
+        )
+    return out
+
+
+def _css_tokens() -> str:
+    return (
+        f":root{{--accent:{pagebase.ACCENT_LIGHT};--accent-soft:{pagebase.ACCENT_SOFT_LIGHT}}}"
+        f'[data-bs-theme="dark"]{{--accent:{pagebase.ACCENT_DARK};'
+        f"--accent-soft:{pagebase.ACCENT_SOFT_DARK}}}"
+    )
+
+
+def _is_safe_out(out: Path) -> bool:
+    return not out.exists() or not any(out.iterdir()) or (out / ".nojekyll").exists()
+
+
+def build(cfg: Config, out: Path, strict: bool = False) -> list[str]:
+    """Write the site to ``out`` and return the list of files written (relative, sorted)."""
+    pages = collect_pages(cfg)
+    home = page_from_markdown(cfg, {"id": HOME_ID, "file": cfg.home})
+    if strict:
+        check_todos(pages + [home])
+    renderer = Renderer(cfg, pages + [home])
+    env = make_env()
+
+    if not _is_safe_out(out):
+        raise BuildError(f"refusing to overwrite {out}: not empty and not a previous site build")
+    if out.exists():
+        shutil.rmtree(out)
+    written: dict[str, bytes] = {}
+
+    version = project_version(cfg.repo_root)
+    footer = f"{cfg.title} {version} · {git_info(cfg.repo_root)} · Apache-2.0"
+    common: dict[str, Any] = {
+        "site": cfg,
+        "favicon": pagebase.FAVICON,
+        "head_js": pagebase.HEAD_JS,
+        "footer": footer,
+    }
+
+    for page in pages:
+        rendered = renderer.render(page)
+        prefix = asset_prefix(page.id)
+        html_text = env.get_template("page.html").render(
+            **common,
+            page=page,
+            rendered=rendered,
+            prefix=prefix,
+            home_href=rel_href(page.id, HOME_ID),
+            nav=_nav(cfg, pages, page),
+            cdn=pagebase.cdn_tags(rendered.has_mermaid),
+            doc_title=f"{page.title} · {cfg.title}",
+            description=page.description or page.lead or cfg.description,
+        )
+        written[page.out] = html_text.encode("utf-8")
+
+    home_rendered = renderer.render_plain(home)
+    cards = [
+        {
+            "kicker": next((g.name for g in cfg.groups if g.id == p.group), ""),
+            "title": p.title,
+            "blurb": p.description or p.lead,
+            "href": rel_href(HOME_ID, p.id),
+        }
+        for g in cfg.groups
+        for p in sorted((p for p in pages if p.group == g.id), key=lambda p: (p.order, p.title))
+    ]
+    cards_html = env.get_template("cards.html").render(cards=cards)
+    home_rendered.intro_html = home_rendered.intro_html.replace(CARDS_MARKER, cards_html)
+    subtitle = home.subtitle if home.subtitle != home.title else ""
+    written["index.html"] = (
+        env.get_template("home.html")
+        .render(
+            **common,
+            page=home,
+            rendered=home_rendered,
+            prefix="",
+            cdn=pagebase.cdn_tags(home_rendered.has_mermaid),
+            doc_title=f"{cfg.title} · {subtitle}" if subtitle else cfg.title,
+            description=home.description or home.lead or cfg.description,
+        )
+        .encode("utf-8")
+    )
+
+    written["404.html"] = (
+        env.get_template("404.html")
+        .render(
+            **common,
+            cdn=pagebase.cdn_tags(False),
+            css_tokens=_css_tokens(),
+            base_path=cfg.site_base_path,
+        )
+        .encode("utf-8")
+    )
+    written["assets/site.css"] = pagebase.CSS.encode("utf-8")
+    written["assets/site.js"] = pagebase.SITE_JS.encode("utf-8")
+    urls = [cfg.site_url] + [cfg.site_url + p.out for p in sorted(pages, key=lambda p: p.id)]
+    sitemap = ['<?xml version="1.0" encoding="UTF-8"?>']
+    sitemap.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
+    sitemap += [f"  <url><loc>{escape(u)}</loc></url>" for u in urls]
+    sitemap.append("</urlset>\n")
+    written["sitemap.xml"] = "\n".join(sitemap).encode("utf-8")
+    robots = f"User-agent: *\nAllow: /\nSitemap: {cfg.site_url}sitemap.xml\n"
+    written["robots.txt"] = robots.encode()
+    written[".nojekyll"] = b""
+
+    for rel in sorted(written):
+        target = out / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(written[rel])
+    return sorted(written)
+
+
+def serve(out: Path, port: int) -> None:
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(out))
+    with http.server.ThreadingHTTPServer(("127.0.0.1", port), handler) as httpd:
+        print(f"Serving {out} at http://127.0.0.1:{port}/ (Ctrl+C to stop)")
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            pass
+
+
+def main(argv: list[str] | None = None) -> int:
+    default_docs = HERE.parent
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--docs", type=Path, default=default_docs, help="docs directory (site.toml)")
+    ap.add_argument("--repo-root", type=Path, default=None)
+    ap.add_argument("--out", type=Path, default=None, help="output dir (default: <repo>/site)")
+    ap.add_argument("--serve", action="store_true", help="serve the result on 127.0.0.1")
+    ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument("--strict", action="store_true", help=f"fail if {TODO_MARKER} remains")
+    args = ap.parse_args(argv)
+    try:
+        cfg = load_config(args.docs, args.repo_root)
+        out = (args.out or cfg.repo_root / "site").resolve()
+        files = build(cfg, out, strict=args.strict)
+    except BuildError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Built {len(files)} files into {out}")
+    if args.serve:
+        serve(out, args.port)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
