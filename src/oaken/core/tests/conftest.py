@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from oaken.core.db import Database
+from oaken.core.clock import FakeClock
+from oaken.core.db import Database, migrate
 
 
 @pytest.fixture(autouse=True)
@@ -22,4 +23,20 @@ def oaken_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 @pytest.fixture
 async def db(tmp_path: Path) -> AsyncIterator[Database]:
     async with await Database.open(tmp_path / "t.db", read_pool_size=3) as database:
+        yield database
+
+
+MIGRATIONS = Path(__file__).resolve().parent.parent / "migrations"
+
+
+@pytest.fixture
+def clock() -> FakeClock:
+    return FakeClock()
+
+
+@pytest.fixture
+async def raw(tmp_path: Path) -> AsyncIterator[Database]:
+    """A raw.db with the core migrations applied."""
+    async with await Database.open(tmp_path / "raw.db", read_pool_size=2) as database:
+        await migrate(database, MIGRATIONS)
         yield database

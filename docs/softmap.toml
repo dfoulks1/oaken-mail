@@ -185,30 +185,58 @@ untrusted = true
 id = "events"
 name = "Event bus"
 layer = "runtime"
-status = "planned"
+status = "built"
 prompt = "03"
-summary = "In-memory, typed events."
+path = "src/oaken/core/events.py"
+summary = "In-memory, typed events. Handlers are never dropped; client streams are bounded and drop the oldest."
 uses = []
 notifies = ["api", "ingest"]
+types = [
+  ["Event", "frozen dataclass", "Base of every event: ts and a UUIDv7 event_id; subclasses add account_id and fields."],
+  ["EventStream", "async iterator", "Bounded drop-oldest queue for one client; counts what it dropped."],
+]
+funcs = [
+  ["EventBus.subscribe(type, handler)", "Internal handler for an event type; failures are logged, never propagated."],
+  ["EventBus.publish(event)", "Deliver to every handler and stream; never blocked by a slow stream."],
+  ["EventBus.stream(filter)", "An async iterator of events, for SSE later."],
+]
 
 [[components]]
 id = "jobs"
 name = "Job queue"
 layer = "runtime"
-status = "planned"
+status = "built"
 prompt = "03"
-summary = "Durable queue that survives crashes and restarts, with retries and backoff."
-uses = ["rawstore"]
+path = "src/oaken/core/jobs.py"
+summary = "Durable queue in raw.db that survives crashes and restarts: leases, retries with backoff, dedupe, priority and per-kind concurrency."
+uses = ["dbaccess", "events"]
 notifies = ["ingest"]
+types = [
+  ["Job", "frozen dataclass", "One row of the jobs table."],
+  ["JobQueue", "class", "Enqueue, claim with a lease, heartbeat, complete, fail, cancel."],
+  ["JobRunner", "class", "N asyncio workers; handlers register by kind with a pydantic payload model."],
+  ["PermanentJobError", "exception", "Raised by a handler to fail without retrying."],
+]
+funcs = [
+  ["JobQueue.enqueue(kind, payload, dedupe_key=...)", "Idempotent while an equal key is queued or running."],
+  ["JobRunner.register(kind, model, handler, concurrency=...)", "Run handler(payload, job) for jobs of this kind."],
+  ["JobRunner.drain()", "Run everything runnable now; used by tests with a fake clock."],
+]
+notes = ["Delivery is at least once, so handlers must be idempotent.", "See architecture/jobs for the lifecycle."]
 
 [[components]]
 id = "scheduler"
 name = "Scheduler"
 layer = "runtime"
-status = "planned"
+status = "built"
 prompt = "03"
-summary = "Recurring work such as periodic sync; replaces APScheduler."
+path = "src/oaken/core/scheduler.py"
+summary = "Recurring work (interval or cron, UTC) with a persisted next_run, so restarts neither repeat nor skip; replaces APScheduler."
 uses = ["jobs"]
+funcs = [
+  ["Scheduler.add(name, kind, payload, every= | cron=)", "Create or update a schedule; idempotent at start-up."],
+  ["Scheduler.tick()", "Enqueue every due schedule and advance next_run in one transaction."],
+]
 
 [[components]]
 id = "pluginhost"

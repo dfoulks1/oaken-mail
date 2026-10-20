@@ -39,6 +39,10 @@ id = "architecture/overview"
 file = "architecture/overview.md"
 
 [[pages]]
+id = "architecture/jobs"
+file = "architecture/jobs.md"
+
+[[pages]]
 id = "architecture/software-map"
 generated = true
 

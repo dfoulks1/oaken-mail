@@ -40,8 +40,19 @@ class AISettings(_Section):
     embedder: str = "ollama"
     embed_model: str = "nomic-embed-text"
     llm_backend: str = "ollama"
-    llm_model: str = "llama3.2:3b"
+    llm_model: str = "qwen3:8b"  # a starting point; set a larger model for better analysis
     vector_store: str = "sqlite-vec"
+
+
+class JobsSettings(_Section):
+    workers: int = Field(default=4, ge=1, le=64)
+    lease_seconds: float = Field(default=120.0, gt=0)
+    max_attempts: int = Field(default=5, ge=1)
+    backoff_base_seconds: float = Field(default=5.0, gt=0)
+    backoff_max_seconds: float = Field(default=3600.0, gt=0)
+    backoff_jitter: float = Field(default=0.2, ge=0, le=1)
+    # Per-kind cap on jobs running at once, e.g. {"embed": 1, "enrich": 1} for one local GPU.
+    kind_limits: dict[str, int] = Field(default_factory=dict)
 
 
 class SyncSettings(_Section):
@@ -68,6 +79,7 @@ class Settings(BaseSettings):
 
     storage: StorageSettings = StorageSettings()
     ai: AISettings = AISettings()
+    jobs: JobsSettings = JobsSettings()
     sync: SyncSettings = SyncSettings()
     api: APISettings = APISettings()
     log: LogSettings = LogSettings()

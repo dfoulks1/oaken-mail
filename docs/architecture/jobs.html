@@ -1,0 +1,215 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Events, jobs and the scheduler · Oaken Mail</title>
+<meta name="description" content="The event bus, the durable job queue with leases and retries, and the scheduler.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Events, jobs and the scheduler · Oaken Mail">
+<meta property="og:description" content="The event bus, the durable job queue with leases and retries, and the scheduler.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=&#39;http%3A//www.w3.org/2000/svg&#39; viewBox=&#39;0 0 32 32&#39;%3E%3Crect width=&#39;32&#39; height=&#39;32&#39; rx=&#39;7&#39; fill=&#39;%231f4e79&#39;/%3E%3Cpath d=&#39;M16 5c-4 0-7 3-7 7 0 2 1 3 1 5 0 3-2 4-2 7h16c0-3-2-4-2-7 0-2 1-3 1-5 0-4-3-7-7-7z&#39; fill=&#39;%23e8f0f8&#39;/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand">OAKEN</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html">OAKEN</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">How core does work in the background</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="overview.html">Architecture overview</a>
+      <a class="doc-link current" href="jobs.html" aria-current="page">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="software-map.html">Software map</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#the-three-pieces"><span class="num">1</span>The three pieces</a>
+      <a class="nav-link" href="#the-job-lifecycle"><span class="num">2</span>The job lifecycle</a>
+      <a class="nav-link" href="#guarantees-and-rules"><span class="num">3</span>Guarantees and rules</a>
+      <a class="nav-link" href="#events"><span class="num">4</span>Events</a>
+      <a class="nav-link" href="#the-scheduler"><span class="num">5</span>The scheduler</a>
+      <a class="nav-link" href="#testing"><span class="num">6</span>Testing</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <h1 class="display-6">Events, jobs and the scheduler</h1>
+    <p class="lead">An in-memory event bus tells the rest of core what happened. A durable job queue does the work, and survives a crash. A scheduler puts recurring work on that queue.</p>
+  </header>
+
+<section id="the-three-pieces" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>The three pieces</h2></div>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Piece</th>
+<th>Lives in</th>
+<th>Survives a restart?</th>
+<th>Job</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Event bus</td>
+<td>memory</td>
+<td>no</td>
+<td>tell listeners that something happened</td>
+</tr>
+<tr>
+<td>Job queue</td>
+<td><code>raw.db</code></td>
+<td>yes</td>
+<td>run work at least once, with retries</td>
+</tr>
+<tr>
+<td>Scheduler</td>
+<td><code>raw.db</code></td>
+<td>yes</td>
+<td>enqueue recurring work on time, once</td>
+</tr>
+</tbody>
+</table></div>
+<p>Nothing here calls a model or a mail provider. Ingest, sync and enrichment arrive in later
+prompts as job handlers; this layer only runs them.</p>
+</section>
+<section id="the-job-lifecycle" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>The job lifecycle</h2></div>
+<p>A job is a row in <code>raw.db</code>. Workers take jobs by <em>claiming</em> them: one short transaction marks
+the best runnable job as <code>running</code> and gives the worker a <strong>lease</strong>. A worker that dies simply
+stops renewing its lease; once the lease expires, the job is queued again.</p>
+<pre class="mermaid">sequenceDiagram
+    participant P as Producer
+    participant Q as Queue (raw.db)
+    participant W as Worker
+    participant H as Handler
+    P-&gt;&gt;Q: enqueue(kind, payload, dedupe_key)
+    Q--&gt;&gt;P: job id (or the existing one)
+    W-&gt;&gt;Q: claim(kinds, limits)
+    Note over Q: reclaim expired leases, skip kinds at their limit,&lt;br/&gt;pick highest priority, set lease, attempts + 1
+    Q--&gt;&gt;W: job
+    W-&gt;&gt;H: handler(payload, job)
+    loop while it runs
+        W-&gt;&gt;Q: heartbeat (extends the lease)
+    end
+    alt success
+        H--&gt;&gt;W: returns
+        W-&gt;&gt;Q: complete, status succeeded
+    else error and attempts left
+        H--&gt;&gt;W: raises
+        W-&gt;&gt;Q: fail, queued again after backoff
+        Note over Q: delay doubles each attempt, capped, with jitter
+    else permanent error or out of attempts
+        W-&gt;&gt;Q: fail, status failed (last_error kept)
+    end
+</pre><noscript><pre><code>sequenceDiagram
+    participant P as Producer
+    participant Q as Queue (raw.db)
+    participant W as Worker
+    participant H as Handler
+    P-&gt;&gt;Q: enqueue(kind, payload, dedupe_key)
+    Q--&gt;&gt;P: job id (or the existing one)
+    W-&gt;&gt;Q: claim(kinds, limits)
+    Note over Q: reclaim expired leases, skip kinds at their limit,&lt;br/&gt;pick highest priority, set lease, attempts + 1
+    Q--&gt;&gt;W: job
+    W-&gt;&gt;H: handler(payload, job)
+    loop while it runs
+        W-&gt;&gt;Q: heartbeat (extends the lease)
+    end
+    alt success
+        H--&gt;&gt;W: returns
+        W-&gt;&gt;Q: complete, status succeeded
+    else error and attempts left
+        H--&gt;&gt;W: raises
+        W-&gt;&gt;Q: fail, queued again after backoff
+        Note over Q: delay doubles each attempt, capped, with jitter
+    else permanent error or out of attempts
+        W-&gt;&gt;Q: fail, status failed (last_error kept)
+    end
+</code></pre></noscript>
+<p>States are <code>queued</code>, <code>running</code>, <code>succeeded</code>, <code>failed</code> and <code>cancelled</code>. Every change is also
+published as a <code>JobStateChanged</code> event.</p>
+</section>
+<section id="guarantees-and-rules" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Guarantees and rules</h2></div>
+<ul>
+<li><strong>At least once.</strong> If a worker dies mid-job, the job runs again after its lease expires, so
+handlers must be idempotent. A worker that lost its lease cannot mark the job done: the
+finish is fenced by the worker's id.</li>
+<li><strong>Dedupe.</strong> An <code>enqueue</code> with a <code>dedupe_key</code> that is already queued or running does nothing
+and returns the existing job. Once the job finishes the key is free again.</li>
+<li><strong>Priority.</strong> Higher runs first: user-initiated (100), ingest (50), backfill (10). Within a
+priority, the job that became runnable first goes first.</li>
+<li><strong>Retries.</strong> After the Nth failed attempt a job waits <code>min(backoff_max, backoff_base * 2^(N-1))</code>
+seconds, shortened by up to <code>backoff_jitter</code> at random. After <code>max_attempts</code> it is <code>failed</code>.
+A handler can raise <code>PermanentJobError</code> to fail at once, and a payload that does not validate
+fails at once too.</li>
+<li><strong>Errors are stored safely.</strong> <code>last_error</code> has secrets redacted and is cut to 500 characters.</li>
+<li><strong>Per-kind concurrency.</strong> A kind can be capped, for example one <code>embed</code> job at a time for a
+single local GPU. Handlers declare a default; <code>[jobs] kind_limits</code> in <code>config.toml</code> wins.
+The cap is enforced in the claim itself, so it holds across all workers.</li>
+<li><strong>Cancellation.</strong> A queued job is cancelled immediately. A running job is interrupted (its
+handler task is cancelled), so handlers should be cancel-safe.</li>
+<li><strong>Shutdown.</strong> <code>stop()</code> lets in-flight jobs finish for a grace period, then cancels them and
+releases their leases without counting the attempt.</li>
+<li><strong>Long jobs.</strong> A running job renews its lease every third of the lease length, so a slow local
+model can take as long as it needs.</li>
+</ul>
+</section>
+<section id="events" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Events</h2></div>
+<p>The bus carries typed, frozen events: sync progress, message stored, parsed, indexed, embedded,
+enriched, read-state changes, job state changes and plugin health. There are two kinds of
+listener:</p>
+<ul>
+<li><strong>Handlers</strong> are internal components. Every matching event reaches every handler, none is
+ever dropped, and a handler that raises is logged and skipped without affecting anyone else.</li>
+<li><strong>Streams</strong> feed clients (the server-sent events endpoint later). Each has a bounded queue
+and, if a consumer falls behind, the <strong>oldest</strong> events are dropped and counted. A slow stream
+never blocks the publisher.</li>
+</ul>
+</section>
+<section id="the-scheduler" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>The scheduler</h2></div>
+<p>A schedule is either a fixed interval or a five-field cron expression, evaluated in UTC (no
+daylight-saving surprises). Its <code>next_run</code> is stored in <code>raw.db</code>. A tick enqueues the due jobs
+and advances <code>next_run</code> in one transaction, so a restart neither repeats a run nor skips one.
+If the process was down for several periods, the missed runs collapse into a single run.</p>
+<p>The cron parser is about a hundred lines with no dependency. It covers <code>*</code>, lists, ranges, steps
+and month and weekday names, which is everything &quot;sync every five minutes&quot; or &quot;nightly backfill&quot;
+needs; a full library would add a dependency and time-zone handling that nothing here uses.</p>
+</section>
+<section id="testing" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Testing</h2></div>
+<p>Everything above is tested with a fake clock and no sleeping: advance the clock, call <code>drain()</code>
+on the runner or <code>tick()</code> on the scheduler, and look at the database. The tests live in
+<code>src/oaken/core/tests/</code>.</p>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js" integrity="sha384-rbtjAdnIQE/aQJGEgXrVUlMibdfTSa4PQju4HDhN3sR2PmaKFzhEafuePsl9H/9I" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>
