@@ -12,6 +12,7 @@ TODO(user): write a short paragraph on where the name Oaken Mail comes from.
 
 ## What it is for
 
+- **A local MCP server for sensitive mail.** Core hosts an MCP server over your local mail store, so a more capable model can search, read and act on your mail through a narrow, audited interface without the mail being uploaded anywhere. Sending is never exposed.
 - **Your mail stays yours.** Messages are stored on your disk. The original bytes are kept, so nothing is lost and everything derived from them can be rebuilt.
 - **Ask your mailbox questions.** Search combines keywords and meaning, and answers cite the messages they came from.
 - **Cheap by design.** Mail is cleaned once when it arrives (quoted replies, signatures and boilerplate removed), and every model result is cached, so asking a question sends only the few passages that matter.

@@ -33,6 +33,9 @@ that also browses the web.
    - Caller class for the registry is derived from a **client-declared header** that can
      only *lower* privileges (e.g. `X-Oaken-Client: mcp` forces the two-phase confirm
      flow); the token alone never grants the "pre-confirmed" human class for `mcp`.
+     Build the app so prompt 18 can mount the MCP server at `/mcp` on the same listener with
+     its own token, its own caller class (set by the mount, not a header), and its own
+     concurrency and size limits (ADR 0004). Leave `[api] mcp` off until 18 lands.
 5. **Daemon lifecycle (`oaken start|stop|status|restart`):** `start` runs in the
    foreground by default (good for systemd/launchd/dev); `--detach` backgrounds it
    portably (subprocess; document the Windows behavior). Single-instance guarantee via
@@ -58,7 +61,7 @@ that also browses the web.
 
 ## Out of scope
 
-The CLI, MCP shim, UI, TLS (loopback only), multi-user.
+The CLI, the MCP server itself (prompt 18), UI, TLS (loopback only), multi-user.
 
 ## Docs site
 

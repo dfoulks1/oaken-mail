@@ -1,6 +1,6 @@
 # 2. One core daemon with thin clients
 
-- Status: accepted
+- Status: accepted (the MCP part is superseded by ADR 0004)
 - Date: 2026-10-20
 
 ## Context

@@ -5,7 +5,7 @@
 ## Goal
 
 Define every user-facing capability **once**, as a typed operation. The HTTP API,
-CLI and MCP shim are generated from this registry, so they cannot drift apart. The
+CLI and the MCP server are generated from this registry, so they cannot drift apart. The
 safety rules (permission classes, confirm gate) live here, in code.
 
 ## Requirements

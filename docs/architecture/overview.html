@@ -61,15 +61,21 @@
   </header>
 
 <section id="the-shape-of-the-system" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>The shape of the system</h2></div>
-<p>A single core process does the work. The command line, the web interface and an MCP
-adapter are thin clients that talk to it over a local HTTP and server-sent-events API,
-bound to <code>127.0.0.1</code> and protected by a token.</p>
+<p>A single core process does the work, and it offers two local surfaces over the same
+operations. The <strong>MCP server</strong> is the heart of the product: a local, data-only MCP server for
+sensitive mail, so a stronger model can search, read and act on your mail through a narrow,
+audited interface while the mail itself stays on your machine. The <strong>general API</strong> serves the
+command line and the web interface. Both are bound to <code>127.0.0.1</code> and protected by tokens, and
+the MCP server runs whether or not the web interface does. See
+<a href="https://github.com/dfoulks1/oaken-mail/blob/main/docs/adr/0004-mcp-server-in-core.md">ADR 0004</a>.</p>
 <pre class="mermaid">flowchart TD
     CLI[CLI] --&gt; API
     WEB[Web UI] --&gt; API
-    MCP[MCP stdio shim] --&gt; API
-    API["Local HTTP + SSE API (127.0.0.1, token)"] --&gt; CORE
+    HOSTAPP["MCP clients (Claude Desktop, ollmcp, ...)"] --&gt;|streamable HTTP| MCP
+    STDIO[stdio-only MCP clients] --&gt; BRIDGE["oaken mcp bridge"] --&gt; MCP
     subgraph CORE[Core process]
+        API["General API (HTTP + SSE)"] --&gt; OPS
+        MCP["MCP server (/mcp)"] --&gt; OPS
         OPS[Operations] --- BUS[Event bus]
         JOBS[Durable job queue] --- SCHED[Scheduler]
         ING[Ingest pipeline] --- HOST[Plugin host]
@@ -80,9 +86,11 @@ bound to <code>127.0.0.1</code> and protected by a token.</p>
 </pre><noscript><pre><code>flowchart TD
     CLI[CLI] --&gt; API
     WEB[Web UI] --&gt; API
-    MCP[MCP stdio shim] --&gt; API
-    API["Local HTTP + SSE API (127.0.0.1, token)"] --&gt; CORE
+    HOSTAPP["MCP clients (Claude Desktop, ollmcp, ...)"] --&gt;|streamable HTTP| MCP
+    STDIO[stdio-only MCP clients] --&gt; BRIDGE["oaken mcp bridge"] --&gt; MCP
     subgraph CORE[Core process]
+        API["General API (HTTP + SSE)"] --&gt; OPS
+        MCP["MCP server (/mcp)"] --&gt; OPS
         OPS[Operations] --- BUS[Event bus]
         JOBS[Durable job queue] --- SCHED[Scheduler]
         ING[Ingest pipeline] --- HOST[Plugin host]
@@ -174,7 +182,7 @@ They meet only through the contract: return values and events.</p>
 and actions that change mail are confirmed in code, not in a prompt.</li>
 <li><strong>Read state follows you.</strong> A message is marked read only when you open or summarize it,
 never by background work.</li>
-<li><strong>No sending over MCP.</strong> Sending mail is never exposed through the MCP adapter.</li>
+<li><strong>No sending over MCP.</strong> Sending mail is never exposed through the MCP server.</li>
 </ul>
 </section>
   <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>

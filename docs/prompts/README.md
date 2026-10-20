@@ -25,7 +25,7 @@ review it before starting the next.
 | 15 | [retrieval-and-ask](15-retrieval-and-ask.md) | Hybrid search, token-budgeted context, cited Q&A, eval harness | 08, 14 |
 | 16 | [api-daemon](16-api-daemon.md) | Local HTTP + SSE, token auth, `start/stop/status` | 13 |
 | 17 | [cli-client](17-cli-client.md) | Thin CLI over the API | 16 |
-| 18 | [mcp-shim](18-mcp-shim.md) | stdio MCP forwarding to core, generated from registry | 16 |
+| 18 | [mcp-server](18-mcp-shim.md) | MCP server hosted by core (+ `oaken mcp` stdio bridge), generated from registry | 16 |
 | 19 | [security-hardening](19-security-hardening.md) | Injection suite, localhost threat tests, audit review | 16–18 |
 | 20 | [oss-docs](20-oss-docs.md) | README, site content, plugin guide, ADRs, roadmap; site verified | all |
 

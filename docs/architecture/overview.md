@@ -10,17 +10,23 @@ description = "The core process, thin clients, plugins and the two databases."
 
 ## The shape of the system
 
-A single core process does the work. The command line, the web interface and an MCP
-adapter are thin clients that talk to it over a local HTTP and server-sent-events API,
-bound to `127.0.0.1` and protected by a token.
+A single core process does the work, and it offers two local surfaces over the same
+operations. The **MCP server** is the heart of the product: a local, data-only MCP server for
+sensitive mail, so a stronger model can search, read and act on your mail through a narrow,
+audited interface while the mail itself stays on your machine. The **general API** serves the
+command line and the web interface. Both are bound to `127.0.0.1` and protected by tokens, and
+the MCP server runs whether or not the web interface does. See
+[ADR 0004](repo:docs/adr/0004-mcp-server-in-core.md).
 
 ```mermaid
 flowchart TD
     CLI[CLI] --> API
     WEB[Web UI] --> API
-    MCP[MCP stdio shim] --> API
-    API["Local HTTP + SSE API (127.0.0.1, token)"] --> CORE
+    HOSTAPP["MCP clients (Claude Desktop, ollmcp, ...)"] -->|streamable HTTP| MCP
+    STDIO[stdio-only MCP clients] --> BRIDGE["oaken mcp bridge"] --> MCP
     subgraph CORE[Core process]
+        API["General API (HTTP + SSE)"] --> OPS
+        MCP["MCP server (/mcp)"] --> OPS
         OPS[Operations] --- BUS[Event bus]
         JOBS[Durable job queue] --- SCHED[Scheduler]
         ING[Ingest pipeline] --- HOST[Plugin host]
@@ -74,4 +80,4 @@ They meet only through the contract: return values and events.
   and actions that change mail are confirmed in code, not in a prompt.
 - **Read state follows you.** A message is marked read only when you open or summarize it,
   never by background work.
-- **No sending over MCP.** Sending mail is never exposed through the MCP adapter.
+- **No sending over MCP.** Sending mail is never exposed through the MCP server.

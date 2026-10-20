@@ -3,7 +3,8 @@
 Oaken Mail is a local-first, AI-native mail client. Mail is pulled to local disk,
 processed by a local LLM and embedder at ingest time, and stored in a form that makes
 search and question answering cheap in tokens. Nothing leaves your machine unless you
-explicitly configure a remote endpoint.
+explicitly configure a remote endpoint. Its core offering is a local MCP server over that
+store, so a stronger model can work on sensitive mail without the mail leaving your machine.
 
 **Status: pre-alpha.** There is nothing to install or set up yet.
 

@@ -80,14 +80,14 @@ funcs = [["main() -> None", "Entry point of the `oaken` command; prints the vers
 notes = ["Does not auto-start core. If the daemon is not running it says so and exits."]
 
 [[components]]
-id = "mcp"
-name = "MCP shim"
+id = "mcpbridge"
+name = "MCP stdio bridge"
 layer = "clients"
 status = "planned"
 prompt = "18"
-summary = "stdio MCP server that forwards tool calls to core; its tools are generated from the operation registry. Never exposes sending."
-uses = ["api"]
-untrusted = true
+summary = "`oaken mcp`: lets stdio-only MCP clients reach the in-core MCP server. Adds no behaviour of its own."
+uses = ["mcp"]
+notes = ["Does not start core and never opens the databases."]
 
 [[components]]
 id = "webui"
@@ -105,10 +105,21 @@ name = "API daemon"
 layer = "api"
 status = "planned"
 prompt = "16"
-summary = "Local HTTP and server-sent events on 127.0.0.1 with token auth; start, stop and status."
+summary = "General local API for the CLI and web UI: HTTP and server-sent events on 127.0.0.1 with token auth; start, stop and status."
 uses = ["operations"]
 untrusted = true
 notes = ["Binds to loopback only. The token file is mode 0600 under the config directory."]
+
+[[components]]
+id = "mcp"
+name = "MCP server"
+layer = "api"
+status = "planned"
+prompt = "18"
+summary = "The AI-enabled surface of core's API and the heart of the product: a local, data-only MCP server for sensitive mail. Tools are generated from the operation registry; sending is never exposed."
+uses = ["operations"]
+untrusted = true
+notes = ["Runs whether or not the web UI does. Its own token, caller class and limits (ADR 0004).", "Mounted at /mcp on the loopback listener; `[api] mcp = false` removes it."]
 
 # --- Operations and services -------------------------------------------------------------
 [[components]]
