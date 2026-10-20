@@ -194,6 +194,11 @@ that sends through your own SMTP server, with the password in the keyring. A pro
 `pull` or `send`, and the contract suite checks only the capabilities a plugin declares. See [Send
 through your own SMTP server](providers/smtp.html).
 
+`oaken_imap` is the generic reader: any IMAP server, with no knowledge of one service. It declares
+`auth`, `sync.pull` and `flags.write`, keeps what it has delivered per folder in its cursor so an
+interrupted sync resumes and a renumbered folder is read again, and refuses any connection that is
+not encrypted. See [Connect any IMAP server](providers/imap.html).
+
 ## Plugin events
 
 Core announces what happens on an event bus, and a plugin can announce its own. Subclass

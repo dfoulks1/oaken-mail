@@ -83,6 +83,10 @@ id = "providers/smtp"
 file = "providers/smtp.md"
 
 [[pages]]
+id = "providers/imap"
+file = "providers/imap.md"
+
+[[pages]]
 id = "plugins"
 file = "plugins.md"
 

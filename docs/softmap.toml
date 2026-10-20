@@ -601,6 +601,32 @@ funcs = [
 ]
 notes = ["There is no plaintext option. A server that does not offer STARTTLS is refused before the password is sent, and certificates are always checked.", "A wrong password (530, 534, 535, 538) makes the plugin unhealthy and publishes an event; no attempt is made again until a different password is stored.", "Test live later: the in-process fake server proves the protocol handling, not that your provider accepts it."]
 
+[[components]]
+id = "imap"
+name = "IMAP provider"
+layer = "plugins"
+status = "built"
+prompt = "11c"
+path = "src/oaken_imap"
+summary = "A generic IMAP provider for any server: it mirrors every folder except Trash and Junk, finds new, deleted and changed mail per folder, and writes back flags, Trash, Archive and moves. TLS is always on and the password lives only in the OS keyring. It cannot send."
+uses = []
+ext = ["IMAP server", "OS keyring", "imapclient (BSD)"]
+types = [
+  ["ImapProvider", "class", "The oaken.providers plugin: authenticate, pull, set_flags, plus trash, archive and move. One connection per pull or write."],
+  ["ImapConfig", "pydantic model", "[plugins.imap]: host, port, security (tls or starttls only), username, account, folder include and exclude lists, trash and archive folders, page_size, flag_scan_limit, timeout."],
+  ["Cursor", "dataclass", "Per folder: UIDVALIDITY, the highest mod-sequence read, and the UIDs delivered as ranges."],
+  ["Session", "class", "One TLS-only connection: login, LIST, SELECT, UID SEARCH, FETCH, STORE, COPY, MOVE and EXPUNGE, with replies parsed to plain values."],
+  ["AuthRequired", "exception", "The password is missing or was rejected; storing a new one fixes it, retrying does not."],
+  ["PartialFailure", "exception", "Some messages changed and some did not; failed maps each message id to why."],
+  ["KeyringStore", "class", "The password in the OS keyring (service oaken, user imap:ACCOUNT); no keyring means a clear error, never a file."],
+]
+funcs = [
+  ["ImapProvider.pull(cursor)", "New mail is the server's UIDs minus the delivered ones, deletions the reverse; flag changes come from CONDSTORE or a capped re-read; a changed UIDVALIDITY re-reads the folder."],
+  ["folders.to_sync(all, config)", "The folders to mirror: selectable, not Trash or Junk (server attributes first, name guesses only when the server gives none), within the include and exclude lists."],
+  ["ImapProvider.set_flags(ids, add, remove)", "UID STORE per folder; never sets \\Deleted; an id from a renumbered folder fails instead of acting on the wrong message."],
+]
+notes = ["No plaintext option. A server that does not offer STARTTLS is refused before the password is sent, and certificates are always checked.", "Messages are fetched with BODY.PEEK, so reading never marks them read.", "Without UIDPLUS or MOVE nothing is moved, because a plain EXPUNGE could destroy other mail marked deleted.", "Special-use folder markings come from the plain LIST reply; otherwise name guesses apply. imapclient is synchronous, so every call runs in a worker thread, one at a time.", "No IDLE and no QRESYNC yet: the scheduler polls, and deletions are found by comparing UID sets.", "Test live later: the in-process fake server proves the protocol handling, not that your provider accepts it."]
+
 # --- Project tooling ---------------------------------------------------------------------
 [[components]]
 id = "tooling"

@@ -10,6 +10,7 @@ dependencies = [
     "aiosmtplib>=5.1.3",
     "aiosqlite>=0.22.1",
     "httpx2>=2.15.1",
+    "imapclient>=4.1.0",
     "keyring>=25.7.0",
     "platformdirs>=4.13.5",
     "pydantic>=2.14.1",
@@ -34,6 +35,7 @@ ollama-remote = "oaken_ollama:OllamaLLM"
 [project.entry-points."oaken.providers"]
 gmail = "oaken_gmail:GmailProvider"
 smtp = "oaken_smtp:SmtpProvider"
+imap = "oaken_imap:ImapProvider"
 
 [project.entry-points."oaken.vector_stores"]
 sqlite-vec = "oaken_vec_sqlite:SqliteVecStore"
@@ -51,7 +53,7 @@ build-backend = "hatchling.build"
 path = "src/oaken/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/oaken", "src/oaken_vec_sqlite", "src/oaken_ollama", "src/oaken_gmail", "src/oaken_smtp"]
+packages = ["src/oaken", "src/oaken_vec_sqlite", "src/oaken_ollama", "src/oaken_gmail", "src/oaken_smtp", "src/oaken_imap"]
 exclude = ["**/tests/**"]
 
 [dependency-groups]
@@ -81,12 +83,13 @@ default-groups = ["dev", "docs"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["src", "docs", "tests"]
-addopts = ["--import-mode=importlib", "-m", "not slow and not live_ollama and not live_gmail and not live_smtp"]
+addopts = ["--import-mode=importlib", "-m", "not slow and not live_ollama and not live_gmail and not live_smtp and not live_imap"]
 markers = [
     "slow: heavy measurements, off by default (run with -m slow)",
     "live_ollama: needs a running local Ollama with the models pulled, off by default",
     "live_gmail: needs a real Google account and OAuth client, off by default",
     "live_smtp: needs a real SMTP server and password, off by default",
+    "live_imap: needs a real IMAP server and password, off by default",
 ]
 filterwarnings = [
     # The in-process SMTP test server (aiosmtpd) warns when it is told not to demand TLS for AUTH,
@@ -121,5 +124,5 @@ files = ["src", "tests", "docs/tools"]
 mypy_path = "docs/tools"
 
 [[tool.mypy.overrides]]
-module = ["pygments", "pygments.*", "sqlite_vec"]
+module = ["pygments", "pygments.*", "sqlite_vec", "imapclient", "imapclient.*"]
 ignore_missing_imports = true

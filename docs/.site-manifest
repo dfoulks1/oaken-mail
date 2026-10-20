@@ -31,6 +31,7 @@ demo/settings.html
 index.html
 plugins.html
 providers/gmail.html
+providers/imap.html
 providers/smtp.html
 reference/plugin-contracts.html
 robots.txt

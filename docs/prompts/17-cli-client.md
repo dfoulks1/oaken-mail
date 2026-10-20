@@ -132,4 +132,10 @@ same commit (see `00-context.md`).
 | 11b | SMTP password (`SmtpProvider.set_password`) | `oaken auth smtp [--account NAME]` | Reads the password without echoing it, stores it in the keyring and says so. Never prints it, never takes it as an argument. |
 | 11b | SMTP health (`needs a new password`) | `oaken doctor` / `oaken accounts` | Shows the needs-a-new-password state, and the command to fix it. |
 | 11b | `authenticate` | `oaken auth smtp --check` | Connects, requires TLS and logs in; sends nothing. |
+| 11c | IMAP password (`ImapProvider.set_password`) | `oaken auth imap [--account NAME]` | Reads the password without echoing it, stores it in the keyring and says so. Never prints it, never takes it as an argument. |
+| 11c | IMAP health (`needs a new password`) | `oaken doctor` / `oaken accounts` | Shows the needs-a-new-password state, and the command to fix it. |
+| 11c | `authenticate` | `oaken auth imap --check` | Connects, requires TLS and logs in; reads nothing. |
+| 11c | Folder scope (`folders.to_sync`) | `oaken folders [--account A]` | Every folder, which are synced, which are skipped and why (server-marked Trash or Junk, a name guess, or your lists), and which folder `trash` and `archive` would use. |
+| 11c | `trash`, `archive`, `move` | `oaken mail trash\|archive\|move ID... [--to FOLDER]` | Shares the Gmail `oaken mail` verbs; a partial failure lists the ids that did not move. Question: one command for both providers, or per-provider flags? |
+| 11c | `ImapFolderReset` event | `oaken events` | The server renumbered a folder and it was read again; worth surfacing in `oaken doctor`. |
 
