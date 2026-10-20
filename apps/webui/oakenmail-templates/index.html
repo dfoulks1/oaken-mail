@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en" data-oaken-theme="oak-light" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inbox · OakenMail</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/oaken.css" rel="stylesheet">
+</head>
+<body>
+<div class="ok-app">
+  <header class="ok-topbar">
+    <button class="btn btn-ghost d-lg-none" data-action="toggle-sidebar" aria-label="Menu"><i class="bi bi-list fs-5"></i></button>
+    <a class="ok-brand" href="index.html">Oaken<span>Mail</span></a>
+    <form class="ok-search" action="search.html" role="search">
+      <i class="bi bi-search"></i>
+      <input class="form-control" name="q" type="search" placeholder="Search mail  ( / )" value="">
+    </form>
+    <div class="ms-auto d-flex align-items-center gap-1">
+      <button class="btn btn-ghost" data-bs-toggle="modal" data-bs-target="#shortcutsModal" title="Keyboard shortcuts"><i class="bi bi-keyboard"></i></button>
+      
+      <div class="dropdown">
+        <button class="btn btn-ghost" data-bs-toggle="dropdown" aria-label="Theme" title="Theme"><i data-theme-icon class="bi bi-circle-half"></i></button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><h6 class="dropdown-header">Theme</h6></li>
+          <li><button class="dropdown-item" data-theme-set="oak-light"><i class="bi bi-sun me-2"></i>Oak Light</button></li>
+          <li><button class="dropdown-item" data-theme-set="oak-dark"><i class="bi bi-moon-stars me-2"></i>Oak Dark</button></li>
+          <li><button class="dropdown-item" data-theme-set="birch"><i class="bi bi-tree me-2"></i>Birch</button></li>
+          <li><button class="dropdown-item" data-theme-set="system"><i class="bi bi-circle-half me-2"></i>System</button></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><h6 class="dropdown-header">Density</h6></li>
+          <li><button class="dropdown-item" data-density-set="comfortable">Comfortable</button></li>
+          <li><button class="dropdown-item" data-density-set="compact">Compact</button></li>
+        </ul>
+      </div>
+      <a class="btn btn-ghost" href="settings.html" title="Settings"><i class="bi bi-gear"></i></a>
+      <div class="dropdown">
+        <button class="btn btn-ghost p-1 ms-1" data-bs-toggle="dropdown" aria-label="Account"><span class="ok-avatar">DF</span></button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li class="px-3 py-2"><div class="fw-semibold">Alex Example</div><div class="small text-muted">alex@example.com</div></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item" href="settings.html">Settings</a></li>
+          <li><a class="dropdown-item" href="login.html">Sign out</a></li>
+        </ul>
+      </div>
+    </div>
+  </header>
+  <div class="ok-body">
+  <aside class="ok-sidebar">
+    <button class="btn btn-oaken btn-compose" data-action="compose"><i class="bi bi-pencil-square"></i>Compose</button>
+    <nav class="ok-nav">
+      <a href="index.html?folder=inbox" class="active"><i class="bi bi-inbox"></i>Inbox<span class="count unread">12</span></a>
+      <a href="index.html?folder=star"><i class="bi bi-star"></i>Starred</a>
+      <a href="index.html?folder=snooze"><i class="bi bi-clock"></i>Snoozed</a>
+      <a href="index.html?folder=sent"><i class="bi bi-send"></i>Sent</a>
+      <a href="index.html?folder=drafts"><i class="bi bi-file-earmark"></i>Drafts<span class="count">3</span></a>
+      <a href="index.html?folder=archive"><i class="bi bi-archive"></i>Archive</a>
+      <a href="index.html?folder=spam"><i class="bi bi-exclamation-octagon"></i>Spam</a>
+      <a href="index.html?folder=trash"><i class="bi bi-trash3"></i>Trash</a>
+      <div class="ok-nav-heading">Folders <button class="btn btn-sm btn-ghost p-0 px-1" data-bs-toggle="modal" data-bs-target="#newFolderModal" title="New folder"><i class="bi bi-plus-lg"></i></button></div>
+      <a href="index.html?folder=dev@lists"><i class="bi bi-folder2"></i>dev@lists<span class="count">24</span></a>
+      <a href="index.html?folder=users@lists"><i class="bi bi-folder2"></i>users@lists<span class="count">5</span></a>
+      <a href="index.html?folder=private@board"><i class="bi bi-folder2"></i>private@board</a>
+      <div class="ok-nav-heading">Labels <button class="btn btn-sm btn-ghost p-0 px-1" data-bs-toggle="modal" data-bs-target="#newLabelModal" title="New label"><i class="bi bi-plus-lg"></i></button></div>
+      <a href="index.html?label=board"><span class="ok-label-dot" style="background:var(--ok-feather-purple)"></span>Board</a>
+      <a href="index.html?label=infra"><span class="ok-label-dot" style="background:var(--ok-primary)"></span>Infra</a>
+      <a href="index.html?label=releases"><span class="ok-label-dot" style="background:var(--ok-feather-orange)"></span>Releases</a>
+      <a href="index.html?label=personal"><span class="ok-label-dot" style="background:var(--ok-feather-amber)"></span>Personal</a>
+      <div class="ok-nav-heading">More</div>
+      <a href="contacts.html"><i class="bi bi-person-lines-fill"></i>Contacts</a>
+      <a href="settings.html"><i class="bi bi-gear"></i>Settings</a>
+    </nav>
+  </aside>
+
+  <main class="ok-main" data-layout="split">
+    <section class="ok-pane ok-listpane">
+        <div class="ok-toolbar">
+          <input class="form-check-input mx-2" type="checkbox" data-action="select-all" aria-label="Select all">
+          <button class="btn btn-sm btn-ghost" title="Refresh"><i class="bi bi-arrow-clockwise"></i></button>
+          <button class="btn btn-sm btn-ghost" title="Archive"><i class="bi bi-archive"></i></button>
+          <button class="btn btn-sm btn-ghost" title="Report spam"><i class="bi bi-exclamation-octagon"></i></button>
+          <button class="btn btn-sm btn-ghost" title="Delete" data-bs-toggle="modal" data-bs-target="#confirmModal"><i class="bi bi-trash3"></i></button>
+          <span class="vr"></span>
+          <button class="btn btn-sm btn-ghost" title="Mark as read"><i class="bi bi-envelope-open"></i></button>
+          <button class="btn btn-sm btn-ghost" title="Move to" data-bs-toggle="modal" data-bs-target="#moveModal"><i class="bi bi-folder-symlink"></i></button>
+          <div class="dropdown"><button class="btn btn-sm btn-ghost" data-bs-toggle="dropdown" title="Label"><i class="bi bi-tag"></i></button>
+            <ul class="dropdown-menu"><li><label class="dropdown-item"><input class="form-check-input me-2" type="checkbox"><span class="ok-label-dot me-2" style="background:var(--ok-feather-purple)"></span>Board</label></li><li><label class="dropdown-item"><input class="form-check-input me-2" type="checkbox"><span class="ok-label-dot me-2" style="background:var(--ok-primary)"></span>Infra</label></li><li><label class="dropdown-item"><input class="form-check-input me-2" type="checkbox"><span class="ok-label-dot me-2" style="background:var(--ok-feather-orange)"></span>Releases</label></li><li><label class="dropdown-item"><input class="form-check-input me-2" type="checkbox"><span class="ok-label-dot me-2" style="background:var(--ok-feather-amber)"></span>Personal</label></li></ul></div>
+          <div class="ms-auto d-flex align-items-center gap-1">
+            <span class="small text-muted me-2">1–50 of 1,284</span>
+            <button class="btn btn-sm btn-ghost" title="Newer"><i class="bi bi-chevron-left"></i></button>
+            <button class="btn btn-sm btn-ghost" title="Older"><i class="bi bi-chevron-right"></i></button>
+            <div class="btn-group ms-1" role="group" aria-label="Layout">
+              <button class="btn btn-sm btn-ghost" data-layout-set="split" title="Reading pane"><i class="bi bi-layout-split"></i></button>
+              <button class="btn btn-sm btn-ghost" data-layout-set="list" title="List only"><i class="bi bi-view-list"></i></button>
+            </div>
+          </div>
+        </div>
+      <div class="ok-scroll"><ul class="ok-list">
+          <div class="ok-list-group">Today</div>
+          <li class="ok-msg unread selected" data-href="message.html" tabindex="0">
+            <input class="form-check-input m-0" type="checkbox" aria-label="Select">
+            <button class="btn btn-sm btn-ghost p-0 star on" data-action="star" aria-label="Star"><i class="bi bi-star-fill"></i></button>
+            <span class="from">Sam Sample</span>
+            <span class="date"><i class="bi bi-paperclip text-muted"></i> 9:12 AM</span>
+            <span class="line2"><span class="subject">[VOTE] Release Example Server 2.4.63</span><span class="snippet">— Please vote on releasing this package. The vote is open for at least 72 hours…</span><span class="ok-tag">dev@lists</span><span class="ok-tag"><span class="ok-label-dot" style="background:var(--ok-feather-orange)"></span>Releases</span></span>
+          </li>
+          <li class="ok-msg unread" data-href="message.html" tabindex="0">
+            <input class="form-check-input m-0" type="checkbox" aria-label="Select">
+            <button class="btn btn-sm btn-ghost p-0 star" data-action="star" aria-label="Star"><i class="bi bi-star"></i></button>
+            <span class="from">Infrastructure</span>
+            <span class="date"> 8:47 AM</span>
+            <span class="line2"><span class="subject">Planned maintenance: mail relays, Oct 22</span><span class="snippet">— We will be rotating the outbound relays on Thursday between 14:00 and 16:00 UTC…</span><span class="ok-tag">users@lists</span><span class="ok-tag"><span class="ok-label-dot" style="background:var(--ok-primary)"></span>Infra</span></span>
+          </li>
+          <li class="ok-msg" data-href="message.html" tabindex="0">
+            <input class="form-check-input m-0" type="checkbox" aria-label="Select">
+            <button class="btn btn-sm btn-ghost p-0 star" data-action="star" aria-label="Star"><i class="bi bi-star"></i></button>
+            <span class="from">Riley Brook</span>
+            <span class="date"><i class="bi bi-paperclip text-muted"></i> 7:30 AM</span>
+            <span class="line2"><span class="subject">Re: ExampleCon keynote draft</span><span class="snippet">— Loved the outline. One thought on the second section — could we lead with the community story…</span><span class="ok-tag"><span class="ok-label-dot" style="background:var(--ok-feather-amber)"></span>Personal</span></span>
+          </li>
+          <div class="ok-list-group">Yesterday</div>
+          <li class="ok-msg unread" data-href="message.html" tabindex="0">
+            <input class="form-check-input m-0" type="checkbox" aria-label="Select">
+            <button class="btn btn-sm btn-ghost p-0 star on" data-action="star" aria-label="Star"><i class="bi bi-star-fill"></i></button>
+            <span class="from">Board Secretary</span>
+            <span class="date"><i class="bi bi-paperclip text-muted"></i> Mon</span>
+            <span class="line2"><span class="subject">Board meeting agenda — October</span><span class="snippet">— Attached is the draft agenda. Reports are due by Friday. Please flag anything that needs a vote…</span><span class="ok-tag">private@board</span><span class="ok-tag"><span class="ok-label-dot" style="background:var(--ok-feather-purple)"></span>Board</span></span>
+          </li>
+          <li class="ok-msg" data-href="message.html" tabindex="0">
+            <input class="form-check-input m-0" type="checkbox" aria-label="Select">
+            <button class="btn btn-sm btn-ghost p-0 star" data-action="star" aria-label="Star"><i class="bi bi-star"></i></button>
+            <span class="from">GitHub</span>
+            <span class="date"> Mon</span>
+            <span class="line2"><span class="subject">[example/oaken-ui] PR #42: theme picker</span><span class="snippet">— dana requested your review on this pull request. 3 files changed…</span></span>
+          </li>
+          <li class="ok-msg" data-href="message.html" tabindex="0">
+            <input class="form-check-input m-0" type="checkbox" aria-label="Select">
+            <button class="btn btn-sm btn-ghost p-0 star on" data-action="star" aria-label="Star"><i class="bi bi-star-fill"></i></button>
+            <span class="from">Dana Grey</span>
+            <span class="date"> Mon</span>
+            <span class="line2"><span class="subject">Lunch Thursday?</span><span class="snippet">— There's a new place near the office that does wood-fired everything. Thought of you…</span><span class="ok-tag"><span class="ok-label-dot" style="background:var(--ok-feather-amber)"></span>Personal</span></span>
+          </li>
+          <div class="ok-list-group">Earlier this week</div>
+          <li class="ok-msg" data-href="message.html" tabindex="0">
+            <input class="form-check-input m-0" type="checkbox" aria-label="Select">
+            <button class="btn btn-sm btn-ghost p-0 star" data-action="star" aria-label="Star"><i class="bi bi-star"></i></button>
+            <span class="from">Jira</span>
+            <span class="date"><i class="bi bi-paperclip text-muted"></i> Sun</span>
+            <span class="line2"><span class="subject">[jira] Created: (EXAMPLE-1201) mod_proxy timeout regression</span><span class="snippet">— Priority: Major. Affects version 2.4.62. Reproduction steps attached…</span><span class="ok-tag">dev@lists</span></span>
+          </li>
+          <li class="ok-msg" data-href="message.html" tabindex="0">
+            <input class="form-check-input m-0" type="checkbox" aria-label="Select">
+            <button class="btn btn-sm btn-ghost p-0 star" data-action="star" aria-label="Star"><i class="bi bi-star"></i></button>
+            <span class="from">Rory Stone</span>
+            <span class="date"> Sat</span>
+            <span class="line2"><span class="subject">Re: Trademark question from a downstream project</span><span class="snippet">— Thanks for looping me in. I'll draft a reply this afternoon and send it over for review…</span><span class="ok-tag"><span class="ok-label-dot" style="background:var(--ok-feather-purple)"></span>Board</span></span>
+          </li>
+      </ul></div>
+    </section>
+    <section class="ok-pane ok-reader">
+        <div class="ok-toolbar">
+          
+          <button class="btn btn-sm btn-ghost" title="Reply" data-action="compose" data-subject="Re: [VOTE] Release Example Server 2.4.63" data-title="Reply"><i class="bi bi-reply"></i></button>
+          <button class="btn btn-sm btn-ghost" title="Reply all" data-action="compose" data-subject="Re: [VOTE] Release Example Server 2.4.63" data-title="Reply all"><i class="bi bi-reply-all"></i></button>
+          <button class="btn btn-sm btn-ghost" title="Forward" data-action="compose" data-subject="Fwd: [VOTE] Release Example Server 2.4.63" data-title="Forward"><i class="bi bi-forward"></i></button>
+          <span class="vr"></span>
+          <button class="btn btn-sm btn-ghost" title="Archive"><i class="bi bi-archive"></i></button>
+          <button class="btn btn-sm btn-ghost" title="Move to" data-bs-toggle="modal" data-bs-target="#moveModal"><i class="bi bi-folder-symlink"></i></button>
+          <button class="btn btn-sm btn-ghost" title="Delete"><i class="bi bi-trash3"></i></button>
+          <div class="dropdown"><button class="btn btn-sm btn-ghost" data-bs-toggle="dropdown" title="More"><i class="bi bi-three-dots"></i></button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><button class="dropdown-item">Mark as unread</button></li><li><button class="dropdown-item">Snooze…</button></li>
+              <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#sourceModal">View source</button></li>
+              <li><button class="dropdown-item">Print</button></li><li><button class="dropdown-item">Block sender</button></li></ul></div>
+          <a class="btn btn-sm btn-ghost ms-auto" href="message.html?popout=1" data-action="popout" title="Open in new window"><i class="bi bi-box-arrow-up-right"></i></a>
+        </div>
+      <div class="ok-scroll">
+        <div class="ok-empty d-none"><div><i class="bi bi-envelope-paper"></i><p class="mt-2">Select a message to read</p></div></div>
+        <div class="ok-reader-content">
+          <div class="ok-reader-inner">
+            <h1>[VOTE] Release Example Server 2.4.63</h1>
+            <div class="d-flex gap-2 mb-4 flex-wrap"><span class="ok-tag">dev@lists</span><span class="ok-tag"><span class="ok-label-dot" style="background:var(--ok-feather-orange)"></span>Releases</span></div>
+            <article class="ok-thread-msg collapsed">
+              <header data-action="toggle-thread"><span class="ok-avatar">SS</span>
+                <div class="flex-grow-1 min-w-0"><div class="fw-semibold">Sam Sample</div><div class="small text-muted text-truncate">Please vote on releasing this package. The vote is open for at least 72 hours…</div></div>
+                <span class="small text-muted">Oct 17</span></header>
+              <div class="ok-msg-body"><p>Original announcement.</p></div>
+            </article>
+            <article class="ok-thread-msg">
+              <header data-action="toggle-thread"><span class="ok-avatar" style="background:var(--ok-primary);color:var(--ok-primary-fg)">SS</span>
+                <div class="flex-grow-1"><div><span class="fw-semibold">Sam Sample</span> <span class="small text-muted">&lt;sam@example.com&gt;</span></div>
+                  <div class="small text-muted">to dev@lists.example.com <button class="btn btn-link btn-sm p-0 align-baseline" data-bs-toggle="collapse" data-bs-target="#hdrs" onclick="event.stopPropagation()">details</button></div></div>
+                <span class="small text-muted">9:12 AM</span>
+                <button class="btn btn-sm btn-ghost" data-action="star" aria-label="Star"><i class="bi bi-star"></i></button></header>
+              <div class="collapse" id="hdrs"><dl class="row small mx-3 mb-3 p-3 rounded" style="background:var(--ok-surface-2)">
+                <dt class="col-3 text-muted fw-normal">From</dt><dd class="col-9">Sam Sample &lt;sam@example.com&gt;</dd>
+                <dt class="col-3 text-muted fw-normal">To</dt><dd class="col-9">dev@lists.example.com</dd>
+                <dt class="col-3 text-muted fw-normal">Date</dt><dd class="col-9">Tue, 20 Oct 2026 09:12 -0400</dd>
+                <dt class="col-3 text-muted fw-normal">Security</dt><dd class="col-9 mb-0"><i class="bi bi-shield-check text-success"></i> Signed (DKIM: example.com) · TLS</dd></dl></div>
+              <div class="ok-msg-body">
+                <p>Hi all,</p>
+                <p>Please vote on releasing this package as Example Server 2.4.63. The vote is open for at least the next 72 hours and passes if a majority of at least three +1 PMC votes are cast.</p>
+                <p>[ ] +1 Release this package<br>[ ] &nbsp;0 I don't feel strongly about it<br>[ ] -1 Do not release this package because…</p>
+                <p class="ok-quote">The tarballs, signatures and checksums are staged at the usual dist/dev location. The tag is 2.4.63.</p>
+                <p>Thanks,<br>Sander</p>
+                <div class="mt-3"><a class="ok-attach" href="#"><i class="bi bi-file-earmark-zip fs-5"></i><span>example-server-2.4.63.tar.gz<br><span class="small text-muted">9.4 MB</span></span></a><a class="ok-attach" href="#"><i class="bi bi-file-earmark-lock fs-5"></i><span>example-server-2.4.63.tar.gz.asc<br><span class="small text-muted">833 B</span></span></a></div>
+              </div>
+            </article>
+            <div class="ok-thread-msg p-3 d-flex gap-2">
+              <button class="btn btn-outline-oaken" data-action="compose" data-subject="Re: [VOTE] Release Example Server 2.4.63" data-title="Reply"><i class="bi bi-reply me-1"></i>Reply</button>
+              <button class="btn btn-outline-oaken" data-action="compose" data-subject="Re: [VOTE] Release Example Server 2.4.63" data-title="Reply all"><i class="bi bi-reply-all me-1"></i>Reply all</button>
+              <button class="btn btn-outline-oaken" data-action="compose" data-subject="Fwd: [VOTE] Release Example Server 2.4.63" data-title="Forward"><i class="bi bi-forward me-1"></i>Forward</button>
+            </div>
+          </div></div>
+      </div>
+    </section>
+  </main>
+  </div>
+</div>
+
+<!-- Floating compose template (cloned by oaken.js) -->
+<template id="tpl-float-compose">
+  <div class="ok-float">
+    <header>
+      <span class="ok-float-title fw-semibold small flex-grow-1">New message</span>
+      <button class="btn btn-sm" data-action="minimize-float" title="Minimize"><i class="bi bi-dash-lg"></i></button>
+      <button class="btn btn-sm" data-action="popout-float" title="Pop out to new window"><i class="bi bi-box-arrow-up-right"></i></button>
+      <button class="btn btn-sm" data-action="expand-float" title="Full screen"><i class="bi bi-arrows-angle-expand"></i></button>
+      <button class="btn btn-sm" data-action="close-float" title="Discard"><i class="bi bi-x-lg"></i></button>
+    </header>
+    <div class="ok-float-body">
+          <div class="ok-compose-field"><label>From</label>
+            <select class="form-select" name="from"><option>Alex Example &lt;alex@example.com&gt;</option><option>Alex Example &lt;alex@example.org&gt;</option></select></div>
+          <div class="ok-compose-field"><label>To</label><div class="flex-grow-1 d-flex flex-wrap align-items-center" data-chips><input class="form-control flex-grow-1 w-auto" name="to" placeholder="Add recipients" style="min-width:8rem"></div>
+            <button type="button" class="btn btn-sm btn-ghost text-muted" data-bs-toggle="collapse" data-bs-target=".ok-ccbcc">Cc Bcc</button></div>
+          <div class="collapse ok-ccbcc"><div class="ok-compose-field"><label>Cc</label><div class="flex-grow-1 d-flex flex-wrap align-items-center" data-chips><input class="form-control flex-grow-1 w-auto" name="cc"></div></div>
+            <div class="ok-compose-field"><label>Bcc</label><div class="flex-grow-1 d-flex flex-wrap align-items-center" data-chips><input class="form-control flex-grow-1 w-auto" name="bcc"></div></div></div>
+          <div class="ok-compose-field"><label>Subject</label><input class="form-control" name="subject" value=""></div>
+          <div class="ok-editor" contenteditable="true" data-placeholder="Write your message…"></div>
+          <div class="ok-toolbar px-0 border-0 border-top">
+            <button type="button" class="btn btn-sm btn-ghost" title="Bold"><i class="bi bi-type-bold"></i></button>
+            <button type="button" class="btn btn-sm btn-ghost" title="Italic"><i class="bi bi-type-italic"></i></button>
+            <button type="button" class="btn btn-sm btn-ghost" title="Link"><i class="bi bi-link-45deg"></i></button>
+            <button type="button" class="btn btn-sm btn-ghost" title="Bulleted list"><i class="bi bi-list-ul"></i></button>
+            <button type="button" class="btn btn-sm btn-ghost" title="Quote"><i class="bi bi-quote"></i></button>
+            <span class="vr"></span>
+            <button type="button" class="btn btn-sm btn-ghost" title="Attach"><i class="bi bi-paperclip"></i></button>
+            <div class="form-check form-switch ms-2 small mb-0"><input class="form-check-input" type="checkbox" id="plainF"><label class="form-check-label" for="plainF">Plain text</label></div>
+          </div>
+    </div>
+    <div class="d-flex align-items-center gap-2 p-3 border-top">
+      <button class="btn btn-oaken px-4">Send</button>
+      <button class="btn btn-ghost" title="Schedule send"><i class="bi bi-clock"></i></button>
+      <span class="small text-muted ms-auto">Draft saved</span>
+    </div>
+  </div>
+</template>
+
+<!-- Full compose modal -->
+<div class="modal fade" id="composeModal" tabindex="-1" aria-labelledby="composeModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable modal-fullscreen-lg-down">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="composeModalLabel">New message</h5>
+        <a class="btn btn-ghost btn-sm ms-auto me-2" href="compose.html?popout=1" data-action="popout" title="Pop out"><i class="bi bi-box-arrow-up-right"></i></a>
+        <button type="button" class="btn-close m-0" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body pt-0">
+          <div class="ok-compose-field"><label>From</label>
+            <select class="form-select" name="from"><option>Alex Example &lt;alex@example.com&gt;</option><option>Alex Example &lt;alex@example.org&gt;</option></select></div>
+          <div class="ok-compose-field"><label>To</label><div class="flex-grow-1 d-flex flex-wrap align-items-center" data-chips><input class="form-control flex-grow-1 w-auto" name="to" placeholder="Add recipients" style="min-width:8rem"></div>
+            <button type="button" class="btn btn-sm btn-ghost text-muted" data-bs-toggle="collapse" data-bs-target=".ok-ccbcc">Cc Bcc</button></div>
+          <div class="collapse ok-ccbcc"><div class="ok-compose-field"><label>Cc</label><div class="flex-grow-1 d-flex flex-wrap align-items-center" data-chips><input class="form-control flex-grow-1 w-auto" name="cc"></div></div>
+            <div class="ok-compose-field"><label>Bcc</label><div class="flex-grow-1 d-flex flex-wrap align-items-center" data-chips><input class="form-control flex-grow-1 w-auto" name="bcc"></div></div></div>
+          <div class="ok-compose-field"><label>Subject</label><input class="form-control" name="subject" value=""></div>
+          <div class="ok-editor" contenteditable="true" data-placeholder="Write your message…"></div>
+          <div class="ok-toolbar px-0 border-0 border-top">
+            <button type="button" class="btn btn-sm btn-ghost" title="Bold"><i class="bi bi-type-bold"></i></button>
+            <button type="button" class="btn btn-sm btn-ghost" title="Italic"><i class="bi bi-type-italic"></i></button>
+            <button type="button" class="btn btn-sm btn-ghost" title="Link"><i class="bi bi-link-45deg"></i></button>
+            <button type="button" class="btn btn-sm btn-ghost" title="Bulleted list"><i class="bi bi-list-ul"></i></button>
+            <button type="button" class="btn btn-sm btn-ghost" title="Quote"><i class="bi bi-quote"></i></button>
+            <span class="vr"></span>
+            <button type="button" class="btn btn-sm btn-ghost" title="Attach"><i class="bi bi-paperclip"></i></button>
+            <div class="form-check form-switch ms-2 small mb-0"><input class="form-check-input" type="checkbox" id="plainM"><label class="form-check-label" for="plainM">Plain text</label></div>
+          </div>
+      </div>
+      <div class="modal-footer justify-content-start"><button class="btn btn-oaken px-4">Send</button><button class="btn btn-ghost" data-bs-dismiss="modal">Discard</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Keyboard shortcuts -->
+<div class="modal fade" id="shortcutsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Keyboard shortcuts</h5><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+    <div class="modal-body"><table class="table table-sm mb-0 bg-transparent">
+      <tr><td><kbd>c</kbd></td><td>Compose</td></tr><tr><td><kbd>/</kbd></td><td>Search</td></tr>
+      <tr><td><kbd>j</kbd> / <kbd>k</kbd></td><td>Next / previous message</td></tr><tr><td><kbd>r</kbd></td><td>Reply</td></tr>
+      <tr><td><kbd>a</kbd></td><td>Reply all</td></tr><tr><td><kbd>e</kbd></td><td>Archive</td></tr><tr><td><kbd>?</kbd></td><td>This help</td></tr>
+    </table></div></div></div>
+</div>
+
+<!-- New folder / label -->
+<div class="modal fade" id="newFolderModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-sm"><form class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">New folder</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+  <div class="modal-body"><label class="form-label">Name</label><input class="form-control mb-3" name="name"><label class="form-label">Inside</label>
+    <select class="form-select" name="parent"><option>(top level)</option><option>Inbox</option><option>Archive</option></select></div>
+  <div class="modal-footer"><button type="button" class="btn btn-ghost" data-bs-dismiss="modal">Cancel</button><button class="btn btn-oaken">Create</button></div></form></div></div>
+<div class="modal fade" id="newLabelModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-sm"><form class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">New label</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+  <div class="modal-body"><label class="form-label">Name</label><input class="form-control mb-3" name="name"><label class="form-label">Color</label>
+    <input type="color" class="form-control form-control-color" name="color" value="#e0662b"></div>
+  <div class="modal-footer"><button type="button" class="btn btn-ghost" data-bs-dismiss="modal">Cancel</button><button class="btn btn-oaken">Create</button></div></form></div></div>
+
+<!-- Move to folder -->
+<div class="modal fade" id="moveModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">Move to…</h5><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+  <div class="modal-body p-2"><input class="form-control mb-2" placeholder="Filter folders"><div class="list-group list-group-flush">
+    <button class="list-group-item list-group-item-action">Inbox</button><button class="list-group-item list-group-item-action">Archive</button>
+    <button class="list-group-item list-group-item-action">dev@lists</button><button class="list-group-item list-group-item-action">users@lists</button>
+    <button class="list-group-item list-group-item-action">private@board</button></div></div></div></div></div>
+
+<!-- Confirm delete -->
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content">
+  <div class="modal-body p-4"><h5 class="mb-2">Delete forever?</h5><p class="text-muted mb-0">These messages can't be recovered.</p></div>
+  <div class="modal-footer"><button class="btn btn-ghost" data-bs-dismiss="modal">Cancel</button><button class="btn btn-danger rounded-pill px-3">Delete</button></div></div></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="assets/oaken.js"></script>
+
+<div class="modal fade" id="sourceModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">Message source</h5><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+  <div class="modal-body"><pre class="small mb-0">Return-Path: &lt;sam@example.com&gt;
+Received: from mx1.example.com ...
+DKIM-Signature: v=1; a=rsa-sha256; d=example.com; ...
+From: Sam Sample &lt;sam@example.com&gt;
+To: dev@lists.example.com
+Subject: [VOTE] Release Example Server 2.4.63
+Date: Tue, 20 Oct 2026 09:12:00 -0400
+Message-ID: &lt;abc123@example.com&gt;
+List-Id: &lt;dev.lists.example.com&gt;</pre></div></div></div></div>
+</body>
+</html>
