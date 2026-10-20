@@ -13,7 +13,7 @@ from markdown_it.renderer import RendererHTML
 from markdown_it.token import Token
 from markdown_it.utils import EnvType, OptionsDict
 from mdit_py_plugins.container import container_plugin
-from model import BuildError, Config, Page
+from model import BuildError, Config, Page, repo_link
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import TextLexer, get_lexer_by_name
@@ -102,15 +102,7 @@ class Renderer:
 
     # -- links ------------------------------------------------------------------------------
     def _repo_url(self, path: str, where: str) -> str:
-        target = (self.cfg.repo_root / path).resolve()
-        try:
-            target.relative_to(self.cfg.repo_root)
-        except ValueError:
-            raise BuildError(f"{where}: repo:{path} points outside the repository") from None
-        if not target.exists():
-            raise BuildError(f"{where}: repo:{path} does not exist")
-        kind = "tree" if target.is_dir() else "blob"
-        return f"{self.cfg.repo_url}/{kind}/{self.cfg.branch}/{path.rstrip('/')}"
+        return repo_link(self.cfg, path, where)
 
     def rewrite_href(self, href: str, page: Page) -> str:
         where = str(page.origin or page.id)

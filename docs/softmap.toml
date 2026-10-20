@@ -1,13 +1,34 @@
-# Software map data. Edit this file as pieces get built; the page
-# "Software map" is generated from it and the build fails if it drifts from the code.
+# Software map data. The page "Software map" is generated from this file, and the docs build
+# fails if it contradicts the repository or the architecture. Edit it in the same change that
+# builds or alters a component.
 #
-# status:  built | partial | planned
-#   built / partial  -> `path` must exist in the repository
-#   planned          -> `path` must not exist yet (when you create it, update the status)
-# uses:    components this one calls directly. A call may go to the same layer or a lower one;
-#          anything else fails the build (the layering rule from the architecture).
-# prompt:  the build prompt that delivers (or delivered) the component.
-# Layers are listed top to bottom.
+# Stacks are separate pieces of software; each lists its layers, top to bottom. A layer's
+# components are laid out in the order listed, six to a row.
+#
+# Component keys
+#   status     built | partial | planned
+#              built/partial -> `path` must exist; planned -> `path` must not exist yet
+#   prompt     the build prompt that delivers it (links to docs/prompts/<prompt>-*.md); "later" if unwritten
+#   uses       direct calls into other components: same layer or lower, never up, no cycles
+#   notifies   events or callbacks the component raises to components strictly ABOVE it
+#   untrusted  true if it handles mail text, remote data or other unvetted input
+#   types / funcs / ext / notes   optional detail, filled in as the component is built
+#                types = [[name, kind, meaning]]   funcs = [[signature, meaning]]
+
+[[stacks]]
+id = "clients"
+name = "Thin clients"
+layers = ["clients"]
+
+[[stacks]]
+id = "core"
+name = "Core daemon (one asyncio process)"
+layers = ["api", "services", "ingest", "runtime", "plugins", "storage", "foundation"]
+
+[[stacks]]
+id = "project"
+name = "Project tooling"
+layers = ["project"]
 
 [[layers]]
 id = "clients"
@@ -43,7 +64,7 @@ name = "Foundation"
 
 [[layers]]
 id = "project"
-name = "Project tooling"
+name = "Tooling"
 
 # --- Clients -----------------------------------------------------------------------------
 [[components]]
@@ -55,15 +76,18 @@ prompt = "17"
 path = "src/oaken/cli.py"
 summary = "Thin command-line client of the local API. Today it only prints the version."
 uses = ["api"]
+funcs = [["main() -> None", "Entry point of the `oaken` command; prints the version for now."]]
+notes = ["Does not auto-start core. If the daemon is not running it says so and exits."]
 
 [[components]]
 id = "mcp"
-name = "MCP stdio shim"
+name = "MCP shim"
 layer = "clients"
 status = "planned"
 prompt = "18"
-summary = "Forwards MCP tool calls to core; generated from the operation registry. Never exposes sending."
+summary = "stdio MCP server that forwards tool calls to core; its tools are generated from the operation registry. Never exposes sending."
 uses = ["api"]
+untrusted = true
 
 [[components]]
 id = "webui"
@@ -71,18 +95,20 @@ name = "Web UI"
 layer = "clients"
 status = "planned"
 prompt = "later"
-summary = "Browser client served by core. Framework choice is deferred."
+summary = "Browser client served by core. The framework choice is deferred until this phase."
 uses = ["api"]
 
 # --- Local API ---------------------------------------------------------------------------
 [[components]]
 id = "api"
-name = "HTTP + SSE daemon"
+name = "API daemon"
 layer = "api"
 status = "planned"
 prompt = "16"
 summary = "Local HTTP and server-sent events on 127.0.0.1 with token auth; start, stop and status."
-uses = ["operations", "events"]
+uses = ["operations"]
+untrusted = true
+notes = ["Binds to loopback only. The token file is mode 0600 under the config directory."]
 
 # --- Operations and services -------------------------------------------------------------
 [[components]]
@@ -91,8 +117,9 @@ name = "Operation registry"
 layer = "services"
 status = "planned"
 prompt = "13"
-summary = "Typed operations with permission classes and the confirm gate; HTTP and MCP are generated from it."
+summary = "Typed operations with permission classes and the confirm gate. HTTP and MCP surfaces are generated from it."
 uses = ["retrieval", "readstate", "audit", "jobs"]
+notes = ["Anything that mutates mail is gated here, in code, not in a prompt."]
 
 [[components]]
 id = "retrieval"
@@ -100,7 +127,7 @@ name = "Retrieval and ask"
 layer = "services"
 status = "planned"
 prompt = "15"
-summary = "Hybrid search, token-budgeted context and cited question answering."
+summary = "Hybrid keyword and vector search, token-budgeted context and cited question answering."
 uses = ["index", "pluginhost"]
 
 [[components]]
@@ -109,7 +136,7 @@ name = "Read state"
 layer = "services"
 status = "planned"
 prompt = "12"
-summary = "Marks mail read only on open or summarize; writes back to the provider with undo."
+summary = "Marks mail read only when the user opens or summarizes it; writes back to the provider with undo."
 uses = ["audit", "rawstore", "pluginhost"]
 
 [[components]]
@@ -128,17 +155,19 @@ name = "Ingest pipeline"
 layer = "ingest"
 status = "planned"
 prompt = "09"
-summary = "Staged, idempotent, resumable pipeline: keyword-searchable first, embedded and enriched after."
+summary = "Staged, idempotent, resumable: a message is keyword-searchable first, then embedded and enriched asynchronously."
 uses = ["parsing", "jobs", "events", "pluginhost", "rawstore", "index"]
+untrusted = true
 
 [[components]]
 id = "parsing"
-name = "Parsing and cleaning"
+name = "Parsing"
 layer = "ingest"
 status = "planned"
 prompt = "06"
-summary = "RFC 822 to structured fields and cleaned text; threading keys."
+summary = "RFC 822 to structured fields and cleaned text (quotes, signatures and boilerplate removed); threading keys."
 uses = []
+untrusted = true
 
 # --- Runtime -----------------------------------------------------------------------------
 [[components]]
@@ -149,6 +178,7 @@ status = "planned"
 prompt = "03"
 summary = "In-memory, typed events."
 uses = []
+notifies = ["api", "ingest"]
 
 [[components]]
 id = "jobs"
@@ -156,8 +186,9 @@ name = "Job queue"
 layer = "runtime"
 status = "planned"
 prompt = "03"
-summary = "Durable queue that survives restarts, with retries and backoff."
+summary = "Durable queue that survives crashes and restarts, with retries and backoff."
 uses = ["rawstore"]
+notifies = ["ingest"]
 
 [[components]]
 id = "scheduler"
@@ -165,7 +196,7 @@ name = "Scheduler"
 layer = "runtime"
 status = "planned"
 prompt = "03"
-summary = "Recurring work such as periodic sync."
+summary = "Recurring work such as periodic sync; replaces APScheduler."
 uses = ["jobs"]
 
 [[components]]
@@ -174,36 +205,44 @@ name = "Plugin host"
 layer = "runtime"
 status = "planned"
 prompt = "04"
-summary = "Entry-point discovery, lifecycle, capabilities and health for the five plugin contracts, plus the fakes."
+summary = "Entry-point discovery, lifecycle, capabilities and health for the five plugin contracts, plus the fakes used in tests."
 uses = ["events", "provider", "embedder", "llm", "enrichers", "vectorstore"]
+notes = ["Core never imports provider code; a plugin never touches the databases."]
 
 # --- Plugins -----------------------------------------------------------------------------
 [[components]]
 id = "provider"
-name = "Provider: Gmail"
+name = "Provider"
 layer = "plugins"
 status = "planned"
 prompt = "11"
-summary = "Bring-your-own OAuth, full and incremental sync, flag write-back."
+summary = "Gmail first: bring-your-own OAuth, full and incremental sync, flag write-back."
 uses = []
+untrusted = true
+notifies = ["pluginhost"]
+ext = ["Gmail API", "OS keyring (refresh token)"]
 
 [[components]]
 id = "embedder"
-name = "Embedder: Ollama"
+name = "Embedder"
 layer = "plugins"
 status = "planned"
 prompt = "10"
-summary = "Turns text into vectors with a local model."
+summary = "Turns text into vectors with a local model (Ollama first)."
 uses = ["safety"]
+untrusted = true
+ext = ["Ollama"]
 
 [[components]]
 id = "llm"
-name = "LLM backend: Ollama"
+name = "LLM backend"
 layer = "plugins"
 status = "planned"
 prompt = "10"
-summary = "Structured outputs from a local model."
+summary = "Structured outputs from a local model (Ollama first)."
 uses = ["safety"]
+untrusted = true
+ext = ["Ollama"]
 
 [[components]]
 id = "enrichers"
@@ -213,24 +252,26 @@ status = "planned"
 prompt = "14"
 summary = "Summary, triage, actions and the header/MIME inspector."
 uses = ["safety"]
+untrusted = true
 
 [[components]]
 id = "vectorstore"
-name = "Vector store: sqlite-vec"
+name = "Vector store"
 layer = "plugins"
 status = "planned"
 prompt = "08"
-summary = "Stores and searches vectors."
+summary = "Stores and searches vectors (sqlite-vec first)."
 uses = []
+ext = ["sqlite-vec"]
 
 # --- Storage -----------------------------------------------------------------------------
 [[components]]
 id = "rawstore"
-name = "raw.db and blob store"
+name = "raw.db"
 layer = "storage"
 status = "planned"
 prompt = "05"
-summary = "Source of truth: compressed messages, cursors, job queue, audit log, read-state intents."
+summary = "Source of truth: zstd RFC 822 blobs (content-addressed), provider ids, sync cursors, job queue, audit log, read-state intents."
 uses = ["dbaccess"]
 
 [[components]]
@@ -239,7 +280,7 @@ name = "index.db"
 layer = "storage"
 status = "planned"
 prompt = "07"
-summary = "Everything derived and rebuildable: chunks, full-text index, enrichments."
+summary = "Everything derived and rebuildable from raw.db: parsed fields, cleaned text, chunks, FTS5, enrichments."
 uses = ["dbaccess"]
 
 # --- Foundation --------------------------------------------------------------------------
@@ -254,30 +295,108 @@ uses = []
 
 [[components]]
 id = "safety"
-name = "Prompt safety and LLM cache"
+name = "Prompt safety"
 layer = "foundation"
 status = "planned"
 prompt = "10"
-summary = "The UntrustedText type and the cache keyed by content hash, model and prompt version."
+summary = "The UntrustedText type that keeps mail out of system prompts, and the LLM cache keyed by content hash, model and prompt version."
 uses = []
 
 # --- Project tooling ---------------------------------------------------------------------
 [[components]]
 id = "tooling"
-name = "Repository and CI"
+name = "Repo and CI"
 layer = "project"
 status = "built"
 prompt = "01"
 path = "pyproject.toml"
-summary = "uv project, lint, types, tests, secret scanning and CI on three platforms."
+summary = "uv project, ruff, mypy --strict, pytest, secret scanning and CI on three platforms."
 uses = []
 
 [[components]]
 id = "docsite"
-name = "Documentation site"
+name = "Docs site"
 layer = "project"
 status = "built"
 prompt = "01a"
 path = "docs/tools"
 summary = "This site: generated from docs/, checked for links and determinism, deployed to GitHub Pages."
 uses = ["tooling"]
+funcs = [
+  ["build_site.build(cfg, out, strict) -> list[str]", "Write the whole site to a directory, deterministically."],
+  ["check_docs.check(cfg) -> list[str]", "Build twice and return every problem found."],
+  ["generated.register(page_id, builder)", "Register a generated page (ADR index, this map, later references)."],
+]
+ext = ["Bootstrap 5.3.3 and mermaid 11.4.1 from jsDelivr (pinned, SRI)"]
+
+# --- Call flows --------------------------------------------------------------------------
+# Each step is [from, to, what happens, note]. Every step must follow a declared relationship.
+
+[[flows]]
+id = "sync"
+title = "A message arrives (sync and ingest)"
+steps = [
+  ["scheduler", "jobs", "enqueue a sync job", "Durable, so a crash loses nothing."],
+  ["jobs", "ingest", "run the job handler", "A registered callback."],
+  ["ingest", "pluginhost", "provider.pull", "Core never calls the provider directly."],
+  ["pluginhost", "provider", "fetch new messages", "Returns raw bytes and provider ids."],
+  ["ingest", "rawstore", "store the raw message", "Content-addressed, so a retry is idempotent."],
+  ["ingest", "parsing", "parse and clean", "Treated as untrusted input."],
+  ["ingest", "index", "write fields and FTS5", "Searchable by keyword from here."],
+  ["ingest", "jobs", "enqueue embed and enrich", "Asynchronous, resumable, cached."],
+  ["ingest", "events", "emit message.ingested", "Clients watching the SSE stream see it."],
+]
+
+[[flows]]
+id = "ask"
+title = "Ask your mailbox a question"
+steps = [
+  ["cli", "api", "POST the question", "Token-authenticated, loopback only."],
+  ["api", "operations", "dispatch the ask operation", "Permission class: read-only."],
+  ["operations", "retrieval", "ask", ""],
+  ["retrieval", "index", "keyword search", "FTS5 candidates."],
+  ["retrieval", "pluginhost", "embed the query and search vectors", "Only the top chunks go to the model."],
+  ["pluginhost", "embedder", "embed", ""],
+  ["pluginhost", "vectorstore", "nearest chunks", ""],
+  ["pluginhost", "llm", "answer from the chunks", "Mail is wrapped as UntrustedText."],
+  ["llm", "safety", "wrap and cache", "Cached by (content hash, model, prompt version)."],
+]
+
+[[flows]]
+id = "read"
+title = "Open a message (mark as read)"
+steps = [
+  ["cli", "api", "POST open", "A user-initiated action."],
+  ["api", "operations", "dispatch the open operation", "Confirm gate applies to anything that mutates."],
+  ["operations", "readstate", "mark read", "Never done by background work."],
+  ["readstate", "rawstore", "record the read-state intent", "Survives a failed write-back."],
+  ["readstate", "audit", "log the change", "So it can be undone."],
+  ["readstate", "pluginhost", "flags.write", ""],
+  ["pluginhost", "provider", "write the flag to the provider", ""],
+]
+
+# --- Open points -------------------------------------------------------------------------
+
+[[open]]
+title = "OAuth refresh tokens expiring"
+text = "Having to re-authenticate every day or so is untenable. Prompt 11 must keep the refresh token alive: publish the OAuth app out of Testing mode (Testing-mode refresh tokens expire after 7 days), refresh access tokens silently, and fail clearly on invalid_grant."
+
+[[open]]
+title = "SQLite driver"
+text = "Standard sqlite3 in a dedicated executor, or aiosqlite. Prompt 02 decides and records an ADR."
+
+[[open]]
+title = "sqlite-vec"
+text = "Prompt 08 starts with a spike to confirm it loads on Linux, macOS and Windows before the VectorStore plugin is built on it."
+
+[[open]]
+title = "Embedding throughput on CPU"
+text = "Not yet measured. Tuning is deliberately out of scope until there is real mail to ingest."
+
+[[open]]
+title = "Web UI framework"
+text = "Deferred until the UI phase. Core serves the built UI files."
+
+[[open]]
+title = "Plugin sandboxing"
+text = "Plugins are in-process and first-party only in v1. Isolation is a later decision."

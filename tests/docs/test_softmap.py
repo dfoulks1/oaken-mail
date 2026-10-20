@@ -10,6 +10,11 @@ from model import BuildError
 from tests.docs.conftest import Tree
 
 MAP = """\
+[[stacks]]
+id = "s"
+name = "Stack"
+layers = ["top", "bottom"]
+
 [[layers]]
 id = "top"
 name = "Top"
@@ -41,11 +46,11 @@ uses = []
 
 def with_map(tree: Tree, text: str = MAP) -> Tree:
     tree.write("docs/softmap.toml", text)
-    tree.write(
-        "docs/site.toml",
-        (tree.docs / "site.toml").read_text()
-        + '\n[[pages]]\nid = "map"\ngenerated = true\ngroup = "g1"\n',
-    )
+    site = (tree.docs / "site.toml").read_text()
+    if 'id = "map"' not in site:
+        tree.write(
+            "docs/site.toml", site + '\n[[pages]]\nid = "map"\ngenerated = true\ngroup = "g1"\n'
+        )
     import generated
 
     if "map" not in generated._REGISTRY:  # register the real builder under the fixture's id
@@ -53,7 +58,7 @@ def with_map(tree: Tree, text: str = MAP) -> Tree:
     return tree
 
 
-def test_map_renders_counts_status_and_diagram(tree: Tree, tmp_path: Path) -> None:
+def test_map_renders_counts_status_and_svg(tree: Tree, tmp_path: Path) -> None:
     with_map(tree)
     out = tmp_path / "out"
     build_site.build(tree.cfg(), out)
@@ -61,11 +66,26 @@ def test_map_renders_counts_status_and_diagram(tree: Tree, tmp_path: Path) -> No
     assert "1 built" in html
     assert "1 planned" in html
     assert "badge text-bg-success" in html
-    assert "flowchart TB" in html
-    assert "a ~~~ b" in html
-    assert "Beta &#124; pipe" in html or "Beta | pipe" in html
+    assert 'id="softmap"' in html
+    assert 'class="node built" data-id="a"' in html
+    assert 'class="node planned" data-id="b"' in html
+    assert "Beta | pipe" in html
     assert "blob/main/src/x.txt" in html
-    assert "mermaid@" in html
+    assert 'id="c-a"' in html and 'id="c-b"' in html
+    assert "http://" not in html  # the SVG namespace is not written out
+    assert "mermaid@" not in html
+
+
+def test_map_has_interactive_script_and_cards(tree: Tree, tmp_path: Path) -> None:
+    with_map(tree)
+    out = tmp_path / "out"
+    build_site.build(tree.cfg(), out)
+    html = (out / "map.html").read_text(encoding="utf-8")
+    assert '"f": "a", "t": "b", "k": "call"' in html
+    assert 'id="q"' in html
+    assert "Dependency matrix" in html
+    assert 'class="mx-c"' in html
+    assert "Entry points" in html
 
 
 @pytest.mark.parametrize(
@@ -101,3 +121,55 @@ def test_calls_may_not_point_up(tree: Tree, tmp_path: Path) -> None:
     with_map(tree, bad)
     with pytest.raises(BuildError, match="layering: b calls up into a"):
         build_site.build(tree.cfg(), tmp_path / "out")
+
+
+def test_call_cycle_is_rejected(tree: Tree, tmp_path: Path) -> None:
+    bad = MAP.replace(
+        'summary = "The bottom piece."\nuses = []', 'summary = "The bottom piece."\nuses = ["b2"]'
+    )
+    bad += """
+[[components]]
+id = "b2"
+name = "Gamma"
+layer = "bottom"
+status = "planned"
+prompt = "03"
+summary = "Same layer."
+uses = ["b"]
+"""
+    with_map(tree, bad)
+    with pytest.raises(BuildError, match="call cycle"):
+        build_site.build(tree.cfg(), tmp_path / "out")
+
+
+def test_callbacks_must_go_up(tree: Tree, tmp_path: Path) -> None:
+    with_map(tree, MAP.replace('uses = ["b"]', 'uses = ["b"]\nnotifies = ["b"]', 1))
+    with pytest.raises(BuildError, match="not above it"):
+        build_site.build(tree.cfg(), tmp_path / "out")
+
+
+def test_flow_steps_must_follow_relationships(tree: Tree, tmp_path: Path) -> None:
+    flow = '\n[[flows]]\nid = "f"\ntitle = "F"\nsteps = [["b", "a", "go", ""]]\n'
+    with_map(tree, MAP + flow)
+    with pytest.raises(BuildError, match="not a declared relationship"):
+        build_site.build(tree.cfg(), tmp_path / "out")
+    ok = '\n[[flows]]\nid = "f"\ntitle = "F"\nsteps = [["a", "b", "go", "n"]]\n'
+    with_map(tree, MAP + ok)
+    build_site.build(tree.cfg(), tmp_path / "out2")
+
+
+def test_stacks_must_cover_layers_in_order(tree: Tree, tmp_path: Path) -> None:
+    with_map(tree, MAP.replace('layers = ["top", "bottom"]', 'layers = ["bottom", "top"]'))
+    with pytest.raises(BuildError, match="every layer exactly once"):
+        build_site.build(tree.cfg(), tmp_path / "out")
+
+
+def test_untrusted_marker_and_prompt_link(tree: Tree, tmp_path: Path) -> None:
+    tree.write("docs/prompts/01-bootstrap.md", "# p\n")
+    with_map(tree, MAP.replace('prompt = "01"', 'prompt = "01"\nuntrusted = true', 1))
+    out = tmp_path / "out"
+    build_site.build(tree.cfg(), out)
+    html = (out / "map.html").read_text(encoding="utf-8")
+    assert "untrusted input" in html
+    assert 'class="untr"' in html
+    assert "blob/main/docs/prompts/01-bootstrap.md" in html

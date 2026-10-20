@@ -34,5 +34,5 @@ uv run --group docs python docs/tools/check_docs.py      # build + link check
 uv run --group docs python docs/tools/build_site.py --serve   # preview on 127.0.0.1:8000
 ```
 
-Register new pages in `docs/site.toml`. Generated output goes to `site/` and is not
+Register new pages in `docs/site.toml`. Keep the software map current: edit `docs/softmap.toml` in the same change that builds or alters a component (the build fails if it disagrees with the repository). Generated output goes to `site/` and is not
 committed.

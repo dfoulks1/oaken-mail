@@ -3,7 +3,10 @@
 <html lang="en" data-bs-theme="light">
 <head>
 {% include "_head.html" %}
-</head>
+{% if page.extra_css %}<style>
+{{ page.extra_css|safe }}
+</style>
+{% endif %}</head>
 <body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
 <a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
 <header class="topbar d-lg-none">
@@ -42,5 +45,9 @@
 {% endfor %}  <footer>{{ footer }}</footer>
 </main>
 {% include "_footer_scripts.html" %}
+{% if page.extra_js %}<script>
+{{ page.extra_js|safe }}
+</script>
+{% endif %}
 </body>
 </html>

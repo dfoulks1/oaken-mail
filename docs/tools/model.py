@@ -40,6 +40,8 @@ class Page:
     description: str = ""
     origin: Path | None = None  # file the Markdown came from; None for generated pages
     origin_root: bool = False  # True when the file lives at the repo root (README-style)
+    extra_css: str = ""  # page-specific CSS, emitted in <style> (generated pages only)
+    extra_js: str = ""  # page-specific script, emitted inline at the end of <body>
 
     @property
     def out(self) -> str:
@@ -210,3 +212,16 @@ def project_version(repo_root: Path) -> str:
     except OSError:
         return "dev"
     return m.group(1) if m else "dev"
+
+
+def repo_link(cfg: Config, path: str, where: str) -> str:
+    """GitHub URL for a repository path; BuildError if it is outside the repo or missing."""
+    target = (cfg.repo_root / path).resolve()
+    try:
+        target.relative_to(cfg.repo_root)
+    except ValueError:
+        raise BuildError(f"{where}: repo:{path} points outside the repository") from None
+    if not target.exists():
+        raise BuildError(f"{where}: repo:{path} does not exist")
+    kind = "tree" if target.is_dir() else "blob"
+    return f"{cfg.repo_url}/{kind}/{cfg.branch}/{path.rstrip('/')}"
