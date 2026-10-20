@@ -167,7 +167,7 @@ async def test_an_operation_that_is_off_over_mcp_looks_like_one_that_does_not_ex
     with pytest.raises(NotExposed) as never:
         await ops.call("get_raw", {"message_id": "x"}, agent())
     with pytest.raises(NotExposed) as off:
-        await ops.call("search", {"query": "x"}, agent())  # exists, off by default
+        await ops.call("ask", {"question": "x"}, agent())  # exists, off by default
     assert type(never.value) is type(off.value)
     assert "not available to MCP clients" in never.value.message
 

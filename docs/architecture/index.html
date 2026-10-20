@@ -54,9 +54,11 @@
       <a class="doc-link" href="read-state.html">Read state</a>
       <a class="doc-link" href="sync-schedule.html">Sync schedule</a>
       <a class="doc-link" href="operations.html">Operations</a>
+      <a class="doc-link" href="retrieval.html">Retrieval and ask</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
       <a class="doc-link" href="../reference/operations.html">Operations</a>
+      <a class="doc-link" href="../reference/evaluation.html">Evaluation results</a>
       <div class="label">Project</div>
       <a class="doc-link" href="../contributing.html">Contributing</a>
       <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
@@ -193,6 +195,7 @@ keywords like any other; only embedding and enrichment skip it.</p>
 <div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[ai]</span>
 <span class="n">chunk_tokens</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">256</span><span class="w">       </span><span class="c1"># target size of a chunk</span>
 <span class="n">chunk_overlap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">32</span><span class="w">       </span><span class="c1"># tokens of the previous chunk repeated at the start of the next</span>
+<span class="n">ask_context_tokens</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">3000</span><span class="w">  </span><span class="c1"># the most `ask` sends to the model (see Retrieval and ask)</span>
 
 <span class="k">[index]</span>
 <span class="n">subject_join_days</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">30</span><span class="w">   </span><span class="c1"># how recent a message with the same subject can be to join its thread</span>

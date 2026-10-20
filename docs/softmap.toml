@@ -136,16 +136,29 @@ types = [
   ["CoreClient", "class", "The one path every call takes: exposure, input, class, confirm gate, handler, audit."],
   ["Proposal", "model", "What a mutation would change, with a single-use token an agent redeems."],
 ]
-notes = ["Anything that mutates mail is gated here, in code, not in a prompt.", "31 core operations, plus those plugins offer as <plugin>.<name>. Retrieval (search, ask) is stubbed until prompt 15.", "No HTTP server yet; the in-process client is what tests use. Exposure to MCP is a ceiling in code and a user setting in operation_settings."]
+notes = ["Anything that mutates mail is gated here, in code, not in a prompt.", "31 core operations, plus those plugins offer as <plugin>.<name>. Retrieval (search, ask) is built (prompt 15).", "No HTTP server yet; the in-process client is what tests use. Exposure to MCP is a ceiling in code and a user setting in operation_settings."]
 
 [[components]]
 id = "retrieval"
 name = "Retrieval and ask"
 layer = "services"
-status = "planned"
+status = "built"
 prompt = "15"
-summary = "Hybrid keyword and vector search, token-budgeted context and cited question answering."
-uses = ["index", "pluginhost"]
+path = "src/oaken/core/search"
+summary = "Hybrid keyword and vector search merged by rank fusion, a token-budgeted context, and question answering whose every claim must quote the message it cites."
+uses = ["index", "pluginhost", "llm", "safety"]
+untrusted = true
+types = [
+  ["HybridSearch", "class", "BM25 and vector search in parallel, filtered, collapsed to messages and merged with RRF; the vector side degrades, never raises."],
+  ["ContextBuilder", "class", "Fills ai.ask_context_tokens in tiers (headers and summaries, matched chunks, neighbours and thread), dedupes, and reports tokens saved."],
+  ["Retrieval", "class", "search, evidence and ask over the pipeline's index, vectors and embedder."],
+  ["AskResult", "frozen dataclass", "Answer, verified citations, confidence, insufficient_evidence, degraded and token figures."],
+]
+funcs = [
+  ["verify(quote, text)", "The quote as it stands in the cited chunk, or None when it is not there (whitespace-tolerant); a fabricated quote is dropped."],
+  ["python -m oaken.evals retrieval", "Seeded synthetic mailbox; Recall@k, MRR, nDCG@10, citation precision and cost; writes docs/evals/latest.json."],
+]
+notes = ["Built means: tested with the fake embedder and model, including a vector outage, hostile queries, fabricated quotes and the budget as a property test. Offline numbers use stand-ins on a synthetic corpus built so each retriever has a weakness; a live run is manual.", "ask refuses mail from more than one account in a single prompt, and is off over MCP until the user turns it on.", "Nothing attaches Services.retrieval or a model service to a running process until the daemon (prompt 16)."]
 
 [[components]]
 id = "readstate"

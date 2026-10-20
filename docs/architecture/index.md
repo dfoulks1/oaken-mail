@@ -85,6 +85,7 @@ keywords like any other; only embedding and enrichment skip it.
 [ai]
 chunk_tokens = 256       # target size of a chunk
 chunk_overlap = 32       # tokens of the previous chunk repeated at the start of the next
+ask_context_tokens = 3000  # the most `ask` sends to the model (see Retrieval and ask)
 
 [index]
 subject_join_days = 30   # how recent a message with the same subject can be to join its thread

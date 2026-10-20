@@ -21,7 +21,7 @@ async def test_an_agent_sees_what_is_on_by_default_and_not_the_rest(ops: Ops) ->
     assert (
         on <= seen and {"mark_read", "get_message", "search_keyword", "summarize_message"} <= seen
     )
-    assert "search" not in seen and "ask" not in seen  # off until prompt 15 makes them work
+    assert "search" in seen and "ask" not in seen  # ask is the user's to turn on
     assert not seen & {"get_raw", "reprocess", "rebuild_index", "set_schedule", "list_audit"}
     assert not {n for n in seen if n.startswith("greeter.")}  # a plugin's operations start off
     assert (await names_for(ops, CLI)) == set(ops.registry.names())  # a person sees everything
@@ -29,12 +29,12 @@ async def test_an_agent_sees_what_is_on_by_default_and_not_the_rest(ops: Ops) ->
 
 async def test_the_user_turns_an_operation_on_and_off_and_back_to_its_default(ops: Ops) -> None:
     with pytest.raises(NotExposed):
-        await ops.call("search", {"query": "x"}, agent())
+        await ops.call("ask", {"question": "x"}, agent())
     out = await ops.out(
-        "set_operation_exposure", {"scope": "operation", "name": "search", "mcp": True}
+        "set_operation_exposure", {"scope": "operation", "name": "ask", "mcp": True}
     )
     assert out.before is None and out.after is True and out.operations[0].mcp_enabled is True
-    assert "search" in await names_for(ops)
+    assert "ask" in await names_for(ops)
     out = await ops.out(
         "set_operation_exposure", {"scope": "operation", "name": "status", "mcp": False}
     )
@@ -44,7 +44,7 @@ async def test_the_user_turns_an_operation_on_and_off_and_back_to_its_default(op
     await ops.out("set_operation_exposure", {"scope": "operation", "name": "status", "mcp": None})
     assert "status" in await names_for(ops)
     listed = {o.name: o for o in (await ops.out("list_operations")).operations}
-    assert listed["search"].mcp_enabled and not listed["search"].mcp_default
+    assert listed["ask"].mcp_enabled and not listed["ask"].mcp_default
 
 
 async def test_nothing_the_user_sets_can_widen_what_code_forbids(ops: Ops) -> None:
@@ -68,7 +68,7 @@ async def test_an_agent_cannot_change_what_it_may_call(ops: Ops) -> None:
         with pytest.raises(NotExposed):
             await ops.call(
                 "set_operation_exposure",
-                {"scope": "operation", "name": "search", "mcp": True},
+                {"scope": "operation", "name": "ask", "mcp": True},
                 caller,
                 confirm=True,
             )
@@ -76,16 +76,12 @@ async def test_an_agent_cannot_change_what_it_may_call(ops: Ops) -> None:
 
 
 async def test_every_change_is_audited_with_who_and_before_and_after(ops: Ops) -> None:
-    await ops.out(
-        "set_operation_exposure", {"scope": "operation", "name": "search", "mcp": True}, UI
-    )
-    await ops.out(
-        "set_operation_exposure", {"scope": "operation", "name": "search", "mcp": False}, UI
-    )
+    await ops.out("set_operation_exposure", {"scope": "operation", "name": "ask", "mcp": True}, UI)
+    await ops.out("set_operation_exposure", {"scope": "operation", "name": "ask", "mcp": False}, UI)
     rows = await ops.svc.audit.recent(5, op="set_exposure")
     assert [(r.before, r.after) for r in rows] == [
-        ({"op:search": True}, {"op:search": False}),
-        ({"op:search": None}, {"op:search": True}),
+        ({"op:ask": True}, {"op:ask": False}),
+        ({"op:ask": None}, {"op:ask": True}),
     ]
     assert {r.reason for r in rows} == {"ui_set_exposure"} and rows[0].actor.kind == "user"
 

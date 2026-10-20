@@ -1,9 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """``uv run python -m oaken.evals enrich [--enricher NAME] [--fixtures DIR]``
+``uv run python -m oaken.evals retrieval [--messages N] [--seed S] [--live] [--out DIR]``
 
-Scores the enrichers' eval fixtures against the language model configured in ``config.toml``.
-Manual: it needs a running model (Ollama, say) and is never part of CI. Nothing is stored outside
-a throwaway database; no real mail is involved.
+``enrich`` scores the enrichers' eval fixtures against the language model configured in
+``config.toml``. Manual: it needs a running model (Ollama, say) and is never part of CI.
+
+``retrieval`` builds a synthetic mailbox, runs keyword, vector and hybrid search and ``ask`` over
+planted questions, and writes ``latest.json`` and ``latest.md``. Offline (the default) it uses
+deterministic stand-ins for the models and is what CI runs; ``--live`` uses the configured
+embedder and language model instead. Nothing is stored outside a throwaway database and no real
+mail is involved.
 """
 
 import argparse
@@ -92,13 +98,53 @@ async def _one(fx: Fixture, enricher: Any, settings: Settings, clock: Any, acces
     return score(fx, result, msg.body.unwrap())
 
 
+async def run_retrieval(args: argparse.Namespace) -> int:
+    from oaken.evals.retrieval import report
+    from oaken.evals.retrieval.corpus import generate
+    from oaken.evals.retrieval.embedder import ConceptEmbedder
+    from oaken.evals.retrieval.reader import read
+    from oaken.evals.retrieval.run import run as run_eval
+    from oaken.testing.fakes import FakeLLM
+
+    corpus = generate(args.messages, seed=args.seed, per_kind=args.per_kind)
+    if args.live:
+        settings = Settings.load()
+        host = PluginHost(settings, SystemClock(), health_interval=3600)
+        await host.start()
+        try:
+            embedder, llm = host.embedder(), host.llm_backend()
+        except Exception as exc:  # noqa: BLE001
+            raise SystemExit(f"no embedder or language model is available ({exc})") from exc
+        results = await run_eval(
+            corpus, embedder, llm, mode="live", reader=llm.model_id, settings=settings,
+            date=args.date,
+        )  # fmt: skip
+        await host.stop()
+    else:
+        results = await run_eval(corpus, ConceptEmbedder(), FakeLLM(responder=read), date=args.date)
+    args.out.mkdir(parents=True, exist_ok=True)
+    (args.out / "latest.json").write_text(report.dumps(results))
+    (args.out / "latest.md").write_text(report.markdown(results))
+    print(report.markdown(results))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m oaken.evals")
     sub = ap.add_subparsers(dest="command", required=True)
+    rt = sub.add_parser("retrieval", help="measure hybrid search and ask on a synthetic mailbox")
+    rt.add_argument("--messages", type=int, default=1000)
+    rt.add_argument("--seed", type=int, default=0)
+    rt.add_argument("--per-kind", type=int, default=12, help="questions of each kind")
+    rt.add_argument("--live", action="store_true", help="use the configured embedder and model")
+    rt.add_argument("--out", type=Path, default=Path("docs/evals"))
+    rt.add_argument("--date", help="date to print in the report (default: today)")
     en = sub.add_parser("enrich", help="score the enricher fixtures against the configured model")
     en.add_argument("--enricher", help="only this enricher (summary, triage, actions, inspector)")
     en.add_argument("--fixtures", type=Path, help="fixture folder (default: the installed package)")
     args = ap.parse_args(argv)
+    if args.command == "retrieval":
+        return asyncio.run(run_retrieval(args))
     root = args.fixtures or default_fixture_root()
     scores = asyncio.run(run(root, args.enricher, Settings.load()))
     for s in scores:

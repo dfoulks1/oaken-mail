@@ -61,6 +61,9 @@ class AISettings(_Section):
     # Most tokens of one message's cleaned text an LLM enricher sends. A longer message keeps its
     # head and tail with a marker between, and the result says ``truncated``.
     enrich_max_input_tokens: int = Field(default=3000, ge=200)
+    # Most tokens of evidence (mail text, summaries and headers) one ``ask`` puts in front of the
+    # model. The context builder never goes over it.
+    ask_context_tokens: int = Field(default=3000, ge=200)
     # Chunking (prompt 07): the target size of a chunk and how much of the previous one a chunk
     # repeats, both in tokens as the configured tokenizer counts them.
     chunk_tokens: int = Field(default=256, ge=16, le=8192)
@@ -240,6 +243,41 @@ class IndexSettings(_Section):
     max_query_terms: int = Field(default=32, ge=1, le=256)
 
 
+class SearchSettings(_Section):
+    """Hybrid retrieval (prompt 15): how keyword and vector results are merged and how far a
+    search looks before it gives up on a filter."""
+
+    # Reciprocal Rank Fusion: a message scores sum(weight / (rrf_k + rank)) over the retrievers
+    # that found it. A larger rrf_k flattens the difference between the first and the tenth hit.
+    rrf_k: int = Field(default=60, ge=1, le=1000)
+    keyword_weight: float = Field(default=1.0, ge=0)
+    vector_weight: float = Field(default=1.0, ge=0)
+    # Keyword search that accepts any of the words (``ask``) keeps only messages that contain at
+    # least this share of them, like Elasticsearch's minimum_should_match. Without it a question
+    # fills the keyword side with messages that share one common word.
+    keyword_min_match: float = Field(default=0.5, ge=0, le=1)
+    # A query with a quoted phrase or a token containing a digit (an order number, a ticket id) is
+    # about exact text, which meaning cannot tell apart: the keyword weight is multiplied by this.
+    exact_boost: float = Field(default=3.0, ge=1)
+    # Each retriever is asked for ``limit * overfetch`` candidates so filters that only raw.db can
+    # answer (category, priority, unread) and the collapse of chunks to messages still leave
+    # enough; a search that comes up short widens up to ``max_candidates``.
+    overfetch: int = Field(default=5, ge=1, le=50)
+    max_candidates: int = Field(default=500, ge=10, le=10_000)
+    # Messages ``ask`` retrieves before the context builder decides how much of each to send.
+    ask_hits: int = Field(default=10, ge=1, le=50)
+    # Of those, how many get their matched chunks into the context (the rest are only a header and
+    # a summary line), and how many also get the chunks beside the match and their thread's
+    # summaries. The context never goes over ``ai.ask_context_tokens`` whatever these are.
+    ask_chunk_hits: int = Field(default=5, ge=1, le=50)
+    ask_neighbor_hits: int = Field(default=2, ge=0, le=50)
+    # The vector side gives up (and the result says ``degraded``) after this long.
+    vector_timeout_seconds: float = Field(default=10.0, gt=0)
+    # Ask the language model to rephrase the free text before it is embedded. Off by default: it
+    # costs a model call per search and sends the question to the model.
+    llm_rewrite: bool = False
+
+
 class SyncSettings(_Section):
     provider: str = "gmail"
     # The schedule a new account starts with (every 15 minutes). After that the schedule lives in
@@ -324,6 +362,7 @@ class Settings(BaseSettings):
     swarm: SwarmSettings = SwarmSettings()
     mail: MailSettings = MailSettings()
     index: IndexSettings = IndexSettings()
+    search: SearchSettings = SearchSettings()
     sync: SyncSettings = SyncSettings()
     read_state: ReadStateSettings = ReadStateSettings()
     operations: OperationsSettings = OperationsSettings()

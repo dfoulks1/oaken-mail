@@ -5,18 +5,20 @@ None of them marks anything read. Text comes back cut to the caller's limits and
 """
 
 import base64
+import dataclasses
 import json
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from oaken.core.errors import NotFound, NotImplementedYet
+from oaken.core.errors import NotFound
 from oaken.core.ids import AccountId, MessageId
 from oaken.core.operations.builtin.common import MessageItem, items_from_hits, read_flags
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import AnyOperation, operation
 from oaken.core.rawstore import header_block
+from oaken.core.search import HybridFilters
 from oaken.index.query import DISPOSITIONS
 from oaken.index.store import SearchFilters
 
@@ -115,40 +117,127 @@ async def search_keyword(ctx: OpContext, inp: SearchKeywordInput) -> MessageList
 class SearchInput(MessageFilter):
     query: str = Field(max_length=1000)
     limit: int | None = Field(default=None, ge=1)
+    thread_key: str | None = None
+    category: list[str] = Field(default_factory=list)  # from the triage enrichment
+    min_priority: int | None = Field(default=None, ge=0, le=3)
+    unread_only: bool = False
+
+
+class SearchOutput(MessageList):
+    degraded: bool = False  # the meaning-based half was unavailable: keyword results only
+    degraded_reason: str = ""
+
+
+def hybrid_filters(inp: MessageFilter, **extra: Any) -> HybridFilters:
+    base = inp.filters()
+    thread = extra.pop("thread_key", None)
+    if thread:
+        base = dataclasses.replace(base, thread_key=thread)
+    return HybridFilters(index=base, **extra)
 
 
 @operation(
     "search",
-    "Hybrid search (keyword and meaning). Arrives with prompt 15; use search_keyword for now.",
+    "Hybrid search: keyword and meaning together. Understands from:, before:, after:, is:unread,"
+    ' category: and "quoted phrases".',
     permission="read",
     input=SearchInput,
-    output=MessageList,
-    mcp="off",  # prompt 15 turns this on when it works
+    output=SearchOutput,
+    mcp="on",
 )
-async def search(ctx: OpContext, inp: SearchInput) -> MessageList:
-    raise NotImplementedYet("hybrid search comes with prompt 15; search_keyword works now")
+async def search(ctx: OpContext, inp: SearchInput) -> SearchOutput:
+    """Each hit says which retrievers found it (``why``). When the embedder or the vectors are
+    unavailable the keyword results still come back, with ``degraded`` set. Never marks read."""
+    k = ctx.limits.results(inp.limit)
+    filters = hybrid_filters(
+        inp,
+        thread_key=inp.thread_key,
+        unread_only=inp.unread_only,
+        categories=tuple(inp.category),
+        min_priority=inp.min_priority,
+    )
+    found = await ctx.svc.need_retrieval().search(inp.query, filters, k + 1)
+    budget = ctx.limits.budget()
+    items = await items_from_hits(ctx, [h.hit for h in found.hits[:k]], budget, markers=True)
+    for item, h in zip(items, found.hits, strict=False):
+        item.why = list(h.why)
+    return SearchOutput(
+        items=items,
+        truncated=budget.truncated or len(found.hits) > k,
+        warnings=list(found.warnings),
+        degraded=found.degraded,
+        degraded_reason=found.degraded_reason,
+    )
 
 
-class AskInput(BaseModel):
+class AskInput(MessageFilter):
     question: str = Field(max_length=2000)
-    account_id: str | None = None
+    thread_key: str | None = None
+
+
+class CitationInfo(BaseModel):
+    claim: int
+    message_id: str
+    chunk_ordinal: int
+    quote: str  # mail text, verified to be in the cited chunk
+    subject: str = ""
+    sender: str = ""
+    date: datetime | None = None
 
 
 class AskOutput(BaseModel):
     answer: str
     message_ids: list[str] = Field(default_factory=list)
+    citations: list[CitationInfo] = Field(default_factory=list)
+    confidence: Literal["high", "medium", "low"] = "low"
+    insufficient_evidence: bool = False
+    dropped_claims: int = 0
+    degraded: bool = False
+    degraded_reason: str = ""
+    evidence_tokens: int = 0
+    full_body_tokens: int = 0
+    content_is_untrusted: bool = True  # the answer is model text built from mail
+    warnings: list[str] = Field(default_factory=list)
 
 
 @operation(
     "ask",
-    "Answer a question from the mail, with the messages it came from. Arrives with prompt 15.",
+    "Answer a question from the mail, citing the messages and quoting the lines it came from.",
     permission="read",
     input=AskInput,
     output=AskOutput,
-    mcp="off",
+    mcp="off",  # an agent could read mail through it; the user decides (see prompt 18)
 )
 async def ask(ctx: OpContext, inp: AskInput) -> AskOutput:
-    raise NotImplementedYet("question answering comes with prompt 15")
+    """Every quote is checked against the message it cites; claims that fail are dropped, and
+    with none left the answer is ``insufficient_evidence``. Never marks anything read."""
+    result = await ctx.svc.need_retrieval().ask(
+        inp.question, hybrid_filters(inp, thread_key=inp.thread_key)
+    )
+    return AskOutput(
+        answer=result.answer,
+        message_ids=list(result.references),
+        citations=[
+            CitationInfo(
+                claim=c.claim,
+                message_id=c.message_id,
+                chunk_ordinal=c.chunk_ordinal,
+                quote=c.quote,
+                subject=c.subject,
+                sender=c.sender,
+                date=c.date,
+            )
+            for c in result.citations
+        ],
+        confidence=result.confidence,
+        insufficient_evidence=result.insufficient_evidence,
+        dropped_claims=result.dropped_claims,
+        degraded=result.degraded,
+        degraded_reason=result.degraded_reason,
+        evidence_tokens=result.evidence_tokens,
+        full_body_tokens=result.full_body_tokens,
+        warnings=list(result.warnings),
+    )
 
 
 class GetMessageInput(BaseModel):

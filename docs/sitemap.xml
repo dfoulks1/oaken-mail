@@ -10,6 +10,7 @@
   <url><loc>https://dfoulks1.github.io/oaken-mail/architecture/overview.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/architecture/parsing.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/architecture/read-state.html</loc></url>
+  <url><loc>https://dfoulks1.github.io/oaken-mail/architecture/retrieval.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/architecture/sieve.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/architecture/software-map.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/architecture/storage.html</loc></url>
@@ -22,6 +23,7 @@
   <url><loc>https://dfoulks1.github.io/oaken-mail/providers/gmail.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/providers/imap.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/providers/smtp.html</loc></url>
+  <url><loc>https://dfoulks1.github.io/oaken-mail/reference/evaluation.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/reference/operations.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/reference/plugin-contracts.html</loc></url>
   <url><loc>https://dfoulks1.github.io/oaken-mail/security.html</loc></url>

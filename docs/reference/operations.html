@@ -54,9 +54,11 @@
       <a class="doc-link" href="../architecture/read-state.html">Read state</a>
       <a class="doc-link" href="../architecture/sync-schedule.html">Sync schedule</a>
       <a class="doc-link" href="../architecture/operations.html">Operations</a>
+      <a class="doc-link" href="../architecture/retrieval.html">Retrieval and ask</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="plugin-contracts.html">Plugin contracts</a>
       <a class="doc-link current" href="operations.html" aria-current="page">Operations</a>
+      <a class="doc-link" href="evaluation.html">Evaluation results</a>
       <div class="label">Project</div>
       <a class="doc-link" href="../contributing.html">Contributing</a>
       <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
@@ -95,7 +97,7 @@
 <td>read</td>
 <td>off until you turn it on</td>
 <td>no</td>
-<td>Answer a question from the mail, with the messages it came from. Arrives with prompt 15.</td>
+<td>Answer a question from the mail, citing the messages and quoting the lines it came from.</td>
 </tr>
 <tr>
 <td><code>get_message</code></td>
@@ -247,9 +249,9 @@
 <tr>
 <td><code>search</code></td>
 <td>read</td>
-<td>off until you turn it on</td>
+<td>on by default</td>
 <td>no</td>
-<td>Hybrid search (keyword and meaning). Arrives with prompt 15; use search_keyword for now.</td>
+<td>Hybrid search: keyword and meaning together. Understands from:, before:, after:, is:unread, category: and &quot;quoted phrases&quot;.</td>
 </tr>
 <tr>
 <td><code>search_keyword</code></td>
@@ -313,10 +315,10 @@
 <section id="inputs-and-outputs" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>Inputs and outputs</h2></div>
 <p>A trailing <code>?</code> marks an optional field.</p>
 <h3 id="ask"><code>ask</code></h3>
-<p>Answer a question from the mail, with the messages it came from. Arrives with prompt 15.</p>
+<p>Every quote is checked against the message it cites; claims that fail are dropped, and with none left the answer is <code>insufficient_evidence</code>. Never marks anything read.</p>
 <ul>
-<li>Input: <code>question</code>, <code>account_id</code>?</li>
-<li>Output: <code>answer</code>, <code>message_ids</code>?</li>
+<li>Input: <code>account_id</code>?, <code>label</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>question</code>, <code>thread_key</code>?</li>
+<li>Output: <code>answer</code>, <code>message_ids</code>?, <code>citations</code>?, <code>confidence</code>?, <code>insufficient_evidence</code>?, <code>dropped_claims</code>?, <code>degraded</code>?, <code>degraded_reason</code>?, <code>evidence_tokens</code>?, <code>full_body_tokens</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
 </ul>
 <h3 id="get-message"><code>get_message</code></h3>
 <p>The cleaned text (quotes and signatures removed), cut to the caller's limit. Reading a message here does not change read state: only opening or summarizing it, by the user, does.</p>
@@ -445,10 +447,10 @@
 <li>Output: <code>schedule</code></li>
 </ul>
 <h3 id="search"><code>search</code></h3>
-<p>Hybrid search (keyword and meaning). Arrives with prompt 15; use search_keyword for now.</p>
+<p>Each hit says which retrievers found it (<code>why</code>). When the embedder or the vectors are unavailable the keyword results still come back, with <code>degraded</code> set. Never marks read.</p>
 <ul>
-<li>Input: <code>account_id</code>?, <code>label</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>query</code>, <code>limit</code>?</li>
-<li>Output: <code>items</code>, <code>truncated</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
+<li>Input: <code>account_id</code>?, <code>label</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>query</code>, <code>limit</code>?, <code>thread_key</code>?, <code>category</code>?, <code>min_priority</code>?, <code>unread_only</code>?</li>
+<li>Output: <code>items</code>, <code>truncated</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?, <code>degraded</code>?, <code>degraded_reason</code>?</li>
 </ul>
 <h3 id="search-keyword"><code>search_keyword</code></h3>
 <p>Hits come back with the matching words marked <code>**like this**</code>. Never marks read.</p>

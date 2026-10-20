@@ -16,6 +16,7 @@ from oaken.core.errors import Unavailable
 from oaken.core.events import EventBus
 from oaken.core.jobs import JobQueue
 from oaken.core.rawstore import RawStore
+from oaken.core.search import Retrieval
 from oaken.core.settings import Settings
 from oaken.index import Indexer, IndexStore
 from oaken.ingest import Pipeline, UsageStore
@@ -49,6 +50,7 @@ class Services:
     sync: SyncService | None = None
     plugins: PluginHost | None = None
     llm: LLMService | None = None
+    retrieval: Retrieval | None = None  # built from the pipeline when not given
     version: str = ""
 
     def need_readstate(self) -> ReadState:
@@ -71,3 +73,13 @@ class Services:
 
     def need_llm(self) -> LLMService:
         return need(self.llm, "the language model service")
+
+    def need_retrieval(self) -> Retrieval:
+        """Search and ask. Built on demand from the pipeline's index, vectors and embedder, and
+        the language model service (workspace-checked per account) when there is one."""
+        if self.retrieval is None:
+            from oaken.ai.access import WorkspaceLLM
+
+            llm = WorkspaceLLM(self.llm, self.raw) if self.llm is not None else None
+            self.retrieval = Retrieval.from_pipeline(self.need_pipeline(), llm)
+        return self.retrieval

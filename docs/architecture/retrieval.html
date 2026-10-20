@@ -1,0 +1,264 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retrieval and ask · Oaken Mail</title>
+<meta name="description" content="How hybrid search merges BM25 and vector results with rank fusion, how the context is built within a token budget, how cited answers are verified, what happens when the vector side is down, and how it is measured.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Retrieval and ask · Oaken Mail">
+<meta property="og:description" content="How hybrid search merges BM25 and vector results with rank fusion, how the context is built within a token budget, how cited answers are verified, what happens when the vector side is down, and how it is measured.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="../assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">Hybrid search, a token-budgeted context and answers that quote their sources</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Start</div>
+      <a class="doc-link" href="../providers/gmail.html">Connect Gmail</a>
+      <a class="doc-link" href="../providers/smtp.html">Send through your own SMTP server</a>
+      <a class="doc-link" href="../providers/imap.html">Connect any IMAP server</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="overview.html">Architecture overview</a>
+      <a class="doc-link" href="jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="software-map.html">Software map</a>
+      <a class="doc-link" href="swarm.html">The swarm</a>
+      <a class="doc-link" href="storage.html">Raw storage</a>
+      <a class="doc-link" href="parsing.html">Parsing and cleaning</a>
+      <a class="doc-link" href="sieve.html">Sieve filtering</a>
+      <a class="doc-link" href="index.html">The search index</a>
+      <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <a class="doc-link" href="vectors.html">The vector store</a>
+      <a class="doc-link" href="ingest-pipeline.html">The ingest pipeline</a>
+      <a class="doc-link" href="ai-safety.html">Prompt safety and workspaces</a>
+      <a class="doc-link" href="read-state.html">Read state</a>
+      <a class="doc-link" href="sync-schedule.html">Sync schedule</a>
+      <a class="doc-link" href="operations.html">Operations</a>
+      <a class="doc-link current" href="retrieval.html" aria-current="page">Retrieval and ask</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
+      <a class="doc-link" href="../reference/operations.html">Operations</a>
+      <a class="doc-link" href="../reference/evaluation.html">Evaluation results</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#search"><span class="num">1</span>Search</a>
+      <a class="nav-link" href="#ask"><span class="num">2</span>Ask</a>
+      <a class="nav-link" href="#how-it-is-measured"><span class="num">3</span>How it is measured</a>
+      <a class="nav-link" href="#what-it-does-not-do"><span class="num">4</span>What it does not do</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <h1 class="display-6">Retrieval and ask</h1>
+    <p class="lead">Search runs the keyword index and the vector store side by side and merges them. Ask builds a small context from the best hits and holds the model to it: every claim must quote the message it came from, and a quote that is not really there is dropped.</p>
+  </header>
+
+<section id="search" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>Search</h2></div>
+<p><code>search</code> asks two retrievers at once and merges what they find.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Retriever</th>
+<th>Finds</th>
+<th>Misses</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Keyword (FTS5, BM25)</td>
+<td>the exact words, names and identifiers</td>
+<td>a question that says the same thing in other words</td>
+</tr>
+<tr>
+<td>Vector (nearest chunks)</td>
+<td>the same meaning in different words</td>
+<td>an order number, a code, an exact phrase</td>
+</tr>
+</tbody>
+</table></div>
+<p>Each ranked list is first filtered, and chunks are collapsed to messages (the best chunk stands
+for the message, and the other chunks that matched are kept as <code>matched_chunks</code>). A message then
+scores the sum of <code>weight / (rrf_k + rank)</code> over the lists it appears in: Reciprocal Rank Fusion.
+Only ranks are used, so a BM25 score and a cosine similarity never have to be compared. Every hit
+carries its score, a snippet and <code>why</code>: which retrievers found it.</p>
+<p>Settings, under <code>[search]</code>:</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rrf_k</code></td>
+<td>60</td>
+<td>A larger value flattens the gap between the first and the tenth hit.</td>
+</tr>
+<tr>
+<td><code>keyword_weight</code>, <code>vector_weight</code></td>
+<td>1.0</td>
+<td>Scale each retriever's contribution.</td>
+</tr>
+<tr>
+<td><code>exact_boost</code></td>
+<td>3.0</td>
+<td>Multiplies the keyword weight when the query has a quoted phrase or a token with a digit, which meaning cannot tell apart.</td>
+</tr>
+<tr>
+<td><code>keyword_min_match</code></td>
+<td>0.5</td>
+<td>For a question, a keyword hit must hold at least this share of its words.</td>
+</tr>
+<tr>
+<td><code>overfetch</code>, <code>max_candidates</code></td>
+<td>5, 500</td>
+<td>How many candidates each retriever returns per hit wanted, and how far a search widens when filters leave too few.</td>
+</tr>
+<tr>
+<td><code>vector_timeout_seconds</code></td>
+<td>10</td>
+<td>After this the vector side is given up on.</td>
+</tr>
+<tr>
+<td><code>llm_rewrite</code></td>
+<td>off</td>
+<td>Rephrase the free text with the model before it is embedded.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="reading-the-query">Reading the query</h3>
+<p>No model is involved. The query is read into words, <code>&quot;phrases&quot;</code>, <code>-exclusions</code> and operators,
+and every word is quoted before it reaches SQLite, so nothing a person types can be FTS5 syntax.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Operator</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>from:alex</code></td>
+<td>sender name or address</td>
+</tr>
+<tr>
+<td><code>after:2024-03-01</code>, <code>before:2024-04-01</code></td>
+<td>date range (UTC)</td>
+</tr>
+<tr>
+<td><code>label:Lists</code>, <code>in:discarded</code></td>
+<td>label, disposition</td>
+</tr>
+<tr>
+<td><code>is:unread</code>, <code>is:read</code></td>
+<td>read state</td>
+</tr>
+<tr>
+<td><code>category:work</code></td>
+<td>the triage category (repeat for several)</td>
+</tr>
+<tr>
+<td><code>priority:2</code></td>
+<td>triage priority 2 or higher</td>
+</tr>
+</tbody>
+</table></div>
+<p>A value that cannot be read (<code>priority:9</code>, <code>category:nope</code>) is reported as a warning and filters
+nothing. Read state and the triage result live in <code>raw.db</code>, not in the index, so those filters are
+applied to the candidates there. The operation also takes the same filters as fields, plus a
+thread. A query with no words, such as <code>is:unread from:alex</code>, lists the newest matching messages.</p>
+<h3 id="when-the-vector-side-is-unavailable">When the vector side is unavailable</h3>
+<p>Search never fails because of it. If there is no embedder, no vector store, no vectors yet, the
+vectors were built by another model (so they would mean nothing), the call times out or it raises,
+the keyword results come back with <code>degraded: true</code> and a <code>degraded_reason</code>. A stale index is
+treated like a missing one rather than mixed in.</p>
+<h3 id="search-does-not-mark-mail-read">Search does not mark mail read</h3>
+<p>A result is a reference. Opening a message is what changes read state, and that is a separate,
+user-initiated operation.</p>
+</section>
+<section id="ask" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Ask</h2></div>
+<p><code>ask(question, filters)</code> retrieves, builds a context, and asks the model to answer in <strong>claims</strong>.
+Each claim has the excerpt it rests on and the exact words it quotes.</p>
+<ol>
+<li>A question has its stop words removed for the keyword side, which then matches messages
+containing at least half of what is left; the vector side gets the question as written.</li>
+<li>The context builder spends <code>ai.ask_context_tokens</code> (3,000 by default) in tiers, across all
+hits in rank order before going deeper into any: a header line and the stored summary for each
+hit; the matched chunks for the first <code>ask_chunk_hits</code>; the neighbouring chunks and the
+summaries of the rest of the thread for the first <code>ask_neighbor_hits</code>.</li>
+<li>Near-identical chunks are sent once, and words a neighbouring chunk already shows are cut. The
+total is counted again at the end and trimmed, so the budget is a limit and not a target.</li>
+<li>The mail goes to the model as <code>UntrustedText</code>, one block per message, behind the usual data
+rules (see <a href="ai-safety.html">AI safety</a>).</li>
+<li>Core keeps a claim only if its excerpt was in the context and its quote really is in that
+chunk's stored text (whitespace may differ, nothing else may). Claims that fail are dropped and
+counted. If any were dropped, confidence is <code>low</code>: a model that invented something is not
+trusted to rate itself. If none are left, the answer is <code>insufficient_evidence</code>, and the text
+says so instead of guessing.</li>
+</ol>
+<p>The result has <code>answer</code>, <code>citations</code> (message, chunk ordinal, the quote as it stands in the
+message, and its offsets), <code>confidence</code>, <code>insufficient_evidence</code>, <code>dropped_claims</code>, <code>degraded</code>
+and the token figures: <code>evidence_tokens</code> and <code>full_body_tokens</code>, the cost of sending every hit
+whole, so the saving is visible on every call. When nothing is found there is no model call at all.</p>
+<p>Mail from more than one account is never put in one prompt, because an account decides which
+workspace, and so which models, may see it. A question that finds mail in several accounts is
+refused with a request to name one. <code>ask</code> does not mark anything read.</p>
+<p><code>ask</code> is off over MCP by default. It would let an agent read mail by asking questions, so the
+user turns it on, like any operation (see <a href="operations.html">Operations</a>).</p>
+</section>
+<section id="how-it-is-measured" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>How it is measured</h2></div>
+<p><code>uv run python -m oaken.evals retrieval</code> builds a seeded synthetic mailbox of about a thousand
+messages with planted facts and questions about them, ingests it through the real pipeline and
+scores each retriever. <a href="../reference/evaluation.html">Evaluation results</a> shows the latest run. The
+corpus has four kinds of answerable question and one kind that the mail does not answer, chosen so
+that keyword search and vector search each fail on one of them. That is why hybrid wins by a wide
+margin offline, and why the numbers say little about real mail.</p>
+<p>Offline, the embedder and the reader are stand-ins: a small concept embedder and an extractive
+reader that quotes the sentence closest to the question. The run is deterministic, and a smaller
+run is a test, which asserts that hybrid is at least as good as each single retriever. A run with
+a real embedder and model (<code>--live</code>) is manual and is not part of CI.</p>
+</section>
+<section id="what-it-does-not-do" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>What it does not do</h2></div>
+<p>No reranking model, no cross-account search, no search inside attachments, and no query rewriting
+unless <code>llm_rewrite</code> is on.</p>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

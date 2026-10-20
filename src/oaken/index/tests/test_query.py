@@ -154,3 +154,33 @@ def test_fts_syntax_in_input_is_just_text() -> None:
     assert hits('"') == 0
     assert hits("bud*") == 1
     assert hits("alex") == 1  # the sender column is searched like any other
+
+
+def test_is_category_and_priority_are_raw_side_operators_not_search_words() -> None:
+    q = parse_query("is:unread category:work priority:2 budget")
+    assert (q.unread, q.categories, q.min_priority, q.terms) == (True, ("work",), 2, ("budget",))
+    assert parse_query("is:read x").unread is False
+    assert parse_query("CATEGORY:Work x").categories == ("work",)
+    assert parse_query("category:work category:newsletter x").categories == ("work", "newsletter")
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["is:bogus x", "category:nope x", "priority:9 x", "priority:-1 x", "priority:abc x", "is: x",
+     "category:work' OR 1=1 --", "is:unread\u200b x", "category:\u202ework x"],
+)  # fmt: skip
+def test_a_bad_value_for_these_operators_warns_and_filters_nothing(text: str) -> None:
+    q = parse_query(text)
+    assert q.warnings and q.unread is None and not q.categories and q.min_priority is None
+    sqlite3.connect(":memory:").execute("CREATE VIRTUAL TABLE t USING fts5(a)").connection.execute(
+        "SELECT * FROM t WHERE t MATCH ?", (q.match,)
+    ).fetchall()  # whatever is left is still a valid FTS5 expression
+
+
+def test_a_quoted_operator_is_a_phrase_not_a_filter() -> None:
+    q = parse_query('"is:unread" "category:work"')
+    assert q.unread is None and not q.categories and q.terms == ("is:unread", "category:work")
+
+
+def test_any_term_joins_with_or() -> None:
+    assert parse_query("budget review", any_term=True).match == '"budget" OR "review"'

@@ -3,7 +3,7 @@
 
 import pytest
 
-from oaken.core.errors import ConfigError, NotFound, NotImplementedYet, Unavailable
+from oaken.core.errors import ConfigError, NotFound, Unavailable
 from oaken.core.operations import CallerContext
 from oaken.core.operations.tests.conftest import CLI, Ops, agent
 
@@ -53,10 +53,24 @@ async def test_get_message_gives_cleaned_text_and_metadata(ops: Ops) -> None:
         await ops.call("get_message_rules", {"message_id": "nope"})
 
 
-async def test_hybrid_search_and_ask_say_which_prompt_builds_them(ops: Ops) -> None:
-    for name, payload in (("search", {"query": "x"}), ("ask", {"question": "x"})):
-        with pytest.raises(NotImplementedYet, match="prompt 15"):
-            await ops.call(name, payload)
+async def test_hybrid_search_finds_mail_says_why_and_never_marks_it_read(ops: Ops) -> None:
+    a, b, _ = await ops.add(3)
+    out = await ops.out("search", {"query": "topic1"})
+    assert out.items[0].message_id == b and out.items[0].why == ["keyword", "vector"]
+    assert not out.degraded
+    ops.svc.need_retrieval().hybrid.embedder = lambda: None  # the model goes away
+    down = await ops.out("search", {"query": "topic1"})
+    assert [i.message_id for i in down.items] == [b] and down.degraded and down.degraded_reason
+    flags = {i.message_id: i.is_read for i in (await ops.out("list_messages")).items}
+    assert flags[b] is False and flags[a] is False
+
+
+async def test_ask_without_a_model_is_unavailable_not_a_crash(ops: Ops) -> None:
+    await ops.add(1)
+    ops.svc.llm = None
+    ops.svc.retrieval = None
+    with pytest.raises(Unavailable):
+        await ops.call("ask", {"question": "what is topic0?"})
 
 
 async def test_status_and_pipeline_status_and_accounts(ops: Ops) -> None:

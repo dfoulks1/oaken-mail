@@ -9,6 +9,7 @@ architecture/operations.html
 architecture/overview.html
 architecture/parsing.html
 architecture/read-state.html
+architecture/retrieval.html
 architecture/sieve.html
 architecture/software-map.html
 architecture/storage.html
@@ -36,6 +37,7 @@ plugins.html
 providers/gmail.html
 providers/imap.html
 providers/smtp.html
+reference/evaluation.html
 reference/operations.html
 reference/plugin-contracts.html
 robots.txt

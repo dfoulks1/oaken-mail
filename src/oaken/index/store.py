@@ -73,6 +73,7 @@ class SearchFilters:
     labels: tuple[str, ...] = ()
     disposition: str | None = None  # None hides discarded mail; "any" shows everything
     include_discarded: bool = False
+    list_all: bool = False  # with no words, list the newest messages even with no other filter
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +90,7 @@ class SearchHit:
     labels: tuple[str, ...]
     disposition: str
     has_attachments: bool
+    chunk_id: int | None = None  # the chunk that matched best; None for a listing
 
 
 @dataclass(frozen=True, slots=True)
@@ -492,6 +494,27 @@ class IndexStore:
         )
         return MessageId(row["message_id"]) if row else None
 
+    async def thread_siblings(
+        self, message_id: MessageId, limit: int = 5
+    ) -> list[tuple[MessageId, datetime | None, str]]:
+        """Other messages in this one's thread, nearest in time first: ``(id, date, from)``."""
+        rows = await self.db.fetchall(
+            "SELECT p.message_id, p.date_utc, p.from_name, p.from_addr FROM docs d"
+            " JOIN docs p ON p.thread_key = d.thread_key AND p.message_id != d.message_id"
+            " WHERE d.message_id = ? AND p.disposition != 'discarded'"
+            " ORDER BY ABS(julianday(COALESCE(p.date_utc, d.date_utc)) -"
+            " julianday(COALESCE(d.date_utc, p.date_utc))), p.message_id LIMIT ?",
+            (message_id, limit),
+        )
+        return [
+            (
+                MessageId(r["message_id"]),
+                parse_ts(r["date_utc"]) if r["date_utc"] else None,
+                r["from_name"] or r["from_addr"],
+            )
+            for r in rows
+        ]
+
     async def chunk_rows(self, message_id: MessageId) -> list[sqlite3.Row]:
         return await self.db.fetchall(
             "SELECT id, ordinal, source, subject, sender, text, token_estimate, content_hash"
@@ -565,7 +588,9 @@ class IndexStore:
                 " AND l.label = ?)"
             )
             args.append(label)
-        explicit = bool(clauses) or bool(q.disposition or f.disposition or f.include_discarded)
+        explicit = bool(clauses) or bool(
+            q.disposition or f.disposition or f.include_discarded or f.list_all
+        )
         disposition = q.disposition or f.disposition
         if disposition in DISPOSITIONS:
             clauses.append("d.disposition = ?")
@@ -575,12 +600,17 @@ class IndexStore:
         return (" AND " + " AND ".join(clauses)) if clauses else "", args, explicit
 
     async def keyword_search(
-        self, query: str, filters: SearchFilters | None = None, k: int = 20
+        self,
+        query: str,
+        filters: SearchFilters | None = None,
+        k: int = 20,
+        *,
+        any_term: bool = False,
     ) -> SearchResult:
         """BM25-ranked search, one hit per message (its best chunk) with a highlighted snippet.
         With no words in the query but some filters it lists the newest matching messages."""
         f = filters or SearchFilters()
-        q = parse_query(query, self.cfg)
+        q = parse_query(query, self.cfg, any_term=any_term)
         k = max(1, min(k, 1000))
         where, args, explicit = self._where(q, f)
         if q.match is None:
@@ -603,8 +633,9 @@ class IndexStore:
                 f"{where}),"
                 " ranked AS (SELECT chunk_id, message_id, score, ROW_NUMBER() OVER ("
                 " PARTITION BY message_id ORDER BY score, chunk_id) AS rn FROM hits)"
-                " SELECT chunk_id, message_id, score FROM ranked WHERE rn = 1"
-                " ORDER BY score, message_id LIMIT ?"
+                " SELECT r.chunk_id, r.message_id, r.score FROM ranked r"
+                " JOIN docs d ON d.message_id = r.message_id WHERE r.rn = 1"
+                " ORDER BY r.score, d.date_utc DESC, r.message_id LIMIT ?"  # ties: newest first
             )
             best = await self.db.fetchall(ranked_sql, [q.match, *args, k])
         except StorageError as exc:  # the parser should make this impossible; never leak it
@@ -640,10 +671,50 @@ class IndexStore:
             snip = snippets.get(b["chunk_id"]) or ""
             if HL_OPEN not in snip:  # matched in the subject or sender only
                 snip = (texts.get(b["chunk_id"]) or "")[:SNIPPET_FALLBACK_CHARS]
-            hits.append(await self._hit(docs[b["message_id"]], -float(b["score"]), snip))
+            hits.append(
+                await self._hit(docs[b["message_id"]], -float(b["score"]), snip, b["chunk_id"])
+            )
         return SearchResult(tuple(hits), q, q.warnings)
 
-    async def _hit(self, d: sqlite3.Row, score: float, snippet: str) -> SearchHit:
+    async def filtered_hits(
+        self, message_ids: Sequence[str], query: ParsedQuery, filters: SearchFilters | None = None
+    ) -> dict[str, SearchHit]:
+        """The messages among ``message_ids`` that satisfy the filters and the query's operators
+        (sender, dates, labels, disposition, thread), as hits with no score or snippet. This is how
+        a retriever that cannot filter (the vector store) is held to the same rules as keyword
+        search."""
+        f = filters or SearchFilters()
+        where, args, _ = self._where(query, f)
+        out: dict[str, SearchHit] = {}
+        unique = list(dict.fromkeys(message_ids))
+        for i in range(0, len(unique), 500):
+            part = unique[i : i + 500]
+            rows = await self.db.fetchall(
+                f"SELECT d.* FROM docs d WHERE d.message_id IN ({','.join('?' * len(part))})"  # noqa: S608
+                f"{where}",
+                [*part, *args],
+            )
+            for r in rows:
+                out[r["message_id"]] = await self._hit(r, 0.0, "")
+        return out
+
+    async def chunks_by_ids(self, chunk_ids: Sequence[int | str]) -> dict[int, sqlite3.Row]:
+        """``{chunk id: row}`` with the text, for the chunks a retriever matched."""
+        out: dict[int, sqlite3.Row] = {}
+        ids = [int(c) for c in dict.fromkeys(chunk_ids)]
+        for i in range(0, len(ids), 500):
+            part = ids[i : i + 500]
+            for r in await self.db.fetchall(
+                "SELECT id, message_id, ordinal, source, text, token_estimate FROM chunks"  # noqa: S608
+                f" WHERE id IN ({','.join('?' * len(part))})",
+                part,
+            ):
+                out[int(r["id"])] = r
+        return out
+
+    async def _hit(
+        self, d: sqlite3.Row, score: float, snippet: str, chunk_id: int | None = None
+    ) -> SearchHit:
         labels = await self.db.fetchall(
             "SELECT label FROM doc_labels WHERE message_id = ? ORDER BY label", (d["message_id"],)
         )
@@ -660,6 +731,7 @@ class IndexStore:
             labels=tuple(r["label"] for r in labels),
             disposition=d["disposition"],
             has_attachments=bool(d["has_attachments"]),
+            chunk_id=int(chunk_id) if chunk_id is not None else None,
         )
 
     # -- integrity --------------------------------------------------------------------------

@@ -32,6 +32,7 @@ class MessageItem(BaseModel):
     has_attachments: bool = False
     is_read: bool | None = None  # None: not stored yet
     score: float = 0.0
+    why: list[str] = Field(default_factory=list)  # which retrievers found it
     text: str | None = None  # cleaned text, only when asked for and within the budget
 
 

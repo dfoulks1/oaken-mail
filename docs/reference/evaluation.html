@@ -1,0 +1,243 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evaluation results · Oaken Mail</title>
+<meta name="description" content="Recall, MRR and nDCG for keyword, vector and hybrid search, and the token cost of cited answers, from the latest evaluation run.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Evaluation results · Oaken Mail">
+<meta property="og:description" content="Recall, MRR and nDCG for keyword, vector and hybrid search, and the token cost of cited answers, from the latest evaluation run.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="../assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">Evaluation results</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Start</div>
+      <a class="doc-link" href="../providers/gmail.html">Connect Gmail</a>
+      <a class="doc-link" href="../providers/smtp.html">Send through your own SMTP server</a>
+      <a class="doc-link" href="../providers/imap.html">Connect any IMAP server</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="../architecture/overview.html">Architecture overview</a>
+      <a class="doc-link" href="../architecture/jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="../architecture/software-map.html">Software map</a>
+      <a class="doc-link" href="../architecture/swarm.html">The swarm</a>
+      <a class="doc-link" href="../architecture/storage.html">Raw storage</a>
+      <a class="doc-link" href="../architecture/parsing.html">Parsing and cleaning</a>
+      <a class="doc-link" href="../architecture/sieve.html">Sieve filtering</a>
+      <a class="doc-link" href="../architecture/index.html">The search index</a>
+      <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <a class="doc-link" href="../architecture/vectors.html">The vector store</a>
+      <a class="doc-link" href="../architecture/ingest-pipeline.html">The ingest pipeline</a>
+      <a class="doc-link" href="../architecture/ai-safety.html">Prompt safety and workspaces</a>
+      <a class="doc-link" href="../architecture/read-state.html">Read state</a>
+      <a class="doc-link" href="../architecture/sync-schedule.html">Sync schedule</a>
+      <a class="doc-link" href="../architecture/operations.html">Operations</a>
+      <a class="doc-link" href="../architecture/retrieval.html">Retrieval and ask</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="plugin-contracts.html">Plugin contracts</a>
+      <a class="doc-link" href="operations.html">Operations</a>
+      <a class="doc-link current" href="evaluation.html" aria-current="page">Evaluation results</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#retrieval"><span class="num">1</span>Retrieval</a>
+      <a class="nav-link" href="#answers-and-cost"><span class="num">2</span>Answers and cost</a>
+      <a class="nav-link" href="#reproduce"><span class="num">3</span>Reproduce</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-secondary">Generated</span></div>
+    <h1 class="display-6">Evaluation results</h1>
+    <p class="lead">How well hybrid search finds the right message and how few tokens it spends, rendered from the latest run.</p>
+  </header>
+<p>Measured on <strong>2026-10-20</strong> with corpus seed <strong>0</strong>: 1,000 messages in 2,249 chunks, 48 answerable questions (12 lexical, 12 paraphrase, 12 identifier, 12 thread) and 12 that the mail does not answer. How the pieces work: <a href="../architecture/retrieval.html">Retrieval and ask</a>.</p>
+<ul>
+<li>Mode: <strong>offline</strong>. Embedder: concept-embed (offline stand-in). Reader: extractive stand-in (not a model).</li>
+<li>Context budget: 3,000 tokens. Summaries in the context: first sentence (stand-in for the summary enricher).</li>
+</ul>
+<blockquote>
+<p>An offline run uses stand-ins for both models, so it measures how the retrieval and context code behaves, not how any real model does. The corpus is synthetic and was built so that each retriever has a kind of question it is bad at. Do not read these numbers as what a real mailbox would score; a run with real models is a manual step (<code>--live</code>).</p>
+</blockquote>
+
+<section id="retrieval" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>Retrieval</h2></div>
+<p>Over the answerable questions. A message is relevant when it holds the planted fact.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Retriever</th>
+<th>Recall@5</th>
+<th>Recall@10</th>
+<th>MRR</th>
+<th>nDCG@10</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Keyword only (BM25)</td>
+<td>0.750</td>
+<td>0.750</td>
+<td>0.740</td>
+<td>0.742</td>
+</tr>
+<tr>
+<td>Vector only</td>
+<td>0.625</td>
+<td>0.625</td>
+<td>0.546</td>
+<td>0.562</td>
+</tr>
+<tr>
+<td>Hybrid (RRF, exact-text boost, minimum match)</td>
+<td>1.000</td>
+<td>1.000</td>
+<td>0.990</td>
+<td>0.992</td>
+</tr>
+<tr>
+<td>Hybrid, plain RRF</td>
+<td>0.646</td>
+<td>0.667</td>
+<td>0.605</td>
+<td>0.612</td>
+</tr>
+</tbody>
+</table></div>
+<p>nDCG@10 by kind of question:</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Retriever</th>
+<th>lexical</th>
+<th>paraphrase</th>
+<th>identifier</th>
+<th>thread</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Keyword only (BM25)</td>
+<td>0.969</td>
+<td>0.000</td>
+<td>1.000</td>
+<td>1.000</td>
+</tr>
+<tr>
+<td>Vector only</td>
+<td>0.969</td>
+<td>1.000</td>
+<td>0.000</td>
+<td>0.279</td>
+</tr>
+<tr>
+<td>Hybrid (RRF, exact-text boost, minimum match)</td>
+<td>0.969</td>
+<td>1.000</td>
+<td>1.000</td>
+<td>1.000</td>
+</tr>
+<tr>
+<td>Hybrid, plain RRF</td>
+<td>0.969</td>
+<td>0.000</td>
+<td>0.556</td>
+<td>0.922</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>lexical</strong>: the question uses the message's own words.</li>
+<li><strong>paraphrase</strong>: the question uses different words for the same idea.</li>
+<li><strong>identifier</strong>: the question is about a code, number or other exact string.</li>
+<li><strong>thread</strong>: the answer is in a reply, so the thread has to be followed.</li>
+</ul>
+</section>
+<section id="answers-and-cost" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Answers and cost</h2></div>
+<p>Every question goes through <code>ask</code>. The baseline puts the whole body of each of the top 10 messages into the prompt, with no budget, and checks the reader's citations the same way.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th></th>
+<th>Context builder</th>
+<th>Top 10 full bodies</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Answerable questions answered correctly</td>
+<td>48/48</td>
+<td>48/48</td>
+</tr>
+<tr>
+<td>Unanswerable questions refused</td>
+<td>12/12</td>
+<td>12/12</td>
+</tr>
+<tr>
+<td>Citation precision</td>
+<td>100.0%</td>
+<td>100.0%</td>
+</tr>
+<tr>
+<td>Mean evidence tokens per question</td>
+<td>1,885</td>
+<td>3,503</td>
+</tr>
+<tr>
+<td>Evidence tokens saved vs the baseline</td>
+<td>46.2%</td>
+<td></td>
+</tr>
+<tr>
+<td>Mean share of the hits' full bodies not sent</td>
+<td>32.0%</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<p>Citation precision is the share of citations that point at the planted message and quote the planted fact. A claim whose quote is not in the cited excerpt is dropped before it is counted (0 dropped in this run).</p>
+<p>The saving is below the 60% the design aims for. The messages in this synthetic mailbox are short, so the chunk that matched is often most of the message and there is little to leave out; the context builder's gain grows with the length of the mail. The figure is reported as measured.</p>
+</section>
+<section id="reproduce" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Reproduce</h2></div>
+<div class="code"><pre class="highlight"><code>uv run python -m oaken.evals retrieval --messages 1000 --seed 0
+</code></pre></div>
+<p>The command rewrites <code>docs/evals/latest.md</code> and <code>docs/evals/latest.json</code>, which this page is built from. With the offline stand-ins it is deterministic.</p>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

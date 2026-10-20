@@ -54,9 +54,11 @@
       <a class="doc-link" href="read-state.html">Read state</a>
       <a class="doc-link" href="sync-schedule.html">Sync schedule</a>
       <a class="doc-link current" href="operations.html" aria-current="page">Operations</a>
+      <a class="doc-link" href="retrieval.html">Retrieval and ask</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
       <a class="doc-link" href="../reference/operations.html">Operations</a>
+      <a class="doc-link" href="../reference/evaluation.html">Evaluation results</a>
       <div class="label">Project</div>
       <a class="doc-link" href="../contributing.html">Contributing</a>
       <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
@@ -235,7 +237,9 @@ the same ceiling rules, with these differences:</p>
 <ul>
 <li>A <strong>generic plugin settings store</strong> for the UI. <code>list_plugins</code> shows each plugin's settings
 schema, but nothing yet writes them.</li>
-<li><code>search</code> and <code>ask</code> exist as stubs, off over MCP, until retrieval lands.</li>
+<li><code>search</code> is on over MCP and <code>ask</code> is off until the user turns it on; both read through
+<a href="retrieval.html">retrieval</a>, which a running process only gets once the daemon (prompt 16)
+attaches the index, vectors and model service to the registry.</li>
 <li><strong>Summaries run inline</strong>, one after another, capped per call. They are not a job.</li>
 <li>The registry's audit row is written just after the change, not in the same transaction. A crash in
 between loses the row, not the change. Operations that already audit atomically (read state,

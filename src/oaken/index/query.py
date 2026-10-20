@@ -11,6 +11,13 @@ well-formed expression or none at all; it never raises.
     from:alex            sender name or address  label:Lists    carries this label
     after:2024-03-01     on or after (UTC)       in:discarded   a disposition (default hides it)
     before:2024-04-01    before (UTC)
+
+Three operators are about what only ``raw.db`` knows (read state and the triage enrichment), so the
+index cannot apply them; they are parsed here and applied by hybrid search:
+
+    is:unread            not yet read (``is:read`` the opposite)
+    category:work        the triage category (repeat to allow several)
+    priority:2           triage priority 2 or higher
 """
 
 import re
@@ -21,7 +28,10 @@ from typing import Final
 from oaken.core.settings import IndexSettings
 
 DISPOSITIONS: Final = ("inbox", "filed", "discarded")
-_OPERATORS: Final = ("from", "before", "after", "label", "in")
+_OPERATORS: Final = ("from", "before", "after", "label", "in", "is", "category", "priority")
+CATEGORIES: Final = (
+    "personal", "work", "transactional", "notification", "newsletter", "automated", "other",
+)  # fmt: skip
 _ALNUM = re.compile(r"[^\W_]", re.UNICODE)
 _CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 _DATE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?$")
@@ -38,6 +48,9 @@ class ParsedQuery:
     labels: tuple[str, ...] = ()
     disposition: str | None = None
     warnings: tuple[str, ...] = field(default=())
+    unread: bool | None = None  # is:unread / is:read; applied by hybrid search, not the index
+    categories: tuple[str, ...] = ()
+    min_priority: int | None = None
 
     @property
     def has_text(self) -> bool:
@@ -86,7 +99,14 @@ def _split(text: str) -> list[str]:
     return pieces
 
 
-def parse_query(text: str, cfg: IndexSettings | None = None) -> ParsedQuery:
+split_pieces = _split  # for callers that rebuild a query (hybrid search drops stop words)
+
+
+def parse_query(
+    text: str, cfg: IndexSettings | None = None, *, any_term: bool = False
+) -> ParsedQuery:
+    """``any_term`` matches a message with any of the words (BM25 ranks the ones with more);
+    the default needs all of them."""
     cfg = cfg or IndexSettings()
     warnings: list[str] = []
     text = _CONTROL.sub(" ", text)
@@ -103,6 +123,9 @@ def parse_query(text: str, cfg: IndexSettings | None = None) -> ParsedQuery:
     after: datetime | None = None
     before: datetime | None = None
     disposition: str | None = None
+    unread: bool | None = None
+    categories: list[str] = []
+    min_priority: int | None = None
     terms = 0
 
     def literal(raw: str) -> str | None:
@@ -123,6 +146,23 @@ def parse_query(text: str, cfg: IndexSettings | None = None) -> ParsedQuery:
                 from_.append(value)
             elif kind == "label":
                 labels.append(value)
+            elif kind == "is":
+                v = value.lower()
+                if v in ("unread", "read"):
+                    unread = v == "unread"
+                else:
+                    warnings.append(f"is: takes unread or read, not {value!r}")
+            elif kind == "category":
+                v = value.lower()
+                if v in CATEGORIES:
+                    categories.append(v)
+                else:
+                    warnings.append(f"category: takes {', '.join(CATEGORIES)}, not {value!r}")
+            elif kind == "priority":
+                if value in ("0", "1", "2", "3"):
+                    min_priority = int(value)
+                else:
+                    warnings.append(f"priority: takes 0 to 3, not {value!r}")
             elif kind == "in":
                 v = value.lower()
                 if v in DISPOSITIONS:
@@ -164,7 +204,7 @@ def parse_query(text: str, cfg: IndexSettings | None = None) -> ParsedQuery:
 
     match: str | None = None
     if positive:
-        match = " AND ".join(positive)
+        match = (" OR " if any_term else " AND ").join(positive)
         if negative:
             match = f"({match}) NOT ({' OR '.join(negative)})"
     elif negative:
@@ -181,4 +221,7 @@ def parse_query(text: str, cfg: IndexSettings | None = None) -> ParsedQuery:
         labels=tuple(labels),
         disposition=disposition,
         warnings=tuple(warnings),
+        unread=unread,
+        categories=tuple(dict.fromkeys(categories)),
+        min_priority=min_priority,
     )
