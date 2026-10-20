@@ -47,6 +47,10 @@ id = "architecture/swarm"
 file = "architecture/swarm.md"
 
 [[pages]]
+id = "architecture/storage"
+file = "architecture/storage.md"
+
+[[pages]]
 id = "plugins"
 file = "plugins.md"
 

@@ -8,7 +8,7 @@ are an error, in the file and in code. No secrets live here: tokens belong in th
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 from pydantic_settings import (
     BaseSettings,
     EnvSettingsSource,
@@ -32,6 +32,18 @@ class StorageSettings(_Section):
     index_db: str = "index.db"
     read_pool_size: int = Field(default=4, ge=1, le=32)
     busy_timeout_ms: int = Field(default=5000, ge=0)
+    # Raw messages up to this size are stored inside raw.db; larger ones go to the LFS folder
+    # (raw.db keeps a header stub and a link).
+    inline_max_bytes: int = Field(default=8 * 1024 * 1024, ge=1024)
+    # Past this size the message is still kept (in LFS) but flagged ``oversize`` in its event.
+    max_message_bytes: int = Field(default=100 * 1024 * 1024, ge=1024)
+    lfs_dir: str = "lfs"
+
+    @model_validator(mode="after")
+    def _limits_are_ordered(self) -> "StorageSettings":
+        if self.inline_max_bytes > self.max_message_bytes:
+            raise ValueError("inline_max_bytes cannot exceed max_message_bytes")
+        return self
 
 
 class AISettings(_Section):

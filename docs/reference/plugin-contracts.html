@@ -39,6 +39,7 @@
       <a class="doc-link" href="../architecture/jobs.html">Events, jobs and the scheduler</a>
       <a class="doc-link" href="../architecture/software-map.html">Software map</a>
       <a class="doc-link" href="../architecture/swarm.html">The swarm</a>
+      <a class="doc-link" href="../architecture/storage.html">Raw storage</a>
       <a class="doc-link" href="../plugins.html">Writing a plugin</a>
       <div class="label">Reference</div>
       <a class="doc-link current" href="plugin-contracts.html" aria-current="page">Plugin contracts</a>
@@ -193,6 +194,11 @@
 <td><code>config</code></td>
 <td><code>dict[str, Any]</code></td>
 <td><code>empty</code></td>
+</tr>
+<tr>
+<td><code>bus</code></td>
+<td><code>EventBus | None</code></td>
+<td><code>None</code></td>
 </tr>
 </tbody>
 </table></div>

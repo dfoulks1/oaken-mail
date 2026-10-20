@@ -12,6 +12,7 @@ dependencies = [
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.1",
     "structlog>=26.1.0",
+    "zstandard>=0.25.0",
 ]
 
 [project.scripts]
@@ -32,6 +33,7 @@ exclude = ["**/tests/**"]
 dev = [
     "coverage",
     "detect-secrets",
+    "hypothesis>=6.170.5",
     "mypy",
     "pytest",
     "pytest-asyncio",

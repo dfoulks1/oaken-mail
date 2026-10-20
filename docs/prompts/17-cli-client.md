@@ -63,3 +63,10 @@ Standard report. Include sample sessions (copy-paste of real CLI output against 
 Add `oaken agents create|list|revoke` and `oaken jobs claim|heartbeat|complete|fail` so a
 scripted worker can lease jobs. `agents create` prints the token once, with a warning that it
 cannot be shown again. See `docs/architecture/swarm.md`.
+
+## Note from prompt 05
+
+Add an **administrative sub-section** (`oaken admin ...`) with an account wizard. It asks the
+questions, then **stores** the answers through `RawStore.create_account` / `set_account_config`,
+so the user never edits a file by hand. Only non-secret settings go in `config_json`; credentials go
+to the OS keyring (the store refuses secret-looking keys).

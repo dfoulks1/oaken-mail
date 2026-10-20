@@ -339,10 +339,22 @@ ext = ["sqlite-vec"]
 id = "rawstore"
 name = "raw.db"
 layer = "storage"
-status = "planned"
+status = "built"
 prompt = "05"
-summary = "Source of truth: zstd RFC 822 blobs (content-addressed), provider ids, sync cursors, job queue, audit log, read-state intents."
+path = "src/oaken/core/rawstore.py"
+summary = "Source of truth: zstd RFC 822 blobs (content-addressed), accounts, provider ids, sync cursors and read-state intents, with an LFS folder for large messages. The job queue shares the file."
 uses = ["dbaccess"]
+types = [
+  ["RawStore", "class", "Idempotent, transactional put; get_raw with sha256 verification; soft delete; cursors; stats; gc_blobs; account create and config."],
+  ["MessageMeta", "frozen dataclass", "What a provider knows besides the bytes: internal date, read, starred, labels."],
+  ["StoredMessage", "frozen dataclass", "A message row as listed by iter_messages, with its size and whether it lives in LFS."],
+]
+funcs = [
+  ["RawStore.put_message(account_id, provider_id, raw, meta) -> (MessageId, is_new)", "Store one message. Same provider id and bytes is a no-op; changed bytes move the pointer."],
+  ["RawStore.get_raw(message_id, verify=False) -> bytes", "The exact stored bytes; verify=True re-hashes and raises StorageError on corruption."],
+  ["RawStore.get_stub(message_id) -> bytes", "The headers only, without opening the LFS file of a large message."],
+  ["RawStore.gc_blobs() -> GcResult", "Remove unreferenced blobs and their LFS files. A referenced blob is never removed."],
+]
 
 [[components]]
 id = "index"

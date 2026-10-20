@@ -39,6 +39,7 @@
       <a class="doc-link" href="architecture/jobs.html">Events, jobs and the scheduler</a>
       <a class="doc-link" href="architecture/software-map.html">Software map</a>
       <a class="doc-link" href="architecture/swarm.html">The swarm</a>
+      <a class="doc-link" href="architecture/storage.html">Raw storage</a>
       <a class="doc-link current" href="plugins.html" aria-current="page">Writing a plugin</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="reference/plugin-contracts.html">Plugin contracts</a>
@@ -59,7 +60,8 @@
       <a class="nav-link" href="#registering-it"><span class="num">6</span>Registering it</a>
       <a class="nav-link" href="#what-the-host-does"><span class="num">7</span>What the host does</a>
       <a class="nav-link" href="#testing-it"><span class="num">8</span>Testing it</a>
-      <a class="nav-link" href="#not-sandboxed"><span class="num">9</span>Not sandboxed</a>
+      <a class="nav-link" href="#plugin-events"><span class="num">9</span>Plugin events</a>
+      <a class="nav-link" href="#not-sandboxed"><span class="num">10</span>Not sandboxed</a>
     </nav></div>
   </div></div>
 </nav>
@@ -253,7 +255,23 @@ mailbox and failure injection, <code>FakeEmbedder</code>, <code>FakeLLM</code> t
 <code>FakeEnricher</code>, <code>InMemoryVectorStore</code>). Use them to test code that uses a plugin, with no network,
 no model and no real mail.</p>
 </section>
-<section id="not-sandboxed" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>Not sandboxed</h2></div>
+<section id="plugin-events" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>Plugin events</h2></div>
+<p>Core announces what happens on an event bus, and a plugin can announce its own. Subclass
+<code>PluginEvent</code>, add plain-data fields, and publish it from <code>start()</code> or anywhere you hold the context:</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">oaken.plugins</span><span class="w"> </span><span class="kn">import</span> <span class="n">PluginEvent</span>
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">QuotaLow</span><span class="p">(</span><span class="n">PluginEvent</span><span class="p">):</span>
+    <span class="n">remaining</span><span class="p">:</span> <span class="nb">int</span>
+
+<span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">QuotaLow</span><span class="p">(</span><span class="n">ts</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">clock</span><span class="o">.</span><span class="n">now</span><span class="p">(),</span> <span class="n">remaining</span><span class="o">=</span><span class="mi">12</span><span class="p">))</span>
+</code></pre></div>
+<p>The host fills in <code>plugin</code> with your plugin's name, so a listener can tell who sent it, and
+<code>publish</code> accepts only <code>PluginEvent</code> subclasses, so a plugin can't forge a core event. Clients that
+stream events (the web UI, an MCP client) receive yours alongside core's.</p>
+</section>
+<section id="not-sandboxed" class="doc-section"><div class="section-head"><span class="section-num">10</span><h2>Not sandboxed</h2></div>
 <p>Plugins run in the same process as core, with full access to the machine and to whatever core can
 reach. They are not sandboxed in version 1. The contract keeps the code tidy and the data
 boundaries clear; it does not contain a hostile plugin. Only install plugins you trust, as you

@@ -16,6 +16,7 @@ writer. Plain ``fetchone``/``fetchall`` see the last committed state.
 
 import asyncio
 import hashlib
+import os
 import re
 import sqlite3
 from collections.abc import AsyncIterator, Sequence
@@ -92,6 +93,7 @@ class Database:
         cls, path: Path, *, read_pool_size: int = 4, busy_timeout_ms: int = 5000
     ) -> Self:
         path = _prepare(path)
+        _create_private(path)
         writer = await _connect(path, busy_timeout_ms, read_only=False)
         try:
             await _pragma(writer, "journal_mode=WAL")  # persists in the file
@@ -101,6 +103,7 @@ class Database:
         except BaseException:
             await writer.close()
             raise
+        _private(path)
         return cls(path, writer, readers)
 
     async def close(self) -> None:
@@ -200,6 +203,19 @@ def _prepare(path: Path) -> Path:
     path = path.resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _create_private(path: Path) -> None:
+    """Create the file owner-only before SQLite does; -wal and -shm copy its mode."""
+    with suppress(OSError):
+        os.close(os.open(path, os.O_RDWR | os.O_CREAT, 0o600))
+
+
+def _private(path: Path) -> None:
+    """Tighten a pre-existing database and its -wal/-shm to owner-only."""
+    for p in (path, Path(f"{path}-wal"), Path(f"{path}-shm")):
+        with suppress(OSError, NotImplementedError):
+            p.chmod(0o600)
 
 
 def _readonly_uri(path: Path) -> str:

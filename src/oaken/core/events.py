@@ -59,8 +59,24 @@ class SyncFinished(Event):
 
 @dataclass(frozen=True, kw_only=True)
 class MessageStored(Event):
+    """``is_new``: first time seen. ``changed``: an existing message got different bytes (or came
+    back after a delete), so anything derived from it is stale. A no-op put publishes nothing."""
+
     account_id: AccountId
     message_id: MessageId
+    is_new: bool = True
+    changed: bool = False
+
+
+@dataclass(frozen=True, kw_only=True)
+class LargeMessageStored(Event):
+    """A message was too big for ``raw.db`` and went to the LFS folder, whole. ``oversize`` is set
+    when it is also past ``storage.max_message_bytes`` (worth a warning in a UI)."""
+
+    account_id: AccountId
+    message_id: MessageId
+    size_bytes: int
+    oversize: bool = False
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -109,6 +125,14 @@ class PluginHealthChanged(Event):
     plugin: str
     healthy: bool
     detail: str = ""
+
+
+@dataclass(frozen=True, kw_only=True)
+class PluginEvent(Event):
+    """Base for events a plugin defines itself: subclass it, add plain-data fields, and publish
+    with ``ctx.publish(...)``. ``plugin`` names the sender (the host fills it in)."""
+
+    plugin: str = ""
 
 
 Handler = Callable[[Event], Awaitable[None]]

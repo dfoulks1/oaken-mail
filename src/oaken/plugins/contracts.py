@@ -11,11 +11,13 @@ tuples are accepted and coerced into these types) and strict about what it hands
 """
 
 from collections.abc import AsyncIterator, Collection, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any, Literal, Protocol, runtime_checkable
 
 from oaken.core.clock import Clock
+from oaken.core.errors import PluginError
+from oaken.core.events import EventBus, PluginEvent
 from oaken.core.settings import Settings
 from oaken.core.untrusted import UntrustedText
 
@@ -84,6 +86,15 @@ class PluginContext:
     clock: Clock
     log: Any
     config: dict[str, Any] = field(default_factory=dict)
+    bus: EventBus | None = None
+
+    async def publish(self, event: PluginEvent) -> None:
+        """Announce a plugin-defined event (a ``PluginEvent`` subclass) on the event bus. Core
+        events cannot be forged this way. A context without a bus (tests) drops it quietly."""
+        if not isinstance(event, PluginEvent):
+            raise PluginError(f"{self.name}: publish() takes a PluginEvent subclass")
+        if self.bus is not None:
+            await self.bus.publish(replace(event, plugin=self.name))
 
 
 @dataclass(frozen=True)

@@ -170,6 +170,26 @@ mailbox and failure injection, `FakeEmbedder`, `FakeLLM` that records every requ
 `FakeEnricher`, `InMemoryVectorStore`). Use them to test code that uses a plugin, with no network,
 no model and no real mail.
 
+## Plugin events
+
+Core announces what happens on an event bus, and a plugin can announce its own. Subclass
+`PluginEvent`, add plain-data fields, and publish it from `start()` or anywhere you hold the context:
+
+```python
+from dataclasses import dataclass
+from oaken.plugins import PluginEvent
+
+@dataclass(frozen=True, kw_only=True)
+class QuotaLow(PluginEvent):
+    remaining: int
+
+await self.ctx.publish(QuotaLow(ts=self.ctx.clock.now(), remaining=12))
+```
+
+The host fills in `plugin` with your plugin's name, so a listener can tell who sent it, and
+`publish` accepts only `PluginEvent` subclasses, so a plugin can't forge a core event. Clients that
+stream events (the web UI, an MCP client) receive yours alongside core's.
+
 ## Not sandboxed
 
 Plugins run in the same process as core, with full access to the machine and to whatever core can

@@ -78,3 +78,9 @@ group. `check_docs.py` must pass.
 
 Standard report. Include the stage diagram as it was actually implemented and the
 queue/lease parameters chosen.
+
+## Note from prompt 05
+
+`MessageStored` carries `is_new` and `changed`. Re-parse and re-index when `changed` is set (the
+bytes differ, or a deleted message came back). `LargeMessageStored` marks a message kept in the LFS
+folder. `RawStore.get_stub()` returns just the headers without opening a large message's file.

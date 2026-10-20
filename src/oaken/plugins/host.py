@@ -157,6 +157,7 @@ class PluginHost:
             clock=self.clock,
             log=get_logger(f"oaken.plugin.{rec.kind}.{rec.name}"),
             config=dict(self.settings.plugins.get(rec.name, {})),
+            bus=self.bus,
         )
         try:
             await self._call(rec.instance, "start", ctx)
