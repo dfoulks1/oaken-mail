@@ -22,6 +22,7 @@ HERE = Path(__file__).resolve().parent
 PINNED = {
     "bootstrap_css": "npm/bootstrap@5.3.3/dist/css/bootstrap.min.css",
     "bootstrap_js": "npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js",
+    "bootstrap_icons_css": "npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css",
     "mermaid_js": "npm/mermaid@11.4.1/dist/mermaid.min.js",
 }
 

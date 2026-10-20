@@ -12,6 +12,15 @@ assets/site.css
 assets/site.js
 code-of-conduct.html
 contributing.html
+demo/assets/oaken.css
+demo/assets/oaken.js
+demo/compose.html
+demo/contacts.html
+demo/index.html
+demo/login.html
+demo/message.html
+demo/search.html
+demo/settings.html
 index.html
 robots.txt
 security.html

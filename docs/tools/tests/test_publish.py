@@ -51,3 +51,19 @@ def test_stale_published_html_is_reported(tree: Tree) -> None:
 
 def test_unpublished_tree_is_not_flagged_stale(tree: Tree) -> None:
     assert not any("out of date" in p for p in check_docs.check(tree.cfg()))
+
+
+def test_demo_is_published_with_pinned_cdn_tags_and_no_google_fonts(tree: Tree) -> None:
+    head = (
+        '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
+        '<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"'
+        ' rel="stylesheet">\n'
+    )
+    tree.write("apps/webui/oakenmail-templates/login.html", f"<html><head>{head}</head></html>")
+    tree.write("apps/webui/oakenmail-templates/assets/x.css", "a{}")
+    publish(tree)
+    login = (tree.docs / "demo" / "login.html").read_text()
+    assert "googleapis" not in login
+    assert 'integrity="sha384-' in login and 'crossorigin="anonymous"' in login
+    assert (tree.docs / "demo" / "assets" / "x.css").read_text() == "a{}"
+    assert "demo/login.html" in (tree.docs / "index.html").read_text()

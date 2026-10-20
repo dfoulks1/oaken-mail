@@ -17,6 +17,7 @@ import argparse
 import contextlib
 import functools
 import http.server
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -41,6 +42,41 @@ CARDS_MARKER = "<p>{{doc-cards}}</p>"
 HOME_ID = "index"
 TODO_MARKER = "TODO(user)"
 MANIFEST = ".site-manifest"
+
+
+DEMO_SRC = Path("apps/webui/oakenmail-templates")
+DEMO_OUT = "demo"
+_FONT_LINK = re.compile(r"[ \t]*<link[^>]*(?:fonts\.googleapis|fonts\.gstatic)[^>]*>\n")
+_CDN_LINK = re.compile(r'<link href="(https://cdn\.jsdelivr\.net/[^"]+)" rel="stylesheet">')
+_CDN_SCRIPT = re.compile(r'<script src="(https://cdn\.jsdelivr\.net/[^"]+)"></script>')
+
+
+def demo_files(cfg: Config) -> dict[str, bytes]:
+    """The clickable UI mockups, published under demo/. The CDN tags get the pinned integrity
+    hashes from sri.toml and the Google Fonts links are dropped (the UI falls back to system
+    fonts), so the demo passes the same checks as every other page."""
+    src = cfg.repo_root / DEMO_SRC
+    if not src.is_dir():
+        return {}
+    pinned = {v["url"]: v["integrity"] for v in pagebase.sri().values()}
+
+    def pin(m: re.Match[str]) -> str:
+        url = m.group(1)
+        if url not in pinned:
+            raise BuildError(f"demo uses a CDN URL that is not pinned in sri.toml: {url}")
+        tag = m.group(0)
+        return tag.replace(">", f' integrity="{pinned[url]}" crossorigin="anonymous">', 1)
+
+    out: dict[str, bytes] = {}
+    for path in sorted(p for p in src.rglob("*") if p.is_file()):
+        rel = f"{DEMO_OUT}/{path.relative_to(src).as_posix()}"
+        data = path.read_bytes()
+        if path.suffix == ".html":
+            text = _FONT_LINK.sub("", data.decode("utf-8"))
+            text = _CDN_LINK.sub(pin, _CDN_SCRIPT.sub(pin, text))
+            data = text.encode("utf-8")
+        out[rel] = data
+    return out
 
 
 def make_env() -> Environment:
@@ -175,6 +211,7 @@ def build(cfg: Config, out: Path, strict: bool = False) -> list[str]:
     cards_html = env.get_template("cards.html").render(cards=cards)
     home_rendered.intro_html = home_rendered.intro_html.replace(CARDS_MARKER, cards_html)
     subtitle = home.subtitle if home.subtitle != home.title else ""
+    demo = demo_files(cfg)
     written["index.html"] = (
         env.get_template("home.html")
         .render(
@@ -182,6 +219,7 @@ def build(cfg: Config, out: Path, strict: bool = False) -> list[str]:
             page=home,
             rendered=home_rendered,
             prefix="",
+            has_demo=bool(demo),
             cdn=pagebase.cdn_tags(home_rendered.has_mermaid),
             doc_title=f"{cfg.title} · {subtitle}" if subtitle else cfg.title,
             description=home.description or home.lead or cfg.description,
@@ -201,6 +239,7 @@ def build(cfg: Config, out: Path, strict: bool = False) -> list[str]:
     )
     for name in pagebase.BRAND_FILES:
         written[f"assets/brand/{name}"] = (pagebase.BRAND_DIR / name).read_bytes()
+    written.update(demo)
     written["assets/site.css"] = pagebase.CSS.encode("utf-8")
     written["assets/site.js"] = pagebase.SITE_JS.encode("utf-8")
     urls = [cfg.site_url] + [cfg.site_url + p.out for p in sorted(pages, key=lambda p: p.id)]
