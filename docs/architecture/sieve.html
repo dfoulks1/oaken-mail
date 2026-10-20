@@ -122,6 +122,13 @@ it). They run <strong>in name order</strong> (<code>10-lists.sieve</code>, <code
 <p>A script with an error is <strong>reported and skipped</strong>, so one typo does not switch off the rest. A
 script that fails while running (a bad regular expression built from a variable, a limit reached)
 loses its own actions only, and the message stays in the inbox.</p>
+<h3 id="trying-a-script">Trying a script</h3>
+<p>You edit the files; nothing writes them for you. <code>oaken sieve check FILE</code> compiles one and names the
+line of the first error. <code>oaken sieve test FILE --message ID</code> (or <code>--eml PATH</code>) runs it on one
+message and shows each effect with the <code>script:line</code> that caused it, storing nothing.
+<code>oaken sieve list</code> shows what core would load and any script it would skip, and why.
+<code>oaken sieve refilter</code> (the <code>filter</code> stage of <code>reprocess</code>) re-reads the files and re-runs them over
+stored mail.</p>
 </section>
 <section id="what-an-action-does" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>What an action does</h2></div>
 <p>Oaken reads and organizes mail. It does not deliver it, so Sieve actions map onto a mailbox view:</p>

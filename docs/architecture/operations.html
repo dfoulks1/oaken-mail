@@ -147,7 +147,8 @@ use them, and a caller can hold only so many at once.</p>
 <p>Each operation has a <strong>ceiling</strong> fixed in code: <code>never</code>, <code>off</code> or <code>on</code>.</p>
 <ul>
 <li><code>never</code>: cannot be offered over MCP, whatever you set. Sending, raw mail bytes, the audit log,
-rebuilding the index, editing exposure itself and editing schedules.</li>
+rebuilding the index, editing exposure itself, editing schedules, managing agents and
+accounts and their credentials, Sieve diagnostics, and running the enrichers by hand.</li>
 <li><code>off</code>: may be offered, and is not until you turn it on.</li>
 <li><code>on</code>: offered by default.</li>
 </ul>

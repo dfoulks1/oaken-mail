@@ -8,6 +8,9 @@ No daemon, no socket. ``cli(*argv)`` returns the exit code and captured stdout/s
 from __future__ import annotations
 
 import json
+from pathlib import Path
+
+import pytest
 
 from oaken_cli.exits import ExitCode
 from oaken_cli.tests.conftest import Cli
@@ -117,3 +120,62 @@ async def test_unread_subcommand_calls_mark_unread(cli: Cli) -> None:
     assert await cli.ops.rs.is_read(ids[0]) is True
     await cli("unread", str(ids[0]))
     assert await cli.ops.rs.is_read(ids[0]) is False
+
+
+# -- enrich -----------------------------------------------------------------------------------
+async def test_enrich_show_and_run(cli: Cli) -> None:
+    (mid,) = await cli.ops.add(1)
+    shown = await cli("enrich", "show", str(mid), "--json")
+    assert shown.code == 0 and "words" in json.loads(shown.out)["results"]
+    human = await cli("enrich", "show", str(mid), "words")
+    assert "words:" in human.out
+    again = await cli("enrich", "run", str(mid))
+    assert again.code == 0 and "already current" in again.out
+    forced = await cli("enrich", "run", str(mid), "words", "--force", "--json")
+    assert json.loads(forced.out)["ran"] == 1
+    assert await cli.ops.rs.is_read(mid) is False
+
+
+async def test_enrich_errors_are_clean(cli: Cli) -> None:
+    (mid,) = await cli.ops.add(1)
+    assert (await cli("enrich", "run", str(mid), "nope")).code == int(ExitCode.USAGE)
+    assert (await cli("enrich", "show", "no-such-message")).code == int(ExitCode.ERROR)
+
+
+# -- sieve ------------------------------------------------------------------------------------
+SCRIPT = 'require ["fileinto"];\nif header :contains "subject" "Subject" { fileinto "Work"; }\n'
+
+
+async def test_sieve_check(cli: Cli, tmp_path: Path) -> None:
+    good = tmp_path / "good.sieve"
+    good.write_text(SCRIPT)
+    bad = tmp_path / "bad.sieve"
+    bad.write_text("keep;\nbogus;\n")
+    ok = await cli("sieve", "check", str(good))
+    assert ok.code == 0 and "ok (fileinto)" in ok.out
+    broken = await cli("sieve", "check", str(bad))
+    assert broken.code == int(ExitCode.ERROR) and "line 2" in broken.out
+    missing = await cli("sieve", "check", str(tmp_path / "nope.sieve"))
+    assert missing.code == int(ExitCode.USAGE)
+
+
+async def test_sieve_test_on_a_stored_message_and_on_an_eml(cli: Cli, tmp_path: Path) -> None:
+    script = tmp_path / "work.sieve"
+    script.write_text(SCRIPT)
+    (mid,) = await cli.ops.add(1)
+    run = await cli("sieve", "test", str(script), "--message", str(mid))
+    assert run.code == 0 and "label Work" in run.out and "filed" in run.out
+    eml = tmp_path / "m.eml"
+    eml.write_bytes(b"From: a@example.com\r\nSubject: Subject here\r\n\r\nbody\r\n")
+    viaeml = await cli("sieve", "test", str(script), "--eml", str(eml), "--json")
+    assert json.loads(viaeml.out)["disposition"] == "filed"
+    with pytest.raises(SystemExit) as stop:  # argparse itself: a message or an eml is required
+        await cli("sieve", "test", str(script))
+    assert stop.value.code == int(ExitCode.USAGE)
+
+
+async def test_sieve_list_and_refilter(cli: Cli) -> None:
+    listed = await cli("sieve", "list", "--json")
+    assert listed.code == 0 and "scripts" in json.loads(listed.out)
+    queued = await cli("sieve", "refilter")
+    assert queued.code == 0 and "refilter queued" in queued.out

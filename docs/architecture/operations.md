@@ -52,7 +52,8 @@ use them, and a caller can hold only so many at once.
 Each operation has a **ceiling** fixed in code: `never`, `off` or `on`.
 
 - `never`: cannot be offered over MCP, whatever you set. Sending, raw mail bytes, the audit log,
-  rebuilding the index, editing exposure itself and editing schedules.
+  rebuilding the index, editing exposure itself, editing schedules, managing agents and
+  accounts and their credentials, Sieve diagnostics, and running the enrichers by hand.
 - `off`: may be offered, and is not until you turn it on.
 - `on`: offered by default.
 

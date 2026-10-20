@@ -55,6 +55,8 @@ def build_parser() -> argparse.ArgumentParser:
     _register_mail(sub, g)
     _register_system(sub, g)
     _register_swarm(sub, g)
+    _register_content(sub)
+    _register_accounts(sub)
     _register_completion(sub, g)
     # Any registry operation without its own verb above is still reachable through the generic
     # ``oaken operation NAME --json '{...}'`` fallback, so a registry change never needs a release.
@@ -361,6 +363,111 @@ def _register_swarm(
     fail.add_argument("--error", required=True, metavar="TEXT", help="What went wrong (no mail).")
     fail.add_argument("--permanent", action="store_true", help="Do not retry it.")
     jobs.set_defaults(func=_lazy("agent_cmd", "cmd_jobs"))
+
+
+def _register_content(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Enrichment results and Sieve scripts."""
+    enrich = sub.add_parser(
+        "enrich",
+        help="Run or show the enrichers (summary, triage, actions, inspector) on a message.",
+        parents=[_globals(True)],
+    )
+    verbs = enrich.add_subparsers(dest="action", metavar="ACTION")
+    verbs.required = True
+    run_ = verbs.add_parser(
+        "run", parents=[_globals(True)], help="Run the enrichers on one message now."
+    )
+    run_.add_argument("message_id")
+    run_.add_argument("enricher", nargs="*", help="Only these enrichers (default: all).")
+    run_.add_argument(
+        "--force", action="store_true", help="Run even if a current result is stored."
+    )
+    show = verbs.add_parser("show", parents=[_globals(True)], help="Show the stored results.")
+    show.add_argument("message_id")
+    show.add_argument("enricher", nargs="*", help="One enricher (default: all stored).")
+    enrich.set_defaults(func=_lazy("content_cmd", "cmd_enrich"))
+
+    sieve = sub.add_parser(
+        "sieve",
+        help="Check, try and list Sieve filter scripts; refilter stored mail.",
+        parents=[_globals(True)],
+        description="Scripts are files you edit; these commands never change them.",
+    )
+    acts = sieve.add_subparsers(dest="action", metavar="ACTION")
+    acts.required = True
+    check = acts.add_parser("check", parents=[_globals(True)], help="Compile a script file.")
+    check.add_argument("file")
+    test = acts.add_parser(
+        "test",
+        parents=[_globals(True)],
+        help="Run a script on one message and show each effect. Stores nothing.",
+    )
+    test.add_argument("file")
+    which = test.add_mutually_exclusive_group(required=True)
+    which.add_argument("--message", metavar="ID", help="A stored message.")
+    which.add_argument("--eml", metavar="PATH", help="A message file.")
+    acts.add_parser("list", parents=[_globals(True)], help="The scripts core would load.")
+    refilter = acts.add_parser(
+        "refilter", parents=[_globals(True)], help="Re-run the scripts over stored mail (a job)."
+    )
+    refilter.add_argument("--account", metavar="ID", help="Restrict to one account.")
+    sieve.set_defaults(func=_lazy("content_cmd", "cmd_sieve"))
+
+
+def _register_accounts(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """The account wizard and credentials."""
+    admin = sub.add_parser(
+        "admin",
+        help="Administration: add and inspect accounts.",
+        parents=[_globals(True)],
+    )
+    area = admin.add_subparsers(dest="area", metavar="AREA")
+    area.required = True
+    account = area.add_parser("account", parents=[_globals(True)], help="Mail accounts.")
+    acts = account.add_subparsers(dest="action", metavar="ACTION")
+    acts.required = True
+    acts.add_parser("list", parents=[_globals(True)], help="List accounts.")
+    show = acts.add_parser("show", parents=[_globals(True)], help="One account and its settings.")
+    show.add_argument("account_id")
+    add = acts.add_parser(
+        "add",
+        parents=[_globals(True)],
+        help="Add an account (asks questions on a terminal).",
+        description=(
+            "Asks for the provider, an id, a name and the provider's own non-secret settings, then "
+            "stores them. The credential is stored afterwards with 'oaken auth'. Give "
+            "--provider, --id and --name (and --set) to skip the questions."
+        ),
+    )
+    add.add_argument("--provider", metavar="NAME", help="gmail, smtp or imap.")
+    add.add_argument("--id", dest="account_id", metavar="ID", help="a-z, 0-9, - and _.")
+    add.add_argument("--name", metavar="TEXT", help="A display name.")
+    add.add_argument(
+        "--set", action="append", metavar="KEY=VALUE", help="A provider setting (repeatable)."
+    )
+    admin.set_defaults(func=_lazy("account_cmd", "cmd_admin"))
+
+    auth = sub.add_parser(
+        "auth",
+        help="Store an account's credential (Gmail consent, SMTP or IMAP password).",
+        parents=[_globals(True)],
+        description=(
+            "gmail opens Google's consent and waits; smtp and imap read the password without "
+            "echo. Nothing is ever printed, taken as an argument, or written to disk: the "
+            "credential goes to the OS keyring."
+        ),
+    )
+    auth.add_argument("provider", choices=["gmail", "smtp", "imap"])
+    auth.add_argument("--account", metavar="ID", help="The account (default: the only one).")
+    auth.add_argument("--check", action="store_true", help="Check the stored credential only.")
+    auth.add_argument(
+        "--password-stdin", action="store_true", help="Read the password from one line of stdin."
+    )
+    auth.add_argument("--no-browser", action="store_true", help="Only print the Gmail address.")
+    auth.add_argument(
+        "--timeout", type=float, default=300.0, metavar="S", help="Gmail: give up after S seconds."
+    )
+    auth.set_defaults(func=_lazy("account_cmd", "cmd_auth"))
 
 
 def _register_completion(

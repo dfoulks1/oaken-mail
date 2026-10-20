@@ -20,12 +20,14 @@ import asyncio
 import json
 import sqlite3
 import time
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Literal
 
 from pydantic import BaseModel
 
+from oaken.ai.fresh import FRESH
 from oaken.core.actors import SYSTEM, Actor
 from oaken.core.attrs import AttrStore
 from oaken.core.clock import Clock, fmt_ts, parse_ts
@@ -387,9 +389,28 @@ class Pipeline:
         r = await self.enrich_message(MessageId(p.message_id))
         return StageJobResult(done=r.ran, skipped=r.cached)
 
-    async def enrich_message(self, message_id: MessageId) -> EnrichResult:
+    async def enrich_message(
+        self,
+        message_id: MessageId,
+        *,
+        only: Collection[str] | None = None,
+        force: bool = False,
+    ) -> EnrichResult:
         """Run every enricher whose result for this content is not already stored. A result
-        another message with the same content produced is copied, not asked for again."""
+        another message with the same content produced is copied, not asked for again.
+
+        ``only`` limits it to the named enrichers. ``force`` runs them even when a current result
+        is stored and asks the model afresh (the new answer replaces the cached one)."""
+        token = FRESH.set(True) if force else None
+        try:
+            return await self._enrich_message(message_id, only, force)
+        finally:
+            if token is not None:
+                FRESH.reset(token)
+
+    async def _enrich_message(
+        self, message_id: MessageId, only: Collection[str] | None, force: bool
+    ) -> EnrichResult:
         out = EnrichResult()
         if await self._skip_ai(message_id):
             return out
@@ -400,6 +421,8 @@ class Pipeline:
         account = AccountId(doc["account_id"])
         msg_input: EnrichInput | None = None
         for name, enricher in self.backends.enrichers().items():
+            if only is not None and name not in only:
+                continue
             if self.settings.plugins.get(name, {}).get("enabled") is False:
                 continue  # switched off with [plugins.<name>] enabled = false
             if enricher.needs_llm and llm is None:
@@ -407,7 +430,7 @@ class Pipeline:
             model = llm.model_id if enricher.needs_llm and llm else ""
             key = (doc["content_hash"], name, enricher.version, model)
             tokens = self.tokenizer.count(doc["cleaned_text"])
-            if await self._cached_enrichment(message_id, key):
+            if not force and await self._cached_enrichment(message_id, key):
                 out.cached += 1
                 await self.usage.record(
                     "enrich", model or name, tokens_in=tokens, cached=True,
@@ -513,6 +536,14 @@ class Pipeline:
             (message_id, name, version, model, content_hash, data, fmt_ts(self.clock.now())),
         )
 
+    async def enrichments(self, message_id: MessageId) -> dict[str, dict[str, object]]:
+        """Every stored enricher result for a message, by enricher name."""
+        rows = await self.raw.db.fetchall(
+            "SELECT enricher, data_json FROM enrichments WHERE message_id = ? ORDER BY enricher",
+            (message_id,),
+        )
+        return {r["enricher"]: json.loads(r["data_json"]) for r in rows}
+
     async def enrichment(self, message_id: MessageId, enricher: str) -> dict[str, object] | None:
         """The stored result of one enricher for a message (for operations and the web UI)."""
         row = await self.raw.db.fetchone(
@@ -548,6 +579,7 @@ class Pipeline:
         if p.stage == "filter":
             if self.filters is None:
                 return StageJobResult(note="no filter engine")
+            self.filters.reload()  # the scripts may have been edited since core started
             r = await self.filters.refilter(acct)
             return StageJobResult(done=r.filtered, skipped=r.failed)
         if p.stage == "embed":

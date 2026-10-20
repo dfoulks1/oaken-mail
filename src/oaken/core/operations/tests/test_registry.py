@@ -92,9 +92,10 @@ def test_what_is_never_offered_over_mcp_is_what_the_user_was_promised() -> None:
         "resume_schedule", "remove_schedule", "set_operation_exposure", "list_operations",
         "list_audit", "message_presented", "message_dismissed",
     } <= never  # fmt: skip
-    assert not any(
-        "sieve" in o.name for o in core_operations()
-    )  # scripts are files, not operations
+    # Scripts are files the person edits, not operations: nothing writes one. The sieve operations
+    # only check, try and list them, and are never offered to an agent.
+    sieve = [o for o in core_operations() if "sieve" in o.name]
+    assert sieve and all(o.permission == "read" and not o.mcp_allowed for o in sieve)
 
 
 def test_bad_names_are_refused() -> None:

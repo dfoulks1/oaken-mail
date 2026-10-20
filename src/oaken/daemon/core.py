@@ -163,7 +163,7 @@ class Core:
             "api": self.server.stop,
             "jobs": lambda: self._stop_jobs(grace),
             "sync": self.sync.stop,
-            "host": self.host.stop,
+            "host": self._stop_host,
         }
         for name in reversed(self._started):
             try:
@@ -176,6 +176,10 @@ class Core:
             await self.readstate.close()
             await self.index.close()
             await self.raw_db.close()
+
+    async def _stop_host(self) -> None:
+        await self.accounts.authorizations.close()
+        await self.host.stop()
 
     async def _stop_jobs(self, grace: float) -> None:
         await self.scheduler.stop()

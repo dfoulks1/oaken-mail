@@ -31,6 +31,15 @@ def examples(a: MessageId) -> dict[str, Any]:
         "summarize_message": {"message_ids": [a]},  # mark_read defaults to False
         "create_agent": {"label": "x", "kinds": ["enrich"]}, "list_agents": {},
         "revoke_agent": {"agent_id": "none"},
+        "get_enrichment": {"message_id": a}, "enrich_message": {"message_id": a},
+        "sieve_check": {"script": 'keep;'}, "sieve_list": {},
+        "sieve_test": {"script": "keep;", "message_id": a},
+        "get_account": {"account_id": "main"}, "check_account": {"account_id": "main"},
+        "create_account": {"account_id": "extra", "provider": "fake", "display_name": "X"},
+        "set_account_config": {"account_id": "main", "config": {}},
+        "set_account_password": {"account_id": "main", "password": "x"},
+        "start_authorization": {"account_id": "main"},
+        "authorization_status": {"account_id": "main"},
     }  # fmt: skip
 
 
@@ -51,6 +60,8 @@ async def test_no_operation_that_does_not_mark_read_changes_read_state(ops: Ops)
             assert name in {"search", "ask"}
         except NotFound:
             assert name == "revoke_agent"  # there is no such agent to revoke
+        except InvalidInput:  # the fake provider has no password and no consent flow
+            assert name in {"set_account_password", "start_authorization"}
         assert await ops.read_count() == 0, f"{name} changed read state"
         assert ops.rs.writes() == [], f"{name} wrote a flag to the server"
     assert ops.rs.writes() == [] and await ops.rs.marker(a) is None

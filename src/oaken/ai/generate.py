@@ -14,6 +14,7 @@ from typing import Any, TypeVar
 from pydantic import ValidationError
 
 from oaken.ai.cache import CacheEntry, LLMCache
+from oaken.ai.fresh import FRESH
 from oaken.ai.prompts import PromptBuilder, SafeOutput, describe_errors
 from oaken.ai.workspaces import Workspaces, check_backend
 from oaken.core.errors import AIBackendError, OakenError
@@ -66,7 +67,7 @@ class LLMService:
         stage = f"llm.{builder.task}"
         key = (ws.name, builder.task, content_hash, backend.model_id, builder.prompt_version)
 
-        hit = await self.cache.get(*key)
+        hit = None if FRESH.get() else await self.cache.get(*key)
         if hit is not None:
             try:
                 value = builder.output.model_validate_json(hit.result_json)

@@ -169,7 +169,7 @@ is <code>400</code>.</li>
 <td>POST</td>
 <td><code>/v1/operations/{name}</code></td>
 <td>API token</td>
-<td>Call one operation. 34 exist.</td>
+<td>Call one operation. 46 exist.</td>
 </tr>
 </tbody>
 </table></div>
@@ -198,10 +198,46 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/ask</code></td>
 </tr>
 <tr>
+<td><code>authorization_status</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/authorization_status</code></td>
+</tr>
+<tr>
+<td><code>check_account</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/check_account</code></td>
+</tr>
+<tr>
+<td><code>create_account</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/create_account</code></td>
+</tr>
+<tr>
 <td><code>create_agent</code></td>
 <td>mutate</td>
 <td>never</td>
 <td><code>POST /v1/operations/create_agent</code></td>
+</tr>
+<tr>
+<td><code>enrich_message</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/enrich_message</code></td>
+</tr>
+<tr>
+<td><code>get_account</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/get_account</code></td>
+</tr>
+<tr>
+<td><code>get_enrichment</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/get_enrichment</code></td>
 </tr>
 <tr>
 <td><code>get_message</code></td>
@@ -354,6 +390,18 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/search_keyword</code></td>
 </tr>
 <tr>
+<td><code>set_account_config</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/set_account_config</code></td>
+</tr>
+<tr>
+<td><code>set_account_password</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/set_account_password</code></td>
+</tr>
+<tr>
 <td><code>set_operation_exposure</code></td>
 <td>mutate</td>
 <td>never</td>
@@ -364,6 +412,30 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td>mutate</td>
 <td>never</td>
 <td><code>POST /v1/operations/set_schedule</code></td>
+</tr>
+<tr>
+<td><code>sieve_check</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/sieve_check</code></td>
+</tr>
+<tr>
+<td><code>sieve_list</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/sieve_list</code></td>
+</tr>
+<tr>
+<td><code>sieve_test</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/sieve_test</code></td>
+</tr>
+<tr>
+<td><code>start_authorization</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/start_authorization</code></td>
 </tr>
 <tr>
 <td><code>status</code></td>

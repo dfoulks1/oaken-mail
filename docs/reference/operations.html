@@ -103,11 +103,53 @@
 <td>Answer a question from the mail, citing the messages and quoting the lines it came from.</td>
 </tr>
 <tr>
+<td><code>authorization_status</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>How an interactive authorization is going.</td>
+</tr>
+<tr>
+<td><code>check_account</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>Check the account's credential: connect, require TLS and log in. Sends and reads nothing.</td>
+</tr>
+<tr>
+<td><code>create_account</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Add an account. Its credential is stored separately with set_account_password or start_authorization.</td>
+</tr>
+<tr>
 <td><code>create_agent</code></td>
 <td>mutate</td>
 <td>never</td>
 <td>no</td>
 <td>Register an external agent and show its token once.</td>
+</tr>
+<tr>
+<td><code>enrich_message</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Run the enrichers on one message now.</td>
+</tr>
+<tr>
+<td><code>get_account</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>One account: provider, its non-secret settings, what the provider's settings are, and why it cannot sync if it cannot.</td>
+</tr>
+<tr>
+<td><code>get_enrichment</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>Show the stored enrichment results (summary, triage, actions, inspector) for a message.</td>
 </tr>
 <tr>
 <td><code>get_message</code></td>
@@ -285,6 +327,20 @@
 <td>Keyword search (BM25) over the index: words, phrases, -exclusions and from:/label:/after:.</td>
 </tr>
 <tr>
+<td><code>set_account_config</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Replace an account's non-secret settings.</td>
+</tr>
+<tr>
+<td><code>set_account_password</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Store an account's password in the OS keyring (SMTP and IMAP). It is never shown again.</td>
+</tr>
+<tr>
 <td><code>set_operation_exposure</code></td>
 <td>mutate</td>
 <td>never</td>
@@ -297,6 +353,34 @@
 <td>never</td>
 <td>no</td>
 <td>Create or change a sync schedule. The floor and the timezone are checked now.</td>
+</tr>
+<tr>
+<td><code>sieve_check</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>Compile a Sieve script and report the first error, with its line.</td>
+</tr>
+<tr>
+<td><code>sieve_list</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>List the Sieve scripts on disk, and any skipped with the reason.</td>
+</tr>
+<tr>
+<td><code>sieve_test</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>Run a Sieve script on one message and show each effect and its rule. Stores nothing.</td>
+</tr>
+<tr>
+<td><code>start_authorization</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Begin an interactive consent (Gmail). Returns the address to open; poll authorization_status.</td>
 </tr>
 <tr>
 <td><code>status</code></td>
@@ -344,11 +428,47 @@
 <li>Input: <code>account_id</code>?, <code>label</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>question</code>, <code>thread_key</code>?</li>
 <li>Output: <code>answer</code>, <code>message_ids</code>?, <code>citations</code>?, <code>confidence</code>?, <code>insufficient_evidence</code>?, <code>dropped_claims</code>?, <code>degraded</code>?, <code>degraded_reason</code>?, <code>evidence_tokens</code>?, <code>full_body_tokens</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
 </ul>
+<h3 id="authorization-status"><code>authorization_status</code></h3>
+<p>How an interactive authorization is going.</p>
+<ul>
+<li>Input: <code>account_id</code></li>
+<li>Output: <code>state</code>, <code>detail</code>?</li>
+</ul>
+<h3 id="check-account"><code>check_account</code></h3>
+<p>Check the account's credential: connect, require TLS and log in. Sends and reads nothing.</p>
+<ul>
+<li>Input: <code>account_id</code></li>
+<li>Output: <code>ok</code>, <code>detail</code>?</li>
+</ul>
+<h3 id="create-account"><code>create_account</code></h3>
+<p>Add an account. Its credential is stored separately with set_account_password or start_authorization.</p>
+<ul>
+<li>Input: <code>account_id</code>, <code>provider</code>, <code>display_name</code>, <code>config</code>?</li>
+<li>Output: <code>account_id</code>, <code>provider</code>, <code>display_name</code>, <code>config</code>, <code>problem</code>?, <code>config_schema</code>?</li>
+</ul>
 <h3 id="create-agent"><code>create_agent</code></h3>
 <p>The swarm must be enabled and every kind listed in <code>[swarm] allowed_kinds</code>.</p>
 <ul>
 <li>Input: <code>label</code>, <code>kinds</code>, <code>account_ids</code>?, <code>max_leases</code>?, <code>max_per_hour</code>?</li>
 <li>Output: <code>agent</code>, <code>token</code></li>
+</ul>
+<h3 id="enrich-message"><code>enrich_message</code></h3>
+<p>Run the enrichers on one message now.</p>
+<ul>
+<li>Input: <code>message_id</code>, <code>enrichers</code>?, <code>force</code>?</li>
+<li>Output: <code>message_id</code>, <code>ran</code>, <code>cached</code>, <code>results</code></li>
+</ul>
+<h3 id="get-account"><code>get_account</code></h3>
+<p>One account: provider, its non-secret settings, what the provider's settings are, and why it cannot sync if it cannot.</p>
+<ul>
+<li>Input: <code>account_id</code></li>
+<li>Output: <code>account_id</code>, <code>provider</code>, <code>display_name</code>, <code>config</code>, <code>problem</code>?, <code>config_schema</code>?</li>
+</ul>
+<h3 id="get-enrichment"><code>get_enrichment</code></h3>
+<p>Show the stored enrichment results (summary, triage, actions, inspector) for a message.</p>
+<ul>
+<li>Input: <code>message_id</code>, <code>enricher</code>?</li>
+<li>Output: <code>message_id</code>, <code>results</code>, <code>content_is_untrusted</code>?</li>
 </ul>
 <h3 id="get-message"><code>get_message</code></h3>
 <p>The cleaned text (quotes and signatures removed), cut to the caller's limit. Reading a message here does not change read state: only opening or summarizing it, by the user, does.</p>
@@ -500,6 +620,18 @@
 <li>Input: <code>account_id</code>?, <code>label</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>query</code>, <code>limit</code>?</li>
 <li>Output: <code>items</code>, <code>truncated</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
 </ul>
+<h3 id="set-account-config"><code>set_account_config</code></h3>
+<p>Replace an account's non-secret settings.</p>
+<ul>
+<li>Input: <code>account_id</code>, <code>config</code></li>
+<li>Output: <code>account</code>, <code>restart_needed</code></li>
+</ul>
+<h3 id="set-account-password"><code>set_account_password</code></h3>
+<p>Store an account's password in the OS keyring (SMTP and IMAP). It is never shown again.</p>
+<ul>
+<li>Input: <code>account_id</code>, <code>password</code></li>
+<li>Output: <code>stored</code></li>
+</ul>
 <h3 id="set-operation-exposure"><code>set_operation_exposure</code></h3>
 <p>Choose whether MCP clients may call an operation, or all of a plugin's operations.</p>
 <ul>
@@ -511,6 +643,30 @@
 <ul>
 <li>Input: <code>account_id</code>, <code>folder</code>?, <code>schedule</code>, <code>timezone</code>?, <code>quiet</code>?, <code>clear_quiet</code>?, <code>run_now</code>?</li>
 <li>Output: <code>schedule</code></li>
+</ul>
+<h3 id="sieve-check"><code>sieve_check</code></h3>
+<p>Compile a Sieve script and report the first error, with its line.</p>
+<ul>
+<li>Input: <code>script</code>, <code>name</code>?</li>
+<li>Output: <code>ok</code>, <code>error</code>?, <code>line</code>?, <code>requires</code>?, <code>sha256</code>?</li>
+</ul>
+<h3 id="sieve-list"><code>sieve_list</code></h3>
+<p>List the Sieve scripts on disk, and any skipped with the reason.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>enabled</code>, <code>directory</code>, <code>sha256</code>, <code>scripts</code>, <code>problems</code></li>
+</ul>
+<h3 id="sieve-test"><code>sieve_test</code></h3>
+<p>Run a Sieve script on one message and show each effect and its rule. Stores nothing.</p>
+<ul>
+<li>Input: <code>script</code>, <code>name</code>?, <code>message_id</code>?, <code>eml_base64</code>?</li>
+<li>Output: <code>check</code>, <code>disposition</code>?, <code>rule</code>?, <code>effects</code>?, <code>errors</code>?, <code>steps</code>?</li>
+</ul>
+<h3 id="start-authorization"><code>start_authorization</code></h3>
+<p>Begin an interactive consent (Gmail). Returns the address to open; poll authorization_status.</p>
+<ul>
+<li>Input: <code>account_id</code></li>
+<li>Output: <code>url</code></li>
 </ul>
 <h3 id="status"><code>status</code></h3>
 <p>A short health summary: accounts, messages, index, queue, plugins and paused schedules.</p>

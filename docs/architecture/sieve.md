@@ -51,6 +51,15 @@ A script with an error is **reported and skipped**, so one typo does not switch 
 script that fails while running (a bad regular expression built from a variable, a limit reached)
 loses its own actions only, and the message stays in the inbox.
 
+### Trying a script
+
+You edit the files; nothing writes them for you. `oaken sieve check FILE` compiles one and names the
+line of the first error. `oaken sieve test FILE --message ID` (or `--eml PATH`) runs it on one
+message and shows each effect with the `script:line` that caused it, storing nothing.
+`oaken sieve list` shows what core would load and any script it would skip, and why.
+`oaken sieve refilter` (the `filter` stage of `reprocess`) re-reads the files and re-runs them over
+stored mail.
+
 ## What an action does
 
 Oaken reads and organizes mail. It does not deliver it, so Sieve actions map onto a mailbox view:
