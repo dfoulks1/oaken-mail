@@ -20,7 +20,9 @@ review it before starting the next.
 | 08 | [vector-store](08-vector-store.md) | sqlite-vec spike + VectorStore plugin | 04, 07 |
 | 09 | [ingest-pipeline](09-ingest-pipeline.md) | Staged, resumable pipeline orchestrating the AI backend | 03–08 |
 | 10 | [ollama-and-prompt-safety](10-ollama-and-prompt-safety.md) | Ollama plugin, `UntrustedText`, structured outputs, LLM cache | 04, 09 |
-| 11 | [gmail-plugin](11-gmail-plugin.md) | Gmail provider: BYO OAuth, full + incremental sync | 04, 05, 09 |
+| 11 | [gmail-plugin](11-gmail-plugin.md) | Gmail provider: BYO OAuth, resilient tokens, sync, flags, labels, trash, send | 04, 05, 09 |
+| 11b | [smtp-send](11b-smtp-send.md) | SMTP send-as provider: sends only, password in the keyring, TLS required | 04, 11 |
+| 11c | [imap-provider](11c-imap-provider.md) | Plain IMAP provider (to be settled in discussion) | 04, 05, 09 |
 | 12 | [read-state](12-read-state.md) | `mark_read` on open/summarize, write-back, audit + undo | 11 |
 | 13 | [operation-registry](13-operation-registry.md) | Typed operations; permission classes; confirm gate | 09, 12 |
 | 14 | [enrichers](14-enrichers.md) | Summary, triage, actions, header/MIME inspector | 10, 13 |
@@ -35,7 +37,7 @@ review it before starting the next.
 
 - **Web UI** (framework choice deferred by the user until this phase).
 - **Compose/send** (after the read side, search and AI are solid).
-- **IMAP provider plugin**, **legacy-DB importer** (only if wanted), **packaging**
+- **Legacy-DB importer** (only if wanted), **packaging**
   (systemd/launchd, installers), **at-rest encryption**, **plugin sandboxing**,
   **embedding-throughput tuning on CPU**.
 

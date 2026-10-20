@@ -5,8 +5,9 @@
 ## Goal
 
 `oaken-gmail`, the first `Provider` plugin: bring-your-own OAuth client, full
-mirror, incremental sync. It owns **its own auth**. It returns raw RFC 822 bytes and
-never touches the databases.
+mirror, incremental sync, and the write side (flags, labels, trash, send). It owns **its own
+auth**. It returns raw RFC 822 bytes and never touches the databases. The plugin is the
+top-level package `src/oaken_gmail`, like `oaken_ollama`.
 
 ## Requirements
 
@@ -51,6 +52,37 @@ never touches the databases.
    history, pagination, rate limits and expired history IDs. The plugin passes
    `ProviderContract` and Gmail-specific tests against it.
 
+## Decisions made in discussion (these override the numbered requirements where they differ)
+
+- **Fully featured, not read-only.** Besides sync and `flags.write`: label create, rename, delete,
+  add and remove; trash and untrash; archive; star; and **send** (`send(raw_bytes)` through
+  `messages.send`, including a send-as alias the user has set up in Gmail). Drafts and permanent
+  delete are **not** in this prompt. The one `gmail.modify` scope is believed to cover all of
+  this: verify against Google's docs first and document the exact scope list.
+- **Sending stays gated.** The plugin only provides `send`. The outbox, audit and confirm gate are a
+  later prompt, and sending is never exposed over MCP.
+- **The user's app is in "Testing" mode**, so refresh tokens die after 7 days. Publishing it to
+  "In production" is a precondition for the no-daily-login goal; the docs must walk the user through
+  it, and the health state must say so when `invalid_grant` shows up.
+- **Hand-rolled OAuth** (PKCE, loopback redirect) on `httpx2`, with `keyring` added as a
+  dependency. No keyring backend means a clear failure, never a token file.
+- **Token architecture** (a `TokenManager` per account):
+  - The refresh token lives only in the keyring; the access token only in memory, refreshed
+    about 5 minutes before expiry on a monotonic clock.
+  - One refresh at a time per account (a lock), so concurrent calls share it.
+  - A 401 forces one refresh and one retry; a second 401 is an auth failure.
+  - A rotated refresh token is written back atomically, and the keyring is re-read before each
+    refresh so a second process's newer token is used.
+  - Network errors and 5xx from the token endpoint retry with backoff and never mark the account
+    broken. `invalid_grant` sets a **needs re-authorization** health state, publishes an event and
+    stops syncing that account: no loop, no crash.
+  - Re-authorizing needs no restart; the next health or sync tick picks the new token up.
+  - Document the causes of a revoked token: a "Testing" app, a password change, more than 100
+    tokens per account and client, six months unused.
+- **Another provider may be the sender.** An account has a receiving provider and an optional
+  `send_via` naming any send-capable provider (see 11b). Wiring `send_via` through core is part
+  of the later send prompt; here it is only documented.
+
 ## Acceptance criteria
 
 - Full sync of a 2,000-message fake mailbox, interrupted midway and resumed, yields
@@ -59,13 +91,17 @@ never touches the databases.
 - Rate-limit responses are retried with backoff without exceeding the concurrency cap.
 - Refresh token lives in a fake keyring backend in tests; assert it never appears in
   logs, exceptions, config files or the DB.
-- `flags.write` of `UNREAD` removal issues the correct `batchModify` body.
+- `flags.write` of `UNREAD` removal issues the correct `batchModify` body; label, trash and
+  send calls issue the right requests against the fake server.
+- Token tests (fake token endpoint): proactive refresh before expiry, one refresh for many
+  concurrent calls, 401 then one retry, rotation persisted, a newer keyring token picked up, and
+  `invalid_grant` giving the health state with no retry loop and recovery after re-authorizing.
 - A manual, skipped-by-default `live_gmail` test + a documented checklist exists for
   the user's first real sync (read-only first: scope check, list 10 messages, no writes).
 
 ## Out of scope
 
-Send/drafts, IMAP, Pub/Sub push notifications (poll via the scheduler for now),
+Drafts, permanent delete, the outbox and confirm gate for sending, IMAP (11c), Pub/Sub push notifications (poll via the scheduler for now),
 Gmail threading semantics (core computes `thread_key`).
 
 ## Docs site
