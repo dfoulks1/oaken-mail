@@ -87,6 +87,9 @@ message is kept, any change to a rule is a rebuild, never a re-download.</p>
 <p><code>parse(raw)</code> uses the standard library's <code>email</code> package and <strong>never raises</strong>. Anything it cannot
 read becomes a line in <code>warnings</code>: an unknown or wrong charset (decoded with replacements), a
 missing <code>Date</code>, a multipart with no readable parts (its body is read as text), MIME defects.</p>
+<p>Damaged base64 is repaired where it can be (missing padding, a cut-off tail, stray characters) and
+flagged. A part that claims to be base64 but mostly is not gives no text, rather than its raw
+garbage posing as content.</p>
 <p>The result has the addresses, <code>Message-ID</code>, <code>In-Reply-To</code> and <code>References</code> (as ids), the subject, the
 date in UTC with the original string, the <code>List-Id</code>, every header (lower-case keys, repeated headers
 kept), the text and HTML bodies, attachment metadata, and any <code>message/rfc822</code> parts parsed as

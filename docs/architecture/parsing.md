@@ -27,6 +27,10 @@ message is kept, any change to a rule is a rebuild, never a re-download.
 read becomes a line in `warnings`: an unknown or wrong charset (decoded with replacements), a
 missing `Date`, a multipart with no readable parts (its body is read as text), MIME defects.
 
+Damaged base64 is repaired where it can be (missing padding, a cut-off tail, stray characters) and
+flagged. A part that claims to be base64 but mostly is not gives no text, rather than its raw
+garbage posing as content.
+
 The result has the addresses, `Message-ID`, `In-Reply-To` and `References` (as ids), the subject, the
 date in UTC with the original string, the `List-Id`, every header (lower-case keys, repeated headers
 kept), the text and HTML bodies, attachment metadata, and any `message/rfc822` parts parsed as

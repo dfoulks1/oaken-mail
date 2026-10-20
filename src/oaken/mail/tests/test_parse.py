@@ -204,3 +204,68 @@ def test_garbage_in_never_raises(tmp_path: Path) -> None:
         b"Subject: =?bogus?q?x?=\n\nhi",
     ):
         assert parse(blob) is not None
+
+
+_B64_HEAD = (
+    b"From: a@example.com\nMessage-ID: <b@e.com>\nDate: Mon, 4 Mar 2024 09:15:00 +0000\n"
+    b"MIME-Version: 1.0\n"
+    b"Content-Type: text/plain; charset=utf-8\nContent-Transfer-Encoding: base64\n\n"
+)
+_B64_GOOD = base64.encodebytes(b"Hello budget review meeting on Thursday.")
+
+
+def _b64_text(body: bytes) -> tuple[str, tuple[str, ...]]:
+    p = parse(_B64_HEAD + body)
+    return " ".join(p.text_parts), p.warnings
+
+
+def test_good_base64_decodes_with_no_warning() -> None:
+    text, warnings = _b64_text(_B64_GOOD)
+    assert text.strip() == "Hello budget review meeting on Thursday."
+    assert warnings == ()
+
+
+@pytest.mark.parametrize(
+    ("body", "expect"),
+    [
+        (_B64_GOOD.replace(b"=", b""), "Hello budget review meeting on Thursday."),
+        (_B64_GOOD[:-6], "Hello budget review meeting on Thursda"),
+    ],
+    ids=["missing-padding", "cut-off-tail"],
+)
+def test_damaged_base64_is_repaired_and_flagged(body: bytes, expect: str) -> None:
+    text, warnings = _b64_text(body)
+    assert text.strip().startswith(expect.rstrip())
+    assert any("base64" in w for w in warnings)
+
+
+def test_whitespace_inside_base64_is_not_damage() -> None:
+    text, warnings = _b64_text(b"  " + _B64_GOOD.replace(b"\n", b" \n "))
+    assert text.strip() == "Hello budget review meeting on Thursday."
+    assert warnings == ()
+
+
+def test_junk_lines_do_not_leak_into_the_text() -> None:
+    text, _ = _b64_text(_B64_GOOD + b"\n***\n")
+    assert text.startswith("Hello budget review meeting on Thursday.")
+    assert "***" not in text
+
+
+def test_a_part_that_is_not_base64_gives_no_text_instead_of_raw_garbage() -> None:
+    text, warnings = _b64_text(b"!!!!%%%% not base64 @@@@\n")
+    assert text == ""
+    assert any("was not" in w for w in warnings)
+
+
+def test_damaged_base64_attachment_is_repaired_on_request() -> None:
+    raw = (
+        b"From: a@example.com\nMessage-ID: <h@e.com>\nMIME-Version: 1.0\n"
+        b'Content-Type: multipart/mixed; boundary="B"\n\n--B\nContent-Type: text/plain\n\nhi\n'
+        b"--B\nContent-Type: application/octet-stream\n"
+        b'Content-Disposition: attachment; filename="a.bin"\n'
+        b"Content-Transfer-Encoding: base64\n\n"
+        + base64.b64encode(b"payload-bytes").rstrip(b"=")
+        + b"\n--B--\n"
+    )
+    path = parse(raw).attachments[0].part_path
+    assert read_attachment(raw, path) == b"payload-bytes"

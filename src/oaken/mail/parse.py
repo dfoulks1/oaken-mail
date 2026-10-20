@@ -7,6 +7,8 @@ Attachment bytes are never extracted here (see ``attachments.py``). A part is ad
 a ``message/rfc822`` part is that part's child ``0``.
 """
 
+import base64
+import binascii
 import re
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -284,9 +286,48 @@ def _stored_size(part: Message) -> int:
         return 0
 
 
+_B64_ALPHABET = re.compile(rb"[^A-Za-z0-9+/]")
+_B64_MAX_JUNK = 0.3  # more stray characters than this share of the part: it is not base64
+
+
+def _is_base64(part: Message) -> bool:
+    return str(part.get("content-transfer-encoding", "")).strip().lower() == "base64"
+
+
+def _decode_base64(part: Message) -> tuple[bytes | None, str | None]:
+    """``(bytes, note)``. Exact base64 decodes as the standard library does. A part with stray
+    characters, missing padding or a cut-off tail is repaired and a note says so; a part that is
+    mostly not base64 gives ``(None, note)`` rather than its raw text posing as content."""
+    payload = part.get_payload()
+    if not isinstance(payload, str):
+        return None, None
+    body = "".join(payload.split()).encode("ascii", "ignore")
+    try:
+        return base64.b64decode(body, validate=True), None
+    except (binascii.Error, ValueError):
+        pass
+    data = _B64_ALPHABET.sub(b"", body.rstrip(b"="))
+    junk = len(body.rstrip(b"=")) - len(data)
+    if not data or junk > len(body) * _B64_MAX_JUNK:
+        return None, "a part claimed to be base64 but was not; it was skipped"
+    if len(data) % 4 == 1:
+        data = data[:-1]  # a single character cannot carry a byte: the tail was cut
+    data += b"=" * (-len(data) % 4)
+    try:
+        return base64.b64decode(data), "base64 data was damaged and repaired as far as possible"
+    except (binascii.Error, ValueError):
+        return None, "a part claimed to be base64 but was not; it was skipped"
+
+
 def _decode_text(part: Message, cfg: MailSettings, warnings: list[str]) -> str:
     try:
-        data = part.get_payload(decode=True)
+        data: object
+        if _is_base64(part):
+            data, note = _decode_base64(part)
+            if note:
+                warnings.append(note)
+        else:
+            data = part.get_payload(decode=True)
     except Exception:  # noqa: BLE001
         warnings.append("a text part could not be decoded")
         return ""
@@ -335,7 +376,7 @@ def read_attachment(raw: bytes, part_path: str) -> bytes:
             if nested is None:
                 raise ValueError(part_path)
             return nested.as_bytes()
-        data = part.get_payload(decode=True)
+        data = _decode_base64(part)[0] if _is_base64(part) else part.get_payload(decode=True)
         if not isinstance(data, bytes):
             raise ValueError(part_path)
         return data

@@ -124,7 +124,7 @@ BM25 index with no raw bytes. It is **not** migrated. It is backed up and left a
 
 ## Decisions from checkpoints (the user's answers; prompts must follow them)
 
-- **Event log:** a plain file (append-only, cheap), not a database table. Decide the format and retention in 17 with the CLI `events` command.
+- **Event log:** a plain JSON-lines file (one JSON object per line, append-only, cheap), not a database table. Decide the format and retention in 17 with the CLI `events` command.
 - **Index:** `from:` matches name or address; a non-Sieve disposition beats a script's; `in:any` stays; rebuilds are deterministic for a given order.
 - **Sieve `\Seen`:** decide in prompt 12. **`discarded` mail is not hidden from MCP** (it is hidden from default search only).
 - **Starter `10-lists.sieve`:** yes, ship one.
