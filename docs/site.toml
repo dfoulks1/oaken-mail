@@ -115,6 +115,10 @@ id = "reference/operations"
 generated = true
 
 [[pages]]
+id = "reference/cli"
+generated = true
+
+[[pages]]
 id = "reference/evaluation"
 generated = true
 

@@ -1,0 +1,406 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLI · Oaken Mail</title>
+<meta name="description" content="The oaken command-line client: commands, options and exit codes.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="CLI · Oaken Mail">
+<meta property="og:description" content="The oaken command-line client: commands, options and exit codes.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="../assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">CLI</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Start</div>
+      <a class="doc-link" href="../providers/gmail.html">Connect Gmail</a>
+      <a class="doc-link" href="../providers/smtp.html">Send through your own SMTP server</a>
+      <a class="doc-link" href="../providers/imap.html">Connect any IMAP server</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="../architecture/overview.html">Architecture overview</a>
+      <a class="doc-link" href="../architecture/jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="../architecture/software-map.html">Software map</a>
+      <a class="doc-link" href="../architecture/swarm.html">The swarm</a>
+      <a class="doc-link" href="../architecture/storage.html">Raw storage</a>
+      <a class="doc-link" href="../architecture/parsing.html">Parsing and cleaning</a>
+      <a class="doc-link" href="../architecture/sieve.html">Sieve filtering</a>
+      <a class="doc-link" href="../architecture/index.html">The search index</a>
+      <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <a class="doc-link" href="../architecture/vectors.html">The vector store</a>
+      <a class="doc-link" href="../architecture/ingest-pipeline.html">The ingest pipeline</a>
+      <a class="doc-link" href="../architecture/ai-safety.html">Prompt safety and workspaces</a>
+      <a class="doc-link" href="../architecture/read-state.html">Read state</a>
+      <a class="doc-link" href="../architecture/sync-schedule.html">Sync schedule</a>
+      <a class="doc-link" href="../architecture/operations.html">Operations</a>
+      <a class="doc-link" href="../architecture/retrieval.html">Retrieval and ask</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="plugin-contracts.html">Plugin contracts</a>
+      <a class="doc-link" href="operations.html">Operations</a>
+      <a class="doc-link current" href="cli.html" aria-current="page">CLI</a>
+      <a class="doc-link" href="evaluation.html">Evaluation results</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#global-options"><span class="num">1</span>Global options</a>
+      <a class="nav-link" href="#commands"><span class="num">2</span>Commands</a>
+      <a class="nav-link" href="#exit-codes"><span class="num">3</span>Exit codes</a>
+      <a class="nav-link" href="#command-details"><span class="num">4</span>Command details</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-secondary">Generated</span></div>
+    <h1 class="display-6">CLI</h1>
+    <p class="lead">Every `oaken` command, its options and the exit codes — generated by walking the real command-line parser.</p>
+  </header>
+<p>The <code>oaken</code> command is a thin client over the local core: every command is one call to a <a href="../architecture/operations.html">registry operation</a>. It holds no logic of its own, so a new operation is reachable immediately through the generic <code>oaken operation NAME</code> fallback, with no new release.</p>
+<p>Output is human-readable by default; <code>--json</code> gives the machine form on <strong>stdout</strong> (never sanitized — it is the contract a script reads), while logs and errors go to <strong>stderr</strong>. Text printed to a terminal is stripped of control and escape sequences, because mail is untrusted.</p>
+
+<section id="global-options" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>Global options</h2></div>
+<p>These work before or after the command name:</p>
+<ul>
+<li><code>--json</code> — emit machine-readable JSON instead of text.</li>
+<li><code>--url URL</code> — base URL of a running core (dev override).</li>
+<li><code>--token-file PATH</code> — read the API token from this file (dev override).</li>
+<li><code>--verbose</code>, <code>-v</code> — show core log output on stderr (<code>-v</code> INFO, <code>-vv</code> DEBUG).</li>
+</ul>
+</section>
+<section id="commands" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Commands</h2></div>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#start"><code>start</code></a></td>
+<td>Start the core daemon (prompt 16).</td>
+</tr>
+<tr>
+<td><a href="#stop"><code>stop</code></a></td>
+<td>Stop the core daemon (prompt 16).</td>
+</tr>
+<tr>
+<td><a href="#restart"><code>restart</code></a></td>
+<td>Restart the core daemon (prompt 16).</td>
+</tr>
+<tr>
+<td><a href="#operation"><code>operation</code></a></td>
+<td>Call any registry operation by name (generic fallback).</td>
+</tr>
+<tr>
+<td><a href="#status"><code>status</code></a></td>
+<td>Is core running? (does not start it)</td>
+</tr>
+<tr>
+<td><a href="#search"><code>search</code></a></td>
+<td>Keyword search over the index.</td>
+</tr>
+<tr>
+<td><a href="#show"><code>show</code></a></td>
+<td>Show one message (cleaned text, or --raw/--headers).</td>
+</tr>
+<tr>
+<td><a href="#summarize"><code>summarize</code></a></td>
+<td>Summarize messages with the local model.</td>
+</tr>
+<tr>
+<td><a href="#read"><code>read</code></a></td>
+<td>Mark messages read.</td>
+</tr>
+<tr>
+<td><a href="#unread"><code>unread</code></a></td>
+<td>Mark messages unread.</td>
+</tr>
+<tr>
+<td><a href="#undo"><code>undo</code></a></td>
+<td>Undo a read-state change from the audit log.</td>
+</tr>
+<tr>
+<td><a href="#sync"><code>sync</code></a></td>
+<td>Sync an account (or one folder) now.</td>
+</tr>
+<tr>
+<td><a href="#ask"><code>ask</code></a></td>
+<td>Answer a question from the mail (prompt 15).</td>
+</tr>
+<tr>
+<td><a href="#pipeline"><code>pipeline</code></a></td>
+<td>Pipeline status: stages, throughput, parked jobs.</td>
+</tr>
+<tr>
+<td><a href="#usage"><code>usage</code></a></td>
+<td>Model calls and tokens per workspace, stage and model.</td>
+</tr>
+<tr>
+<td><a href="#plugins"><code>plugins</code></a></td>
+<td>List plugins; --check runs the health probe now.</td>
+</tr>
+<tr>
+<td><a href="#accounts"><code>accounts</code></a></td>
+<td>The configured accounts (never credentials).</td>
+</tr>
+<tr>
+<td><a href="#audit"><code>audit</code></a></td>
+<td>The newest audit-log rows.</td>
+</tr>
+<tr>
+<td><a href="#operations"><code>operations</code></a></td>
+<td>Every operation with its permission and MCP exposure.</td>
+</tr>
+<tr>
+<td><a href="#reprocess"><code>reprocess</code></a></td>
+<td>Bring one pipeline stage up to date.</td>
+</tr>
+<tr>
+<td><a href="#rebuild-index"><code>rebuild-index</code></a></td>
+<td>Rebuild the search index from the raw store.</td>
+</tr>
+<tr>
+<td><a href="#watch"><code>watch</code></a></td>
+<td>Stream core events as lines (or --json).</td>
+</tr>
+</tbody>
+</table></div>
+</section>
+<section id="exit-codes" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Exit codes</h2></div>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Code</th>
+<th>Meaning</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>ok</td>
+<td>The command succeeded.</td>
+</tr>
+<tr>
+<td>1</td>
+<td>error</td>
+<td>The operation ran and failed, or an unexpected error.</td>
+</tr>
+<tr>
+<td>2</td>
+<td>usage</td>
+<td>Bad arguments.</td>
+</tr>
+<tr>
+<td>3</td>
+<td>core down</td>
+<td>Core is not running — start it with &quot;oaken start&quot;.</td>
+</tr>
+<tr>
+<td>4</td>
+<td>auth</td>
+<td>A bad API token, or a provider that needs re-authorizing.</td>
+</tr>
+<tr>
+<td>5</td>
+<td>needs confirmation</td>
+<td>A mutation returned a proposal and was not confirmed.</td>
+</tr>
+</tbody>
+</table></div>
+</section>
+<section id="command-details" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Command details</h2></div>
+<h3 id="start"><code>start</code></h3>
+<p>Start the core daemon (prompt 16).</p>
+<p>Options:</p>
+<ul>
+<li><code>--detach</code> — Run in the background.</li>
+</ul>
+<h3 id="stop"><code>stop</code></h3>
+<p>Stop the core daemon (prompt 16).</p>
+<p>No arguments.</p>
+<h3 id="restart"><code>restart</code></h3>
+<p>Restart the core daemon (prompt 16).</p>
+<p>Options:</p>
+<ul>
+<li><code>--detach</code> — Run in the background.</li>
+</ul>
+<h3 id="operation"><code>operation</code></h3>
+<p>Call a registry operation directly. The input is JSON on --json-input or stdin. This reaches every operation the daemon offers, including ones added after this CLI was released. 'oaken operation' with no name lists the operations.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>name</code> — Operation name; omit to list operations.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--json-input</code> — The operation input as a JSON object. Use '-' or omit to read stdin when piped.</li>
+<li><code>--yes</code> — Confirm a mutating operation (the person asked for exactly this).</li>
+</ul>
+<h3 id="status"><code>status</code></h3>
+<p>Is core running? (does not start it)</p>
+<p>No arguments.</p>
+<h3 id="search"><code>search</code></h3>
+<p>Keyword search over the index.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>query</code> — Search terms: words, &quot;phrases&quot;, -exclude, term*.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--from</code> — Only this sender.</li>
+<li><code>--since</code> — Only after this date (ISO 8601).</li>
+<li><code>--label</code> — Only messages carrying this label.</li>
+<li><code>--account</code> — Restrict to one account.</li>
+<li><code>--limit</code> — Maximum results.</li>
+</ul>
+<h3 id="show"><code>show</code></h3>
+<p>Show one message (cleaned text, or --raw/--headers).</p>
+<p>Arguments:</p>
+<ul>
+<li><code>message_id</code> — The message id.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--raw</code> — Include the raw bytes (base64 in --json).</li>
+<li><code>--headers</code> — Show only the raw headers.</li>
+</ul>
+<h3 id="summarize"><code>summarize</code></h3>
+<p>Summarize messages with the local model.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>ID</code> — One or more message ids.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--mark-read</code> — Also mark the summarized messages read.</li>
+</ul>
+<h3 id="read"><code>read</code></h3>
+<p>Mark messages read.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>ID</code> — One or more message ids.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--yes</code> — Confirm a bulk change (&gt;25 messages).</li>
+</ul>
+<h3 id="unread"><code>unread</code></h3>
+<p>Mark messages unread.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>ID</code> — One or more message ids.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--yes</code> — Confirm a bulk change (&gt;25 messages).</li>
+</ul>
+<h3 id="undo"><code>undo</code></h3>
+<p>Undo a read-state change from the audit log.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>audit_id</code> — The audit id to undo (see 'oaken audit').</li>
+</ul>
+<h3 id="sync"><code>sync</code></h3>
+<p>Sync an account (or one folder) now.</p>
+<p>Options:</p>
+<ul>
+<li><code>--account</code> — Account to sync; default is all.</li>
+<li><code>--folder</code> — One folder; default is the whole account.</li>
+<li><code>--wait</code> — Stream job events until it finishes.</li>
+</ul>
+<h3 id="ask"><code>ask</code></h3>
+<p>Answer a question from the mail (prompt 15).</p>
+<p>Arguments:</p>
+<ul>
+<li><code>question</code> — The question to answer.</li>
+</ul>
+<h3 id="pipeline"><code>pipeline</code></h3>
+<p>Pipeline status: stages, throughput, parked jobs.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>subcommand</code> — status (default).</li>
+</ul>
+<h3 id="usage"><code>usage</code></h3>
+<p>Model calls and tokens per workspace, stage and model.</p>
+<p>Options:</p>
+<ul>
+<li><code>--since-hours</code> — Only the last H hours of usage.</li>
+<li><code>--workspace</code> — Only this workspace.</li>
+</ul>
+<h3 id="plugins"><code>plugins</code></h3>
+<p>List plugins; --check runs the health probe now.</p>
+<p>Options:</p>
+<ul>
+<li><code>--check</code> — Run each plugin's health probe.</li>
+</ul>
+<h3 id="accounts"><code>accounts</code></h3>
+<p>The configured accounts (never credentials).</p>
+<p>No arguments.</p>
+<h3 id="audit"><code>audit</code></h3>
+<p>The newest audit-log rows.</p>
+<p>Options:</p>
+<ul>
+<li><code>--limit</code> — How many rows (max 500).</li>
+<li><code>--op</code> — Only rows for this operation.</li>
+</ul>
+<h3 id="operations"><code>operations</code></h3>
+<p>Every operation with its permission and MCP exposure.</p>
+<p>No arguments.</p>
+<h3 id="reprocess"><code>reprocess</code></h3>
+<p>Bring one pipeline stage up to date.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>stage</code> — The stage to reprocess.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--account</code> — Restrict to one account.</li>
+</ul>
+<h3 id="rebuild-index"><code>rebuild-index</code></h3>
+<p>Rebuild the search index from the raw store.</p>
+<p>Options:</p>
+<ul>
+<li><code>--account</code> — Restrict to one account.</li>
+<li><code>--force</code> — Re-index even where the content hash is unchanged.</li>
+</ul>
+<h3 id="watch"><code>watch</code></h3>
+<p>Stream core events as lines (or --json).</p>
+<p>No arguments.</p>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

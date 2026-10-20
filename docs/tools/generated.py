@@ -21,6 +21,7 @@ GENERATOR_MODULES: list[str] = [
     "softmap",
     "gen_plugin_contracts",
     "gen_operations",
+    "gen_cli_reference",
     "gen_evaluation",
 ]
 

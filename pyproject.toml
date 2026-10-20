@@ -16,9 +16,11 @@ dependencies = [
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.1",
     "selectolax>=1.0.1",
+    "starlette>=1.9.0",
     "structlog>=26.1.0",
     "tokenizers>=0.23.3",
     "tzdata>=2025.2; sys_platform == 'win32'",  # Windows has no system tz database
+    "uvicorn>=0.54.0",
     "zstandard>=0.25.0",
 ]
 

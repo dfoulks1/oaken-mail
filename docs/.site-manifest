@@ -37,6 +37,7 @@ plugins.html
 providers/gmail.html
 providers/imap.html
 providers/smtp.html
+reference/cli.html
 reference/evaluation.html
 reference/operations.html
 reference/plugin-contracts.html
