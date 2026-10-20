@@ -34,7 +34,8 @@ def test_no_background_module_can_reach_read_state() -> None:
     """Only the read-state package (and the API layers built on it) may name it. Sync, ingest, the
     index, the Sieve engine and plugins do not, and none of them may call ``set_flags``."""
     root = Path(__file__).resolve().parents[2]
-    forbidden = re.compile(r"readstate|ReadState|mark_read|mark_unread")
+    # The audit log is shared infrastructure, so naming it is fine; the service is off limits.
+    forbidden = re.compile(r"oaken\.readstate(?!\.audit)|ReadState|mark_read|mark_unread")
     offenders = []
     for package in ("ingest", "index", "mail", "ai", "plugins"):
         for path in (root / package).rglob("*.py"):

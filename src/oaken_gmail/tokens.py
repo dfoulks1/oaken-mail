@@ -21,7 +21,7 @@ from typing import Any, Protocol
 
 import httpx2
 
-from oaken.core.errors import PluginError, ProviderError
+from oaken.core.errors import AuthError, PluginError, ProviderError
 from oaken.core.logging import get_logger
 from oaken_gmail.config import TOKEN_URL
 
@@ -36,7 +36,7 @@ REAUTH_HELP = (
 )
 
 
-class AuthRequired(ProviderError):
+class AuthRequired(AuthError):
     """The account has no usable refresh token. Re-authorizing fixes it; retrying does not."""
 
 

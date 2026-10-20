@@ -61,7 +61,7 @@ class FakeProvider(BaseProvider):
     def __init__(self, batch_size: int = 100) -> None:
         self.batch_size = batch_size
         self.messages: dict[str, RawMessage] = {}
-        self.history: list[tuple[str, Any]] = []  # (operation, argument) for assertions
+        self.history: list[tuple[Any, ...]] = []  # (operation, argument) for assertions
         self._events: list[_Event] = []
         self._failures: dict[str, list[Exception]] = {}
         self._next = 1
@@ -127,8 +127,8 @@ class FakeProvider(BaseProvider):
         self._maybe_fail("authenticate")
         self.authenticated = True
 
-    async def pull(self, cursor: str | None) -> AsyncIterator[PullBatch]:
-        self.history.append(("pull", cursor))
+    async def pull(self, cursor: str | None, folder: str | None = None) -> AsyncIterator[PullBatch]:
+        self.history.append(("pull", cursor) if folder is None else ("pull", cursor, folder))
         self._maybe_fail("pull")
         after = int(cursor) if cursor else 0
         pending = [e for e in self._events if e.seq > after]

@@ -87,6 +87,10 @@ class PluginContext:
     log: Any
     config: dict[str, Any] = field(default_factory=dict)
     bus: EventBus | None = None
+    # Set when the host started this instance for one account (a provider serving several
+    # accounts runs one instance each). ``config`` is then the plugin's table with that account's
+    # own settings on top. None for the plugin's shared instance.
+    account_id: str | None = None
     _subscriptions: list[Callable[[], None]] = field(
         default_factory=list, repr=False, compare=False
     )
@@ -186,9 +190,14 @@ class Provider(Plugin, Protocol):
         """Make sure the plugin can talk to the service (capability ``auth``)."""
         ...
 
-    def pull(self, cursor: str | None) -> AsyncIterator[PullBatch]:
+    def pull(self, cursor: str | None, folder: str | None = None) -> AsyncIterator[PullBatch]:
         """Yield batches of changes since ``cursor`` (None: from the start). Capability
-        ``sync.pull``. Re-pulling from the last cursor returns nothing new."""
+        ``sync.pull``. Re-pulling from the last cursor returns nothing new.
+
+        ``folder`` limits the pull to one folder, for a provider with folders (set
+        ``supports_folders = True``); the cursor is still the account's whole cursor, and a
+        folder pull only moves that folder's part of it. Core passes ``folder`` only to a provider
+        that supports it, and only when the user scheduled that folder on its own."""
         ...
 
     async def set_flags(

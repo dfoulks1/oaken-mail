@@ -79,6 +79,10 @@ id = "architecture/read-state"
 file = "architecture/read-state.md"
 
 [[pages]]
+id = "architecture/sync-schedule"
+file = "architecture/sync-schedule.md"
+
+[[pages]]
 id = "providers/gmail"
 file = "providers/gmail.md"
 

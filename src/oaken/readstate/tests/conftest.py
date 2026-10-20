@@ -77,12 +77,12 @@ async def make(
             read_state=ReadStateSettings(auto_mark=auto_mark, audit_chunk=chunk),
             ui=UISettings(mark_read_delay_ms=delay_ms),
         )
-        available = {"fake": provider}
+        available = {str(ACCT): provider}
 
         def provider_for(
-            name: str, rig: Rig = rig, available: dict[str, bool] = available
+            account_id: str, rig: Rig = rig, available: dict[str, bool] = available
         ) -> Provider | None:
-            return rig.provider if available.get(name) else None
+            return rig.provider if available.get(account_id) else None
 
         audit = AuditLog(rig.raw_db, rig.clock)
         rs = ReadState(

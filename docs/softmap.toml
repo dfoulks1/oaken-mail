@@ -145,7 +145,7 @@ uses = ["index", "pluginhost"]
 id = "readstate"
 name = "Read state"
 layer = "services"
-status = "partial"
+status = "built"
 prompt = "12"
 path = "src/oaken/readstate/service.py"
 summary = "Marks mail read only when the user opens or summarizes it. Local first: sets the state and a dirty marker, audits, then writes back through a durable job. A change nothing can write stays local and says so."
@@ -154,13 +154,13 @@ types = [
   ["ReadState", "class", "mark_read, mark_unread, message_presented, message_dismissed, undo, resume_pending and apply_server_flags (a SyncRunner flag sink)."],
   ["ReadResult", "dataclass", "What changed, what was unchanged, missing or local-only, and the audit ids."],
 ]
-notes = ["The write job is readstate.write, one per message. A system actor is refused outright; reasons that are not the user's need confirm=True until prompt 13.", "Nothing schedules the provider yet, so a write-back reaches a real mailbox only once a scheduler drives providers."]
+notes = ["The write job is readstate.write, one per message. A system actor is refused outright; reasons that are not the user's need confirm=True until prompt 13.", "Providers are keyed by account id, so write-back reaches the right mailbox of several."]
 
 [[components]]
 id = "audit"
 name = "Audit log"
 layer = "services"
-status = "partial"
+status = "built"
 prompt = "12"
 path = "src/oaken/readstate/audit.py"
 summary = "Records every undoable state change in raw.db, in the same transaction as the change, with the value before and after."
@@ -315,6 +315,23 @@ funcs = [
 ]
 
 [[components]]
+id = "syncsched"
+name = "Sync schedule"
+layer = "services"
+status = "built"
+prompt = "12b"
+path = "src/oaken/ingest/schedule.py"
+summary = "Per-account and per-folder sync schedules in the database: interval or cron with a timezone, quiet hours, a floor, a concurrency cap, catch-up, backoff, an authentication pause and an audit trail for every edit."
+uses = ["scheduler", "jobs", "audit", "provider", "readstate", "events"]
+funcs = [
+  ["SyncService.start()", "Starts the account providers, resumes pending write-backs, ensures schedules and starts the loop. Returns the accounts with no provider and why."],
+  ["SyncService.set(account, spec, folder=, timezone=, quiet=)", "Create or change a schedule; refused below the floor. Audited."],
+  ["SyncService.request(account, folder=)", "Sync now; joins a running sync. The hook for IDLE or push."],
+  ["SyncService.crontab()", "A read-only crontab-style export."],
+]
+notes = ["Quiet hours mute alerts only; they never stop a sync.", "The daemon entry point and oaken auth come with prompts 16 and 17, so no real mailbox is read until then."]
+
+[[components]]
 id = "pluginhost"
 name = "Plugin host"
 layer = "runtime"
@@ -342,9 +359,9 @@ id = "provider"
 name = "Provider"
 layer = "plugins"
 path = "src/oaken/plugins"
-status = "partial"
+status = "built"
 prompt = "11"
-summary = "The provider contract: pull, flag write-back, auth and send, each declared by overriding its method. First-party providers are Gmail, SMTP (send only) and IMAP. Nothing schedules a sync or routes a send yet."
+summary = "The provider contract: pull, flag write-back, auth and send, each declared by overriding its method. First-party providers are Gmail, SMTP (send only) and IMAP. pull takes an optional folder; one instance runs per account. Nothing routes a send yet."
 uses = []
 untrusted = true
 notifies = ["pluginhost"]
@@ -671,7 +688,7 @@ ext = ["Bootstrap 5.3.3 and mermaid 11.4.1 from jsDelivr (pinned, SRI)"]
 id = "sync"
 title = "A message arrives (sync and ingest)"
 steps = [
-  ["scheduler", "jobs", "enqueue a sync job", "Durable, so a crash loses nothing."],
+  ["syncsched", "jobs", "enqueue a sync job", "Durable, so a crash loses nothing."],
   ["jobs", "ingest", "run the job handler", "A registered callback."],
   ["ingest", "pluginhost", "provider.pull", "Core never calls the provider directly."],
   ["pluginhost", "provider", "fetch new messages", "Returns raw bytes and provider ids."],

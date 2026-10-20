@@ -239,7 +239,19 @@ class IndexSettings(_Section):
 
 class SyncSettings(_Section):
     provider: str = "gmail"
-    interval_seconds: int = Field(default=300, ge=1)
+    # The schedule a new account starts with (every 15 minutes). After that the schedule lives in
+    # the database and is edited there; changing this does not touch existing schedules.
+    interval_seconds: int = Field(default=900, ge=1)
+    # The timezone a new schedule starts with, an IANA name from the system's tz database. It
+    # matters for cron schedules and quiet hours; an interval does not care.
+    timezone: str = "UTC"
+    # The shortest interval a schedule may have, enforced when it is set (Gmail has quotas).
+    min_interval_seconds: int = Field(default=60, ge=1)
+    # How many accounts may sync at the same time; the rest wait their turn.
+    max_concurrent: int = Field(default=2, ge=1, le=64)
+    # After a failed sync the next try is interval * 2**failures, at most this long, +/- jitter.
+    backoff_max_seconds: int = Field(default=3600, ge=1)
+    backoff_jitter: float = Field(default=0.2, ge=0, le=1)
     batch_size: int = Field(default=100, ge=1)
 
 

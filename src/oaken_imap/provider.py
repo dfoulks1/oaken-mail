@@ -17,7 +17,7 @@ import ssl
 from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Sequence
 from dataclasses import dataclass
 
-from oaken.core.errors import ProviderError
+from oaken.core.errors import AuthError, ProviderError
 from oaken.core.events import PluginEvent
 from oaken.core.logging import get_logger
 from oaken.plugins.base import BaseProvider
@@ -53,7 +53,7 @@ REPASSWORD_HELP = (
 )
 
 
-class AuthRequired(ProviderError):
+class AuthRequired(AuthError):
     """The server rejected the password (or none is stored). Storing a new one fixes it;
     retrying does not."""
 
@@ -99,6 +99,7 @@ def _flag_changes(
 
 class ImapProvider(BaseProvider):
     version = "1"
+    supports_folders = True
 
     def __init__(
         self,
@@ -114,7 +115,10 @@ class ImapProvider(BaseProvider):
     async def start(self, ctx: PluginContext) -> None:
         await super().start(ctx)
         config, store, tls = self._inject
-        self.config = config or ImapConfig.parse(ctx.config)
+        raw = dict(ctx.config)
+        if ctx.account_id:
+            raw.setdefault("account", ctx.account_id)  # one keyring entry per account
+        self.config = config or ImapConfig.parse(raw)
         self._store = store or KeyringStore(self.config.account)
         self._tls = tls
 
@@ -157,20 +161,28 @@ class ImapProvider(BaseProvider):
         await session.close()
 
     # -- reading ---------------------------------------------------------------------------
-    async def pull(self, cursor: str | None) -> AsyncIterator[PullBatch]:
+    async def pull(self, cursor: str | None, folder: str | None = None) -> AsyncIterator[PullBatch]:
         state = Cursor.parse(cursor)
         session = await self._open()
         try:
             everyone = await session.folders()
             targets = roles.to_sync(everyone, self.config)
-            left = [n for n in state.folders if n not in {f.name for f in targets}]
+            if folder is not None:  # one folder alone; the others' part of the cursor is untouched
+                targets = [f for f in targets if f.name.lower() == folder.lower()]
+                if not targets:
+                    raise ProviderError(f"imap: {folder!r} is not a folder this account syncs")
+            left = (
+                []
+                if folder is not None
+                else [n for n in state.folders if n not in {f.name for f in targets}]
+            )
             if left:  # out of scope now (deleted, renamed, or newly excluded): gone for us
                 ids = [pid for n in left for pid in state.folders[n].ids(n)]
                 for n in left:
                     del state.folders[n]
                 yield PullBatch(deleted_provider_ids=tuple(ids), next_cursor=state.dump())
-            for folder in targets:
-                async for batch in self._pull_folder(session, folder, state):
+            for target in targets:
+                async for batch in self._pull_folder(session, target, state):
                     yield batch
         finally:
             await session.close()

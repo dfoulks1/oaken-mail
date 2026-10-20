@@ -1,16 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A small five-field cron parser (minute hour day-of-month month day-of-week), in UTC.
+"""A small five-field cron parser (minute hour day-of-month month day-of-week).
 
 Supported per field: ``*``, numbers, ``a-b`` ranges, ``a,b`` lists and ``/n`` steps (``*/5``,
 ``10-30/5``). Months and weekdays also take three-letter names (``jan``, ``mon``). Weekday 0 and
 7 are both Sunday. As in classic cron, when both day-of-month and day-of-week are restricted a
-day matches if *either* matches. There is no ``@daily`` shorthand, no seconds and no time zones:
-a dependency-free parser is enough for "sync every N minutes" and "nightly backfill", and UTC
-keeps schedules free of daylight-saving surprises.
+day matches if *either* matches. There is no ``@daily`` shorthand and no seconds. A schedule is
+read in UTC unless ``next_after`` is given a time zone (from the system's tz database).
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 
 from oaken.core.errors import ConfigError
 
@@ -36,11 +35,26 @@ class CronSpec:
             return dom or dow
         return dom and dow
 
-    def next_after(self, after: datetime) -> datetime:
-        """The first matching minute strictly after ``after`` (which must be timezone-aware)."""
+    def next_after(self, after: datetime, tz: tzinfo = UTC) -> datetime:
+        """The first matching minute strictly after ``after`` (timezone-aware), with the fields
+        read as wall-clock time in ``tz``. The result is in UTC.
+
+        Around a daylight-saving change: a wall-clock time that does not exist (the hour skipped
+        in spring) never matches, so ``30 2 * * *`` does not run that day; a time that happens
+        twice (the hour repeated in autumn) matches its first occurrence only."""
         if after.tzinfo is None:
             raise ValueError("next_after needs a timezone-aware datetime")
-        dt = after.astimezone(UTC).replace(second=0, microsecond=0) + timedelta(minutes=1)
+        local = after.astimezone(tz).replace(tzinfo=None, second=0, microsecond=0)
+        dt = local + timedelta(minutes=1)
+        while True:
+            found = self._next_wall(dt)
+            when = _resolve(found, tz)
+            if when is not None and when > after:
+                return when
+            dt = found + timedelta(minutes=1)
+
+    def _next_wall(self, dt: datetime) -> datetime:
+        """The first matching wall-clock minute at or after ``dt`` (naive)."""
         limit = dt + timedelta(days=366 * _MAX_YEARS)
         while dt < limit:
             if dt.month not in self.months:
@@ -54,6 +68,12 @@ class CronSpec:
             else:
                 return dt
         raise ConfigError("cron expression never matches (e.g. 30 February)")
+
+
+def _resolve(wall: datetime, tz: tzinfo) -> datetime | None:
+    """A naive wall-clock time as UTC: its first occurrence, or None if the clocks skipped it."""
+    when = wall.replace(tzinfo=tz, fold=0).astimezone(UTC)
+    return when if when.astimezone(tz).replace(tzinfo=None) == wall else None
 
 
 def _first_of_next_month(dt: datetime) -> datetime:

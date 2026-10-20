@@ -9,7 +9,7 @@ from oaken.readstate.service import (
     ConfirmRequired,
     ReadResult,
     ReadState,
-    providers_from_host,
+    providers_from_accounts,
 )
 
 __all__ = [
@@ -21,5 +21,5 @@ __all__ = [
     "ConfirmRequired",
     "ReadResult",
     "ReadState",
-    "providers_from_host",
+    "providers_from_accounts",
 ]

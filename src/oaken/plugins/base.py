@@ -84,13 +84,16 @@ class BaseProvider(_Base):
     """
 
     kind: ClassVar[PluginKind] = "provider"
+    # True if ``pull(cursor, folder=...)`` can sync one folder alone (IMAP). Gmail has labels, not
+    # folders, and says False.
+    supports_folders: ClassVar[bool] = False
 
     @_default
     async def authenticate(self, ctx: PluginContext) -> None:
         raise NotImplementedError
 
     @_default
-    def pull(self, cursor: str | None) -> AsyncIterator[PullBatch]:
+    def pull(self, cursor: str | None, folder: str | None = None) -> AsyncIterator[PullBatch]:
         raise NotImplementedError
 
     @_default

@@ -58,6 +58,7 @@ AUTOMATIC = frozenset({"user_opened", "user_summarized", "mcp_summarized"})
 PRECONFIRMED = frozenset({"mcp_summarized"})
 READ_OPS = frozenset({"mark_read", "mark_unread", "undo"})
 
+# Asked with an account id: the provider instance that serves that account, if it can write flags.
 ProviderFor = Callable[[str], Provider | None]
 
 
@@ -99,13 +100,13 @@ class _Outcome:
     audit_ids: list[str] = field(default_factory=list)
 
 
-def providers_from_host(host: Any) -> ProviderFor:
-    """A ``provider_for`` that asks the plugin host: the account's provider, if it is healthy and
-    can write flags."""
+def providers_from_accounts(accounts: Any) -> ProviderFor:
+    """A ``provider_for`` that asks ``AccountProviders``: the account's own provider instance, if it
+    is healthy and can write flags."""
 
-    def lookup(name: str) -> Provider | None:
+    def lookup(account_id: str) -> Provider | None:
         try:
-            provider = host.get("provider", name)
+            provider = accounts.get(account_id)
         except OakenError:
             return None
         return provider if "flags.write" in inferred_capabilities(provider, "provider") else None
@@ -326,7 +327,7 @@ class ReadState:
                     r = rows[mid]
                     marker: dict[str, Any] = {"is_read": read, "audit_id": audit_id, "ts": now}
                     error: str | None = None
-                    if self.provider_for(r["provider"]) is None:
+                    if self.provider_for(r["account_id"]) is None:
                         error = f"{NO_PROVIDER}: account {r['account_id']!r} uses {r['provider']!r}"
                         marker["error"] = error
                     await tx.execute(
@@ -426,7 +427,7 @@ class ReadState:
                 await self._clear(mid, text)
                 return
             marker = json.loads(text)
-            provider = self.provider_for(r["provider"])
+            provider = self.provider_for(r["account_id"])
             if provider is None:
                 error = f"{NO_PROVIDER}: account {r['account_id']!r} uses {r['provider']!r}"
                 await self._park(r, marker, error)
@@ -485,7 +486,7 @@ class ReadState:
         announce = []
         async with self.raw.db.transaction() as tx:
             for r in await tx.fetchall(sql, args):
-                if self.provider_for(r["provider"]) is None:
+                if self.provider_for(r["account_id"]) is None:
                     continue
                 marker = json.loads(r["dirty"])
                 if "error" in marker:

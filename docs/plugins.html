@@ -52,6 +52,7 @@
       <a class="doc-link" href="architecture/ingest-pipeline.html">The ingest pipeline</a>
       <a class="doc-link" href="architecture/ai-safety.html">Prompt safety and workspaces</a>
       <a class="doc-link" href="architecture/read-state.html">Read state</a>
+      <a class="doc-link" href="architecture/sync-schedule.html">Sync schedule</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="reference/plugin-contracts.html">Plugin contracts</a>
       <div class="label">Project</div>
@@ -156,8 +157,8 @@ is no second list to keep in step:</p>
 </thead>
 <tbody>
 <tr>
-<td><code>pull(cursor)</code></td>
-<td><code>sync.pull</code> (a provider needs this or <code>send</code>)</td>
+<td><code>pull(cursor, folder=None)</code></td>
+<td><code>sync.pull</code> (a provider needs this or <code>send</code>). <code>folder</code> is passed only to a provider that sets <code>supports_folders = True</code></td>
 </tr>
 <tr>
 <td><code>authenticate(ctx)</code></td>
@@ -176,6 +177,10 @@ is no second list to keep in step:</p>
 <p><code>ctx</code> (also on <code>self.ctx</code> once started) carries your settings, a logger, the clock, and <code>config</code>,
 the table <code>[plugins.&lt;name&gt;]</code> from the user's <code>config.toml</code>. Credentials belong in the OS keyring,
 never in config.</p>
+<p>Raise <code>oaken.core.errors.AuthError</code> (or a subclass) when credentials are missing or refused. Core
+pauses that account's schedule instead of retrying, and the other accounts carry on. Core starts one
+instance of your class per account, so <code>ctx.account_id</code> tells you which one you are and is the natural
+name for your keyring entry.</p>
 <p>You never touch the databases. You return data and core stores it.</p>
 </section>
 <section id="be-accepting-in-what-you-return" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Be accepting in what you return</h2></div>

@@ -55,6 +55,28 @@ class SyncFinished(Event):
     account_id: AccountId
     new_messages: int = 0
     error: str | None = None
+    # The account is inside its quiet hours: the sync ran as usual, but a client should not alert.
+    quiet: bool = False
+    folder: str = ""
+
+
+@dataclass(frozen=True, kw_only=True)
+class SyncPaused(Event):
+    """An account's scheduled sync stopped until the user acts (for example, the password was
+    refused). ``quiet`` is as on ``SyncFinished``."""
+
+    account_id: AccountId
+    reason: str
+    quiet: bool = False
+
+
+@dataclass(frozen=True, kw_only=True)
+class SyncScheduleChanged(Event):
+    """A sync schedule was added, edited, paused, resumed or removed (``change`` says which)."""
+
+    account_id: AccountId
+    folder: str = ""
+    change: str
 
 
 @dataclass(frozen=True, kw_only=True)

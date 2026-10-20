@@ -50,7 +50,7 @@ is no second list to keep in step:
 
 | You write | You gain |
 |---|---|
-| `pull(cursor)` | `sync.pull` (a provider needs this or `send`) |
+| `pull(cursor, folder=None)` | `sync.pull` (a provider needs this or `send`). `folder` is passed only to a provider that sets `supports_folders = True` |
 | `authenticate(ctx)` | `auth` |
 | `set_flags(provider_ids, add, remove)` | `flags.write`, so a read in Oaken becomes a read on the server |
 | `send(raw_bytes)` | `send`, declared for the future. Nothing calls it in v1, and sending is never exposed over MCP |
@@ -58,6 +58,11 @@ is no second list to keep in step:
 `ctx` (also on `self.ctx` once started) carries your settings, a logger, the clock, and `config`,
 the table `[plugins.<name>]` from the user's `config.toml`. Credentials belong in the OS keyring,
 never in config.
+
+Raise `oaken.core.errors.AuthError` (or a subclass) when credentials are missing or refused. Core
+pauses that account's schedule instead of retrying, and the other accounts carry on. Core starts one
+instance of your class per account, so `ctx.account_id` tells you which one you are and is the natural
+name for your keyring entry.
 
 You never touch the databases. You return data and core stores it.
 

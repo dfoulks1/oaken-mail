@@ -240,3 +240,10 @@ def test_a_cursor_round_trips() -> None:
     c = Cursor("full", "123", "tok")
     assert Cursor.parse(c.dump()) == c and json.loads(c.dump())["mode"] == "full"
     assert asyncio  # keep the import used by the module under test's style
+
+
+async def test_a_folder_pull_is_refused_because_gmail_has_labels_not_folders() -> None:
+    rig = await started()
+    assert not rig.provider.supports_folders
+    with pytest.raises(ProviderError):
+        _ = [b async for b in rig.provider.pull(None, "INBOX")]

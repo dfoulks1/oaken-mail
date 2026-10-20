@@ -52,6 +52,7 @@
       <a class="doc-link" href="../architecture/ingest-pipeline.html">The ingest pipeline</a>
       <a class="doc-link" href="../architecture/ai-safety.html">Prompt safety and workspaces</a>
       <a class="doc-link" href="../architecture/read-state.html">Read state</a>
+      <a class="doc-link" href="../architecture/sync-schedule.html">Sync schedule</a>
       <div class="label">Reference</div>
       <a class="doc-link current" href="plugin-contracts.html" aria-current="page">Plugin contracts</a>
       <div class="label">Project</div>
@@ -209,6 +210,11 @@
 <tr>
 <td><code>bus</code></td>
 <td><code>EventBus | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>account_id</code></td>
+<td><code>str | None</code></td>
 <td><code>None</code></td>
 </tr>
 <tr>
@@ -591,9 +597,9 @@
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">authenticate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">PluginContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 <p>Make sure the plugin can talk to the service (capability <code>auth</code>).</p>
-<div class="code"><pre class="highlight"><code class="language-python"><span class="k">def</span><span class="w"> </span><span class="nf">pull</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cursor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AsyncIterator</span><span class="p">[</span><span class="n">PullBatch</span><span class="p">]</span>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">def</span><span class="w"> </span><span class="nf">pull</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cursor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AsyncIterator</span><span class="p">[</span><span class="n">PullBatch</span><span class="p">]</span>
 </code></pre></div>
-<p>Yield batches of changes since <code>cursor</code> (None: from the start). Capability <code>sync.pull</code>. Re-pulling from the last cursor returns nothing new.</p>
+<p>Yield batches of changes since <code>cursor</code> (None: from the start). Capability <code>sync.pull</code>. Re-pulling from the last cursor returns nothing new. <code>folder</code> limits the pull to one folder, for a provider with folders (set <code>supports_folders = True</code>); the cursor is still the account's whole cursor, and a folder pull only moves that folder's part of it. Core passes <code>folder</code> only to a provider that supports it, and only when the user scheduled that folder on its own.</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">set_flags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">provider_ids</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">add</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">remove</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 <p>Write flags back to the server (capability <code>flags.write</code>).</p>
@@ -654,11 +660,12 @@
 <p>Set:</p>
 <ul>
 <li><code>kind: ClassVar[PluginKind] = 'provider'</code></li>
+<li><code>supports_folders: ClassVar[bool] = False</code></li>
 </ul>
 <p>Override:</p>
 <ul>
 <li><code>async def authenticate(self, ctx: PluginContext) -&gt; None</code></li>
-<li><code>def pull(self, cursor: str | None) -&gt; AsyncIterator[PullBatch]</code></li>
+<li><code>def pull(self, cursor: str | None, folder: str | None=None) -&gt; AsyncIterator[PullBatch]</code></li>
 <li><code>async def set_flags(self, provider_ids: Sequence[str], add: Collection[str], remove: Collection[str]) -&gt; None</code></li>
 <li><code>async def send(self, raw_bytes: bytes) -&gt; str</code></li>
 </ul>

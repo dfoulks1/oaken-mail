@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 import aiosmtplib
 
-from oaken.core.errors import PluginError, ProviderError
+from oaken.core.errors import AuthError, PluginError, ProviderError
 from oaken.core.events import PluginEvent
 from oaken.core.logging import get_logger
 from oaken.plugins.base import BaseProvider
@@ -37,7 +37,7 @@ REPASSWORD_HELP = (
 _BAD_CREDENTIALS = {530, 534, 535, 538}
 
 
-class AuthRequired(ProviderError):
+class AuthRequired(AuthError):
     """The server rejected the password (or none is stored). Storing a new one fixes it;
     retrying does not."""
 
@@ -99,7 +99,10 @@ class SmtpProvider(BaseProvider):
     async def start(self, ctx: PluginContext) -> None:
         await super().start(ctx)
         config, store, tls = self._inject
-        self.config = config or SmtpConfig.parse(ctx.config)
+        raw = dict(ctx.config)
+        if ctx.account_id:
+            raw.setdefault("account", ctx.account_id)  # one keyring entry per account
+        self.config = config or SmtpConfig.parse(raw)
         self._store = store or KeyringStore(self.config.account)
         self._tls = tls
 

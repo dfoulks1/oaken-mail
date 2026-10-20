@@ -41,6 +41,9 @@ log = get_logger("oaken.plugins")
 # Sending is a declared capability but unimplemented in v1: the host never routes it.
 SEND_ROUTING_ENABLED = False
 
+# An instance for one account is named ``<plugin>@<account id>``; account ids never hold "@".
+ACCOUNT_SEP = "@"
+
 Discover = Callable[[str], Iterable[EntryPoint]]
 
 
@@ -59,6 +62,9 @@ class _Record:
     detail: str = ""
     announced: bool | None = None  # the last health state published
     ctx: PluginContext | None = None
+    factory: Any = None  # what the entry point loaded: a class or function that makes instances
+    account_id: str | None = None  # set on an instance started for one account
+    overlay: dict[str, Any] | None = None  # that account's own (non-secret) settings
 
 
 @dataclass(frozen=True)
@@ -108,6 +114,7 @@ class PluginHost:
         rec = _Record(kind, ep.name)
         try:
             obj = ep.load()
+            rec.factory = obj
             rec.instance = self._instantiate(obj)
             declared = getattr(rec.instance, "name", None)
             if isinstance(declared, str) and declared and declared != ep.name:
@@ -150,15 +157,50 @@ class PluginHost:
         self._stop.clear()
         self._task = asyncio.create_task(self._health_loop())
 
+    async def start_account_instance(
+        self, kind: PluginKind, name: str, account_id: str, config: dict[str, Any] | None = None
+    ) -> str:
+        """Start a separate instance of plugin ``name`` for one account, so a provider can serve
+        several accounts (three Gmail accounts, a Fastmail one). Its settings are the plugin's own
+        ``[plugins.<name>]`` table with ``config`` (the account's non-secret settings) on top.
+        Returns the instance's name (``gmail@work``), which ``get`` accepts. Starting the same
+        account twice returns the running instance. A failure to start is recorded, not raised,
+        exactly as for any plugin: the instance is unhealthy and retried at the health tick."""
+        instance_name = f"{name}{ACCOUNT_SEP}{account_id}"
+        if (kind, instance_name) in self._records:
+            return instance_name
+        base = self._records.get((kind, name))
+        if base is None or base.factory is None:
+            known = ", ".join(sorted(n for k, n in self._records if k == kind)) or "none installed"
+            raise NotFound(f"no {kind} named {name!r} (found: {known})")
+        rec = _Record(kind, instance_name, factory=base.factory, account_id=account_id)
+        rec.overlay = dict(config or {})
+        if isinstance(base.factory, type) or inspect.isfunction(base.factory):
+            try:
+                rec.instance = self._instantiate(base.factory)
+                rec.info = base.info
+            except Exception as exc:
+                rec.detail = f"failed to load: {exc}"
+        else:
+            rec.detail = f"{name} is a single object, so it cannot serve more than one account"
+        self._records[(kind, instance_name)] = rec
+        if rec.instance is not None and self._task is not None:
+            await self._start_one(rec)
+        else:
+            await self._announce(rec)
+        return instance_name
+
     async def _start_one(self, rec: _Record) -> None:
+        base_name = rec.name.partition(ACCOUNT_SEP)[0]
         ctx = PluginContext(
             name=rec.name,
             kind=rec.kind,
             settings=self.settings,
             clock=self.clock,
             log=get_logger(f"oaken.plugin.{rec.kind}.{rec.name}"),
-            config=dict(self.settings.plugins.get(rec.name, {})),
+            config={**self.settings.plugins.get(base_name, {}), **(rec.overlay or {})},
             bus=self.bus,
+            account_id=rec.account_id,
         )
         rec.ctx = ctx
         try:

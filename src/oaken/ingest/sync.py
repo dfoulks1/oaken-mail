@@ -12,6 +12,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from oaken.core.clock import Clock
+from oaken.core.errors import AuthError
 from oaken.core.events import EventBus, SyncFinished, SyncProgress, SyncStarted
 from oaken.core.ids import AccountId, MessageId
 from oaken.core.logging import get_logger
@@ -38,6 +39,7 @@ class SyncResult:
     flag_changes: int = 0
     batches: int = 0
     paused: bool = False  # backfill stopped at the queue cap; the next run continues
+    auth_failed: bool = False  # the provider refused our credentials; retrying cannot help
     cursor: str | None = None
     errors: list[str] = field(default_factory=list)
 
@@ -56,14 +58,33 @@ class SyncRunner:
         self.flag_sink = flag_sink
         self._locks: dict[str, asyncio.Lock] = {}
 
-    async def sync(self, account_id: AccountId, provider: Provider, *, who: str = "") -> SyncResult:
+    async def sync(
+        self,
+        account_id: AccountId,
+        provider: Provider,
+        *,
+        who: str = "",
+        folder: str | None = None,
+        quiet: bool = False,
+    ) -> SyncResult:
         """One pull of one account, to the end or until the backfill cap. Syncs of the same
-        account never overlap: a second call waits for the first."""
+        account never overlap: a second call waits for the first. ``folder`` pulls just that
+        folder (the provider must support it). ``quiet`` is passed on in ``SyncFinished`` so a
+        client knows not to alert."""
         lock = self._locks.setdefault(account_id, asyncio.Lock())
         async with lock:
-            return await self._sync(account_id, provider, who or type(provider).__name__)
+            return await self._sync(
+                account_id, provider, who or type(provider).__name__, folder, quiet
+            )
 
-    async def _sync(self, account_id: AccountId, provider: Provider, who: str) -> SyncResult:
+    async def _sync(
+        self,
+        account_id: AccountId,
+        provider: Provider,
+        who: str,
+        folder: str | None,
+        quiet: bool,
+    ) -> SyncResult:
         out = SyncResult()
         cursor = await self.raw.get_cursor(account_id, SCOPE)
         out.cursor = cursor
@@ -76,7 +97,7 @@ class SyncRunner:
         await self._publish(SyncStarted(ts=self.clock.now(), account_id=account_id))
         error: str | None = None
         try:
-            async for batch in iter_pull(provider, cursor, who):
+            async for batch in iter_pull(provider, cursor, who, folder):
                 if backfill and await self.pipeline.backfill_paused():
                     out.paused = True
                     break
@@ -95,10 +116,16 @@ class SyncRunner:
         except Exception as exc:  # a provider plugin may raise anything; report it, keep going
             error = f"{type(exc).__name__}: {exc}"
             out.errors.append(error)
+            out.auth_failed = isinstance(exc, AuthError)
             log.warning("sync failed", account_id=account_id, error=type(exc).__name__)
         await self._publish(
             SyncFinished(
-                ts=self.clock.now(), account_id=account_id, new_messages=out.stored, error=error
+                ts=self.clock.now(),
+                account_id=account_id,
+                new_messages=out.stored,
+                error=error,
+                quiet=quiet,
+                folder=folder or "",
             )
         )
         return out

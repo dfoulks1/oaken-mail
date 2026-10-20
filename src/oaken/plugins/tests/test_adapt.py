@@ -48,7 +48,7 @@ class Shapes(BaseProvider):
     def __init__(self, how: str) -> None:
         self.how = how
 
-    def pull(self, cursor: str | None) -> Any:
+    def pull(self, cursor: str | None, folder: str | None = None) -> Any:
         m = RawMessage("1", b"x")
         if self.how == "gen":
 
@@ -141,7 +141,7 @@ async def test_the_enricher_decorator_builds_a_working_class() -> None:
 
 def test_capabilities_are_inferred_from_overrides_and_extra_methods_are_not_claimed() -> None:
     class P(BaseProvider):
-        async def pull(self, cursor: str | None) -> Any:
+        async def pull(self, cursor: str | None, folder: str | None = None) -> Any:
             yield PullBatch()
 
         async def send(self, raw_bytes: bytes) -> str:

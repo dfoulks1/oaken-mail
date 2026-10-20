@@ -121,7 +121,7 @@ async def test_with_no_provider_that_writes_flags_the_change_stays_local_and_say
 
         # Until it is dealt with: a provider that can write flags appears.
         assert await rs.rs.resume_pending() == 0
-        rs.available["fake"] = True
+        rs.available["main"] = True
         assert await rs.rs.resume_pending() == 1
         assert await rs.rs.resume_pending() == 0  # deduplicated
         await rs.settle()
@@ -133,14 +133,14 @@ async def test_a_provider_that_goes_away_before_the_job_runs_fails_it_and_keeps_
 ) -> None:
     (mid,) = await rsrig.add(1)
     await rsrig.rs.mark_read([mid], "user_marked_read")
-    rsrig.available["fake"] = False
+    rsrig.available["main"] = False
     await rsrig.settle()
     assert await rsrig.is_read(mid)
     assert json.loads(await rsrig.marker(mid) or "")["error"].startswith(NO_PROVIDER)
     [(status, error)] = await job_rows(rsrig)
     assert status == "failed" and error.startswith("PermanentJobError")
     assert rsrig.rig.names(MessageReadChanged)[-1].local_only
-    rsrig.available["fake"] = True
+    rsrig.available["main"] = True
     assert await rsrig.rs.resume_pending() == 1
     await rsrig.settle()
     assert rsrig.server_has_seen("fake-1")

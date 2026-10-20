@@ -190,3 +190,18 @@ async def test_message_bodies_never_reach_the_log(
             [f"1:{rig.server.boxes['INBOX'].validity}:INBOX"], {"\\Seen"}, set()
         )
     assert BODY_MARKER not in caplog.text
+
+
+async def test_a_folder_pull_touches_only_that_folder(rig: Rig) -> None:
+    rig.server.add_box("Archive")
+    rig.server.deliver("Archive", message(9))
+    batches = [b async for b in rig.provider.pull(None, "INBOX")]
+    assert {p.split(":")[-1] for p in delivered(batches)} == {"INBOX"}
+    assert rig.provider.supports_folders
+
+
+async def test_a_pull_of_an_unknown_folder_is_refused(rig: Rig) -> None:
+    from oaken.core.errors import ProviderError
+
+    with pytest.raises(ProviderError):
+        _ = [b async for b in rig.provider.pull(None, "Nowhere")]

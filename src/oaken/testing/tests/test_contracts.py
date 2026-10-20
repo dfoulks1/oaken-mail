@@ -80,7 +80,7 @@ class TestInMemoryVectorStore(VectorStoreContract):
 class ForgetfulProvider(FakeProvider):
     """Re-delivers everything on every pull and never hands back a cursor."""
 
-    async def pull(self, cursor: str | None) -> Any:
+    async def pull(self, cursor: str | None, folder: str | None = None) -> Any:
         yield PullBatch(messages=tuple(self.messages.values()))
 
 
@@ -132,7 +132,7 @@ async def test_provider_suite_fails_a_provider_that_claims_what_it_lacks() -> No
     class Liar(BaseProvider):
         capabilities = frozenset({"sync.pull", "flags.write"})
 
-        async def pull(self, cursor: str | None) -> Any:
+        async def pull(self, cursor: str | None, folder: str | None = None) -> Any:
             yield PullBatch(next_cursor="1")
 
     with pytest.raises(AssertionError, match="flags.write"):

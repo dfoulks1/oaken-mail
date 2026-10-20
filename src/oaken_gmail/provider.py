@@ -143,6 +143,7 @@ def _decode(raw: str) -> bytes:
 
 class GmailProvider(BaseProvider):
     version = "1"
+    supports_folders = False
 
     def __init__(
         self,
@@ -162,7 +163,10 @@ class GmailProvider(BaseProvider):
     async def start(self, ctx: PluginContext) -> None:
         await super().start(ctx)
         store, creds, transport, sleep, monotonic = self._inject
-        self.config = GmailConfig.parse(ctx.config)
+        raw = dict(ctx.config)
+        if ctx.account_id:
+            raw.setdefault("account", ctx.account_id)  # one keyring entry per account
+        self.config = GmailConfig.parse(raw)
         self._creds = creds or load_client(self.config.client_secret_file)
         self._store = store or KeyringStore(self.config.account)
         self._http = httpx2.AsyncClient(
@@ -213,7 +217,9 @@ class GmailProvider(BaseProvider):
         await self.tokens.forget()
 
     # -- reading ---------------------------------------------------------------------------
-    async def pull(self, cursor: str | None) -> AsyncIterator[PullBatch]:
+    async def pull(self, cursor: str | None, folder: str | None = None) -> AsyncIterator[PullBatch]:
+        if folder is not None:
+            raise ProviderError("gmail: has labels, not folders; sync the whole account")
         state = Cursor.parse(cursor)
         if state is not None and state.mode == "inc":
             try:

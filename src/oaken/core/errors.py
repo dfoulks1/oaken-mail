@@ -38,6 +38,13 @@ class ProviderError(OakenError):
     code = "provider_error"
 
 
+class AuthError(ProviderError):
+    """The service refused our credentials, or has none to give. Retrying cannot fix it: the user
+    must act (re-authorize, store a new password). Core pauses the account's sync on this."""
+
+    code = "auth_required"
+
+
 class AIBackendError(OakenError):
     code = "ai_backend_error"
 

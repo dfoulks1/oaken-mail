@@ -60,10 +60,13 @@ def to_batch(obj: object, who: str) -> PullBatch:
     return dataclasses.replace(batch, messages=tuple(_utc(m) for m in batch.messages))
 
 
-async def iter_pull(provider: Any, cursor: str | None, who: str) -> AsyncIterator[PullBatch]:
+async def iter_pull(
+    provider: Any, cursor: str | None, who: str, folder: str | None = None
+) -> AsyncIterator[PullBatch]:
     """Batches from ``provider.pull(cursor)``. The plugin may be an async generator, a
-    coroutine returning one batch or a list, or a plain list; each is accepted."""
-    result = provider.pull(cursor)
+    coroutine returning one batch or a list, or a plain list; each is accepted. ``folder`` is
+    passed only when set, so a plugin written before it existed keeps working."""
+    result = provider.pull(cursor) if folder is None else provider.pull(cursor, folder=folder)
     if inspect.isawaitable(result):
         result = await result
     if hasattr(result, "__aiter__"):
