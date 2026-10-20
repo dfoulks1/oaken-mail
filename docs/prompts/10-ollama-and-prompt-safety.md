@@ -83,3 +83,30 @@ not make text safe either; the `UntrustedText` rules still apply.
 
 A vector store needs the embedder's `model_id` and `dimensions` for `begin_model`. Raw float32
 insert speed falls about 8x going from 384 to 768 dimensions, so prefer a small embedding model by default.
+
+## As built
+
+- **Workspaces** (agreed in discussion, not in the original prompt). A workspace is a named
+  profile: a trust level (`secure` needs a backend whose `locality` is `"local"`; `insecure`
+  allows a remote one), an LLM backend name, and its own partition of `llm_cache` and `ai_usage`.
+  The cache key therefore also contains the workspace, so a secure workspace's results are never
+  served to an insecure one or the other way round. The built-in `default` workspace is secure and
+  uses `ai.llm_backend`. An account picks one with its non-secret `config["workspace"]`; routing
+  by Sieve rule is a later prompt. Embeddings are not partitioned.
+- **Package.** The plugin is the top-level package `src/oaken_ollama`, like `oaken_vec_sqlite`.
+  Entry points: `ollama` (embedder), `ollama` and `ollama-remote` (LLM). The second LLM name reads
+  `[plugins.ollama-remote]`, so an insecure workspace can point at a remote host.
+- **HTTP client.** `httpx` is not installed here; `httpx2` (Pydantic's maintained fork, with
+  `MockTransport`) already was, through the tokenizers dependency, so it is used and no `respx`
+  is needed. The fixtures are written from Ollama's API documentation, not recorded.
+- **Default models** are placeholders until tried on real hardware: `nomic-embed-text` and
+  `qwen2.5:3b`.
+
+### Pending: test live later
+
+- [ ] Run `uv run pytest -m live_ollama` against a real Ollama and confirm the two default models.
+- [ ] Run the delimiter and forgery cases against a model that is actually reading them. The unit
+      tests prove what is sent, not how a model reacts, and nothing here proves a model obeys the
+      "ignore instructions" rule.
+- [ ] The AST lint (`oaken/ai/tests/test_lint_prompts.py`) is strict: a `LLMRequest` whose user
+      part is not a constant or `UntrustedText` fails. Revisit once real enrichers exist (14).

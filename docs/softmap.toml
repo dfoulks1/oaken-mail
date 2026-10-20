@@ -512,10 +512,46 @@ notes = ["OAKEN_HOME relocates every path under one root; tests rely on it.", "D
 id = "safety"
 name = "Prompt safety"
 layer = "foundation"
-status = "planned"
+status = "built"
 prompt = "10"
-summary = "The UntrustedText type that keeps mail out of system prompts, and the LLM cache keyed by content hash, model and prompt version."
+path = "src/oaken/ai"
+summary = "Mail reaches a model only as UntrustedText in a fenced, per-call-nonce block; instructions are constants. Answers are validated against a pydantic schema, with one repair retry. Results are cached per workspace."
 uses = []
+types = [
+  ["UntrustedText", "frozen dataclass", "Mail-derived text with no implicit str; render() fences it with a fresh nonce and neutralizes forged delimiters."],
+  ["PromptBuilder", "class", "One LLM task: constant instructions, answer model, version (plus a hash of the text) and token cap."],
+  ["SafeOutput", "pydantic model", "Base of every answer: carries injection_suspected."],
+  ["LLMService", "class", "generate_cached(): the only door enrichers use. Cache, backend call, validation, one repair, usage."],
+  ["LLMCache", "class", "llm_cache in raw.db, keyed by workspace, task, content hash, model and prompt version."],
+  ["Workspaces", "class", "Named profiles (secure or insecure) that partition the cache and usage and gate the backend."],
+]
+funcs = [
+  ["UntrustedText.render(label)", "The only way to put mail in a prompt; strips invisible characters and look-alike brackets."],
+  ["LLMService.generate_cached(builder, *parts, content_hash, workspace)", "Returns a validated answer, from the cache when it can."],
+  ["Workspaces.for_account(raw, account_id)", "The workspace named in the account's config, else default."],
+]
+notes = ["A secure workspace refuses any backend that does not declare locality = local.", "The AST lint test fails any module that builds an LLMRequest from a raw string.", "Test live later: the unit tests prove what is sent, not that a model obeys it."]
+
+[[components]]
+id = "ollama"
+name = "Ollama plugin"
+layer = "plugins"
+status = "built"
+prompt = "10"
+path = "src/oaken_ollama"
+summary = "The first-party embedder and LLM backend for a local Ollama. Loopback only unless ai.allow_remote is set; never pulls a model; structured output through Ollama's format schema."
+uses = ["safety"]
+ext = ["Ollama"]
+types = [
+  ["OllamaEmbedder", "class", "The oaken.embedders plugin: batches, discovers dimensions with a probe."],
+  ["OllamaLLM", "class", "The oaken.llm_backends plugin (ollama and ollama-remote): chat with a JSON schema, token counts, locality."],
+  ["OllamaConfig", "pydantic model", "[plugins.ollama]: base_url, model, keep_alive, timeout, max_retries, backoff, batch_size."],
+]
+funcs = [
+  ["start(ctx)", "Checks the address, that the model is installed (else prints ollama pull NAME), and its context size."],
+  ["is_loopback(url)", "True only for localhost, 127.0.0.0/8 and ::1."],
+]
+notes = ["Retries only connection errors and 5xx. Error messages never carry request or response bodies.", "Default models nomic-embed-text and qwen2.5:3b are unverified placeholders; test live later.", "Fixtures are written from the API docs, not recorded."]
 
 # --- Project tooling ---------------------------------------------------------------------
 [[components]]

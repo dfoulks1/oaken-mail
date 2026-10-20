@@ -52,7 +52,11 @@ class AISettings(_Section):
     embedder: str = "ollama"
     embed_model: str = "nomic-embed-text"
     llm_backend: str = "ollama"
-    llm_model: str = "qwen3:8b"  # a starting point; set a larger model for better analysis
+    llm_model: str = "qwen2.5:3b"  # small on purpose; set a larger model for better analysis
+    # Without this, a backend that talks to a non-loopback address refuses to start (prompt 10).
+    allow_remote: bool = False
+    # Longest model answer, in characters, that is accepted before it counts as invalid output.
+    max_output_chars: int = Field(default=64 * 1024, ge=256)
     vector_store: str = "sqlite-vec"
     # Chunking (prompt 07): the target size of a chunk and how much of the previous one a chunk
     # repeats, both in tokens as the configured tokenizer counts them.
@@ -64,6 +68,15 @@ class AISettings(_Section):
         if self.chunk_overlap * 2 > self.chunk_tokens:
             raise ValueError("chunk_overlap cannot be more than half of chunk_tokens")
         return self
+
+
+class WorkspaceSettings(_Section):
+    """A named place AI work happens (prompt 10). The LLM's cache and usage are kept apart per
+    workspace, and a ``secure`` one only ever talks to a backend that runs on this machine."""
+
+    trust: Literal["secure", "insecure"] = "secure"
+    # Entry-point name of the LLM backend; empty means ``ai.llm_backend``.
+    llm_backend: str = ""
 
 
 class IngestSettings(_Section):
@@ -250,6 +263,8 @@ class Settings(BaseSettings):
     ai: AISettings = AISettings()
     jobs: JobsSettings = JobsSettings()
     ingest: IngestSettings = IngestSettings()
+    # [workspaces.<name>]; "default" always exists (secure, ``ai.llm_backend``) unless redefined.
+    workspaces: dict[str, WorkspaceSettings] = Field(default_factory=dict)
     swarm: SwarmSettings = SwarmSettings()
     mail: MailSettings = MailSettings()
     index: IndexSettings = IndexSettings()

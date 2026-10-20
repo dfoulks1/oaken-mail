@@ -8,6 +8,7 @@ license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.11"
 dependencies = [
     "aiosqlite>=0.22.1",
+    "httpx2>=2.15.1",
     "platformdirs>=4.13.5",
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.1",
@@ -21,6 +22,13 @@ dependencies = [
 oaken = "oaken.cli:main"
 
 # First-party plugins register exactly as a third party's would.
+[project.entry-points."oaken.embedders"]
+ollama = "oaken_ollama:OllamaEmbedder"
+
+[project.entry-points."oaken.llm_backends"]
+ollama = "oaken_ollama:OllamaLLM"
+ollama-remote = "oaken_ollama:OllamaLLM"
+
 [project.entry-points."oaken.vector_stores"]
 sqlite-vec = "oaken_vec_sqlite:SqliteVecStore"
 
@@ -37,7 +45,7 @@ build-backend = "hatchling.build"
 path = "src/oaken/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/oaken", "src/oaken_vec_sqlite"]
+packages = ["src/oaken", "src/oaken_vec_sqlite", "src/oaken_ollama"]
 exclude = ["**/tests/**"]
 
 [dependency-groups]
@@ -65,8 +73,11 @@ default-groups = ["dev", "docs"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["src", "docs", "tests"]
-addopts = ["--import-mode=importlib", "-m", "not slow"]
-markers = ["slow: heavy measurements, off by default (run with -m slow)"]
+addopts = ["--import-mode=importlib", "-m", "not slow and not live_ollama"]
+markers = [
+    "slow: heavy measurements, off by default (run with -m slow)",
+    "live_ollama: needs a running local Ollama with the models pulled, off by default",
+]
 
 [tool.ruff]
 line-length = 100

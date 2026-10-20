@@ -71,6 +71,10 @@ id = "architecture/ingest-pipeline"
 file = "architecture/ingest-pipeline.md"
 
 [[pages]]
+id = "architecture/ai-safety"
+file = "architecture/ai-safety.md"
+
+[[pages]]
 id = "plugins"
 file = "plugins.md"
 

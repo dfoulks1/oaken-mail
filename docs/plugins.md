@@ -170,6 +170,16 @@ mailbox and failure injection, `FakeEmbedder`, `FakeLLM` that records every requ
 `FakeEnricher`, `InMemoryVectorStore`). Use them to test code that uses a plugin, with no network,
 no model and no real mail.
 
+## A first-party example: Ollama
+
+`oaken_ollama` (an embedder and an LLM backend) is the reference for anything that talks to a
+model server. It reads its own `[plugins.<entry-point-name>]` table through `ctx.config` (here
+`base_url`, `model`, `keep_alive`, `timeout`, `max_retries`, `backoff`, `batch_size`), sets
+`model_id`, `dimensions` and `context_window` in `start()`, and an LLM backend sets `locality` to
+`"local"` or `"remote"` so a secure workspace can refuse it. Register one class under two entry
+points to offer two differently configured instances. See [prompt safety and
+workspaces](architecture/ai-safety.html).
+
 ## Plugin events
 
 Core announces what happens on an event bus, and a plugin can announce its own. Subclass

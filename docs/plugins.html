@@ -46,6 +46,7 @@
       <a class="doc-link current" href="plugins.html" aria-current="page">Writing a plugin</a>
       <a class="doc-link" href="architecture/vectors.html">The vector store</a>
       <a class="doc-link" href="architecture/ingest-pipeline.html">The ingest pipeline</a>
+      <a class="doc-link" href="architecture/ai-safety.html">Prompt safety and workspaces</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="reference/plugin-contracts.html">Plugin contracts</a>
       <div class="label">Project</div>
@@ -65,8 +66,9 @@
       <a class="nav-link" href="#registering-it"><span class="num">6</span>Registering it</a>
       <a class="nav-link" href="#what-the-host-does"><span class="num">7</span>What the host does</a>
       <a class="nav-link" href="#testing-it"><span class="num">8</span>Testing it</a>
-      <a class="nav-link" href="#plugin-events"><span class="num">9</span>Plugin events</a>
-      <a class="nav-link" href="#not-sandboxed"><span class="num">10</span>Not sandboxed</a>
+      <a class="nav-link" href="#a-first-party-example-ollama"><span class="num">9</span>A first-party example: Ollama</a>
+      <a class="nav-link" href="#plugin-events"><span class="num">10</span>Plugin events</a>
+      <a class="nav-link" href="#not-sandboxed"><span class="num">11</span>Not sandboxed</a>
     </nav></div>
   </div></div>
 </nav>
@@ -260,7 +262,16 @@ mailbox and failure injection, <code>FakeEmbedder</code>, <code>FakeLLM</code> t
 <code>FakeEnricher</code>, <code>InMemoryVectorStore</code>). Use them to test code that uses a plugin, with no network,
 no model and no real mail.</p>
 </section>
-<section id="plugin-events" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>Plugin events</h2></div>
+<section id="a-first-party-example-ollama" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>A first-party example: Ollama</h2></div>
+<p><code>oaken_ollama</code> (an embedder and an LLM backend) is the reference for anything that talks to a
+model server. It reads its own <code>[plugins.&lt;entry-point-name&gt;]</code> table through <code>ctx.config</code> (here
+<code>base_url</code>, <code>model</code>, <code>keep_alive</code>, <code>timeout</code>, <code>max_retries</code>, <code>backoff</code>, <code>batch_size</code>), sets
+<code>model_id</code>, <code>dimensions</code> and <code>context_window</code> in <code>start()</code>, and an LLM backend sets <code>locality</code> to
+<code>&quot;local&quot;</code> or <code>&quot;remote&quot;</code> so a secure workspace can refuse it. Register one class under two entry
+points to offer two differently configured instances. See <a href="architecture/ai-safety.html">prompt safety and
+workspaces</a>.</p>
+</section>
+<section id="plugin-events" class="doc-section"><div class="section-head"><span class="section-num">10</span><h2>Plugin events</h2></div>
 <p>Core announces what happens on an event bus, and a plugin can announce its own. Subclass
 <code>PluginEvent</code>, add plain-data fields, and publish it from <code>start()</code> or anywhere you hold the context:</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
@@ -291,7 +302,7 @@ subscription:</p>
 and skipped without affecting core or other listeners. The host ends every subscription when the
 plugin stops.</p>
 </section>
-<section id="not-sandboxed" class="doc-section"><div class="section-head"><span class="section-num">10</span><h2>Not sandboxed</h2></div>
+<section id="not-sandboxed" class="doc-section"><div class="section-head"><span class="section-num">11</span><h2>Not sandboxed</h2></div>
 <p>Plugins run in the same process as core, with full access to the machine and to whatever core can
 reach. They are not sandboxed in version 1. The contract keeps the code tidy and the data
 boundaries clear; it does not contain a hostile plugin. Only install plugins you trust, as you

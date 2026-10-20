@@ -118,6 +118,9 @@ class BaseLLMBackend(_Base):
     kind: ClassVar[PluginKind] = "llm_backend"
     model_id: str = ""
     context_window: int = 0
+    # Where the model runs: "local" (this machine) or "remote". A ``secure`` workspace refuses a
+    # backend that does not say "local", so a plugin that forgets this is treated as remote.
+    locality: str = "remote"
 
     @_default
     async def generate(self, request: LLMRequest) -> LLMResponse:

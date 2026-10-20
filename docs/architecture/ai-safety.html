@@ -1,0 +1,191 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt safety and workspaces · Oaken Mail</title>
+<meta name="description" content="UntrustedText and delimiters, the prompt builder, structured output and its single repair retry, the per-workspace LLM cache, the secure and insecure workspaces, and the Ollama plugin&#39;s rules.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Prompt safety and workspaces · Oaken Mail">
+<meta property="og:description" content="UntrustedText and delimiters, the prompt builder, structured output and its single repair retry, the per-workspace LLM cache, the secure and insecure workspaces, and the Ollama plugin&#39;s rules.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="../assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="../assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="../index.html"><img src="../assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">How mail reaches a language model without ever becoming an instruction</div>
+    <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="overview.html">Architecture overview</a>
+      <a class="doc-link" href="jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="software-map.html">Software map</a>
+      <a class="doc-link" href="swarm.html">The swarm</a>
+      <a class="doc-link" href="storage.html">Raw storage</a>
+      <a class="doc-link" href="parsing.html">Parsing and cleaning</a>
+      <a class="doc-link" href="sieve.html">Sieve filtering</a>
+      <a class="doc-link" href="index.html">The search index</a>
+      <a class="doc-link" href="../plugins.html">Writing a plugin</a>
+      <a class="doc-link" href="vectors.html">The vector store</a>
+      <a class="doc-link" href="ingest-pipeline.html">The ingest pipeline</a>
+      <a class="doc-link current" href="ai-safety.html" aria-current="page">Prompt safety and workspaces</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="../contributing.html">Contributing</a>
+      <a class="doc-link" href="../adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="../security.html">Security policy</a>
+      <a class="doc-link" href="../code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#the-rule"><span class="num">1</span>The rule</a>
+      <a class="nav-link" href="#structured-answers"><span class="num">2</span>Structured answers</a>
+      <a class="nav-link" href="#the-cache-and-workspaces"><span class="num">3</span>The cache and workspaces</a>
+      <a class="nav-link" href="#the-ollama-plugin"><span class="num">4</span>The Ollama plugin</a>
+      <a class="nav-link" href="#what-this-does-not-prove"><span class="num">5</span>What this does not prove</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <h1 class="display-6">Prompt safety and workspaces</h1>
+    <p class="lead">Mail is data. It enters a prompt only inside a fenced block with a fresh random nonce, the instructions are constants written in this codebase, and the answer is JSON that is checked, never interpreted.</p>
+  </header>
+
+<section id="the-rule" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>The rule</h2></div>
+<p>A message can say anything, including &quot;ignore your instructions&quot;. So the code never lets mail text
+near the instructions:</p>
+<ul>
+<li>
+<p>The <strong>system prompt</strong> is a constant. A test reads the source of every module and fails if an
+<code>LLMRequest</code> is built from an f-string, a concatenation or any raw string that could hold mail.</p>
+</li>
+<li>
+<p>Mail enters only as <code>UntrustedText</code> in the <strong>user turn</strong>. It has no <code>str()</code>; the one way out is
+<code>render(label=...)</code>, which fences it:</p>
+<div class="code"><pre class="highlight"><code class="language-text">&lt;&lt;&lt;EMAIL label=body nonce=3f9c2a71d04be856&gt;&gt;&gt;
+...the message text...
+&lt;&lt;&lt;END nonce=3f9c2a71d04be856&gt;&gt;&gt;
+</code></pre></div>
+</li>
+<li>
+<p>The nonce is new for every call, so a message cannot know it in advance. Text that looks like a
+delimiter is neutralized first: runs of two or more <code>&lt;</code> or <code>&gt;</code> (including full-width and other
+look-alikes) become <code>‹</code> and <code>›</code>, and invisible characters (zero-width, bidirectional controls)
+are removed. A single <code>&lt;</code>, as in <code>&lt;alex@example.com&gt;</code>, is left alone.</p>
+</li>
+<li>
+<p>The system prompt tells the model that the fenced text is data, to ignore instructions in it and
+to set <code>injection_suspected</code> when it sees any. That is a request, not a guarantee: see below.</p>
+</li>
+</ul>
+</section>
+<section id="structured-answers" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Structured answers</h2></div>
+<p>Each task is a <code>PromptBuilder</code>: literal instructions, a pydantic answer model and a version. The
+JSON schema goes in the request, and the reply is validated. A reply that is not valid JSON, does
+not match, or is longer than <code>ai.max_output_chars</code> gets <strong>one</strong> repair attempt (the same request
+plus a plain note naming the fields that were wrong, never the input). If that fails too, the call
+raises <code>AIBackendError</code>. Tokens spent on the failed attempt are still counted in <code>ai_usage</code>.
+The builder's version includes a hash of its own text, so editing a prompt without bumping the
+version cannot return an answer made by the old one.</p>
+</section>
+<section id="the-cache-and-workspaces" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>The cache and workspaces</h2></div>
+<p><code>generate_cached()</code> is the only function enrichers call. It looks up <code>llm_cache</code> in <code>raw.db</code> by
+<strong>(workspace, task, content hash, model, prompt version)</strong>. A hit makes no backend call and is
+recorded in <code>ai_usage</code> as cached.</p>
+<p>A <strong>workspace</strong> is a named profile with a trust level, an LLM backend, and its own slice of the
+cache and usage:</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Trust</th>
+<th>Backend must be</th>
+<th>Meant for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>secure</code></td>
+<td>local (<code>locality = &quot;local&quot;</code>)</td>
+<td>Mail that must not leave this machine. The default.</td>
+</tr>
+<tr>
+<td><code>insecure</code></td>
+<td>anything</td>
+<td>Mail the user is happy to send to a hosted model.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Because the workspace is part of the cache key, a secure workspace's results are never served to
+an insecure one, and the reverse. A backend that does not say where it runs counts as remote. An
+account picks its workspace with <code>config[&quot;workspace&quot;]</code> (non-secret); Sieve-based routing comes in a
+later prompt. Only the language model is partitioned: embeddings use the single configured embedder.</p>
+<div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[workspaces.private]</span>
+<span class="n">trust</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"secure"</span>
+<span class="n">llm_backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"ollama"</span>
+
+<span class="k">[workspaces.cloud]</span>
+<span class="n">trust</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"insecure"</span>
+<span class="n">llm_backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"ollama-remote"</span>
+</code></pre></div>
+</section>
+<section id="the-ollama-plugin" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>The Ollama plugin</h2></div>
+<p><code>oaken_ollama</code> is the first-party embedder and LLM backend.</p>
+<ul>
+<li>It talks to port 11434 on <code>127.0.0.1</code> by default. Only <code>localhost</code>, <code>127.0.0.0/8</code> and <code>::1</code> count
+as loopback; any other address stops the plugin at start unless <code>ai.allow_remote = true</code>, and a
+one-time warning is logged when it is. The LLM backend reports <code>locality</code> from the address.</li>
+<li>At start it asks <code>/api/tags</code> whether the model exists. If not, the error is the exact command,
+for example <code>ollama pull qwen2.5:3b</code>. It never pulls anything itself.</li>
+<li>It reads the context window from <code>/api/show</code> and learns the embedding size by embedding a probe.</li>
+<li>It retries only connection errors and 5xx answers, a few times with a growing pause. Error
+messages never include what was sent or received, because both are mail.</li>
+<li>Structured output uses Ollama's <code>format</code> field with the task's JSON schema.</li>
+</ul>
+<div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[plugins.ollama]</span>
+<span class="c1"># base_url defaults to this machine</span>
+<span class="n">keep_alive</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"5m"</span>
+<span class="n">batch_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">32</span>
+</code></pre></div>
+<p>Model names come from <code>ai.embed_model</code> and <code>ai.llm_model</code> (defaults <code>nomic-embed-text</code> and
+<code>qwen2.5:3b</code>, both placeholders until tried) and can be overridden per plugin with <code>model</code>.</p>
+</section>
+<section id="what-this-does-not-prove" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>What this does not prove</h2></div>
+<p>Delimiters, nonces and a schema make an attack harder and make a success visible; they do not make
+a model obey. A model can still be talked into a wrong summary, which is why the answers are
+validated, never executed, and never allowed to trigger an action by themselves. The unit tests
+check what is sent and what is refused. They cannot show how a particular model behaves when it
+reads a hostile message; that needs a live run against a real model, which is still to do.
+The cache may contain text derived from mail, so it is as sensitive as <code>raw.db</code> and is cleared
+per workspace.</p>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="../assets/site.js"></script>
+
+
+</body>
+</html>

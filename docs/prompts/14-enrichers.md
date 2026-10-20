@@ -78,3 +78,11 @@ through `generate_cached()`). Use `BaseEnricher` / `@enricher`, and run `Enriche
 The cleaner already reads bulk signals (`List-Id`, `List-Unsubscribe`, `Precedence`,
 `Auto-Submitted`). The header/MIME inspector can reuse them so bulk and automated mail skips the
 expensive enrichers, which is probably the largest CPU saving available.
+
+## Note from prompt 10
+
+An enricher with `needs_llm = True` reaches a model only through
+`LLMService.generate_cached(builder, *parts, content_hash=..., workspace=..., account_id=...)`.
+Write each task as a `PromptBuilder` with a literal `instructions` string and a `SafeOutput`
+subclass for the answer; pass mail as `UntrustedText` parts. The lint test fails a module that
+builds an `LLMRequest` any other way. Resolve the workspace with `Workspaces.for_account`.

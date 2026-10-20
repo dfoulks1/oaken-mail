@@ -190,6 +190,7 @@ class FakeLLM(BaseLLMBackend):
     ``responder`` callable, the ``reply`` queue, or a default (JSON ``{}`` when a schema asks)."""
 
     version = "1"
+    locality = "local"
 
     def __init__(
         self,

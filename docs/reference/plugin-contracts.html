@@ -46,6 +46,7 @@
       <a class="doc-link" href="../plugins.html">Writing a plugin</a>
       <a class="doc-link" href="../architecture/vectors.html">The vector store</a>
       <a class="doc-link" href="../architecture/ingest-pipeline.html">The ingest pipeline</a>
+      <a class="doc-link" href="../architecture/ai-safety.html">Prompt safety and workspaces</a>
       <div class="label">Reference</div>
       <a class="doc-link current" href="plugin-contracts.html" aria-current="page">Plugin contracts</a>
       <div class="label">Project</div>
@@ -674,6 +675,7 @@
 <li><code>kind: ClassVar[PluginKind] = 'llm_backend'</code></li>
 <li><code>model_id: str = ''</code></li>
 <li><code>context_window: int = 0</code></li>
+<li><code>locality: str = 'remote'</code></li>
 </ul>
 <p>Override:</p>
 <ul>

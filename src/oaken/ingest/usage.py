@@ -23,6 +23,7 @@ class UsageRow:
     tokens_in: int  # spent
     tokens_out: int
     tokens_saved: int  # what the skipped calls would have cost (in + out)
+    workspace: str = "default"
 
 
 class UsageStore:
@@ -40,10 +41,11 @@ class UsageStore:
         cached: bool = False,
         account_id: AccountId | None = None,
         message_id: MessageId | None = None,
+        workspace: str = "default",
     ) -> None:
         await self.db.execute(
             "INSERT INTO ai_usage (ts, stage, model_id, tokens_in, tokens_out, cached, account_id,"
-            " message_id) VALUES (?,?,?,?,?,?,?,?)",
+            " message_id, workspace) VALUES (?,?,?,?,?,?,?,?,?)",
             (
                 fmt_ts(self.clock.now()),
                 stage,
@@ -53,19 +55,24 @@ class UsageStore:
                 int(cached),
                 account_id,
                 message_id,
+                workspace,
             ),
         )
 
-    async def usage_summary(self, since: datetime | None = None) -> list[UsageRow]:
-        """Per stage and model: calls made, calls saved by the cache, and the tokens of each."""
+    async def usage_summary(
+        self, since: datetime | None = None, workspace: str | None = None
+    ) -> list[UsageRow]:
+        """Per workspace, stage and model (one workspace if named): calls made, calls the cache
+        saved, and the tokens of each."""
         rows = await self.db.fetchall(
-            "SELECT stage, model_id,"
+            "SELECT workspace, stage, model_id,"
             " SUM(cached = 0) AS calls, SUM(cached = 1) AS cached_calls,"
             " COALESCE(SUM(CASE WHEN cached = 0 THEN tokens_in END), 0) AS tin,"
             " COALESCE(SUM(CASE WHEN cached = 0 THEN tokens_out END), 0) AS tout,"
             " COALESCE(SUM(CASE WHEN cached = 1 THEN tokens_in + tokens_out END), 0) AS saved"
-            " FROM ai_usage WHERE ts >= ? GROUP BY stage, model_id ORDER BY stage, model_id",
-            (fmt_ts(since) if since else "",),
+            " FROM ai_usage WHERE ts >= ? AND (? IS NULL OR workspace = ?)"
+            " GROUP BY workspace, stage, model_id ORDER BY workspace, stage, model_id",
+            (fmt_ts(since) if since else "", workspace, workspace),
         )
         return [
             UsageRow(
@@ -76,6 +83,7 @@ class UsageStore:
                 int(r["tin"]),
                 int(r["tout"]),
                 int(r["saved"]),
+                r["workspace"],
             )
             for r in rows
         ]

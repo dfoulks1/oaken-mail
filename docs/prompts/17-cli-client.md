@@ -120,4 +120,8 @@ same commit (see `00-context.md`).
 | 09 | `UsageStore.usage_summary(since)` | `oaken usage [--since DATE] [--json]` | Calls, cached calls, tokens in and out and tokens saved, per stage and model. Enrichment tokens are estimates. |
 | 09 | Quarantine folder | `oaken quarantine list\|stats\|check` | Files and bytes, and `problems()` for loose permissions. Never opens a file; there is no `show`. |
 | 09 | `SyncRunner.sync` | `oaken sync [--account A] [--wait]` | Prints stored, unchanged, deleted, whether a backfill paused and any error. |
+| 10 | `usage_summary(since, workspace)` | `oaken usage --workspace NAME` | The same table, narrowed to one workspace (usage is now grouped by workspace, stage and model). |
+| 10 | `Workspaces` | `oaken workspaces [--json]` | Each workspace with its trust level, backend, and whether that backend is local; flags a secure workspace whose backend is remote. |
+| 10 | `LLMCache.clear(workspace)` | `oaken ai cache clear [--workspace NAME]` | Confirm first. The cache can hold text derived from mail. |
+| 10 | Ollama startup check | `oaken ai check` | Starts the configured embedder and LLM backend and reports the model, dimensions, context window and locality, or the exact `ollama pull` to run. Never pulls. |
 
