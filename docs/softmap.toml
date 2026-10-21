@@ -95,10 +95,17 @@ notes = ["Does not start core and never opens the databases; it imports no core 
 id = "webui"
 name = "Web UI"
 layer = "clients"
-status = "planned"
+status = "partial"
 prompt = "later"
-summary = "Browser client served by core. The framework choice is deferred until this phase."
+path = "apps/webui/src/oaken_webui"
+summary = "Browser client in its own app (oaken-webui), parallel to oaken-cli: it serves the static UI and reverse-proxies /v1/* to the running core over loopback — the general API bridge, never MCP. Core stays headless (ADR 0007)."
 uses = ["api"]
+notes = [
+  "Holds the API token server-side and adds X-Oaken-Client: ui; the token never reaches the browser, which sees one same-origin server.",
+  "Serves the oakenmail-templates UI (demo marker stripped so it calls the API); the published demo under docs/ keeps the marker and its dummy fixtures.",
+  "Partial: the server, the proxy and the static serving are built and tested; the UI pages themselves are only partly wired, and core's vestigial static_dir mount is not yet removed.",
+  "Loopback only; does not start core. Core down -> 503 core_unavailable, like the CLI.",
+]
 
 # --- Local API ---------------------------------------------------------------------------
 [[components]]
@@ -811,7 +818,7 @@ text = "Not yet measured. Tuning is deliberately out of scope until there is rea
 
 [[open]]
 title = "Web UI framework"
-text = "Deferred until the UI phase. Core serves the built UI files."
+text = "The web UI is its own app (oaken-webui) that serves the UI and proxies to core; core stays headless (ADR 0007). The client-side framework for the pages themselves is still deferred — they are plain HTML/CSS/JS for now."
 
 [[open]]
 title = "Plugin sandboxing"

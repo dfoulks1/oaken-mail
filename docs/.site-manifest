@@ -25,6 +25,7 @@ assets/site.js
 code-of-conduct.html
 contributing.html
 demo/assets/api.js
+demo/assets/demo-fixtures.js
 demo/assets/oaken.css
 demo/assets/oaken.js
 demo/compose.html

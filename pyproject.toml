@@ -75,6 +75,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "oaken-cli",
+    "oaken-webui",
     "ruff",
     "sqlite-vec>=0.1.9",
 ]
@@ -90,14 +91,15 @@ docs = [
 default-groups = ["dev", "docs"]
 
 [tool.uv.workspace]
-members = ["apps/cli"]
+members = ["apps/cli", "apps/webui"]
 
 [tool.uv.sources]
 oaken-cli = { workspace = true }
+oaken-webui = { workspace = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["src", "apps/cli", "docs", "tests"]
+testpaths = ["src", "apps/cli", "apps/webui", "docs", "tests"]
 addopts = ["--import-mode=importlib", "-m", "not slow and not live_ollama and not live_gmail and not live_smtp and not live_imap"]
 markers = [
     "slow: heavy measurements, off by default (run with -m slow)",
@@ -114,7 +116,7 @@ filterwarnings = [
 
 [tool.ruff]
 line-length = 100
-src = ["src", "apps/cli/src", "tests"]
+src = ["src", "apps/cli/src", "apps/webui/src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "CPY"]
@@ -135,8 +137,8 @@ min-file-size = 0
 
 [tool.mypy]
 strict = true
-files = ["src", "apps/cli/src", "tests", "docs/tools"]
-mypy_path = "docs/tools:apps/cli/src"
+files = ["src", "apps/cli/src", "apps/webui/src", "tests", "docs/tools"]
+mypy_path = "docs/tools:apps/cli/src:apps/webui/src"
 
 [[tool.mypy.overrides]]
 module = ["pygments", "pygments.*", "sqlite_vec", "imapclient", "imapclient.*", "rich", "rich.*"]

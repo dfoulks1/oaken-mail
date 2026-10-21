@@ -33,14 +33,24 @@ review it before starting the next.
 | 18 | [mcp-server](18-mcp-shim.md) | MCP server hosted by core (+ `oaken mcp` stdio bridge), generated from registry | 16 |
 | 19 | [security-hardening](19-security-hardening.md) | Injection suite, localhost threat tests, audit review | 16–18 |
 | 20 | [oss-docs](20-oss-docs.md) | README, site content, plugin guide, ADRs, roadmap; site verified | all |
+| 21 | [webui-server](21-webui-server.md) | `oaken-webui`: a thin client that serves the UI and proxies `/v1/*` to core (core stays headless) | 16, 17 |
+| 22 | [api-parity](22-api-parity.md) | Expand the API for the UI; audit registry ⇄ CLI ⇄ UI; enforce 1:1 CLI/UI parity (one backend) | 13, 16, 17, 21 |
+| 23 | [plugin-settings](23-plugin-settings.md) | Configure plugins: load/test/save (`get`/`check`/`set_plugin_config`), schema form, `config.toml` round-trip, reload | 04, 13, 21, 22 |
+| 24 | [accounts-onboarding](24-accounts-onboarding.md) | Add/auth/test/configure accounts; Gmail "listen but not send" (receive-only) | 11–12b, 23 |
+| 25 | [folders-labels-counts](25-folders-labels-counts.md) | Sidebar chrome: folders, labels and unread counts (new `mailbox_counts` op) | 07, 12, 22 |
+| 26 | [sieve-management](26-sieve-management.md) | Manage Sieve in the UI: list/check/test + a write path (`sieve_save`/`delete`, never over MCP) | 06c, 22 |
+| 27 | [contacts-people](27-contacts-people.md) | People view derived from mail (`list_people`/`get_person`); derive-vs-store ADR | 06, 07, 22 |
 
 ## Not written yet (deliberately)
 
-- **Web UI** (framework choice deferred by the user until this phase).
-- **Compose/send** (after the read side, search and AI are solid).
+- **Compose/send** (after the read side, search and AI are solid; send is never exposed over MCP).
 - **Legacy-DB importer** (only if wanted), **packaging**
   (systemd/launchd, installers), **at-rest encryption**, **plugin sandboxing**,
   **embedding-throughput tuning on CPU**.
+
+The **Web UI** is now a written phase (prompts 21–27): its own thin-client app (`oaken-webui`)
+that serves the UI and proxies the general API, plus the registry operations each UI feature needs,
+built with 1:1 CLI/UI parity (one backend).
 
 ## Decisions recorded while planning
 

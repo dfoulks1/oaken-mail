@@ -13,6 +13,7 @@ resolution-markers = [
 members = [
     "oaken",
     "oaken-cli",
+    "oaken-webui",
 ]
 
 [[package]]
@@ -1481,6 +1482,7 @@ dev = [
     { name = "hypothesis" },
     { name = "mypy" },
     { name = "oaken-cli" },
+    { name = "oaken-webui" },
     { name = "openapi-spec-validator" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -1525,6 +1527,7 @@ dev = [
     { name = "hypothesis", specifier = ">=6.170.5" },
     { name = "mypy" },
     { name = "oaken-cli", editable = "apps/cli" },
+    { name = "oaken-webui", editable = "apps/webui" },
     { name = "openapi-spec-validator", specifier = ">=0.9.0" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -1551,6 +1554,27 @@ dependencies = [
 requires-dist = [
     { name = "oaken", editable = "." },
     { name = "rich", specifier = ">=13" },
+]
+
+[[package]]
+name = "oaken-webui"
+version = "0.1.0"
+source = { editable = "apps/webui" }
+dependencies = [
+    { name = "httpx2" },
+    { name = "oaken" },
+    { name = "oaken-cli" },
+    { name = "starlette" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx2" },
+    { name = "oaken", editable = "." },
+    { name = "oaken-cli", editable = "apps/cli" },
+    { name = "starlette" },
+    { name = "uvicorn" },
 ]
 
 [[package]]

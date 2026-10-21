@@ -1,0 +1,166 @@
+# SPDX-License-Identifier: Apache-2.0
+"""The web UI ASGI app: static files at ``/`` and a reverse proxy for ``/v1/*``.
+
+Design
+------
+The browser only ever talks to this server. Two concerns, nothing else:
+
+* **Static UI.** The HTML/CSS/JS live next to this package (packaged as ``oaken_webui/ui``) or, in
+  a source checkout, in ``apps/webui/oakenmail-templates``. HTML is served with the
+  ``data-oaken-demo`` marker stripped, so the live UI calls the API instead of the demo fixtures
+  (the marker is only for the published mockups under ``docs/``).
+
+* **API proxy.** ``/v1/*`` is forwarded verbatim to the core daemon on loopback. This server holds
+  the API token and adds it (and ``X-Oaken-Client: ui``) on the way through, so the token never
+  reaches the browser. Server-sent events (``/v1/events``) are streamed, not buffered.
+
+Core is not contacted at import time: the proxy resolves the endpoint per request (so the UI
+server can start before core, and survive a core restart that changes the port). Everything is
+loopback; this server never binds off-host.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import AsyncIterator
+from pathlib import Path
+
+import anyio
+import httpx2
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response, StreamingResponse
+from starlette.routing import BaseRoute, Mount, Route
+from starlette.staticfiles import StaticFiles
+from starlette.types import Scope
+
+from oaken_cli.discovery import Endpoint, discover
+from oaken_cli.exits import CoreUnavailable
+
+UI_CLIENT = "ui"
+# The demo marker: only the published mockups use it. Served live, the UI must be in API mode.
+_DEMO_ATTR = re.compile(rb"\s+data-oaken-demo\b")
+# Hop-by-hop headers are not forwarded across a proxy (RFC 7230 §6.1).
+_HOP_BY_HOP = frozenset(
+    {
+        "connection",
+        "keep-alive",
+        "proxy-authenticate",
+        "proxy-authorization",
+        "te",
+        "trailers",
+        "transfer-encoding",
+        "upgrade",
+        "host",
+        "content-length",
+    }
+)
+
+
+def ui_dir() -> Path:
+    """Where the browser UI lives: the packaged copy if present, else the source templates."""
+    packaged = Path(__file__).parent / "ui"
+    if packaged.is_dir():
+        return packaged
+    # Source checkout: apps/webui/oakenmail-templates, three parents up from this file
+    # (src/oaken_webui/app.py -> src/oaken_webui -> src -> apps/webui).
+    return Path(__file__).resolve().parents[2] / "oakenmail-templates"
+
+
+class _UiFiles(StaticFiles):
+    """StaticFiles that strips ``data-oaken-demo`` from HTML as it is served, so the live UI runs
+    against the API instead of the demo fixtures. Non-HTML files and misses fall through to the
+    normal StaticFiles handling (range requests, 404s, caching headers)."""
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        # Resolve "." (a directory request such as "/") to its index before deciding.
+        lookup = "index.html" if path == "." else path
+        full, stat = self.lookup_path(lookup)
+        is_html = bool(full) and lookup.endswith(".html") and stat is not None
+        if is_html:
+            raw = await anyio.to_thread.run_sync(Path(full).read_bytes)
+            return Response(_DEMO_ATTR.sub(b"", raw), media_type="text/html")
+        return await super().get_response(path, scope)
+
+
+class Proxy:
+    """A reverse proxy for ``/v1/*`` to the core daemon, resolved per request.
+
+    ``endpoint`` fixes the target (a dev override); without it the core is discovered from the
+    runtime file on each request, so the proxy follows a core that restarts on a new port.
+    """
+
+    def __init__(
+        self,
+        *,
+        endpoint: Endpoint | None = None,
+        transport: httpx2.AsyncBaseTransport | None = None,
+    ) -> None:
+        self._fixed = endpoint
+        self._transport = transport
+
+    def _endpoint(self) -> Endpoint:
+        return self._fixed or discover()
+
+    def _client(self, base_url: str) -> httpx2.AsyncClient:
+        return httpx2.AsyncClient(
+            base_url=base_url, transport=self._transport, timeout=httpx2.Timeout(60.0, read=None)
+        )
+
+    def _headers(self, request: Request, token: str) -> dict[str, str]:
+        out = {k: v for k, v in request.headers.items() if k.lower() not in _HOP_BY_HOP}
+        out["authorization"] = f"Bearer {token}"
+        out["x-oaken-client"] = UI_CLIENT  # the UI caller class, never raised to mcp
+        return out
+
+    async def handle(self, request: Request) -> Response:
+        try:
+            endpoint = self._endpoint()
+        except CoreUnavailable as exc:
+            return JSONResponse({"code": "core_unavailable", "message": str(exc)}, status_code=503)
+        path = request.url.path
+        if request.url.query:
+            path = f"{path}?{request.url.query}"
+        body = await request.body()
+        headers = self._headers(request, endpoint.token)
+        client = self._client(endpoint.base_url)
+        req = client.build_request(request.method, path, headers=headers, content=body)
+        try:
+            upstream = await client.send(req, stream=True)
+        except (httpx2.ConnectError, httpx2.ConnectTimeout, httpx2.RemoteProtocolError) as exc:
+            await client.aclose()
+            return JSONResponse({"code": "core_unavailable", "message": str(exc)}, status_code=503)
+
+        async def stream() -> AsyncIterator[bytes]:
+            try:
+                async for chunk in upstream.aiter_raw():
+                    yield chunk
+            finally:
+                await upstream.aclose()
+                await client.aclose()
+
+        resp_headers = {k: v for k, v in upstream.headers.items() if k.lower() not in _HOP_BY_HOP}
+        return StreamingResponse(
+            stream(),
+            status_code=upstream.status_code,
+            headers=resp_headers,
+            media_type=upstream.headers.get("content-type"),
+        )
+
+
+def build_app(
+    *,
+    endpoint: Endpoint | None = None,
+    transport: httpx2.AsyncBaseTransport | None = None,
+    static_dir: Path | None = None,
+) -> Starlette:
+    """The web UI ASGI app. ``endpoint``/``transport`` are for a dev override and for tests
+    (an ASGI transport pointed at a fake core); ``static_dir`` overrides where the UI is read."""
+    proxy = Proxy(endpoint=endpoint, transport=transport)
+    root = static_dir or ui_dir()
+    routes: list[BaseRoute] = [
+        Route("/v1/{path:path}", proxy.handle, methods=["GET", "POST", "PUT", "DELETE", "PATCH"]),
+    ]
+    if root.is_dir():
+        routes.append(Mount("/", app=_UiFiles(directory=str(root), html=True), name="ui"))
+    return Starlette(routes=routes)
