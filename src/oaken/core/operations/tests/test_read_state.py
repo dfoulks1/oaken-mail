@@ -42,6 +42,9 @@ def examples(a: MessageId, job_id: str = "none") -> dict[str, Any]:
         "authorization_status": {"account_id": "main"},
         "list_jobs": {}, "cancel_job": {"job_id": job_id}, "retry_job": {"job_id": job_id},
         "pause_backfill": {}, "resume_backfill": {}, "retry_parked": {"all": True},
+        "list_mailbox": {}, "create_folder": {"path": "Lists/Dev"}, "create_label": {"name": "x"},
+        "move_to_folder": {"ids": [a], "path": "Work"},
+        "set_labels": {"ids": [a], "add": ["x"]},
     }  # fmt: skip
 
 

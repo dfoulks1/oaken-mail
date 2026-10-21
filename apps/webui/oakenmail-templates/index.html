@@ -86,9 +86,10 @@
           <button class="btn btn-sm btn-ghost" title="Delete" data-bs-toggle="modal" data-bs-target="#confirmModal"><i class="bi bi-trash3"></i></button>
           <span class="vr"></span>
           <button class="btn btn-sm btn-ghost" title="Mark as read" data-oaken-action="mark-read"><i class="bi bi-envelope-open"></i></button>
+          <button class="btn btn-sm btn-ghost" title="Mark as unread" data-oaken-action="mark-unread"><i class="bi bi-envelope"></i></button>
           <button class="btn btn-sm btn-ghost" title="Move to" data-bs-toggle="modal" data-bs-target="#moveModal"><i class="bi bi-folder-symlink"></i></button>
           <div class="dropdown"><button class="btn btn-sm btn-ghost" data-bs-toggle="dropdown" title="Label"><i class="bi bi-tag"></i></button>
-            <ul class="dropdown-menu"><li><label class="dropdown-item"><input class="form-check-input me-2" type="checkbox"><span class="ok-label-dot me-2" style="background:var(--ok-feather-purple)"></span>Board</label></li><li><label class="dropdown-item"><input class="form-check-input me-2" type="checkbox"><span class="ok-label-dot me-2" style="background:var(--ok-primary)"></span>Infra</label></li><li><label class="dropdown-item"><input class="form-check-input me-2" type="checkbox"><span class="ok-label-dot me-2" style="background:var(--ok-feather-orange)"></span>Releases</label></li><li><label class="dropdown-item"><input class="form-check-input me-2" type="checkbox"><span class="ok-label-dot me-2" style="background:var(--ok-feather-amber)"></span>Personal</label></li></ul></div>
+            <ul class="dropdown-menu" data-oaken-label-menu></ul></div>
           <div class="ms-auto d-flex align-items-center gap-1">
             <span class="small text-muted me-2">1–50 of 1,284</span>
             <button class="btn btn-sm btn-ghost" title="Newer"><i class="bi bi-chevron-left"></i></button>
@@ -222,24 +223,21 @@
 </div>
 
 <!-- New folder / label -->
-<div class="modal fade" id="newFolderModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-sm"><form class="modal-content">
+<div class="modal fade" id="newFolderModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-sm"><form class="modal-content" data-oaken-new="folder">
   <div class="modal-header"><h5 class="modal-title">New folder</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
-  <div class="modal-body"><label class="form-label">Name</label><input class="form-control mb-3" name="name"><label class="form-label">Inside</label>
-    <select class="form-select" name="parent"><option>(top level)</option><option>Inbox</option><option>Archive</option></select></div>
+  <div class="modal-body"><label class="form-label">Name</label><input class="form-control mb-3" name="name" required maxlength="64" placeholder="e.g. Receipts"><label class="form-label">Inside</label>
+    <select class="form-select" name="parent" data-oaken-parent-select><option value="">Inbox (top level)</option></select></div>
   <div class="modal-footer"><button type="button" class="btn btn-ghost" data-bs-dismiss="modal">Cancel</button><button class="btn btn-oaken">Create</button></div></form></div></div>
-<div class="modal fade" id="newLabelModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-sm"><form class="modal-content">
+<div class="modal fade" id="newLabelModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-sm"><form class="modal-content" data-oaken-new="label">
   <div class="modal-header"><h5 class="modal-title">New label</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
-  <div class="modal-body"><label class="form-label">Name</label><input class="form-control mb-3" name="name"><label class="form-label">Color</label>
+  <div class="modal-body"><label class="form-label">Name</label><input class="form-control mb-3" name="name" required maxlength="64" placeholder="e.g. Travel"><label class="form-label">Color</label>
     <input type="color" class="form-control form-control-color" name="color" value="#e0662b"></div>
   <div class="modal-footer"><button type="button" class="btn btn-ghost" data-bs-dismiss="modal">Cancel</button><button class="btn btn-oaken">Create</button></div></form></div></div>
 
 <!-- Move to folder -->
 <div class="modal fade" id="moveModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content">
   <div class="modal-header"><h5 class="modal-title">Move to…</h5><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
-  <div class="modal-body p-2"><input class="form-control mb-2" placeholder="Filter folders"><div class="list-group list-group-flush">
-    <button class="list-group-item list-group-item-action">Inbox</button><button class="list-group-item list-group-item-action">Archive</button>
-    <button class="list-group-item list-group-item-action">dev@lists</button><button class="list-group-item list-group-item-action">users@lists</button>
-    <button class="list-group-item list-group-item-action">private@board</button></div></div></div></div></div>
+  <div class="modal-body p-2"><input class="form-control mb-2" placeholder="Filter folders" data-oaken-move-filter><div class="list-group list-group-flush" data-oaken-move-list></div></div></div></div></div></div>
 
 <!-- Confirm delete -->
 <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content">

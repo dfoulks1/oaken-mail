@@ -16,6 +16,7 @@ from oaken.core.clock import Clock
 from oaken.core.errors import Unavailable
 from oaken.core.events import EventBus
 from oaken.core.jobs import JobQueue
+from oaken.core.mailbox import MailboxStore
 from oaken.core.rawstore import RawStore
 from oaken.core.search import Retrieval
 from oaken.core.settings import Settings
@@ -55,6 +56,7 @@ class Services:
     pipeline_control: PipelineControl | None = None
     retrieval: Retrieval | None = None  # built from the pipeline when not given
     agents: AgentRegistry | None = None
+    mailbox: MailboxStore | None = None  # built on first use from raw, attrs and the indexer
     version: str = ""
 
     def need_readstate(self) -> ReadState:
@@ -74,6 +76,12 @@ class Services:
 
     def need_pipeline_control(self) -> PipelineControl:
         return need(self.pipeline_control, "the pipeline control")
+
+    def need_mailbox(self) -> MailboxStore:
+        if self.mailbox is None:
+            refresh = self.indexer.refresh_organization if self.indexer is not None else None
+            self.mailbox = MailboxStore(self.raw.db, self.attrs, self.clock, refresh)
+        return self.mailbox
 
     def need_plugins(self) -> PluginHost:
         return need(self.plugins, "the plugin host")

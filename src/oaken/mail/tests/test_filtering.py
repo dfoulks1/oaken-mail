@@ -170,6 +170,20 @@ async def test_deleted_messages_are_not_listed_or_counted(rig: Rig) -> None:
     assert await rig.attrs.counts("disposition") == {"filed": 1}
 
 
+async def test_unread_counts_skip_read_messages_and_count_those_with_no_state(rig: Rig) -> None:
+    rig.script("a.sieve", 'require "fileinto"; fileinto "x";')
+    a = await rig.put("a", PLAIN + b"a")
+    await rig.put("b", PLAIN + b"b")
+    c = await rig.put("c", PLAIN + b"c")
+    await rig.engine().refilter()
+    # a is read, b is unread, and c has no stored state at all (so it is unread).
+    await rig.store.db.execute("UPDATE message_state SET is_read = 1 WHERE message_id = ?", (a,))
+    await rig.store.db.execute("DELETE FROM message_state WHERE message_id = ?", (c,))
+    assert await rig.attrs.counts("location") == {"x": 3}
+    assert await rig.attrs.counts("location", unread_only=True) == {"x": 2}
+    assert await rig.attrs.counts("disposition", unread_only=True) == {"filed": 2}
+
+
 async def test_a_broken_script_is_skipped_and_reported(rig: Rig) -> None:
     rig.script("10-good.sieve", 'require "fileinto"; fileinto "ok";')
     rig.script("20-bad.sieve", "if {")

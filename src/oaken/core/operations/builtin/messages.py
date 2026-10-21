@@ -367,6 +367,8 @@ class ListLabelsOutput(BaseModel):
     labels: dict[str, int]  # label -> messages carrying it (search tags)
     dispositions: dict[str, int]  # inbox, filed, discarded -> messages
     locations: dict[str, int]  # folder -> messages filed into it (organization)
+    # The same three maps counting only unread messages, for the sidebar badges.
+    unread: dict[str, dict[str, int]] = Field(default_factory=dict)
     content_is_untrusted: bool = True  # a label or folder name can come from the mail's own server
 
 
@@ -383,6 +385,11 @@ async def list_labels(ctx: OpContext, inp: ListLabelsInput) -> ListLabelsOutput:
         labels=await ctx.svc.attrs.counts("label"),
         dispositions=await ctx.svc.attrs.counts("disposition"),
         locations=await ctx.svc.attrs.counts("location"),
+        unread={
+            "labels": await ctx.svc.attrs.counts("label", unread_only=True),
+            "dispositions": await ctx.svc.attrs.counts("disposition", unread_only=True),
+            "locations": await ctx.svc.attrs.counts("location", unread_only=True),
+        },
     )
 
 

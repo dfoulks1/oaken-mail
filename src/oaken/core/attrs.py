@@ -130,12 +130,15 @@ class AttrStore:
         )
         return [MessageId(r["message_id"]) for r in rows]
 
-    async def counts(self, kind: str) -> dict[str, int]:
-        """How many live messages carry each value of ``kind`` (labels, dispositions, flags)."""
+    async def counts(self, kind: str, *, unread_only: bool = False) -> dict[str, int]:
+        """How many live messages carry each value of ``kind`` (labels, dispositions, flags).
+        With ``unread_only``, only the unread ones (a message with no stored state is unread)."""
+        join = " LEFT JOIN message_state s ON s.message_id = m.id" if unread_only else ""
+        where = " AND COALESCE(s.is_read, 0) = 0" if unread_only else ""
         rows = await self.db.fetchall(
-            "SELECT a.value, COUNT(DISTINCT a.message_id) AS n FROM message_attrs a"
-            " JOIN messages m ON m.id = a.message_id"
-            " WHERE a.kind = ? AND m.deleted_at IS NULL GROUP BY a.value ORDER BY a.value",
+            "SELECT a.value, COUNT(DISTINCT a.message_id) AS n FROM message_attrs a"  # noqa: S608
+            f" JOIN messages m ON m.id = a.message_id{join}"
+            f" WHERE a.kind = ? AND m.deleted_at IS NULL{where} GROUP BY a.value ORDER BY a.value",
             (kind,),
         )
         return {r["value"]: r["n"] for r in rows}

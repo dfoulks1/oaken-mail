@@ -148,6 +148,12 @@ class Indexer:
             await self.bus.publish(event)
 
     # -- keeping organization in step -------------------------------------------------------
+    async def refresh_organization(self, message_id: MessageId) -> bool:
+        """Copy the message's current disposition, labels and folder into the index (after the
+        user moved or tagged it). False if it is not indexed yet; indexing then picks it up."""
+        disposition, labels, location = await self.organization(message_id)
+        return await self.index.set_organization(message_id, disposition, labels, location)
+
     def follow_filtering(self) -> Callable[[], None]:
         """Refresh the index's copy of the disposition and labels whenever Sieve runs. Returns
         the function that stops following."""

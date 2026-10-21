@@ -8,6 +8,7 @@ from oaken.core.operations.builtin import (
     filtering,
     jobs,
     mail,
+    mailbox,
     messages,
     schedules,
     system,
@@ -19,6 +20,7 @@ def core_operations() -> tuple[AnyOperation, ...]:
     return (
         *messages.OPERATIONS,
         *mail.OPERATIONS,
+        *mailbox.OPERATIONS,
         *schedules.OPERATIONS,
         *system.OPERATIONS,
         *accounts.OPERATIONS,
