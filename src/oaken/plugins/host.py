@@ -37,7 +37,7 @@ from oaken.plugins.contracts import (
     Provider,
     VectorStore,
 )
-from oaken.plugins.validate import check_plugin, declared_operations
+from oaken.plugins.validate import check_plugin, check_started, declared_operations
 
 log = get_logger("oaken.plugins")
 
@@ -151,7 +151,7 @@ class PluginHost:
                     entry_point=ep.name,
                     declared=declared,
                 )
-            info, problems = check_plugin(kind, ep.name, rec.instance)
+            info, problems = check_plugin(kind, ep.name, rec.instance, defer_started=True)
             if info is not None and not info.version and ep.dist is not None:
                 info = PluginInfo(
                     info.name, ep.dist.version, kind, info.capabilities, info.api_version
@@ -233,6 +233,10 @@ class PluginHost:
         rec.ctx = ctx
         try:
             await self._call(rec.instance, "start", ctx)
+            problems = check_started(rec.kind, rec.instance)
+            if problems:
+                await self._call(rec.instance, "stop")
+                raise PluginError("; ".join(problems))
             rec.started, rec.healthy, rec.detail = True, True, ""
         except Exception as exc:
             rec.started, rec.healthy = False, False

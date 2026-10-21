@@ -21,6 +21,10 @@ from oaken.plugins.contracts import (
 
 _OP_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 
+# Values a plugin may only learn in ``start()`` (the model it was configured with, the vector size
+# a probe returned), so the host checks them after starting and not on the fresh instance.
+STARTED_VALUES = frozenset({"model_id", "dimensions", "context_window"})
+
 
 def declared_capabilities(obj: object, kind: str) -> frozenset[str]:
     """What the plugin claims: its ``capabilities`` attribute if it sets one, otherwise what its
@@ -34,8 +38,13 @@ def declared_capabilities(obj: object, kind: str) -> frozenset[str]:
         return frozenset({f"<capabilities is not a collection: {explicit!r}>"})
 
 
-def check_plugin(kind: PluginKind, name: str, obj: object) -> tuple[PluginInfo | None, list[str]]:
-    """The ``PluginInfo`` for ``obj`` (None if it cannot be built) and every problem found."""
+def check_plugin(
+    kind: PluginKind, name: str, obj: object, *, defer_started: bool = False
+) -> tuple[PluginInfo | None, list[str]]:
+    """The ``PluginInfo`` for ``obj`` (None if it cannot be built) and every problem found.
+
+    With ``defer_started`` the ``STARTED_VALUES`` are only checked to exist; ``check_started``
+    checks what they hold once the plugin has started."""
     problems: list[str] = []
     known = CAPABILITIES[kind]
 
@@ -60,7 +69,8 @@ def check_plugin(kind: PluginKind, name: str, obj: object) -> tuple[PluginInfo |
         if not hasattr(obj, member):
             problems.append(f"missing {member}")
         elif callable(getattr(obj, member)) is False:
-            problems.extend(_check_value(kind, obj, member))
+            if not (defer_started and member in STARTED_VALUES):
+                problems.extend(_check_value(kind, obj, member))
         elif not is_implemented(obj, member):
             problems.append(f"{member}() is not implemented")
 
@@ -75,6 +85,15 @@ def check_plugin(kind: PluginKind, name: str, obj: object) -> tuple[PluginInfo |
         api_version=PLUGIN_API_VERSION,
     )
     return (info if not problems else None), problems
+
+
+def check_started(kind: PluginKind, obj: object) -> list[str]:
+    """Problems with the ``STARTED_VALUES`` of a plugin that has just started."""
+    problems: list[str] = []
+    for member in REQUIRED_MEMBERS[kind]:
+        if member in STARTED_VALUES and hasattr(obj, member):
+            problems.extend(_check_value(kind, obj, member))
+    return problems
 
 
 def _check_value(kind: str, obj: object, member: str) -> list[str]:

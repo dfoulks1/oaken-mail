@@ -187,9 +187,56 @@ async def test_every_problem_is_reported_at_once_and_load_errors_never_raise(
         by_name = {s.name: s for s in host.statuses()}
         detail = by_name["many"].detail
         assert "api_version is 99" in detail and "unknown capability 'telepathy'" in detail
-        assert "model_id must be a non-empty string" in detail
         assert "embed() is not implemented" in detail
         assert "failed to load" in by_name["gone"].detail
+    finally:
+        await host.stop()
+
+
+LATE = """
+from oaken.plugins.base import BaseEmbedder
+
+class Late(BaseEmbedder):
+    fill = True
+
+    async def start(self, ctx):
+        await super().start(ctx)
+        if Late.fill:
+            self.model_id, self.dimensions = "late-model", 8
+
+    async def embed(self, texts):
+        return [[0.0] * 8 for _ in texts]
+"""
+
+
+async def test_values_a_plugin_learns_in_start_are_checked_after_it(
+    install_plugin: Installer,
+) -> None:
+    install_plugin("plug_late", LATE, [("oaken.embedders", "late", "Late")])
+    host, _, _ = make_host()
+    await host.start()
+    try:
+        [st] = host.statuses()
+        assert st.started and st.healthy, st.detail
+    finally:
+        await host.stop()
+
+
+async def test_a_plugin_that_starts_without_its_values_is_unhealthy(
+    install_plugin: Installer,
+) -> None:
+    install_plugin(
+        "plug_late_bad",
+        LATE.replace("fill = True", "fill = False"),
+        [("oaken.embedders", "late", "Late")],
+    )
+    host, _, _ = make_host()
+    await host.start()
+    try:
+        [st] = host.statuses()
+        assert not st.started and not st.healthy
+        assert "model_id must be a non-empty string" in st.detail
+        assert "dimensions must be a positive integer" in st.detail
     finally:
         await host.stop()
 
