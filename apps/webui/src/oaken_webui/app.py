@@ -67,7 +67,7 @@ _CSP = (
     "default-src 'self'; "
     "script-src 'self' https://cdn.jsdelivr.net; "
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
-    "font-src 'self' https://fonts.gstatic.com; "
+    "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; "  # icons are a webfont
     "img-src 'self' data:; "
     "connect-src 'self'; "
     "frame-ancestors 'none'; "
@@ -159,7 +159,13 @@ class _UiFiles(StaticFiles):
             raw = await anyio.to_thread.run_sync(Path(full).read_bytes)
             body = _version_assets(_DEMO_ATTR.sub(b"", raw))
             return Response(body, media_type="text/html", headers=_html_headers())
-        return await super().get_response(path, scope)
+        response = await super().get_response(path, scope)
+        # A script or stylesheet is revalidated on every load (a cheap 304 on loopback). Without
+        # this a browser may run yesterday's oaken.js against today's HTML, and a dev checkout's
+        # version stamp (0.0.0) never changes to tell it otherwise.
+        if response.status_code in (200, 304):
+            response.headers["cache-control"] = "no-cache"
+        return response
 
 
 class Proxy:

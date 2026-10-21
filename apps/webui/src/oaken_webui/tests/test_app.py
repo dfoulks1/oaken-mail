@@ -107,6 +107,9 @@ async def test_html_is_no_store_and_carries_a_csp(ui_tree: Path) -> None:
         assert "frame-ancestors 'none'" in csp
         assert "img-src 'self' data:" in csp  # no remote images
         assert "connect-src 'self'" in csp
+        # Bootstrap Icons is a webfont served from jsDelivr: without this every icon is blank.
+        font_src = next(d for d in csp.split("; ") if d.startswith("font-src"))
+        assert "https://cdn.jsdelivr.net" in font_src and "https://fonts.gstatic.com" in font_src
 
 
 async def test_local_asset_references_are_version_stamped(ui_tree: Path) -> None:
@@ -122,6 +125,21 @@ async def test_local_asset_references_are_version_stamped(ui_tree: Path) -> None
         r = await c.get("/")
         assert f"assets/oaken.js?v={__version__}" in r.text  # local asset stamped
         assert "cdn.jsdelivr.net/npm/bootstrap/x.css?v=" not in r.text
+
+
+async def test_assets_are_revalidated_not_served_from_a_stale_browser_cache(
+    ui_tree: Path,
+) -> None:
+    (ui_tree / "assets").mkdir(exist_ok=True)
+    (ui_tree / "assets" / "oaken.js").write_text("// js")
+    async with _webui_client(FakeCore(), static_dir=ui_tree) as c:
+        first = await c.get("/assets/oaken.js")
+        assert first.status_code == 200 and first.headers["cache-control"] == "no-cache"
+        again = await c.get("/assets/oaken.js", headers={"if-none-match": first.headers["etag"]})
+        assert again.status_code == 304  # revalidating is still cheap
+
+        missing = await c.get("/assets/nope.js")
+        assert missing.status_code == 404 and "cache-control" not in missing.headers
 
 
 async def test_login_html_redirects_to_root(ui_tree: Path) -> None:
