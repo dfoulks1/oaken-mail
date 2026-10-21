@@ -32,29 +32,36 @@ class MessageItem(BaseModel):
     location: str | None = None  # the folder it is filed into, if any
     has_attachments: bool = False
     is_read: bool | None = None  # None: not stored yet
+    starred: bool | None = None  # None: not stored yet
     score: float = 0.0
     why: list[str] = Field(default_factory=list)  # which retrievers found it
     text: str | None = None  # cleaned text, only when asked for and within the budget
 
 
-async def read_flags(raw: RawStore, ids: Sequence[str]) -> dict[str, bool]:
-    out: dict[str, bool] = {}
+async def state_flags(raw: RawStore, ids: Sequence[str]) -> dict[str, tuple[bool, bool]]:
+    """``{message_id: (is_read, is_starred)}`` for the messages that have a state row."""
+    out: dict[str, tuple[bool, bool]] = {}
     for i in range(0, len(ids), IN_LIMIT):
         part = ids[i : i + IN_LIMIT]
         marks = ",".join("?" * len(part))
         for r in await raw.db.fetchall(
-            f"SELECT message_id, is_read FROM message_state WHERE message_id IN ({marks})",  # noqa: S608
+            "SELECT message_id, is_read, is_starred FROM message_state"  # noqa: S608
+            f" WHERE message_id IN ({marks})",
             part,
         ):
-            out[r["message_id"]] = bool(r["is_read"])
+            out[r["message_id"]] = (bool(r["is_read"]), bool(r["is_starred"]))
     return out
+
+
+async def read_flags(raw: RawStore, ids: Sequence[str]) -> dict[str, bool]:
+    return {m: read for m, (read, _) in (await state_flags(raw, ids)).items()}
 
 
 async def items_from_hits(
     ctx: OpContext, hits: Sequence[SearchHit], budget: CharBudget, *, markers: bool = False
 ) -> list[MessageItem]:
     """Listing rows for search hits, with read state, snippets cut to the limits."""
-    flags = await read_flags(ctx.svc.raw, [h.message_id for h in hits])
+    flags = await state_flags(ctx.svc.raw, [h.message_id for h in hits])
     items: list[MessageItem] = []
     for h in hits:
         mark = "**" if markers else ""
@@ -73,7 +80,8 @@ async def items_from_hits(
                 disposition=h.disposition,
                 location=h.location,
                 has_attachments=h.has_attachments,
-                is_read=flags.get(h.message_id),
+                is_read=flags[h.message_id][0] if h.message_id in flags else None,
+                starred=flags[h.message_id][1] if h.message_id in flags else None,
                 score=h.score,
             )
         )

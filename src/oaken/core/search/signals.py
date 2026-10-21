@@ -17,13 +17,14 @@ async def eligible(
     ids: Sequence[str],
     *,
     unread: bool | None = None,
+    starred: bool | None = None,
     categories: Sequence[str] = (),
     min_priority: int | None = None,
 ) -> set[str]:
-    """The ids among ``ids`` that pass the read-state and triage filters. A message with no triage
-    result passes only when neither ``categories`` nor ``min_priority`` is asked for. A message with
-    no read-state row counts as unread."""
-    if unread is None and not categories and min_priority is None:
+    """The ids among ``ids`` that pass the read-state, star and triage filters. A message with no
+    triage result passes only when neither ``categories`` nor ``min_priority`` is asked for. A
+    message with no read-state row counts as unread and unstarred."""
+    if unread is None and starred is None and not categories and min_priority is None:
         return set(ids)
     out: set[str] = set()
     unique = list(dict.fromkeys(ids))
@@ -34,6 +35,9 @@ async def eligible(
         if unread is not None:
             clauses.append("COALESCE(s.is_read, 0) = ?")
             args.append(0 if unread else 1)
+        if starred is not None:
+            clauses.append("COALESCE(s.is_starred, 0) = ?")
+            args.append(1 if starred else 0)
         if categories:
             clauses.append(
                 f"json_extract(t.data_json, '$.category') IN ({','.join('?' * len(categories))})"

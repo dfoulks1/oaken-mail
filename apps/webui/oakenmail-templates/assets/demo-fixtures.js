@@ -82,7 +82,9 @@
         if (input.label) items = items.filter((m) => (m.labels || []).includes(input.label));
         if (input.location) items = items.filter((m) => (m.tags || []).includes(input.location));
         if (input.disposition === "inbox") items = items.filter((m) => !(m.tags || []).length);
-        return { request_id: "demo", status: "ok", output: { items, truncated: false, warnings: [], degraded: false } };
+        const total = items.length, off = input.offset || 0, lim = input.limit || 50;
+        items = items.slice(off, off + lim);
+        return { request_id: "demo", status: "ok", output: { items, truncated: off + lim < total, total, total_exact: true, offset: off, warnings: [], degraded: false } };
       }
       case "get_message": {
         const body = FIX_BODY[input.message_id] || FIX_BODY["m-vote-2463"];

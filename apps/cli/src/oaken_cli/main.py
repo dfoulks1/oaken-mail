@@ -240,6 +240,13 @@ def _register_mail(
         "--keyword", action="store_true", help="Keyword search only (no model, no vectors)."
     )
     search.add_argument("--limit", type=int, metavar="N", help="Maximum results.")
+    search.add_argument(
+        "--offset", type=int, default=0, metavar="N", help="Skip this many (paging)."
+    )
+    search.add_argument("--starred", action="store_true", help="Only starred messages.")
+    search.add_argument(
+        "--has-attachment", action="store_true", help="Only messages with an attachment."
+    )
     search.set_defaults(func=_lazy("mail_cmd", "cmd_search"))
 
     show = sub.add_parser(

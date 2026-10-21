@@ -47,6 +47,7 @@ class HybridFilters:
     unread_only: bool = False
     categories: tuple[str, ...] = ()
     min_priority: int | None = None
+    starred: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +78,8 @@ class HybridResult:
     degraded_reason: str = ""
     warnings: tuple[str, ...] = ()
     retrievers: tuple[str, ...] = ()  # those that contributed
+    total: int | None = None  # messages that match, before paging
+    total_exact: bool = False  # False: a lower bound (only the best candidates were counted)
 
 
 @dataclass(slots=True)
@@ -138,6 +141,7 @@ class HybridSearch:
         *,
         keyword_text: str | None = None,
         keyword_any: bool = False,
+        offset: int = 0,
     ) -> HybridResult:
         """The ``k`` best messages for ``text``. ``keyword_text`` is what the keyword side matches
         when it should differ from what is embedded (a question with its stop words removed), and
@@ -145,6 +149,9 @@ class HybridSearch:
         f = filters or HybridFilters()
         q = parse_query(text, self.index_cfg)
         k = max(1, min(k, MAX_RESULTS))
+        offset = max(0, offset)
+        need = offset + k  # fetch enough to skip ``offset`` and still fill a page
+        starred = q.starred if q.starred is not None else f.starred
         unread = q.unread if q.unread is not None else (True if f.unread_only else None)
         categories = tuple(dict.fromkeys((*f.categories, *q.categories)))
         priorities = [p for p in (f.min_priority, q.min_priority) if p is not None]
@@ -153,7 +160,7 @@ class HybridSearch:
 
         if not q.has_text:  # nothing to rank by: the newest messages that pass the filters
             return await self._listing(
-                text, q, f, index_filters, k, unread, categories, min_priority
+                text, q, f, index_filters, k, offset, unread, starred, categories, min_priority
             )
 
         semantic = " ".join(q.terms)
@@ -165,7 +172,7 @@ class HybridSearch:
         weights = (self.cfg.keyword_weight * (self.cfg.exact_boost if exact else 1.0),
                    self.cfg.vector_weight)  # fmt: skip
         keyword_terms = parse_query(keyword_text or text, self.index_cfg).terms
-        n = min(k * self.cfg.overfetch, self.cfg.max_candidates)
+        n = min(need * self.cfg.overfetch, self.cfg.max_candidates)
         while True:
             keyword_res, vec = await asyncio.gather(
                 self.index.keyword_search(
@@ -176,11 +183,11 @@ class HybridSearch:
             keyword_hits = keyword_res.hits
             if keyword_any:
                 keyword_hits = await self._enough_terms(keyword_hits, keyword_terms)
-            built = await self._fuse(
-                q, f, keyword_hits, vec, k, unread, categories, min_priority, weights
+            built, matching = await self._fuse(
+                q, f, keyword_hits, vec, need, unread, starred, categories, min_priority, weights
             )
             exhausted = len(keyword_res.hits) < n and len(vec.hits) < n
-            if len(built) >= k or exhausted or n >= self.cfg.max_candidates:
+            if len(built) >= need or exhausted or n >= self.cfg.max_candidates:
                 break
             n = min(n * 4, self.cfg.max_candidates)
         retrievers = (
@@ -189,12 +196,14 @@ class HybridSearch:
         )
         degraded = not vec.ran
         return HybridResult(
-            hits=tuple(built[:k]),
+            hits=tuple(built[offset:need]),
             query=q,
             degraded=degraded,
             degraded_reason=vec.reason if degraded else "",
             warnings=tuple(dict.fromkeys((*q.warnings, *keyword_res.warnings))),
             retrievers=retrievers,
+            total=matching,
+            total_exact=exhausted,
         )
 
     async def _enough_terms(
@@ -232,10 +241,11 @@ class HybridSearch:
         vec: _Vec,
         k: int,
         unread: bool | None,
+        starred: bool | None,
         categories: tuple[str, ...],
         min_priority: int | None,
         weights: tuple[float, float],
-    ) -> list[HybridHit]:
+    ) -> tuple[list[HybridHit], int]:
         # Collapse vector chunks to messages: first appearance is the message's best chunk.
         vec_order: list[str] = []
         vec_chunks: dict[str, list[Hit]] = {}
@@ -250,7 +260,12 @@ class HybridSearch:
             m for m in vec_order if m in allowed_vec
         ]
         passing = await eligible(
-            self.raw, candidates, unread=unread, categories=categories, min_priority=min_priority
+            self.raw,
+            candidates,
+            unread=unread,
+            starred=starred,
+            categories=categories,
+            min_priority=min_priority,
         )
         kw = [h for h in keyword_hits if h.message_id in passing]
         vo = [m for m in vec_order if m in allowed_vec and m in passing]
@@ -309,7 +324,7 @@ class HybridSearch:
                     vector_rank=vec_rank.get(m),
                 )
             )
-        return out
+        return out, len(fused)
 
     async def _listing(
         self,
@@ -318,11 +333,27 @@ class HybridSearch:
         f: HybridFilters,
         index_filters: SearchFilters,
         k: int,
+        offset: int,
         unread: bool | None,
+        starred: bool | None,
         categories: tuple[str, ...],
         min_priority: int | None,
     ) -> HybridResult:
-        n = min(k * self.cfg.overfetch, self.cfg.max_candidates)
+        raw_only = unread is not None or starred is not None or categories or min_priority
+        if not raw_only:
+            # Only the index filters apply, so it can page and count exactly on its own.
+            res = await self.index.keyword_search(text, index_filters, k, offset=offset)
+            total = await self.index.count(text, index_filters)
+            return HybridResult(
+                hits=tuple(HybridHit(hit=h, why=("filter",)) for h in res.hits),
+                query=q,
+                warnings=q.warnings,
+                retrievers=("filter",),
+                total=total,
+                total_exact=True,
+            )
+        need = offset + k
+        n = min(need * self.cfg.overfetch, self.cfg.max_candidates)
         while True:
             # the query's operators (from:, after:, label:) are applied by the index itself
             res = await self.index.keyword_search(text, index_filters, n)
@@ -330,16 +361,20 @@ class HybridSearch:
                 self.raw,
                 [h.message_id for h in res.hits],
                 unread=unread,
+                starred=starred,
                 categories=categories,
                 min_priority=min_priority,
             )
             hits = [h for h in res.hits if h.message_id in passing]
-            if len(hits) >= k or len(res.hits) < n or n >= self.cfg.max_candidates:
+            exhausted = len(res.hits) < n
+            if len(hits) >= need or exhausted or n >= self.cfg.max_candidates:
                 break
             n = min(n * 4, self.cfg.max_candidates)
         return HybridResult(
-            hits=tuple(HybridHit(hit=h, why=("filter",)) for h in hits[:k]),
+            hits=tuple(HybridHit(hit=h, why=("filter",)) for h in hits[offset:need]),
             query=q,
             warnings=q.warnings,
             retrievers=("filter",),
+            total=len(hits),
+            total_exact=exhausted,
         )

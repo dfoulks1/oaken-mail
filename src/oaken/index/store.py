@@ -595,15 +595,24 @@ class IndexStore:
         if f.list_id:
             clauses.append("d.list_id = ?")
             args.append(f.list_id)
+        for v in q.to:
+            clauses.append("d.to_json LIKE ? ESCAPE '\\'")
+            args.append(_like(v))
+        for v in q.subject:
+            clauses.append("d.subject LIKE ? ESCAPE '\\'")
+            args.append(_like(v))
+        if q.has_attachment:
+            clauses.append("d.has_attachments = 1")
         for label in (*q.labels, *f.labels):
             clauses.append(
                 "EXISTS (SELECT 1 FROM doc_labels l WHERE l.message_id = d.message_id"
                 " AND l.label = ?)"
             )
             args.append(label)
-        if f.location is not None:
+        location = f.location if f.location is not None else q.location
+        if location is not None:
             clauses.append("d.location = ?")
-            args.append(f.location)
+            args.append(location)
         explicit = bool(clauses) or bool(
             q.disposition or f.disposition or f.include_discarded or f.list_all
         )
@@ -622,10 +631,13 @@ class IndexStore:
         k: int = 20,
         *,
         any_term: bool = False,
+        offset: int = 0,
     ) -> SearchResult:
         """BM25-ranked search, one hit per message (its best chunk) with a highlighted snippet.
-        With no words in the query but some filters it lists the newest matching messages."""
+        With no words in the query but some filters it lists the newest matching messages.
+        ``offset`` skips that many of the best hits (for paging)."""
         f = filters or SearchFilters()
+        offset = max(0, offset)
         q = parse_query(query, self.cfg, any_term=any_term)
         k = max(1, min(k, 1000))
         where, args, explicit = self._where(q, f)
@@ -634,9 +646,9 @@ class IndexStore:
                 return SearchResult((), q, q.warnings)
             listing_sql = (
                 f"SELECT d.* FROM docs d WHERE 1 = 1{where}"  # noqa: S608 (placeholders only)
-                " ORDER BY d.date_utc DESC, d.message_id LIMIT ?"
+                " ORDER BY d.date_utc DESC, d.message_id LIMIT ? OFFSET ?"
             )
-            rows = await self.db.fetchall(listing_sql, [*args, k])
+            rows = await self.db.fetchall(listing_sql, [*args, k, offset])
             hits = [
                 await self._hit(r, 0.0, r["cleaned_text"][:SNIPPET_FALLBACK_CHARS]) for r in rows
             ]
@@ -651,9 +663,10 @@ class IndexStore:
                 " PARTITION BY message_id ORDER BY score, chunk_id) AS rn FROM hits)"
                 " SELECT r.chunk_id, r.message_id, r.score FROM ranked r"
                 " JOIN docs d ON d.message_id = r.message_id WHERE r.rn = 1"
-                " ORDER BY r.score, d.date_utc DESC, r.message_id LIMIT ?"  # ties: newest first
+                # ties: newest first
+                " ORDER BY r.score, d.date_utc DESC, r.message_id LIMIT ? OFFSET ?"
             )
-            best = await self.db.fetchall(ranked_sql, [q.match, *args, k])
+            best = await self.db.fetchall(ranked_sql, [q.match, *args, k, offset])
         except StorageError as exc:  # the parser should make this impossible; never leak it
             log.warning("search expression rejected", error=exc.message[:120])
             return SearchResult((), q, (*q.warnings, "the search could not be run"))
@@ -691,6 +704,33 @@ class IndexStore:
                 await self._hit(docs[b["message_id"]], -float(b["score"]), snip, b["chunk_id"])
             )
         return SearchResult(tuple(hits), q, q.warnings)
+
+    async def count(
+        self, query: str, filters: SearchFilters | None = None, *, any_term: bool = False
+    ) -> int:
+        """How many messages ``keyword_search`` would return with no limit: the whole match, not
+        a page. Zero when the query has no words and nothing to filter by."""
+        f = filters or SearchFilters()
+        q = parse_query(query, self.cfg, any_term=any_term)
+        where, args, explicit = self._where(q, f)
+        try:
+            if q.match is None:
+                if not explicit:
+                    return 0
+                row = await self.db.fetchone(
+                    f"SELECT COUNT(*) AS n FROM docs d WHERE 1 = 1{where}",  # noqa: S608
+                    args,
+                )
+            else:
+                row = await self.db.fetchone(
+                    "SELECT COUNT(DISTINCT c.message_id) AS n FROM fts"  # noqa: S608
+                    " JOIN chunks c ON c.id = fts.rowid"
+                    f" JOIN docs d ON d.message_id = c.message_id WHERE fts MATCH ?{where}",
+                    [q.match, *args],
+                )
+        except StorageError:
+            return 0
+        return int(row["n"]) if row else 0
 
     async def filtered_hits(
         self, message_ids: Sequence[str], query: ParsedQuery, filters: SearchFilters | None = None

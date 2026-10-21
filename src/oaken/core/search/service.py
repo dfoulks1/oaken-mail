@@ -64,9 +64,9 @@ class Retrieval:
         )
 
     async def search(
-        self, text: str, filters: HybridFilters | None = None, k: int = 20
+        self, text: str, filters: HybridFilters | None = None, k: int = 20, *, offset: int = 0
     ) -> HybridResult:
-        return await self.hybrid.search(text, filters, k)
+        return await self.hybrid.search(text, filters, k, offset=offset)
 
     async def evidence(
         self, question: str, filters: HybridFilters | None = None

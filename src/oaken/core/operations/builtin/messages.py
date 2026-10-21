@@ -4,6 +4,7 @@
 None of them marks anything read. Text comes back cut to the caller's limits and says so.
 """
 
+import asyncio
 import base64
 import dataclasses
 import json
@@ -14,13 +15,14 @@ from pydantic import BaseModel, Field
 
 from oaken.core.errors import NotFound
 from oaken.core.ids import AccountId, MessageId
-from oaken.core.operations.builtin.common import MessageItem, items_from_hits, read_flags
+from oaken.core.operations.builtin.common import MessageItem, items_from_hits, state_flags
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import AnyOperation, operation
 from oaken.core.rawstore import header_block
 from oaken.core.search import HybridFilters
 from oaken.index.query import DISPOSITIONS
 from oaken.index.store import SearchFilters
+from oaken.mail.parse import parse
 
 Disposition = Literal["inbox", "filed", "discarded", "any"]
 assert set(DISPOSITIONS) <= {"inbox", "filed", "discarded"}  # noqa: S101 (keeps the Literal honest)
@@ -34,6 +36,9 @@ class MessageFilter(BaseModel):
     after: datetime | None = None
     before: datetime | None = None
     disposition: Disposition = "inbox"  # discarded mail is hidden unless asked for
+    unread_only: bool = False
+    starred: bool | None = None  # True: only starred; False: only unstarred
+    has_attachment: bool | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -46,11 +51,18 @@ class MessageFilter(BaseModel):
             labels=(self.label,) if self.label else (),
             location=self.location,
             disposition=self.disposition,
+            has_attachments=self.has_attachment,
         )
+
+    @property
+    def needs_state(self) -> bool:
+        """Read state and stars live in raw.db, so the index alone cannot apply them."""
+        return self.unread_only or self.starred is not None
 
 
 class ListMessagesInput(MessageFilter):
     limit: int | None = Field(default=None, ge=1)
+    offset: int = Field(default=0, ge=0)  # skip this many (for paging)
     include_text: bool = False  # the cleaned text of each, cut to the limits
     text_chars: int | None = Field(default=None, ge=1)  # per message
 
@@ -58,6 +70,9 @@ class ListMessagesInput(MessageFilter):
 class MessageList(BaseModel):
     items: list[MessageItem]
     truncated: bool = False  # text was cut, or there were more than the limit
+    offset: int = 0
+    total: int | None = None  # messages that match the filters, before paging
+    total_exact: bool = True  # False: a lower bound (a ranked search counts its best candidates)
     content_is_untrusted: bool = True  # subjects, senders, snippets and text come from mail
     warnings: list[str] = Field(default_factory=list)
 
@@ -74,8 +89,22 @@ async def list_messages(ctx: OpContext, inp: ListMessagesInput) -> MessageList:
     """Newest first. Snippets by default; ``include_text`` adds the cleaned text within the
     reply's character budget. Never marks anything read."""
     k = ctx.limits.results(inp.limit)
-    result = await ctx.svc.index.keyword_search("", inp.filters(), k=k + 1)
-    hits = result.hits[:k]
+    if inp.needs_state:  # unread and starred come from raw.db: the retrieval service applies them
+        found = await ctx.svc.need_retrieval().search(
+            "", hybrid_filters(inp), k + 1, offset=inp.offset
+        )
+        hits = [h.hit for h in found.hits][:k]
+        more, total, exact, warnings = (
+            len(found.hits) > k,
+            found.total,
+            found.total_exact,
+            found.warnings,
+        )
+    else:
+        result = await ctx.svc.index.keyword_search("", inp.filters(), k=k + 1, offset=inp.offset)
+        hits = list(result.hits[:k])
+        total = await ctx.svc.index.count("", inp.filters())
+        more, exact, warnings = len(result.hits) > k, True, result.warnings
     budget = ctx.limits.budget()
     items = await items_from_hits(ctx, hits, budget)
     if inp.include_text:
@@ -85,14 +114,18 @@ async def list_messages(ctx: OpContext, inp: ListMessagesInput) -> MessageList:
             item.text = budget.take(doc["cleaned_text"], per) if doc else ""
     return MessageList(
         items=items,
-        truncated=budget.truncated or len(result.hits) > k,
-        warnings=list(result.warnings),
+        truncated=budget.truncated or more,
+        warnings=list(warnings),
+        offset=inp.offset,
+        total=total,
+        total_exact=exact,
     )
 
 
 class SearchKeywordInput(MessageFilter):
     query: str = Field(max_length=1000)
     limit: int | None = Field(default=None, ge=1)
+    offset: int = Field(default=0, ge=0)
 
 
 @operation(
@@ -106,13 +139,18 @@ class SearchKeywordInput(MessageFilter):
 async def search_keyword(ctx: OpContext, inp: SearchKeywordInput) -> MessageList:
     """Hits come back with the matching words marked ``**like this**``. Never marks read."""
     k = ctx.limits.results(inp.limit)
-    result = await ctx.svc.index.keyword_search(inp.query, inp.filters(), k=k + 1)
+    result = await ctx.svc.index.keyword_search(
+        inp.query, inp.filters(), k=k + 1, offset=inp.offset
+    )
+    total = await ctx.svc.index.count(inp.query, inp.filters())
     budget = ctx.limits.budget()
     items = await items_from_hits(ctx, result.hits[:k], budget, markers=True)
     return MessageList(
         items=items,
         truncated=budget.truncated or len(result.hits) > k,
         warnings=list(result.warnings),
+        offset=inp.offset,
+        total=total,
     )
 
 
@@ -122,7 +160,7 @@ class SearchInput(MessageFilter):
     thread_key: str | None = None
     category: list[str] = Field(default_factory=list)  # from the triage enrichment
     min_priority: int | None = Field(default=None, ge=0, le=3)
-    unread_only: bool = False
+    offset: int = Field(default=0, ge=0)
 
 
 class SearchOutput(MessageList):
@@ -135,6 +173,8 @@ def hybrid_filters(inp: MessageFilter, **extra: Any) -> HybridFilters:
     thread = extra.pop("thread_key", None)
     if thread:
         base = dataclasses.replace(base, thread_key=thread)
+    extra.setdefault("unread_only", inp.unread_only)
+    extra.setdefault("starred", inp.starred)
     return HybridFilters(index=base, **extra)
 
 
@@ -154,11 +194,10 @@ async def search(ctx: OpContext, inp: SearchInput) -> SearchOutput:
     filters = hybrid_filters(
         inp,
         thread_key=inp.thread_key,
-        unread_only=inp.unread_only,
         categories=tuple(inp.category),
         min_priority=inp.min_priority,
     )
-    found = await ctx.svc.need_retrieval().search(inp.query, filters, k + 1)
+    found = await ctx.svc.need_retrieval().search(inp.query, filters, k + 1, offset=inp.offset)
     budget = ctx.limits.budget()
     items = await items_from_hits(ctx, [h.hit for h in found.hits[:k]], budget, markers=True)
     for item, h in zip(items, found.hits, strict=False):
@@ -169,6 +208,9 @@ async def search(ctx: OpContext, inp: SearchInput) -> SearchOutput:
         warnings=list(found.warnings),
         degraded=found.degraded,
         degraded_reason=found.degraded_reason,
+        offset=inp.offset,
+        total=found.total,
+        total_exact=found.total_exact,
     )
 
 
@@ -255,6 +297,11 @@ class AttachmentInfo(BaseModel):
     quarantined: bool = False
 
 
+class AddressInfo(BaseModel):
+    name: str = ""
+    address: str = ""
+
+
 class GetMessageOutput(BaseModel):
     message_id: str
     account_id: str
@@ -267,6 +314,12 @@ class GetMessageOutput(BaseModel):
     disposition: str = "inbox"
     location: str | None = None  # the folder it is filed into, if any
     is_read: bool | None = None
+    starred: bool | None = None
+    to_addrs: list[AddressInfo] = Field(default_factory=list)
+    cc_addrs: list[AddressInfo] = Field(default_factory=list)
+    message_id_header: str = ""  # the Message-ID header, without the angle brackets
+    in_reply_to: list[str] = Field(default_factory=list)
+    references: list[str] = Field(default_factory=list)  # what a reply threads under
     indexed: bool = True  # False: stored, but not parsed yet (no text)
     text: str = ""
     truncated: bool = False
@@ -291,7 +344,7 @@ async def get_message(ctx: OpContext, inp: GetMessageInput) -> GetMessageOutput:
         raise NotFound(f"no such message: {inp.message_id}")
     doc = await ctx.svc.index.get_doc(mid)
     disposition, labels, location = await ctx.svc.need_indexer().organization(mid)
-    flags = await read_flags(ctx.svc.raw, [mid])
+    flags = (await state_flags(ctx.svc.raw, [mid])).get(mid)
     out = GetMessageOutput(
         message_id=mid,
         account_id=stored.account_id,
@@ -299,13 +352,26 @@ async def get_message(ctx: OpContext, inp: GetMessageInput) -> GetMessageOutput:
         labels=labels,
         disposition=disposition,
         location=location,
-        is_read=flags.get(mid),
+        is_read=flags[0] if flags else None,
+        starred=flags[1] if flags else None,
         indexed=doc is not None,
     )
     if doc is None:
         return out
     out.thread_key, out.subject = doc["thread_key"], doc["subject"]
     out.from_addr, out.from_name = doc["from_addr"], doc["from_name"]
+    try:  # recipients and threading headers are not in the index: read them from the raw message
+        parsed = await asyncio.to_thread(
+            parse, await ctx.svc.raw.get_raw(mid), ctx.svc.settings.mail
+        )
+    except Exception:  # noqa: BLE001 - a message that will not parse still shows its text
+        parsed = None
+    if parsed is not None:
+        out.to_addrs = [AddressInfo(name=a.name, address=a.address) for a in parsed.to]
+        out.cc_addrs = [AddressInfo(name=a.name, address=a.address) for a in parsed.cc]
+        out.message_id_header = parsed.message_id or ""
+        out.in_reply_to = list(parsed.in_reply_to)
+        out.references = list(parsed.references)
     for a in json.loads(doc["attachments_json"] or "[]"):
         out.attachments.append(
             AttachmentInfo(

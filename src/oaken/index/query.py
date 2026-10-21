@@ -18,6 +18,12 @@ index cannot apply them; they are parsed here and applied by hybrid search:
     is:unread            not yet read (``is:read`` the opposite)
     category:work        the triage category (repeat to allow several)
     priority:2           triage priority 2 or higher
+    is:starred           starred (``is:unstarred`` the opposite)
+
+and four that the index applies:
+
+    to:alex              a recipient name or address     subject:budget   in the subject
+    has:attachment       carries an attachment           location:Lists   filed in that folder
 """
 
 import re
@@ -28,7 +34,10 @@ from typing import Final
 from oaken.core.settings import IndexSettings
 
 DISPOSITIONS: Final = ("inbox", "filed", "discarded")
-_OPERATORS: Final = ("from", "before", "after", "label", "in", "is", "category", "priority")
+_OPERATORS: Final = (
+    "from", "before", "after", "label", "in", "is", "category", "priority",
+    "to", "subject", "has", "location",
+)  # fmt: skip
 CATEGORIES: Final = (
     "personal", "work", "transactional", "notification", "newsletter", "automated", "other",
 )  # fmt: skip
@@ -51,6 +60,11 @@ class ParsedQuery:
     unread: bool | None = None  # is:unread / is:read; applied by hybrid search, not the index
     categories: tuple[str, ...] = ()
     min_priority: int | None = None
+    starred: bool | None = None  # is:starred / is:unstarred; applied by hybrid search too
+    to: tuple[str, ...] = ()
+    subject: tuple[str, ...] = ()
+    has_attachment: bool | None = None
+    location: str | None = None
 
     @property
     def has_text(self) -> bool:
@@ -126,6 +140,11 @@ def parse_query(
     unread: bool | None = None
     categories: list[str] = []
     min_priority: int | None = None
+    starred: bool | None = None
+    to: list[str] = []
+    subject: list[str] = []
+    has_attachment: bool | None = None
+    location: str | None = None
     terms = 0
 
     def literal(raw: str) -> str | None:
@@ -146,12 +165,25 @@ def parse_query(
                 from_.append(value)
             elif kind == "label":
                 labels.append(value)
+            elif kind == "to":
+                to.append(value)
+            elif kind == "subject":
+                subject.append(value)
+            elif kind == "location":
+                location = value
+            elif kind == "has":
+                if value.lower() in ("attachment", "attachments"):
+                    has_attachment = True
+                else:
+                    warnings.append(f"has: takes attachment, not {value!r}")
             elif kind == "is":
                 v = value.lower()
                 if v in ("unread", "read"):
                     unread = v == "unread"
+                elif v in ("starred", "unstarred"):
+                    starred = v == "starred"
                 else:
-                    warnings.append(f"is: takes unread or read, not {value!r}")
+                    warnings.append(f"is: takes unread, read, starred or unstarred, not {value!r}")
             elif kind == "category":
                 v = value.lower()
                 if v in CATEGORIES:
@@ -224,4 +256,9 @@ def parse_query(
         unread=unread,
         categories=tuple(dict.fromkeys(categories)),
         min_priority=min_priority,
+        starred=starred,
+        to=tuple(to),
+        subject=tuple(subject),
+        has_attachment=has_attachment,
+        location=location,
     )

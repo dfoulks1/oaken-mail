@@ -50,6 +50,14 @@ async def _search(client: ApiClient, args: argparse.Namespace) -> int:
         payload["disposition"] = args.disposition
     if args.limit is not None:
         payload["limit"] = args.limit
+    if args.offset:
+        payload["offset"] = args.offset
+    if args.unread:
+        payload["unread_only"] = True
+    if args.starred:
+        payload["starred"] = True
+    if args.has_attachment:
+        payload["has_attachment"] = True
     if args.keyword:
         result = await client.call("search_keyword", payload)
     else:
@@ -58,8 +66,6 @@ async def _search(client: ApiClient, args: argparse.Namespace) -> int:
             payload["category"] = args.category
         if args.min_priority is not None:
             payload["min_priority"] = args.min_priority
-        if args.unread:
-            payload["unread_only"] = True
         result = await client.call("search", payload)
     return _render_messages(args, result)
 
@@ -205,6 +211,11 @@ def _render_messages(args: argparse.Namespace, result: CallResult) -> int:
             print_text("no matches")
             return
         print_table(rows, columns)
+        total = out.get("total")
+        if isinstance(total, int):
+            first = int(out.get("offset") or 0) + 1
+            about = "" if out.get("total_exact", True) else "about "
+            print_text(f"{first}-{first + len(rows) - 1} of {about}{total}")
         if out.get("truncated"):
             print_text("(results were cut to the limit; narrow the query or raise --limit)")
         if out.get("degraded"):

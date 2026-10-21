@@ -1,0 +1,33 @@
+{
+  "_about": "What the web UI needs from core. `capabilities` are the registry operations its pages call; `fields` are the output fields its render code reads (a dotted path, [] for each item of a list). src/oaken/core/operations/tests/test_ui_contract.py checks every one against the real operation schemas, so a renamed or dropped field fails a test instead of a page.",
+  "capabilities": [
+    "list_messages", "search", "get_message", "get_raw", "message_presented",
+    "mark_read", "mark_unread", "list_mailbox", "create_folder", "create_label",
+    "move_to_folder", "set_labels", "sync_now"
+  ],
+  "fields": {
+    "list_messages": [
+      "items[].message_id", "items[].subject", "items[].from_name", "items[].from_addr",
+      "items[].date", "items[].snippet", "items[].labels", "items[].is_read",
+      "items[].starred", "items[].has_attachments", "total", "offset", "truncated"
+    ],
+    "search": [
+      "items[].message_id", "items[].subject", "items[].from_name", "items[].from_addr",
+      "items[].date", "items[].snippet", "items[].labels", "items[].is_read",
+      "items[].starred", "items[].has_attachments", "total", "total_exact", "offset",
+      "degraded"
+    ],
+    "get_message": [
+      "message_id", "subject", "from_name", "from_addr", "to_addrs", "cc_addrs", "date",
+      "labels", "location", "is_read", "starred", "text", "attachments",
+      "message_id_header", "references"
+    ],
+    "list_mailbox": ["inbox", "discarded", "folders", "labels"],
+    "mark_read": ["changed", "unchanged"],
+    "mark_unread": ["changed", "unchanged"],
+    "create_folder": ["path", "created"],
+    "create_label": ["name", "created"],
+    "move_to_folder": ["path", "moved"],
+    "set_labels": ["changed"]
+  }
+}

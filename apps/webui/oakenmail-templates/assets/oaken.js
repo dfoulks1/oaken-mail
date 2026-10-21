@@ -221,6 +221,27 @@
     return html;
   }
 
+  const PAGE = 50;
+  let pageOffset = 0; // where the list starts; reset whenever the folder, label or query changes
+  let pageKey = "";
+
+  // "1–50 of 1,284" from the operation's own offset and total, and the Newer/Older buttons.
+  function renderPager(output, shown) {
+    const text = qs("[data-oaken-pager-text]");
+    const prev = qs("[data-oaken-page='-1']");
+    const next = qs("[data-oaken-page='1']");
+    const total = output && typeof output.total === "number" ? output.total : null;
+    const from = shown ? pageOffset + 1 : 0;
+    const to = pageOffset + shown;
+    const exact = !output || output.total_exact !== false;
+    if (text) {
+      text.textContent = total === null ? "" :
+        shown ? `${from.toLocaleString()}–${to.toLocaleString()} of ${exact ? "" : "about "}${total.toLocaleString()}` : "0 messages";
+    }
+    if (prev) prev.disabled = pageOffset === 0;
+    if (next) next.disabled = !(output && (output.truncated || (total !== null && to < total)));
+  }
+
   async function loadList(container, keepChecked) {
     const list = qs(".ok-list", container) || container;
     const op = container.dataset.oakenList || "list_messages"; // "list_messages" | "search"
@@ -235,10 +256,15 @@
     if (location) { input.location = location; input.disposition = "any"; }
     const folder = url.searchParams.get("folder");
     if (folder && ["inbox", "filed", "discarded"].includes(folder)) input.disposition = folder;
+    const key = op + "|" + url.search;
+    if (key !== pageKey) { pageKey = key; pageOffset = 0; }
+    input.limit = PAGE;
+    input.offset = pageOffset;
     container.classList.add("ok-loading");
     try {
       const { output } = await api(op, input);
       const items = (output && output.items) || [];
+      renderPager(output, items.length);
       itemsById.clear();
       items.forEach((m) => itemsById.set(m.message_id, m));
       list.innerHTML = groupedListHtml(items);
@@ -254,6 +280,14 @@
       container.classList.remove("ok-loading");
     }
   }
+
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-oaken-page]");
+    const container = qs("[data-oaken-list]");
+    if (!b || b.disabled || !container) return;
+    pageOffset = Math.max(0, pageOffset + Number(b.dataset.oakenPage) * PAGE);
+    loadList(container);
+  });
 
   /* Clicking a row: split layout loads the reader inline; otherwise follow the link. Mirrors the
    * presentation handler but also fetches the body when a reader pane is present. */
@@ -295,6 +329,12 @@
     }
   }
 
+  // "Alex <alex@x.org>, bob@y.org" from get_message's to_addrs (the demo fixture sends a string).
+  function recipients(b) {
+    if (typeof b.to === "string") return b.to;
+    return (b.to_addrs || []).map((a) => (a.name ? `${a.name} <${a.address}>` : a.address)).join(", ");
+  }
+
   function readerHtml(b) {
     const tags = []
       .concat((b.tags || []).map((t) => tag(t)))
@@ -313,10 +353,9 @@
       `<article class="ok-thread-msg">` +
       `<header data-action="toggle-thread"><span class="ok-avatar">${esc(initials)}</span>` +
       `<div class="flex-grow-1"><div><span class="fw-semibold">${esc(b.from_name || "")}</span> <span class="small text-muted">&lt;${esc(b.from_addr || "")}&gt;</span></div>` +
-      (b.to ? `<div class="small text-muted">to ${esc(b.to)}</div>` : "") + `</div>` +
+      (recipients(b) ? `<div class="small text-muted">to ${esc(recipients(b))}</div>` : "") + `</div>` +
       `<span class="small text-muted">${esc(b.date || "")}</span></header>` +
-      (b.security ? `<div class="small text-muted px-3 pb-2"><i class="bi bi-shield-check text-success"></i> ${esc(b.security)}</div>` : "") +
-      `<div class="ok-msg-body" style="white-space:pre-wrap">${b.text ? esc(b.text) : "(no text)"}${atts ? `<div class="mt-3">${atts}</div>` : ""}</div>` +
+            `<div class="ok-msg-body" style="white-space:pre-wrap">${b.text ? esc(b.text) : "(no text)"}${atts ? `<div class="mt-3">${atts}</div>` : ""}</div>` +
       `</article></div>`
     );
   }
