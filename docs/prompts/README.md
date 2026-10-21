@@ -46,6 +46,7 @@ review it before starting the next.
 | 30 | [pipeline-management](30-pipeline-management.md) | Manage the queue: job list with ids, pause/resume, retry, cancel, live concurrency, interactive-over-background priority | 05, 13, 17, 21b, 22 |
 | 31 | [workspace-management](31-workspace-management.md) | List/get/check/set/remove workspaces (Oaken's confidentiality levels) from the UI and CLI; `[workspaces.*]` stays the one source of truth | 10, 13, 22, 23 |
 | 32 | [mcp-settings](32-mcp-settings.md) | Settings → MCP: the `[mcp]` section in a textarea (`allow_send`, `workspaces=[]`, enable/disable), operation list with presets, workspace scoping, live reload | 13, 18, 22, 23, 29, 31 |
+| 33 | [agent-enrichment](33-agent-enrichment.md) | Let an external model (LM Studio, 27B) enrich a message through `/mcp/agent`: claimable payload with text and instructions, a real result type, storage, cache and workspace rules | 03b, 05, 13, 18, 31, 32 |
 
 ## Not written yet (deliberately)
 
