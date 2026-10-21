@@ -17,6 +17,34 @@ uv run pytest
 Install the git hooks (lint plus secret scan) with `uv run pre-commit install` if you use
 pre-commit, or run `uv run detect-secrets-hook --baseline .secrets.baseline <files>`.
 
+## Configuration
+
+Oaken reads a single `config.toml`. It lives **outside the repo**, in the per-user config
+directory (via `platformdirs`):
+
+| OS | Path |
+|---|---|
+| Linux | `~/.config/oaken/config.toml` |
+| macOS | `~/Library/Application Support/oaken/config.toml` |
+| Windows | `%APPDATA%\oaken\config.toml` |
+
+Set `OAKEN_HOME=/some/dir` to relocate everything under one root (`<dir>/config/config.toml`).
+Precedence is: built-in defaults < `config.toml` < `OAKEN_*` environment variables. Unknown
+top-level keys are an error; every section has defaults, so you only set what you change.
+
+[`config.example.toml`](config.example.toml) at the repo root is a documented template covering
+every section (Gmail, IMAP, SMTP, Ollama, AI models, sync, API, logging). Copy it and edit:
+
+```bash
+cp config.example.toml ~/.config/oaken/config.toml
+```
+
+**Secrets never go in `config.toml`.** OAuth refresh tokens and IMAP/SMTP passwords live in the OS
+keyring (service `oaken`, user `<kind>:<account>`). The file only names the Gmail OAuth *client*
+JSON; the token is obtained by the authorization flow. For Gmail, bring your own OAuth client
+(Desktop-app type, `gmail.modify` scope) and **publish it to Production** — a Testing-mode app
+expires refresh tokens after ~7 days.
+
 ## Repository layout
 
 ```text
@@ -40,6 +68,25 @@ own (`uv run pytest apps/cli`). See [ADR 0006](docs/adr/0006-clients-live-in-app
 - Tests never use the network, Ollama, Gmail, Docker or real mail. Use synthetic fixtures.
 - Never commit real email content, addresses, databases or tokens.
 - Use Conventional Commits for commit messages.
+- AI-assisted contributions must follow the [AI tooling](#ai-tooling) rules below.
+
+## AI tooling
+
+Contributions produced with generative AI tooling must follow the ASF's
+[Generative Tooling Guidance](https://www.apache.org/legal/generative-tooling.html). In short:
+
+- You still represent that the contribution is your original creation and that you are entitled to
+  license it under Apache-2.0 (ICLA §§4–5). Disclose any third-party material it contains.
+- Make sure the tool's terms grant you rights broad enough to contribute the output under
+  Apache-2.0, and don't restrict it in ways inconsistent with the Open Source Definition.
+- Do not include GPL or otherwise Apache-incompatible third-party code (this matches our
+  "no GPL dependencies" rule). Where a tool can report similarity to its training data, or a code
+  scanner is available, use it to gain reasonable certainty no copyrighted material was copied.
+- Record the tool in the commit message with a provenance trailer, for example
+  `Co-authored-by: <Tool> <Version>` or `Generated-by: <Tool> <Version>`.
+- Public-facing AI-generated text (the docs site, the published demo, release notes,
+  announcements, security advisories) must be reviewed by a committer before publishing, or be
+  labeled as AI-generated (EU AI Act). Reviewing it as you would any other contribution is enough.
 
 ## Documentation
 

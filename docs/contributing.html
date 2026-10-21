@@ -73,9 +73,11 @@
       <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
     <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
       <a class="nav-link" href="#development-setup"><span class="num">1</span>Development setup</a>
-      <a class="nav-link" href="#repository-layout"><span class="num">2</span>Repository layout</a>
-      <a class="nav-link" href="#ground-rules"><span class="num">3</span>Ground rules</a>
-      <a class="nav-link" href="#documentation"><span class="num">4</span>Documentation</a>
+      <a class="nav-link" href="#configuration"><span class="num">2</span>Configuration</a>
+      <a class="nav-link" href="#repository-layout"><span class="num">3</span>Repository layout</a>
+      <a class="nav-link" href="#ground-rules"><span class="num">4</span>Ground rules</a>
+      <a class="nav-link" href="#ai-tooling"><span class="num">5</span>AI tooling</a>
+      <a class="nav-link" href="#documentation"><span class="num">6</span>Documentation</a>
     </nav></div>
   </div></div>
 </nav>
@@ -98,7 +100,45 @@ uv<span class="w"> </span>run<span class="w"> </span>pytest
 <p>Install the git hooks (lint plus secret scan) with <code>uv run pre-commit install</code> if you use
 pre-commit, or run <code>uv run detect-secrets-hook --baseline .secrets.baseline &lt;files&gt;</code>.</p>
 </section>
-<section id="repository-layout" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Repository layout</h2></div>
+<section id="configuration" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Configuration</h2></div>
+<p>Oaken reads a single <code>config.toml</code>. It lives <strong>outside the repo</strong>, in the per-user config
+directory (via <code>platformdirs</code>):</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>OS</th>
+<th>Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Linux</td>
+<td><code>~/.config/oaken/config.toml</code></td>
+</tr>
+<tr>
+<td>macOS</td>
+<td><code>~/Library/Application Support/oaken/config.toml</code></td>
+</tr>
+<tr>
+<td>Windows</td>
+<td><code>%APPDATA%\oaken\config.toml</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Set <code>OAKEN_HOME=/some/dir</code> to relocate everything under one root (<code>&lt;dir&gt;/config/config.toml</code>).
+Precedence is: built-in defaults &lt; <code>config.toml</code> &lt; <code>OAKEN_*</code> environment variables. Unknown
+top-level keys are an error; every section has defaults, so you only set what you change.</p>
+<p><a href="https://github.com/dfoulks1/oaken-mail/blob/main/config.example.toml"><code>config.example.toml</code></a> at the repo root is a documented template covering
+every section (Gmail, IMAP, SMTP, Ollama, AI models, sync, API, logging). Copy it and edit:</p>
+<div class="code"><pre class="highlight"><code class="language-bash">cp<span class="w"> </span>config.example.toml<span class="w"> </span>~/.config/oaken/config.toml
+</code></pre></div>
+<p><strong>Secrets never go in <code>config.toml</code>.</strong> OAuth refresh tokens and IMAP/SMTP passwords live in the OS
+keyring (service <code>oaken</code>, user <code>&lt;kind&gt;:&lt;account&gt;</code>). The file only names the Gmail OAuth <em>client</em>
+JSON; the token is obtained by the authorization flow. For Gmail, bring your own OAuth client
+(Desktop-app type, <code>gmail.modify</code> scope) and <strong>publish it to Production</strong> — a Testing-mode app
+expires refresh tokens after ~7 days.</p>
+</section>
+<section id="repository-layout" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Repository layout</h2></div>
 <div class="code"><pre class="highlight"><code class="language-text">src/oaken/           core: the daemon, API, operations, storage, ingest (the `oaken` package)
 src/oaken_*/         first-party plugins (providers, embedder, enrichers, vector store)
 apps/cli/            the `oaken` command, a separate package (`oaken-cli`, import `oaken_cli`)
@@ -109,7 +149,7 @@ docs/                the documentation site sources and generators
 uv workspace member with its own <code>pyproject.toml</code>, so it can be built, versioned and tested on its
 own (<code>uv run pytest apps/cli</code>). See <a href="https://github.com/dfoulks1/oaken-mail/blob/main/docs/adr/0006-clients-live-in-apps.md">ADR 0006</a>.</p>
 </section>
-<section id="ground-rules" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Ground rules</h2></div>
+<section id="ground-rules" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Ground rules</h2></div>
 <ul>
 <li>Every Python file starts with <code># SPDX-License-Identifier: Apache-2.0</code>.</li>
 <li>Tests live in a <code>tests/</code> directory next to the code they cover (<code>src/oaken/core/tests/</code> for
@@ -118,9 +158,28 @@ subdirectory to run only the tests below it. <code>tests/</code> at the root hol
 <li>Tests never use the network, Ollama, Gmail, Docker or real mail. Use synthetic fixtures.</li>
 <li>Never commit real email content, addresses, databases or tokens.</li>
 <li>Use Conventional Commits for commit messages.</li>
+<li>AI-assisted contributions must follow the <a href="#ai-tooling">AI tooling</a> rules below.</li>
 </ul>
 </section>
-<section id="documentation" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Documentation</h2></div>
+<section id="ai-tooling" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>AI tooling</h2></div>
+<p>Contributions produced with generative AI tooling must follow the ASF's
+<a href="https://www.apache.org/legal/generative-tooling.html">Generative Tooling Guidance</a>. In short:</p>
+<ul>
+<li>You still represent that the contribution is your original creation and that you are entitled to
+license it under Apache-2.0 (ICLA §§4–5). Disclose any third-party material it contains.</li>
+<li>Make sure the tool's terms grant you rights broad enough to contribute the output under
+Apache-2.0, and don't restrict it in ways inconsistent with the Open Source Definition.</li>
+<li>Do not include GPL or otherwise Apache-incompatible third-party code (this matches our
+&quot;no GPL dependencies&quot; rule). Where a tool can report similarity to its training data, or a code
+scanner is available, use it to gain reasonable certainty no copyrighted material was copied.</li>
+<li>Record the tool in the commit message with a provenance trailer, for example
+<code>Co-authored-by: &lt;Tool&gt; &lt;Version&gt;</code> or <code>Generated-by: &lt;Tool&gt; &lt;Version&gt;</code>.</li>
+<li>Public-facing AI-generated text (the docs site, the published demo, release notes,
+announcements, security advisories) must be reviewed by a committer before publishing, or be
+labeled as AI-generated (EU AI Act). Reviewing it as you would any other contribution is enough.</li>
+</ul>
+</section>
+<section id="documentation" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Documentation</h2></div>
 <p>The project website is generated <strong>locally</strong> from the Markdown in <code>docs/</code> and the generated
 HTML is committed beside it; GitHub Pages serves the <code>main</code> branch's <code>/docs</code> folder. CI does not
 build it. After changing docs (or the software map), regenerate, check and commit the result:</p>
