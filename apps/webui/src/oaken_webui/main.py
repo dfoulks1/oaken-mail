@@ -38,6 +38,7 @@ from oaken_webui.app import build_app
 PROG = "oaken-webui"
 LOOPBACK = "127.0.0.1"
 DEFAULT_PORT = 47813  # obscure, high-numbered, well clear of common dev ports
+COMMANDS = ("start", "stop", "restart", "status")
 PID_FILE = "webui.json"  # beside core's runtime file; says which process serves the UI, and where
 
 
@@ -48,14 +49,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"{PROG} {__version__}")
     parser.add_argument(
-        "--port", type=int, default=DEFAULT_PORT, help=f"port to listen on (default {DEFAULT_PORT})"
+        "command",
+        nargs="?",
+        choices=COMMANDS,
+        default="start",
+        help="start (the default; foreground unless --detach), stop, restart, or status.",
     )
     parser.add_argument(
-        "--detach", action="store_true", help="run in the background and return once it is serving."
+        "--port",
+        type=int,
+        default=None,
+        help=f"port to listen on (default {DEFAULT_PORT}; restart keeps the running one's)",
     )
     parser.add_argument(
-        "--stop", action="store_true", help="stop a UI server that was started with --detach."
+        "--detach",
+        action="store_true",
+        help="with start or restart: run in the background and return once it is serving.",
     )
+    parser.add_argument("--stop", action="store_true", help=argparse.SUPPRESS)  # old spelling
     parser.add_argument(
         "--url",
         metavar="URL",
@@ -113,7 +124,17 @@ def _listening(port: int) -> bool:
     return False
 
 
-def _detach(args: argparse.Namespace, argv: Sequence[str]) -> int:
+def _child_args(args: argparse.Namespace) -> list[str]:
+    """The arguments that start the same server in the foreground."""
+    out = ["start", "--port", str(args.port)]
+    if args.url:
+        out += ["--url", args.url]
+    if args.token_file:
+        out += ["--token-file", args.token_file]
+    return out + ["-v"] * args.verbose
+
+
+def _detach(args: argparse.Namespace) -> int:
     """Start ourselves again in the background (a new session on POSIX, so closing the terminal
     does not stop it) and wait until the port answers."""
     found = _running()
@@ -128,9 +149,8 @@ def _detach(args: argparse.Namespace, argv: Sequence[str]) -> int:
         flags["creationflags"] = 0x00000008 | 0x00000200  # DETACHED_PROCESS | NEW_PROCESS_GROUP
     else:
         flags["start_new_session"] = True
-    child_args = [a for a in argv if a != "--detach"]
     child = subprocess.Popen(  # noqa: S603 (our own interpreter, fixed arguments)
-        [sys.executable, "-m", "oaken_webui.main", *child_args],
+        [sys.executable, "-m", "oaken_webui.main", *_child_args(args)],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -142,7 +162,7 @@ def _detach(args: argparse.Namespace, argv: Sequence[str]) -> int:
         if _listening(args.port) and _running() is not None:
             print(
                 f"{PROG}: serving the Oaken Mail UI on http://{LOOPBACK}:{args.port} "
-                f"(pid {child.pid}); stop it with {PROG} --stop",
+                f"(pid {child.pid}); stop it with {PROG} stop",
                 file=sys.stderr,
             )
             return int(ExitCode.OK)
@@ -158,11 +178,12 @@ def _detach(args: argparse.Namespace, argv: Sequence[str]) -> int:
     return int(ExitCode.ERROR)
 
 
-def _stop() -> int:
+def _stop(*, quiet: bool = False) -> int:
     found = _running()
     if found is None:
-        print(f"{PROG}: not running", file=sys.stderr)
-        return int(ExitCode.ERROR)
+        if not quiet:
+            print(f"{PROG}: not running", file=sys.stderr)
+        return int(ExitCode.OK if quiet else ExitCode.ERROR)
     sig = signal.CTRL_BREAK_EVENT if sys.platform == "win32" else signal.SIGTERM  # type: ignore[attr-defined,unused-ignore]
     with contextlib.suppress(ProcessLookupError):
         os.kill(found["pid"], sig)
@@ -178,13 +199,32 @@ def _stop() -> int:
     return int(ExitCode.OK)
 
 
+def _status() -> int:
+    found = _running()
+    if found is None:
+        print(f"{PROG}: not running", file=sys.stderr)
+        return int(ExitCode.ERROR)
+    print(f"{PROG}: running (pid {found['pid']}) on http://{LOOPBACK}:{found['port']}")
+    return int(ExitCode.OK)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    argv = list(sys.argv[1:] if argv is None else argv)
-    args = build_parser().parse_args(argv)
-    if args.stop:
+    args = build_parser().parse_args(list(sys.argv[1:] if argv is None else argv))
+    command = "stop" if args.stop else args.command
+    if command == "status":
+        return _status()
+    if command == "stop":
         return _stop()
+    if command == "restart":
+        before = _running()
+        if _stop(quiet=True) != int(ExitCode.OK):
+            return int(ExitCode.ERROR)
+        if args.port is None and before is not None:
+            args.port = before["port"]  # the UI comes back where the browser tab expects it
+    if args.port is None:
+        args.port = DEFAULT_PORT
     if args.detach:
-        return _detach(args, argv)
+        return _detach(args)
     _configure_logging(args.verbose)
     try:
         endpoint = _endpoint(args)

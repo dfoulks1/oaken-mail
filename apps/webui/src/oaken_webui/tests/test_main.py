@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for ``oaken-webui --detach`` and ``--stop``.
+"""Tests for ``oaken-webui`` start, stop, restart and status, and ``--detach``.
 
 These start the real server as a background process under a throwaway ``OAKEN_HOME``, the way the
 CLI's end-to-end test does for core, on a port the OS picked.
@@ -55,7 +55,7 @@ def webui(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def test_stop_when_nothing_runs(home: Path) -> None:
-    out = webui("--stop")
+    out = webui("stop")
     assert out.returncode == 1
     assert "not running" in out.stderr
 
@@ -71,7 +71,7 @@ def test_a_stale_pid_file_is_not_running(home: Path) -> None:
 
 def test_detach_serves_then_stop_ends_it(home: Path) -> None:
     port = _free_port()
-    started = webui("--detach", "--port", str(port))
+    started = webui("start", "--detach", "--port", str(port))
     assert started.returncode == 0, started.stderr
     assert f"http://127.0.0.1:{port}" in started.stderr
 
@@ -82,7 +82,7 @@ def test_detach_serves_then_stop_ends_it(home: Path) -> None:
     with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=5) as resp:  # noqa: S310
         assert resp.status == 200
 
-    stopped = webui("--stop")
+    stopped = webui("stop")
     assert stopped.returncode == 0, stopped.stderr
     assert not pid_alive(info["pid"])
     assert not pid_file.exists()
@@ -90,14 +90,14 @@ def test_detach_serves_then_stop_ends_it(home: Path) -> None:
 
 def test_a_second_start_is_refused_while_one_runs(home: Path) -> None:
     port = _free_port()
-    assert webui("--detach", "--port", str(port)).returncode == 0
+    assert webui("start", "--detach", "--port", str(port)).returncode == 0
     for extra in (["--detach"], []):
         again = webui(*extra, "--port", str(port))
         assert again.returncode == 1
         assert "already running" in again.stderr
     # The refused start must not have disturbed the running server's pid file.
     assert webui_main._running() is not None
-    assert webui("--stop").returncode == 0
+    assert webui("stop").returncode == 0
 
 
 def test_detach_reports_a_port_that_is_taken(home: Path) -> None:
@@ -105,7 +105,31 @@ def test_detach_reports_a_port_that_is_taken(home: Path) -> None:
         taken.bind(("127.0.0.1", 0))
         taken.listen()
         port = int(taken.getsockname()[1])
-        out = webui("--detach", "--port", str(port))
+        out = webui("start", "--detach", "--port", str(port))
     assert out.returncode == 1
     assert "without --detach" in out.stderr
     assert webui_main._running() is None
+
+
+def test_status_and_restart_keep_the_same_port(home: Path) -> None:
+    assert webui("status").returncode == 1
+    port = _free_port()
+    assert webui("--detach", "--port", str(port)).returncode == 0  # bare flags still start it
+    status = webui("status")
+    assert status.returncode == 0 and f"http://127.0.0.1:{port}" in status.stdout
+    old = json.loads((home / "run" / webui_main.PID_FILE).read_text())["pid"]
+
+    restarted = webui("restart", "--detach")  # no --port: it comes back where it was
+    assert restarted.returncode == 0, restarted.stderr
+    new = json.loads((home / "run" / webui_main.PID_FILE).read_text())
+    assert new["pid"] != old and new["port"] == port and not pid_alive(old)
+    assert webui("stop").returncode == 0
+
+
+def test_restart_starts_it_when_nothing_runs_and_the_old_stop_flag_still_works(
+    home: Path,
+) -> None:
+    port = _free_port()
+    assert webui("restart", "--detach", "--port", str(port)).returncode == 0
+    assert webui("--stop").returncode == 0
+    assert webui("status").returncode == 1

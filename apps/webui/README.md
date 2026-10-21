@@ -23,7 +23,11 @@ browser ──HTTP──> oaken-webui ──loopback──> oaken core (/v1/*)
 Start core first (`oaken start`), then:
 
 ```
-oaken-webui                 # serves http://127.0.0.1:47813 by default
+oaken-webui                 # serves http://127.0.0.1:47813 by default (same as `oaken-webui start`)
+oaken-webui start --detach  # in the background; returns once it is serving
+oaken-webui status          # running? (exit 1 if not)
+oaken-webui restart         # stop and start again, on the same port, keeping --detach if given
+oaken-webui stop
 oaken-webui --port 9000
 oaken-webui --url http://127.0.0.1:8123   # dev override: a hand-started core
 ```
