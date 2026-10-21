@@ -29,7 +29,7 @@ import anyio
 import httpx2
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response, StreamingResponse
+from starlette.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 from starlette.routing import BaseRoute, Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.types import Scope
@@ -40,6 +40,46 @@ from oaken_cli.exits import CoreUnavailable
 UI_CLIENT = "ui"
 # The demo marker: only the published mockups use it. Served live, the UI must be in API mode.
 _DEMO_ATTR = re.compile(rb"\s+data-oaken-demo\b")
+# Local asset references in served HTML (src=/href="assets/...js|css"), for cache-busting. Only
+# relative ``assets/`` paths are stamped; absolute URLs and CDN links are left alone.
+_ASSET_REF = re.compile(rb'(src|href)="(assets/[^"?]+\.(?:js|css))"')
+
+
+def _asset_version() -> bytes:
+    from oaken import __version__
+
+    return __version__.encode()
+
+
+def _version_assets(html: bytes) -> bytes:
+    """Append ``?v=<version>`` to local ``assets/*.js``/``*.css`` references so a browser fetches
+    the current file after an upgrade instead of a cached one (21b D2)."""
+    ver = _asset_version()
+    return _ASSET_REF.sub(rb'\1="\2?v=' + ver + b'"', html)
+
+
+# The Content-Security-Policy for served HTML (21b D3). The templates load Bootstrap and Bootstrap
+# Icons from jsDelivr and fonts from Google Fonts; everything else is same-origin. No remote images
+# can load (``img-src`` is self + data: only), which is the enforcement behind "Load remote images"
+# being hidden in the UI. ``connect-src 'self'`` keeps XHR/EventSource on the proxy; the page cannot
+# be framed. If the CDN assets are later vendored under assets/ (21b Q7), tighten this to 'self'.
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' https://cdn.jsdelivr.net; "
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'"
+)
+
+
+def _html_headers() -> dict[str, str]:
+    return {"cache-control": "no-store", "content-security-policy": _CSP}
+
+
 # Hop-by-hop headers are not forwarded across a proxy (RFC 7230 §6.1).
 _HOP_BY_HOP = frozenset(
     {
@@ -105,8 +145,10 @@ def ui_dir() -> Path:
 
 class _UiFiles(StaticFiles):
     """StaticFiles that strips ``data-oaken-demo`` from HTML as it is served, so the live UI runs
-    against the API instead of the demo fixtures. Non-HTML files and misses fall through to the
-    normal StaticFiles handling (range requests, 404s, caching headers)."""
+    against the API instead of the demo fixtures. It also sends HTML with ``Cache-Control:
+    no-store`` and stamps local ``assets/*.js``/``*.css`` references with a ``?v=<version>`` query,
+    so a browser never runs a stale shell or a stale script after an upgrade (21b D2). Non-HTML
+    files and misses fall through to the normal StaticFiles handling (range requests, 404s)."""
 
     async def get_response(self, path: str, scope: Scope) -> Response:
         # Resolve "." (a directory request such as "/") to its index before deciding.
@@ -115,7 +157,8 @@ class _UiFiles(StaticFiles):
         is_html = bool(full) and lookup.endswith(".html") and stat is not None
         if is_html:
             raw = await anyio.to_thread.run_sync(Path(full).read_bytes)
-            return Response(_DEMO_ATTR.sub(b"", raw), media_type="text/html")
+            body = _version_assets(_DEMO_ATTR.sub(b"", raw))
+            return Response(body, media_type="text/html", headers=_html_headers())
         return await super().get_response(path, scope)
 
 
@@ -197,8 +240,14 @@ def build_app(
     (an ASGI transport pointed at a fake core); ``static_dir`` overrides where the UI is read."""
     proxy = Proxy(endpoint=endpoint, transport=transport)
     root = static_dir or ui_dir()
+
+    async def _login_redirect(_request: Request) -> Response:
+        # There is no login in a loopback single-user app (21b A2/D1): the proxy holds the token.
+        return RedirectResponse("/", status_code=302)
+
     routes: list[BaseRoute] = [
         Route("/v1/{path:path}", proxy.handle, methods=["GET", "POST", "PUT", "DELETE", "PATCH"]),
+        Route("/login.html", _login_redirect, methods=["GET"]),
     ]
     if root.is_dir():
         routes.append(Mount("/", app=_UiFiles(directory=str(root), html=True), name="ui"))

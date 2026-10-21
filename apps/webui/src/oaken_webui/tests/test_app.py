@@ -98,6 +98,38 @@ async def test_static_index_is_served_with_the_demo_marker_stripped(ui_tree: Pat
         assert "data-oaken-theme" in r.text
 
 
+async def test_html_is_no_store_and_carries_a_csp(ui_tree: Path) -> None:
+    async with _webui_client(FakeCore(), static_dir=ui_tree) as c:
+        r = await c.get("/")
+        assert r.headers["cache-control"] == "no-store"
+        csp = r.headers["content-security-policy"]
+        assert "default-src 'self'" in csp
+        assert "frame-ancestors 'none'" in csp
+        assert "img-src 'self' data:" in csp  # no remote images
+        assert "connect-src 'self'" in csp
+
+
+async def test_local_asset_references_are_version_stamped(ui_tree: Path) -> None:
+    # Give the index a real local asset reference and a CDN one.
+    (ui_tree / "index.html").write_text(
+        "<!doctype html><html data-oaken-demo><head>"
+        '<link href="https://cdn.jsdelivr.net/npm/bootstrap/x.css" rel="stylesheet">'
+        '</head><body>inbox<script src="assets/oaken.js"></script></body></html>'
+    )
+    from oaken import __version__
+
+    async with _webui_client(FakeCore(), static_dir=ui_tree) as c:
+        r = await c.get("/")
+        assert f"assets/oaken.js?v={__version__}" in r.text  # local asset stamped
+        assert "cdn.jsdelivr.net/npm/bootstrap/x.css?v=" not in r.text
+
+
+async def test_login_html_redirects_to_root(ui_tree: Path) -> None:
+    async with _webui_client(FakeCore(), static_dir=ui_tree) as c:
+        r = await c.get("/login.html")
+        assert r.status_code == 302 and r.headers["location"] == "/"
+
+
 async def test_non_html_assets_are_served_unchanged(ui_tree: Path) -> None:
     async with _webui_client(FakeCore(), static_dir=ui_tree) as c:
         r = await c.get("/assets/api.js")
