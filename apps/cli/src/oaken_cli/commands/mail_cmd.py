@@ -85,6 +85,37 @@ async def _show(client: ApiClient, args: argparse.Namespace) -> int:
     return _render_message(args, result)
 
 
+def cmd_thread(args: argparse.Namespace) -> int:
+    return run(lambda client: _thread(client, args), args)
+
+
+async def _thread(client: ApiClient, args: argparse.Namespace) -> int:
+    payload: dict[str, object] = {"message_id": args.message_id}
+    if args.limit:
+        payload["limit"] = args.limit
+    result = await client.call("get_thread", payload)
+    out = result.output if isinstance(result.output, dict) else {}
+
+    def text() -> None:
+        from oaken_cli.output import print_text
+
+        items = out.get("items", []) if isinstance(out, dict) else []
+        if not items:
+            print_text("no such thread")
+            return
+        for it in items:
+            who = it.get("from_name") or it.get("from_addr", "")
+            mark = " " if it.get("is_read") else "*"
+            pad = "  " * min(int(it.get("depth") or 0), 12)
+            line = f"{mark} {pad}{'└ ' if it.get('depth') else ''}"
+            print_text(f"{line}{_short_date(it.get('date'))}  {who}  [{it.get('message_id', '')}]")
+        total = out.get("total")
+        if out.get("truncated"):
+            print_text(f"(showing {len(items)} of {total}; raise --limit)")
+
+    return emit(args, data=result.output, text=text)
+
+
 # --- read state: summarize / read / unread / undo -------------------------------------------
 
 

@@ -21,6 +21,7 @@ def examples(a: MessageId, job_id: str = "none") -> dict[str, Any]:
         "list_plugins": {}, "plugin_health": {}, "list_audit": {}, "list_operations": {},
         "list_labels": {}, "list_schedules": {"crontab": True}, "list_messages": {},
         "search_keyword": {"query": "quokkas"}, "get_message": {"message_id": a},
+        "get_thread": {"message_id": a},
         "get_raw": {"message_id": a, "include_raw": True}, "get_message_rules": {"message_id": a},
         "message_dismissed": {"message_id": a}, "search": {"query": "x"}, "ask": {"question": "x"},
         "sync_now": {"account_id": "main"}, "reprocess": {"stage": "parse"}, "rebuild_index": {},
@@ -94,6 +95,7 @@ async def test_reading_through_the_registry_as_an_agent_changes_nothing_either(o
         ("list_messages", {"include_text": True}),
         ("search_keyword", {"query": "quokkas"}),
         ("get_message", {"message_id": b}),
+        ("get_thread", {"message_id": b}),
         ("get_message_rules", {"message_id": c}),
         ("list_labels", {}),
     ):

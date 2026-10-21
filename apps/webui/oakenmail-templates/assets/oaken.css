@@ -199,6 +199,8 @@ h1, h2, h3, h4, h5, h6, .ok-brand, .modal-title { font-family: var(--ok-font-hea
 .ok-thread-msg header { display: flex; gap: .85rem; align-items: center; padding: 1rem 1.25rem; }
 .ok-thread-msg.collapsed .ok-msg-body { display: none; }
 .ok-thread-msg.collapsed header { cursor: pointer; }
+.ok-thread-msg { margin-left: calc(var(--ok-depth, 0) * 1.25rem); }
+.ok-thread-msg.nested { border-left: 3px solid var(--ok-border); }
 .ok-thread-msg.current { border-color: var(--ok-accent, var(--bs-primary)); }
 .ok-thread-msg.collapsed header:hover { background: var(--ok-hover, rgba(127,127,127,.08)); }
 .ok-thread-snippet { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 38rem; }

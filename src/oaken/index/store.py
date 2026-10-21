@@ -26,6 +26,7 @@ from oaken.index.analyze import Analysis
 from oaken.index.query import DISPOSITIONS, ParsedQuery, parse_query
 from oaken.mail.chunk import Chunk, chunk_text
 from oaken.mail.parse import Address, ParsedMessage
+from oaken.mail.thread_tree import parent_ids
 from oaken.mail.tokens import EstimateTokenizer, Tokenizer
 
 log = get_logger("oaken.index")
@@ -274,6 +275,15 @@ class IndexStore:
     ) -> tuple[str, bool]:
         """The thread key, after joining a reference-less reply to a recent same-subject thread."""
         info = a.thread
+        if info.basis == "in-reply-to" and info.root_message_id:
+            # Only In-Reply-To, no References: the id it names is its parent, not the thread's
+            # root. If the parent is indexed, join the parent's thread.
+            row = await tx.fetchone(
+                "SELECT thread_key FROM docs WHERE msgid = ? AND message_id != ? LIMIT 1",
+                (info.root_message_id, message_id),
+            )
+            if row is not None:
+                return str(row["thread_key"]), row["thread_key"] != info.key
         days = self.cfg.subject_join_days
         if not (info.basis == "subject" and info.is_reply and days > 0 and when is not None):
             return info.key, False
@@ -350,7 +360,8 @@ class IndexStore:
                 "INSERT INTO docs (message_id, account_id, thread_key, subject_key, subject,"
                 " from_addr, from_name, to_json, date_utc, list_id, has_attachments,"
                 " attachments_json, cleaned_text, content_hash, parse_warnings_json,"
-                " disposition, location, indexed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                " disposition, location, indexed_at, msgid, refs_json)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
                 " ON CONFLICT (message_id) DO UPDATE SET account_id = excluded.account_id,"
                 " thread_key = excluded.thread_key, subject_key = excluded.subject_key,"
                 " subject = excluded.subject, from_addr = excluded.from_addr,"
@@ -361,7 +372,8 @@ class IndexStore:
                 " cleaned_text = excluded.cleaned_text, content_hash = excluded.content_hash,"
                 " parse_warnings_json = excluded.parse_warnings_json,"
                 " disposition = excluded.disposition, location = excluded.location,"
-                " indexed_at = excluded.indexed_at",
+                " indexed_at = excluded.indexed_at, msgid = excluded.msgid,"
+                " refs_json = excluded.refs_json",
                 (
                     message_id,
                     account_id,
@@ -381,6 +393,8 @@ class IndexStore:
                     disposition,
                     location,
                     fmt_ts(self.clock.now()),
+                    p.message_id,
+                    json.dumps(parent_ids(p.in_reply_to, p.references)),
                 ),
             )
             await self._set_labels(tx, message_id, label_set)
@@ -511,6 +525,28 @@ class IndexStore:
             "SELECT message_id, account_id, subject, from_addr, from_name, cleaned_text,"
             " content_hash, thread_key, attachments_json FROM docs WHERE message_id = ?",
             (message_id,),
+        )
+
+    async def thread_rows(self, thread_key: str, limit: int) -> list[sqlite3.Row]:
+        """The messages of a thread (oldest first) with what the tree needs. One more than
+        ``limit`` comes back if there are more, so the caller can say it cut the thread."""
+        return await self.db.fetchall(
+            "SELECT message_id, msgid, refs_json, date_utc FROM docs WHERE thread_key = ?"
+            " ORDER BY date_utc IS NULL, date_utc, message_id LIMIT ?",
+            (thread_key, limit + 1),
+        )
+
+    async def thread_count(self, thread_key: str) -> int:
+        row = await self.db.fetchone(
+            "SELECT COUNT(*) AS n FROM docs WHERE thread_key = ?", (thread_key,)
+        )
+        return int(row["n"]) if row else 0
+
+    async def set_threading(self, message_id: str, msgid: str | None, parents: list[str]) -> None:
+        """Record a message's own id and what it answers (rows indexed before they were stored)."""
+        await self.db.execute(
+            "UPDATE docs SET msgid = ?, refs_json = ? WHERE message_id = ?",
+            (msgid or "", json.dumps(parents), message_id),
         )
 
     async def previous_in_thread(self, message_id: MessageId) -> MessageId | None:

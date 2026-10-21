@@ -56,7 +56,7 @@ getting started:
 
 command groups:
   daemon        start · stop · restart · status
-  mail          search · ask · show · summarize · read · unread · undo · sync
+  mail          search · ask · show · thread · summarize · read · unread · undo · sync
   organize      sieve · schedule · reprocess · rebuild-index
   queue         jobs · pipeline · watch
   accounts      admin · auth · accounts
@@ -257,6 +257,15 @@ def _register_mail(
     grp.add_argument("--raw", action="store_true", help="Include the raw bytes (base64 in --json).")
     grp.add_argument("--headers", action="store_true", help="Show only the raw headers.")
     show.set_defaults(func=_lazy("mail_cmd", "cmd_show"))
+
+    thread = sub.add_parser(
+        "thread",
+        help="Show a conversation as a tree: who replied to whom (* marks unread).",
+        parents=[g],
+    )
+    thread.add_argument("message_id", help="Any message in the conversation.")
+    thread.add_argument("--limit", type=int, metavar="N", help="Most messages to show.")
+    thread.set_defaults(func=_lazy("mail_cmd", "cmd_thread"))
 
     summarize = sub.add_parser(
         "summarize", help="Summarize messages with the local model.", parents=[g]

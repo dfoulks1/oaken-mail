@@ -96,6 +96,12 @@
         items = items.slice(off, off + lim);
         return { request_id: "demo", status: "ok", output: { items, truncated: off + lim < total, total, total_exact: true, offset: off, warnings: [], degraded: false } };
       }
+      case "get_thread": {
+        const m = FIX_MESSAGES.find((x) => x.message_id === input.message_id);
+        const items = FIX_MESSAGES.filter((x) => m && x.thread_key === m.thread_key)
+          .map((x, i) => ({ ...x, parent_id: i ? FIX_MESSAGES.find((y) => y.thread_key === m.thread_key).message_id : null, depth: i ? 1 : 0 }));
+        return { request_id: "demo", status: "ok", output: { thread_key: m ? m.thread_key : "", items, total: items.length, truncated: false } };
+      }
       case "get_message": {
         const body = FIX_BODY[input.message_id] || FIX_BODY["m-vote-2463"];
         return { request_id: "demo", status: "ok", output: body };

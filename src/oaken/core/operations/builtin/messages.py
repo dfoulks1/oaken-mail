@@ -6,6 +6,7 @@ None of them marks anything read. Text comes back cut to the caller's limits and
 
 import asyncio
 import base64
+import contextlib
 import dataclasses
 import json
 from datetime import datetime
@@ -13,7 +14,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from oaken.core.errors import NotFound
+from oaken.core.errors import InvalidInput, NotFound
 from oaken.core.ids import AccountId, MessageId
 from oaken.core.operations.builtin.common import MessageItem, items_from_hits, state_flags
 from oaken.core.operations.context import OpContext
@@ -23,6 +24,7 @@ from oaken.core.search import HybridFilters
 from oaken.index.query import DISPOSITIONS, parse_query
 from oaken.index.store import SORTS, SearchFilters
 from oaken.mail.parse import parse
+from oaken.mail.thread_tree import ThreadMember, build_tree, parent_ids
 
 Disposition = Literal["inbox", "filed", "discarded", "any"]
 Sort = Literal[
@@ -601,12 +603,109 @@ async def get_message_rules(ctx: OpContext, inp: MessageRulesInput) -> MessageRu
     return MessageRulesOutput(message_id=mid, attrs=attrs, filter=info)
 
 
+class GetThreadInput(BaseModel):
+    message_id: str | None = None  # any message of the conversation, or ...
+    thread_key: str | None = None  # ... its key (from any listing)
+    limit: int | None = Field(default=None, ge=1)  # most messages to return; capped for the caller
+
+
+class ThreadNode(MessageItem):
+    parent_id: str | None = None  # the message this one replies to, if we hold it
+    depth: int = 0  # 0 for a root; one more for each reply level
+
+
+class ThreadOutput(BaseModel):
+    thread_key: str
+    items: list[ThreadNode] = Field(default_factory=list)  # reading order: depth first, by date
+    total: int = 0
+    truncated: bool = False  # the conversation has more messages than were returned
+    content_is_untrusted: bool = True
+    warnings: list[str] = Field(default_factory=list)
+
+
+async def _fill_threading(
+    ctx: OpContext, rows: list[Any]
+) -> dict[str, tuple[str | None, list[str]]]:
+    """``{message_id: (msgid, parents)}``. Rows indexed before threading was stored have neither:
+    read them from the raw message once and keep them."""
+    out: dict[str, tuple[str | None, list[str]]] = {}
+    for r in rows:
+        if r["msgid"] is not None:
+            out[r["message_id"]] = (r["msgid"] or None, json.loads(r["refs_json"] or "[]"))
+            continue
+        msgid: str | None = None
+        parents: list[str] = []
+        with contextlib.suppress(Exception):  # one unreadable message must not hide the thread
+            parsed = await asyncio.to_thread(
+                parse, await ctx.svc.raw.get_raw(MessageId(r["message_id"])), ctx.svc.settings.mail
+            )
+            msgid, parents = parsed.message_id, parent_ids(parsed.in_reply_to, parsed.references)
+        await ctx.svc.index.set_threading(r["message_id"], msgid, parents)
+        out[r["message_id"]] = (msgid, parents)
+    return out
+
+
+@operation(
+    "get_thread",
+    "A conversation as a tree: every message that shares a thread, in reading order, each with its"
+    " parent and depth.",
+    permission="read",
+    input=GetThreadInput,
+    output=ThreadOutput,
+    mcp="on",
+)
+async def get_thread(ctx: OpContext, inp: GetThreadInput) -> ThreadOutput:
+    """Ask by any message id or by thread key. ``parent_id`` is the message it replies to (the
+    nearest ancestor we hold when its direct parent never arrived); a message that answers nothing
+    we have is a root. Never marks anything read."""
+    key = inp.thread_key
+    if not key:
+        if not inp.message_id:
+            raise InvalidInput("give a message_id or a thread_key")
+        doc = await ctx.svc.index.get_doc(MessageId(inp.message_id))
+        if doc is None:
+            raise NotFound(f"no such message: {inp.message_id}")
+        key = str(doc["thread_key"])
+    cap = max(1, min(inp.limit or ctx.limits.max_results * 4, ctx.limits.max_results * 4))
+    rows = await ctx.svc.index.thread_rows(key, cap)
+    cut = len(rows) > cap
+    rows = rows[:cap]
+    if not rows:
+        return ThreadOutput(thread_key=key)
+    total = await ctx.svc.index.thread_count(key)
+    info = await _fill_threading(ctx, rows)
+    placed = build_tree(
+        ThreadMember(
+            r["message_id"],
+            info[r["message_id"]][0],
+            info[r["message_id"]][1],
+            datetime.fromisoformat(r["date_utc"].replace("Z", "+00:00")) if r["date_utc"] else None,
+        )
+        for r in rows
+    )
+    found = await ctx.svc.index.keyword_search(
+        "", SearchFilters(thread_key=key, disposition="any"), k=cap, sort="date_asc"
+    )
+    items = {
+        i.message_id: i for i in await items_from_hits(ctx, list(found.hits), ctx.limits.budget())
+    }
+    nodes = [
+        ThreadNode(**items[p.id].model_dump(), parent_id=p.parent_id, depth=p.depth)
+        for p in placed
+        if p.id in items
+    ]
+    return ThreadOutput(
+        thread_key=key, items=nodes, total=total, truncated=cut or len(nodes) < total
+    )
+
+
 OPERATIONS: tuple[AnyOperation, ...] = (
     list_messages,
     search_keyword,
     search,
     ask,
     get_message,
+    get_thread,
     get_raw,
     list_labels,
     get_message_rules,

@@ -506,19 +506,14 @@
     });
   }
 
-  const THREAD_MAX = 100;
-
-  // The other messages of the conversation, oldest first. A failure here must not stop the opened
-  // message from showing, so it answers an empty list.
-  async function fetchThread(key) {
-    if (!key) return [];
+  // The conversation as core's get_thread returns it: reading order, each with parent_id and
+  // depth. A failure here must not stop the opened message from showing, so it answers [].
+  async function fetchThread(messageId) {
     try {
-      const { output } = await api("list_messages", {
-        thread_key: key, sort: "date_asc", disposition: "any", limit: THREAD_MAX,
-      });
-      return (output && output.items) || [];
+      const { output } = await api("get_thread", { message_id: messageId });
+      return { items: (output && output.items) || [], cut: !!(output && output.truncated), total: output && output.total };
     } catch (_) {
-      return [];
+      return { items: [], cut: false, total: 0 };
     }
   }
 
@@ -527,7 +522,7 @@
     try {
       const { output } = await api("get_message", { message_id: messageId, include_text: true });
       const b = output || {};
-      const thread = await fetchThread(b.thread_key);
+      const thread = await fetchThread(b.message_id);
       container.innerHTML = readerHtml(b, thread);
       // The reader starts hidden (d-none) beside the "Select a message" placeholder: swap them.
       container.classList.remove("d-none");
@@ -571,19 +566,22 @@
     return (b.to_addrs || []).map((a) => (a.name ? `${a.name} <${a.address}>` : a.address)).join(", ");
   }
 
+  const MAX_INDENT = 6; // deeper replies stop indenting so a long chain stays readable
   const initialsOf = (name) =>
     (name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
   // One card of the thread. The opened message arrives with its text; the others show a line of
   // snippet and fetch the rest when expanded.
-  function cardHtml(m, { current, text, atts, to }) {
+  function cardHtml(m, { current, text, atts, to, replyTo }) {
     const who = m.from_name || m.from_addr || "";
+    const depth = Math.min(Number(m.depth) || 0, MAX_INDENT);
     return (
-      `<article class="ok-thread-msg${current ? " current" : " collapsed"}" data-id="${esc(m.message_id || "")}"${current ? ' data-loaded="1"' : ""}>` +
+      `<article class="ok-thread-msg${current ? " current" : " collapsed"}${depth ? " nested" : ""}" data-id="${esc(m.message_id || "")}"${current ? ' data-loaded="1"' : ""} style="--ok-depth:${depth}">` +
       `<header data-action="toggle-thread"><span class="ok-avatar">${esc(initialsOf(who))}</span>` +
       `<div class="flex-grow-1"><div><span class="fw-semibold">${esc(m.from_name || "")}</span> <span class="small text-muted">&lt;${esc(m.from_addr || "")}&gt;</span>` +
       (m.is_read === false && !current ? ` <span class="badge text-bg-primary ms-1">Unread</span>` : "") + `</div>` +
       (to ? `<div class="small text-muted">to ${esc(to)}</div>` : "") +
+      (replyTo ? `<div class="small text-muted">in reply to ${esc(replyTo)}</div>` : "") +
       (current ? "" : `<div class="small text-muted ok-thread-snippet">${esc(m.snippet || "")}</div>`) + `</div>` +
       `<span class="small text-muted">${esc(current ? m.date || "" : fmtDate(m.date))}</span></header>` +
       `<div class="ok-msg-body" style="white-space:pre-wrap">${current ? (text ? esc(text) : "(no text)") : ""}${atts ? `<div class="mt-3">${atts}</div>` : ""}</div>` +
@@ -601,20 +599,28 @@
       .join("");
     // b.text is the cleaned plain text core produced. Mail is untrusted: it is escaped and shown
     // as text, never as markup.
-    const current = cardHtml(b, { current: true, text: b.text, atts, to: recipients(b) });
-    const others = (thread || []).filter((m) => m.message_id);
-    const all = others.length > 1 || (others.length === 1 && others[0].message_id !== b.message_id);
-    const cards = all
-      ? others.map((m) => (m.message_id === b.message_id ? current : cardHtml(m, { current: false }))).join("")
-      : current;
+    const nodes = (thread && thread.items) || [];
+    const byId = new Map(nodes.map((m) => [m.message_id, m]));
+    const nameOf = (m) => (m && (m.from_name || m.from_addr)) || "";
+    const card = (m) => {
+      const isCur = m.message_id === b.message_id;
+      const replyTo = m.parent_id ? nameOf(byId.get(m.parent_id)) : "";
+      return isCur
+        ? cardHtml({ ...b, depth: m.depth }, { current: true, text: b.text, atts, to: recipients(b), replyTo })
+        : cardHtml(m, { current: false, replyTo });
+    };
+    const many = nodes.length > 1;
+    const inList = nodes.some((m) => m.message_id === b.message_id);
     // A thread that did not list the opened message (filtered, or past the cap) still shows it.
-    const body = all && !others.some((m) => m.message_id === b.message_id) ? cards + current : cards;
+    const body = many
+      ? nodes.map(card).join("") + (inList ? "" : cardHtml(b, { current: true, text: b.text, atts, to: recipients(b) }))
+      : cardHtml(b, { current: true, text: b.text, atts, to: recipients(b) });
     return (
       `<div class="ok-reader-inner">` +
       `<h1>${esc(b.subject)}</h1>` +
-      (all ? `<div class="small text-muted mb-2">${others.length} messages in this conversation</div>` : "") +
+      (many ? `<div class="small text-muted mb-2">${thread.total || nodes.length} messages in this conversation</div>` : "") +
       `<div class="d-flex gap-2 mb-4 flex-wrap">${tags}</div>` + body +
-      (others.length >= THREAD_MAX ? `<div class="small text-muted">Showing the first ${THREAD_MAX} messages.</div>` : "") +
+      (thread && thread.cut ? `<div class="small text-muted">Showing ${nodes.length} of ${thread.total} messages.</div>` : "") +
       `</div>`
     );
   }
@@ -682,9 +688,9 @@
   const FOLDER_ICON = { inbox: "bi-inbox", filed: "bi-folder2", discarded: "bi-trash3" };
   // A badge is the UNREAD count (like a mail client); nothing shows when there is none.
   function badge(n) { return n ? `<span class="count unread">${n}</span>` : ""; }
-  // Put the unread count on one of the static top links (Inbox, Discarded).
-  function topBadge(folder, n) {
-    const a = qs(`.ok-nav > a[href="index.html?folder=${folder}"]`);
+  // Put the unread count on one of the fixed top links (keyed by data-view: inbox, starred, ...).
+  function topBadge(view, n) {
+    const a = qs(`.ok-nav a[data-view="${view}"]`);
     if (!a) return;
     qs(".count", a)?.remove();
     a.insertAdjacentHTML("beforeend", badge(n));
@@ -705,6 +711,55 @@
   window.Oaken.labelColor = (name) => labelColors.all()[name] || baseLabelColor(name);
 
   const indent = (f) => "  ".repeat(f.depth);
+
+  /* ---- the one sidebar, used on every page ----
+   * Every template carries an empty <aside class="ok-sidebar" data-oaken-sidebar></aside>; this
+   * fills it with the canonical chrome (21b C4): Compose, the fixed views (Inbox, Starred,
+   * Discarded), the Folders section, the Labels section, and More. The fixed views link to
+   * index.html with the ?view/?folder/?label the list reads; the active one is marked from the
+   * current URL. Folders and labels are then filled from the backend by renderSidebar(). Keeping
+   * the markup here means one definition instead of a copy per page. */
+  const SIDEBAR_HTML = `
+    <button class="btn btn-oaken btn-compose" data-action="compose"><i class="bi bi-pencil-square"></i>Compose</button>
+    <nav class="ok-nav" data-oaken-nav>
+      <a href="index.html?view=inbox" data-view="inbox"><i class="bi bi-inbox"></i>Inbox</a>
+      <a href="index.html?view=starred" data-view="starred"><i class="bi bi-star"></i>Starred</a>
+      <a href="index.html?view=sent" data-view="sent"><i class="bi bi-send"></i>Sent</a>
+      <a href="index.html?view=drafts" data-view="drafts"><i class="bi bi-file-earmark"></i>Drafts</a>
+      <a href="index.html?view=archive" data-view="archive"><i class="bi bi-archive"></i>Archive</a>
+      <a href="index.html?view=spam" data-view="spam"><i class="bi bi-exclamation-octagon"></i>Spam</a>
+      <div class="ok-nav-heading">Folders</div>
+      <div data-oaken-folders><div class="small text-muted px-3 py-1">No folders yet.</div></div>
+      <a href="index.html?view=discarded" data-view="discarded"><i class="bi bi-trash3"></i>Discarded</a>
+      <div class="ok-nav-heading">Labels</div>
+      <div data-oaken-labels><div class="small text-muted px-3 py-1">No tags yet.</div></div>
+      <div class="ok-nav-heading">More</div>
+      <a href="contacts.html" data-page="contacts.html"><i class="bi bi-person-lines-fill"></i>Contacts</a>
+      <a href="settings.html" data-page="settings.html"><i class="bi bi-gear"></i>Settings</a>
+    </nav>`;
+
+  function markActive(nav) {
+    const url = new URL(window.location.href);
+    const page = (url.pathname.split("/").pop() || "index.html");
+    const view = url.searchParams.get("view") || (url.searchParams.get("folder") ? "" : "inbox");
+    const folder = url.searchParams.get("location") || url.searchParams.get("folder") || "";
+    const label = url.searchParams.get("label") || "";
+    nav.querySelectorAll("a").forEach((a) => a.classList.remove("active"));
+    const hit =
+      (page === "index.html" && folder && nav.querySelector(`a[href*="location=${encodeURIComponent(folder)}"]`)) ||
+      (page === "index.html" && label && nav.querySelector(`a[href*="label=${encodeURIComponent(label)}"]`)) ||
+      (page === "index.html" && view && nav.querySelector(`a[data-view="${view}"]`)) ||
+      nav.querySelector(`a[data-page="${page}"]`);
+    if (hit) hit.classList.add("active");
+  }
+
+  function buildSidebar() {
+    qsa("[data-oaken-sidebar]").forEach((mount) => {
+      mount.innerHTML = SIDEBAR_HTML;
+      const nav = qs("[data-oaken-nav]", mount);
+      if (nav) markActive(nav);
+    });
+  }
 
   async function renderSidebar() {
     const folders = qs("[data-oaken-folders]");
@@ -738,6 +793,13 @@
       toast(e.message || "Could not load folders.");
     }
   }
+
+  // One sidebar for every page: build the chrome, then fill folders/labels from the backend.
+  window.Oaken.sidebar = {
+    build: buildSidebar,
+    render: renderSidebar,
+    refresh: () => { buildSidebar(); return renderSidebar(); },
+  };
 
   /* ---- creating and using folders and labels ---- */
   const modalOf = (el) => (el && window.bootstrap ? window.bootstrap.Modal.getOrCreateInstance(el) : null);
@@ -868,6 +930,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     wireActions();
     wireMailboxUi();
+    buildSidebar();
     renderSidebar();
     watchEvents();
     // Reflect the current ?q into the search box and any results heading.
