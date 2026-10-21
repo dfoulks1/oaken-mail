@@ -6,6 +6,7 @@ from oaken.core.operations.builtin import (
     agents,
     enrichment,
     filtering,
+    jobs,
     mail,
     messages,
     schedules,
@@ -27,9 +28,14 @@ def core_operations() -> tuple[AnyOperation, ...]:
     )
 
 
+def agent_registry() -> OperationRegistry:
+    """The few operations an external agent may call on its own door (the swarm)."""
+    return jobs.agent_registry()
+
+
 def core_registry() -> OperationRegistry:
     """A registry holding every core operation. Plugin operations are attached by the daemon."""
     return OperationRegistry(core_operations())
 
 
-__all__ = ["core_operations", "core_registry"]
+__all__ = ["agent_registry", "core_operations", "core_registry"]

@@ -186,12 +186,13 @@ class Api:
 
     def mount(self, surface: Surface, app: ASGIApp) -> None:
         """Serve ``app`` at ``surface.prefix`` behind the same guard, with its own token and limits.
-        The MCP server (prompt 18) mounts here; the surface, not a header, sets its class."""
+        The MCP doors mount here (the person's at ``/mcp``, an agent's at ``/mcp/agent``); the
+        surface, not a header, sets the caller's class."""
         self.policy.surfaces.append(surface)
         base = surface.prefix.rstrip("/")
-        # Both spellings, not a ``Mount``: a Mount does not match its own bare path, and a client
-        # that posts to ``/mcp`` must not be redirected.
-        self.starlette.router.routes[0:0] = [Route(base, app), Route(base + "/{rest:path}", app)]
+        # A ``Route`` for exactly this path, not a ``Mount``: a Mount does not match its own bare
+        # path (a client that posts to ``/mcp`` would be redirected), and a door has no subpaths.
+        self.starlette.router.routes.insert(0, Route(base, app))
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         await self.app(scope, receive, send)

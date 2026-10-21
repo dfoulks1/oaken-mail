@@ -26,6 +26,7 @@ class CallerContext:
     client: Client
     actor: Actor
     request_id: str = field(default_factory=_request_id)
+    agent_id: str | None = None  # the swarm agent behind an MCP call on the agent door
 
     def __post_init__(self) -> None:
         if self.client not in CLIENTS:
@@ -44,8 +45,8 @@ class CallerContext:
         return cls("ui", USER)
 
     @classmethod
-    def mcp(cls, label: str = "") -> "CallerContext":
-        return cls("mcp", Actor("agent", label))
+    def mcp(cls, label: str = "", *, agent_id: str | None = None) -> "CallerContext":
+        return cls("mcp", Actor("agent", label), agent_id=agent_id)
 
     @classmethod
     def internal(cls, actor: Actor = SYSTEM) -> "CallerContext":
@@ -60,4 +61,5 @@ class CallerContext:
     def key(self) -> str:
         """What a confirmation token is bound to: the class and the actor, so a token issued to one
         agent cannot be replayed by another."""
-        return f"{self.client}:{self.actor.kind}:{self.actor.label}"
+        base = f"{self.client}:{self.actor.kind}:{self.actor.label}"
+        return f"{base}:{self.agent_id}" if self.agent_id else base

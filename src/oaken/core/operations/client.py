@@ -116,7 +116,7 @@ class CoreClient:
         output = await op.handler(ctx, inp)
         if not isinstance(output, op.output):
             output = op.output.model_validate(output)
-        if op.permission == "mutate" and op.audit == "registry":
+        if op.audit == "always" or (op.permission == "mutate" and op.audit == "registry"):
             await self._audit(op, inp, caller)
         log.info(
             "operation ran", operation=op.name, client=caller.client, actor=caller.actor.kind,
@@ -166,5 +166,9 @@ class CoreClient:
                 op=f"call:{op.name}",
                 batch_id=caller.request_id,
                 before={},
-                after={"request_id": caller.request_id, "input_sha256": hash_input(op.name, inp)},
+                after={
+                    "request_id": caller.request_id,
+                    "input_sha256": hash_input(op.name, inp),
+                    **({"agent_id": caller.agent_id} if caller.agent_id else {}),
+                },
             )

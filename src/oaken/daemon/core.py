@@ -23,7 +23,7 @@ from oaken.core.events import EventBus
 from oaken.core.jobs import JobQueue, JobRunner
 from oaken.core.logging import get_logger
 from oaken.core.operations import CoreClient, Services
-from oaken.core.operations.builtin import core_registry
+from oaken.core.operations.builtin import agent_registry, core_registry
 from oaken.core.operations.plugin_ops import plugin_operations
 from oaken.core.rawstore import RawStore
 from oaken.core.scheduler import Scheduler
@@ -89,7 +89,7 @@ class Core:
             raise
         self.indexer = Indexer(self.raw, self.index, self.attrs, s.mail, clock, bus=bus)
         self.indexer.follow_filtering()
-        self.queue = JobQueue(self.raw_db, clock, bus, settings=s.jobs)
+        self.queue = JobQueue(self.raw_db, clock, bus, settings=s.jobs, swarm=s.swarm)
         self.runner = JobRunner(self.queue)
         self.scheduler = Scheduler(self.raw_db, self.queue, clock)
         self.usage = UsageStore(self.raw_db, clock)
@@ -139,9 +139,19 @@ class Core:
         self.client = CoreClient(registry, self.services)
         self.api = Api(self.client, token=load_or_create_token(self.token_path))
         self.mcp: McpServer | None = None
+        self.mcp_agent: McpServer | None = None
         if s.api.mcp:
             self.mcp = McpServer(self.client, token=load_or_create_token(self.mcp_token_path))
             self.api.mount(self.mcp.surface, self.mcp)
+            if s.swarm.enabled:  # agents work through their own door, later so it wins /mcp/agent
+                agent_client = CoreClient(
+                    agent_registry(),
+                    self.services,
+                    proposals=self.client.proposals,
+                    exposure=self.client.exposure,
+                )
+                self.mcp_agent = McpServer(agent_client, agents=self.agents)
+                self.api.mount(self.mcp_agent.surface, self.mcp_agent)
         self.server = ApiServer(self.api, host=s.api.host, port=s.api.port)
         self._open = True
 
@@ -158,6 +168,8 @@ class Core:
             self._started.append("jobs")
             if self.mcp is not None:
                 await self.mcp.start()
+                if self.mcp_agent is not None:
+                    await self.mcp_agent.start()
                 self._started.append("mcp")
             port = await self.server.start()
             self._started.append("api")
@@ -189,8 +201,9 @@ class Core:
             await self.raw_db.close()
 
     async def _stop_mcp(self) -> None:
-        if self.mcp is not None:
-            await self.mcp.stop()
+        for door in (self.mcp_agent, self.mcp):
+            if door is not None:
+                await door.stop()
 
     async def _stop_host(self) -> None:
         await self.accounts.authorizations.close()

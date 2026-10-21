@@ -32,8 +32,10 @@ Permission = Literal["read", "mutate", "send"]
 # ``off``: may be offered, and is not until the user turns it on. ``on``: offered by default.
 McpMode = Literal["never", "off", "on"]
 # Who writes the audit row: the registry (a generic one, after the handler) or the service the
-# handler calls (which already records every change it makes, atomically).
-AuditBy = Literal["registry", "service"]
+# handler calls (which already records every change it makes, atomically). ``always``: the registry
+# writes its row for an operation that is not a mail mutation (an agent working the job queue), so
+# what an agent did is on the audit log even though it changes no mail.
+AuditBy = Literal["registry", "service", "always"]
 
 In = TypeVar("In", bound=BaseModel)
 Out = TypeVar("Out", bound=BaseModel)
