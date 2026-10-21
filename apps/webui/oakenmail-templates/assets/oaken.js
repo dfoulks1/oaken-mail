@@ -578,12 +578,12 @@
     return (
       `<article class="ok-thread-msg${current ? " current" : " collapsed"}${depth ? " nested" : ""}" data-id="${esc(m.message_id || "")}"${current ? ' data-loaded="1"' : ""} style="--ok-depth:${depth}">` +
       `<header data-action="toggle-thread"><span class="ok-avatar">${esc(initialsOf(who))}</span>` +
-      `<div class="flex-grow-1"><div><span class="fw-semibold">${esc(m.from_name || "")}</span> <span class="small text-muted">&lt;${esc(m.from_addr || "")}&gt;</span>` +
+      `<div class="flex-grow-1 ok-thread-who"><div><span class="fw-semibold">${esc(m.from_name || "")}</span> <span class="small text-muted">&lt;${esc(m.from_addr || "")}&gt;</span>` +
       (m.is_read === false && !current ? ` <span class="badge text-bg-primary ms-1">Unread</span>` : "") + `</div>` +
       (to ? `<div class="small text-muted">to ${esc(to)}</div>` : "") +
       (replyTo ? `<div class="small text-muted">in reply to ${esc(replyTo)}</div>` : "") +
       (current ? "" : `<div class="small text-muted ok-thread-snippet">${esc(m.snippet || "")}</div>`) + `</div>` +
-      `<span class="small text-muted">${esc(current ? m.date || "" : fmtDate(m.date))}</span></header>` +
+      `<span class="small text-muted ok-thread-date">${esc(current ? m.date || "" : fmtDate(m.date))}</span></header>` +
       `<div class="ok-msg-body" style="white-space:pre-wrap">${current ? (text ? esc(text) : "(no text)") : ""}${atts ? `<div class="mt-3">${atts}</div>` : ""}</div>` +
       `</article>`
     );
