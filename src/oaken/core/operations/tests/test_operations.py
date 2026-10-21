@@ -31,13 +31,13 @@ async def test_filters_narrow_by_sender_label_and_disposition(ops: Ops) -> None:
     a, b = await ops.add(2)  # filed as they arrive
     by_sender = await ops.out("list_messages", {"from": "alex0"})
     assert [i.message_id for i in by_sender.items] == [a]
-    by_label = await ops.out("list_messages", {"label": "Lists", "disposition": "any"})
-    assert [i.message_id for i in by_label.items] == [b]
+    by_folder = await ops.out("list_messages", {"location": "Lists", "disposition": "any"})
+    assert [i.message_id for i in by_folder.items] == [b]
     labels = await ops.out("list_labels")
-    assert labels.labels.get("Lists") == 1 and "inbox" in labels.dispositions
+    assert labels.locations.get("Lists") == 1 and "inbox" in labels.dispositions
     rules = await ops.out("get_message_rules", {"message_id": b})
     assert any(
-        x.kind == "label" and x.value == "Lists" and x.source == "sieve" for x in rules.attrs
+        x.kind == "location" and x.value == "Lists" and x.source == "sieve" for x in rules.attrs
     )
     assert rules.filter is not None and rules.filter.error_count == 0
 

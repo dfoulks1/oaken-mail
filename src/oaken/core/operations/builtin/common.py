@@ -29,6 +29,7 @@ class MessageItem(BaseModel):
     snippet: str = ""
     labels: list[str] = Field(default_factory=list)
     disposition: str = "inbox"
+    location: str | None = None  # the folder it is filed into, if any
     has_attachments: bool = False
     is_read: bool | None = None  # None: not stored yet
     score: float = 0.0
@@ -70,6 +71,7 @@ async def items_from_hits(
                 snippet=budget.take(snippet, ctx.limits.snippet_chars),
                 labels=list(h.labels),
                 disposition=h.disposition,
+                location=h.location,
                 has_attachments=h.has_attachments,
                 is_read=flags.get(h.message_id),
                 score=h.score,

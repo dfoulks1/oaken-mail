@@ -108,7 +108,7 @@ kept, changing a script re-derives the attributes with no new download.</p>
 it). They run <strong>in name order</strong> (<code>10-lists.sieve</code>, <code>20-work.sieve</code>), and <code>stop</code> ends them all.</p>
 <div class="code"><pre class="highlight"><code class="language-sieve"><span class="kn">require</span> <span class="p">[</span><span class="s">"fileinto"</span><span class="p">,</span> <span class="s">"imap4flags"</span><span class="p">,</span> <span class="s">"vnd.oaken.analysis"</span><span class="p">];</span>
 
-<span class="c1"># Mailing lists get a label and are marked read.</span>
+<span class="c1"># Mailing lists go in a folder and are marked read.</span>
 <span class="nb">if</span> <span class="nb">exists</span> <span class="s">"list-id"</span> <span class="p">{</span>
     <span class="nb">fileinto</span> <span class="s">"Lists"</span><span class="p">;</span>
     <span class="nb">addflag</span> <span class="s">"\\Seen"</span><span class="p">;</span>
@@ -149,19 +149,23 @@ stored mail.</p>
 </tr>
 <tr>
 <td><code>fileinto &quot;X&quot;</code></td>
-<td>label <code>X</code>, disposition <code>filed</code> (the implicit keep is cancelled). <code>fileinto &quot;INBOX&quot;</code> is a keep.</td>
+<td><strong>folder</strong> (location) <code>X</code>, disposition <code>filed</code> (the implicit keep is cancelled). <code>fileinto &quot;INBOX&quot;</code> is a keep. A message lives in one folder: the first <code>fileinto</code> wins.</td>
 </tr>
 <tr>
 <td><code>fileinto :copy &quot;X&quot;</code></td>
-<td>label <code>X</code> and disposition <code>inbox</code></td>
+<td>folder <code>X</code> and disposition <code>inbox</code></td>
 </tr>
 <tr>
 <td><code>discard</code></td>
 <td>disposition <code>discarded</code>: <strong>hidden from default views, never deleted</strong></td>
 </tr>
 <tr>
-<td><code>addflag</code>, <code>setflag</code>, <code>removeflag</code></td>
-<td>flags on the message (<code>\Seen</code>, <code>\Flagged</code> or a keyword)</td>
+<td><code>addflag</code>/<code>setflag</code>/<code>removeflag</code> of <code>\Seen</code> or <code>\Flagged</code></td>
+<td>flags on the message (read / starred)</td>
+</tr>
+<tr>
+<td><code>addflag &quot;keyword&quot;</code> (a non-<code>\</code> keyword)</td>
+<td><strong>label</strong> <code>keyword</code>: a search tag</td>
 </tr>
 <tr>
 <td><code>redirect</code>, <code>reject</code>, <code>ereject</code>, <code>vacation</code></td>
@@ -233,11 +237,11 @@ backup of <code>raw.db</code> should keep it.</p>
 <tbody>
 <tr>
 <td><code>kind</code></td>
-<td><code>disposition</code>, <code>label</code>, <code>flag</code>, <code>intent</code> or <code>analysis</code></td>
+<td><code>disposition</code>, <code>location</code>, <code>label</code>, <code>flag</code>, <code>intent</code>, <code>analysis</code> or <code>enrichment</code></td>
 </tr>
 <tr>
 <td><code>value</code></td>
-<td><code>filed</code>, <code>Lists</code>, <code>\Seen</code>, <code>redirect x@example.net</code>, <code>skip_enrich</code></td>
+<td><code>filed</code>, <code>Work</code> (a folder), <code>Lists</code> (a label), <code>\Seen</code>, <code>redirect x@example.net</code>, <code>skip_enrich</code></td>
 </tr>
 <tr>
 <td><code>source</code></td>
@@ -249,6 +253,11 @@ backup of <code>raw.db</code> should keep it.</p>
 </tr>
 </tbody>
 </table></div>
+<p>A <strong>location</strong> is the folder a filed message is organized into (single-valued per source, like the
+disposition); a <strong>label</strong> is a search tag (many per message). They are distinguished by <code>kind</code>, so a
+UI can show folders apart from tags (see <a href="../adr/index.html">ADR 0008</a>). The <code>enrichment</code> kind is a
+namespaced escape hatch (<code>&lt;producer&gt;:&lt;key&gt;=&lt;data&gt;</code>) for enrichers and plugins to attach their own
+data without a schema change.</p>
 <p>A re-run replaces only the <code>sieve</code> rows of that message, in one transaction. <code>message_filters</code>
 records the hash of the script set that last ran on each message. Edit a script and the hash changes,
 every message becomes stale, and <code>FilterEngine.refilter()</code> walks them oldest first, resumably. A

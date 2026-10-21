@@ -17,6 +17,7 @@ from oaken.core.settings import MailSettings
 from oaken.index import (
     REBUILD_KIND,
     RebuildPayload,
+    SearchFilters,
     enqueue_rebuild,
     rebuild_index,
     register_index_jobs,
@@ -294,8 +295,8 @@ async def test_sieve_decisions_reach_the_index(rig: Rig) -> None:
     assert {
         h.message_id for h in (await rig.index.keyword_search("gryphon in:discarded")).hits
     } == {spam}
-    [hit] = (await rig.index.keyword_search("gryphon label:Lists")).hits
-    assert hit.message_id == lst and hit.disposition == "filed"
+    [hit] = (await rig.index.keyword_search("gryphon", SearchFilters(location="Lists"))).hits
+    assert hit.message_id == lst and hit.disposition == "filed" and hit.location == "Lists"
 
     # a script change re-derives organization and the index follows without re-indexing
     (sieve / "10.sieve").write_text('require "fileinto";\nfileinto "Everything";\n')
@@ -304,7 +305,10 @@ async def test_sieve_decisions_reach_the_index(rig: Rig) -> None:
     chunks = c.chunks_written
     await engine.refilter()
     assert {
-        h.message_id for h in (await rig.index.keyword_search("gryphon label:Everything")).hits
+        h.message_id
+        for h in (
+            await rig.index.keyword_search("gryphon", SearchFilters(location="Everything"))
+        ).hits
     } == {spam, lst, plain}
     assert c.chunks_written == chunks
 
@@ -336,7 +340,7 @@ async def test_a_disposition_from_the_user_beats_the_script(rig: Rig) -> None:
     mid = await rig.put("p1", mail())
     await rig.attrs.replace(mid, "sieve", [Attr("disposition", "discarded"), Attr("label", "A")])
     await rig.attrs.replace(mid, "user", [Attr("disposition", "inbox", "user"), Attr("label", "B")])
-    assert await rig.indexer.organization(mid) == ("inbox", ["A", "B"])
+    assert await rig.indexer.organization(mid) == ("inbox", ["A", "B"], None)
 
 
 # -- nothing leaks ----------------------------------------------------------------------------

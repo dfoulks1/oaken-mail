@@ -3,7 +3,7 @@
 
 import pytest
 
-from oaken.mail.tests.sieve_helpers import MAIL, flags, go, labels
+from oaken.mail.tests.sieve_helpers import MAIL, flags, go, labels, locations
 
 REQ = (
     'require ["fileinto","imap4flags","envelope","body","relational","regex","variables",'
@@ -159,17 +159,17 @@ def test_unknown_date_part_is_a_run_error_not_a_crash() -> None:
 # -- actions ------------------------------------------------------------------------------
 def test_fileinto_files_and_cancels_the_implicit_keep() -> None:
     r = go(REQ + 'fileinto "Lists/Dev";')
-    assert (r.disposition, labels(r)) == ("filed", ["Lists/Dev"])
+    assert (r.disposition, locations(r)) == ("filed", ["Lists/Dev"])
 
 
 def test_fileinto_copy_keeps_it_in_the_inbox_too() -> None:
     r = go(REQ + 'fileinto :copy "Archive";')
-    assert (r.disposition, labels(r)) == ("inbox", ["Archive"])
+    assert (r.disposition, locations(r)) == ("inbox", ["Archive"])
 
 
 def test_fileinto_inbox_is_a_keep_and_not_a_label() -> None:
     r = go(REQ + 'fileinto "INBOX";')
-    assert (r.disposition, labels(r)) == ("inbox", [])
+    assert (r.disposition, locations(r)) == ("inbox", [])
 
 
 def test_discard_hides_but_other_actions_win() -> None:
@@ -180,7 +180,7 @@ def test_discard_hides_but_other_actions_win() -> None:
 
 def test_stop_ends_the_script() -> None:
     r = go(REQ + 'fileinto "a"; stop; fileinto "b";')
-    assert labels(r) == ["a"]
+    assert locations(r) == ["a"]
 
 
 def test_elsif_and_else_chain_runs_one_branch() -> None:
@@ -189,17 +189,17 @@ def test_elsif_and_else_chain_runs_one_branch() -> None:
         ' elsif header :contains "subject" "report" { fileinto "2"; }'
         ' elsif true { fileinto "3"; } else { fileinto "4"; }'
     )
-    assert labels(go(script)) == ["2"]
-    assert labels(go(REQ + 'if false { fileinto "1"; } else { fileinto "4"; }')) == ["4"]
+    assert locations(go(script)) == ["2"]
+    assert locations(go(REQ + 'if false { fileinto "1"; } else { fileinto "4"; }')) == ["4"]
 
 
 def test_a_second_if_after_a_chain_starts_a_new_chain() -> None:
-    r = go(REQ + 'if true { fileinto "a"; } if true { fileinto "b"; } else { fileinto "c"; }')
+    r = go(REQ + 'if true { addflag "a"; } if true { addflag "b"; } else { addflag "c"; }')
     assert labels(r) == ["a", "b"]
 
 
 def test_duplicate_labels_collapse() -> None:
-    assert labels(go(REQ + 'fileinto "x"; fileinto "X";')) == ["x"]
+    assert locations(go(REQ + 'fileinto "x"; fileinto "X";')) == ["x"]
 
 
 @pytest.mark.parametrize("name", ["", "a\x01b", "x" * 300])
@@ -211,22 +211,26 @@ def test_bad_mailbox_names_are_a_run_error(name: str) -> None:
 # -- imap4flags ---------------------------------------------------------------------------
 def test_flags_set_add_remove() -> None:
     r = go(REQ + 'setflag "\\\\Seen"; addflag ["\\\\Flagged","work"]; removeflag "\\\\seen";')
-    assert flags(r) == ["\\Flagged", "work"]
+    # System flags are flags (read/starred); a keyword is a label (search tag) — ADR 0008.
+    assert flags(r) == ["\\Flagged"]
+    assert labels(r) == ["work"]
 
 
 def test_flags_are_normalised_and_deduplicated() -> None:
     r = go(REQ + 'addflag "\\\\seen \\\\SEEN todo"; addflag "TODO";')
-    assert flags(r) == ["\\Seen", "todo"]
+    assert flags(r) == ["\\Seen"]
+    assert labels(r) == ["todo"]
 
 
 def test_hasflag_reads_the_internal_flags() -> None:
     r = go(REQ + 'addflag "work"; if hasflag :is "WORK" { fileinto "w"; }')
-    assert labels(r) == ["w"]
+    assert locations(r) == ["w"]
 
 
 def test_flags_tag_on_keep_and_fileinto() -> None:
     assert flags(go(REQ + 'keep :flags "\\\\Flagged";')) == ["\\Flagged"]
-    assert flags(go(REQ + 'fileinto :flags "a b" "x";')) == ["a", "b"]
+    # :flags "a b" are keywords, so they become labels (search tags), not flags.
+    assert labels(go(REQ + 'fileinto :flags "a b" "x";')) == ["a", "b"]
 
 
 def test_a_discarded_message_carries_no_flags() -> None:
@@ -252,30 +256,32 @@ def test_set_with_modifiers(var: str, want: str) -> None:
         ' set :upperfirst "d" "${c}"; set :lowerfirst "e" "${b}"; set :length "f" "${a}";'
         ' set :quotewildcard "g" "a*b?c"; fileinto "x-${' + var + '}";'
     )
-    assert labels(go(script)) == [f"x-{want}"]
+    assert locations(go(script)) == [f"x-{want}"]
 
 
 def test_match_variables_from_matches_and_regex() -> None:
-    assert labels(go(REQ + 'if header :matches "subject" "[*] *" { fileinto "t/${1}/${2}"; }')) == [
-        "t/dev/Quarterly report 2026"
-    ]
-    assert labels(
+    assert locations(
+        go(REQ + 'if header :matches "subject" "[*] *" { fileinto "t/${1}/${2}"; }')
+    ) == ["t/dev/Quarterly report 2026"]
+    assert locations(
         go(REQ + 'if header :regex "subject" "^.(dev). (\\\\w+)" { fileinto "${0}|${2}"; }')
     ) == ["[dev] Quarterly|Quarterly"]
 
 
 def test_string_test_compares_expanded_values() -> None:
-    assert labels(go(REQ + 'set "k" "dev"; if string :is "${k}" "DEV" { fileinto "s"; }')) == ["s"]
+    assert locations(go(REQ + 'set "k" "dev"; if string :is "${k}" "DEV" { fileinto "s"; }')) == [
+        "s"
+    ]
 
 
 def test_variables_are_not_expanded_without_the_extension() -> None:
     r = go('require "fileinto"; fileinto "${x}";')
-    assert labels(r) == ["${x}"]
+    assert locations(r) == ["${x}"]
 
 
 def test_variable_values_are_capped() -> None:
     r = go(REQ + 'set "a" "' + "x" * 9000 + '"; set :length "n" "${a}"; fileinto "${n}";')
-    assert labels(r) == ["4096"]
+    assert locations(r) == ["4096"]
 
 
 # -- intents: never executed ---------------------------------------------------------------
@@ -296,7 +302,7 @@ def test_skip_enrich_is_an_analysis_marker() -> None:
 
 def test_each_effect_names_the_rule_that_caused_it() -> None:
     r = go('require "fileinto";\n\nif true {\n  fileinto "x";\n}\n')
-    assert r.of("label")[0].rule == "t.sieve:4"
+    assert r.of("location")[0].rule == "t.sieve:4"
     assert r.disposition_rule == "t.sieve:4"
 
 

@@ -53,7 +53,7 @@ async def test_sieve_test_shows_effects_and_stores_nothing(ops: Ops) -> None:
     before = await ops.rig.attrs.get(mid)
     out = await ops.out("sieve_test", {"script": SCRIPT, "message_id": mid})
     assert out.check.ok and out.disposition == "filed"
-    assert [(e.kind, e.value) for e in out.effects] == [("label", "Work")]
+    assert [(e.kind, e.value) for e in out.effects] == [("location", "Work")]
     assert out.effects[0].rule.endswith(":2")
     after = await ops.rig.attrs.get(mid)
     assert before == after

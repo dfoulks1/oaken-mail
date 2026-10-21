@@ -228,6 +228,12 @@
     if (op === "search" || op === "search_keyword") input.query = url.searchParams.get("q") || "";
     const label = url.searchParams.get("label");
     if (label) input.label = label;
+    // Folders (ADR 0008): ?location=X filters to a filed folder; ?folder=inbox|filed|discarded
+    // selects a disposition. The sidebar links set these.
+    const location = url.searchParams.get("location");
+    if (location) { input.location = location; input.disposition = "any"; }
+    const folder = url.searchParams.get("folder");
+    if (folder && ["inbox", "filed", "discarded"].includes(folder)) input.disposition = folder;
     container.classList.add("ok-loading");
     try {
       const { output } = await api(op, input);
@@ -349,8 +355,58 @@
     });
   }
 
+  /* ---- sidebar: folders (organization) and labels (search), from the backend ----
+   * Folders are the default dispositions plus each distinct location (ADR 0008). Labels are the
+   * search tags. Both come from list_labels, so nothing is assembled from mail in the client. */
+  const FOLDER_ICON = { inbox: "bi-inbox", filed: "bi-folder2", discarded: "bi-trash3" };
+  function folderLink(href, icon, name, count) {
+    const badge = count ? `<span class="count">${count}</span>` : "";
+    return `<a href="${href}"><i class="bi ${icon}"></i>${esc(name)}${badge}</a>`;
+  }
+
+  async function renderSidebar() {
+    const folders = qs("[data-oaken-folders]");
+    const labelsBox = qs("[data-oaken-labels]");
+    if (!folders && !labelsBox) return;
+    try {
+      const { output } = await api("list_labels", {});
+      const disp = (output && output.dispositions) || {};
+      const locs = (output && output.locations) || {};
+      const labs = (output && output.labels) || {};
+      if (folders) {
+        let html = "";
+        // Default folders: Inbox and (if present) Discarded, by disposition.
+        html += folderLink("index.html?folder=inbox", FOLDER_ICON.inbox, "Inbox", disp.inbox || 0);
+        // Each filed location is a folder.
+        for (const name of Object.keys(locs).sort()) {
+          html += folderLink(
+            `index.html?location=${encodeURIComponent(name)}`, FOLDER_ICON.filed, name, locs[name]
+          );
+        }
+        if (disp.discarded) {
+          html += folderLink("index.html?folder=discarded", FOLDER_ICON.discarded, "Discarded", disp.discarded);
+        }
+        folders.innerHTML = html;
+      }
+      if (labelsBox) {
+        const names = Object.keys(labs).sort();
+        labelsBox.innerHTML = names.length
+          ? names.map((n) =>
+              `<a href="index.html?label=${encodeURIComponent(n)}">` +
+              `<span class="ok-label-dot" style="background:${window.Oaken.labelColor(n)}"></span>` +
+              `${esc(n)}<span class="count">${labs[n]}</span></a>`
+            ).join("")
+          : '<div class="small text-muted px-3 py-1">No tags yet.</div>';
+      }
+    } catch (e) {
+      // A sidebar failure should not break the page; leave the static fallback in place.
+      toast(e.message || "Could not load folders.");
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     wireActions();
+    renderSidebar();
     // Reflect the current ?q into the search box and any results heading.
     const q = new URL(window.location.href).searchParams.get("q") || "";
     qsa("[data-oaken-query]").forEach((el) => {

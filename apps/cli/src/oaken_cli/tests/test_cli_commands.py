@@ -164,7 +164,7 @@ async def test_sieve_test_on_a_stored_message_and_on_an_eml(cli: Cli, tmp_path: 
     script.write_text(SCRIPT)
     (mid,) = await cli.ops.add(1)
     run = await cli("sieve", "test", str(script), "--message", str(mid))
-    assert run.code == 0 and "label Work" in run.out and "filed" in run.out
+    assert run.code == 0 and "location Work" in run.out and "filed" in run.out
     eml = tmp_path / "m.eml"
     eml.write_bytes(b"From: a@example.com\r\nSubject: Subject here\r\n\r\nbody\r\n")
     viaeml = await cli("sieve", "test", str(script), "--eml", str(eml), "--json")

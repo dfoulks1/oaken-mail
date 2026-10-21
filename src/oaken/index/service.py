@@ -76,21 +76,29 @@ class Indexer:
         self.tokenizer = tokenizer or load_tokenizer(settings)
 
     # -- one message ------------------------------------------------------------------------
-    async def organization(self, message_id: MessageId) -> tuple[str, list[str]]:
-        """``(disposition, labels)`` from the message's attributes in ``raw.db``. A disposition
-        set by anything other than a script (the user, later) wins over the script's."""
+    async def organization(self, message_id: MessageId) -> tuple[str, list[str], str | None]:
+        """``(disposition, labels, location)`` from the message's attributes in ``raw.db``. A
+        disposition or location set by anything other than a script (the user, later) wins over
+        the script's. ``location`` is None unless the message is filed into a folder."""
         dispositions: dict[str, str] = {}
+        locations: dict[str, str] = {}
         labels: set[str] = set()
         for a in await self.attrs.get(message_id):
             if a.kind == "label":
                 labels.add(a.value)
             elif a.kind == "disposition" and a.value in DISPOSITIONS:
                 dispositions[a.source] = a.value
+            elif a.kind == "location":
+                locations[a.source] = a.value
         chosen = next(
             (v for s, v in sorted(dispositions.items()) if s != "sieve"),
             dispositions.get("sieve", "inbox"),
         )
-        return chosen, sorted(labels)
+        location = next(
+            (v for s, v in sorted(locations.items()) if s != "sieve"),
+            locations.get("sieve"),
+        )
+        return chosen, sorted(labels), location
 
     async def index_one(self, message_id: MessageId, *, force: bool = False) -> IndexResult | None:
         """Parse, clean, chunk and index one message. A deleted message is removed from the index
@@ -110,13 +118,14 @@ class Indexer:
         await self._publish(
             MessageParsed(ts=self.clock.now(), account_id=msg.account_id, message_id=message_id)
         )
-        disposition, labels = await self.organization(message_id)
+        disposition, labels, location = await self.organization(message_id)
         result = await self.index.index_message(
             message_id,
             msg.account_id,
             analysis,
             disposition=disposition,
             labels=labels,
+            location=location,
             force=force,
         )
         if result.changed:
@@ -146,8 +155,8 @@ class Indexer:
             raise ValueError("an event bus is needed to follow filtering")
 
         async def on_filtered(event: MessageFiltered) -> None:
-            disposition, labels = await self.organization(event.message_id)
-            await self.index.set_organization(event.message_id, disposition, labels)
+            disposition, labels, location = await self.organization(event.message_id)
+            await self.index.set_organization(event.message_id, disposition, labels, location)
 
         return self.bus.subscribe(MessageFiltered, on_filtered)  # type: ignore[arg-type]
 

@@ -10,7 +10,7 @@ from hypothesis import strategies as st
 from oaken.core.settings import SieveSettings
 from oaken.mail import parse
 from oaken.mail.sieve import SieveError, compile_script, run, view_of
-from oaken.mail.tests.sieve_helpers import MAIL, NOW, go, labels
+from oaken.mail.tests.sieve_helpers import MAIL, NOW, go, labels, locations
 
 REQ = 'require ["fileinto","regex","variables","body","imap4flags"];\n'
 
@@ -22,8 +22,10 @@ def test_step_limit_stops_a_huge_key_list() -> None:
 
 
 def test_action_limit() -> None:
-    body = "".join(f'fileinto :copy "l{i}"; ' for i in range(30))
-    r = go('require ["fileinto","copy"];\n' + body, max_actions=10)
+    # Each emitted effect counts; intents emit one per call, and fileinto now emits at most one
+    # location, so drive the limit with redirects (recorded as suppressed intents, never sent).
+    body = "".join(f'redirect "r{i}@example.net"; ' for i in range(30))
+    r = go('require ["fileinto"];\n' + body, max_actions=10)
     assert r.disposition == "inbox" and "more than 10 actions" in r.errors[0]
     assert r.effects == ()  # the failing script's actions are dropped, none leak
 
@@ -56,7 +58,10 @@ def test_a_failing_script_loses_only_its_own_actions() -> None:
     last = compile_script("c.sieve", REQ + 'fileinto "c";')
     view = view_of(parse(MAIL), size=len(MAIL), now=NOW)
     r = run([first, broken, last], view)
-    assert labels(r) == ["a", "c"]
+    # A message lives in one folder: the first successful fileinto ("a") wins; the broken script's
+    # "b" is rolled back; "c" cannot change an already-set location.
+    assert locations(r) == ["a"]
+    assert labels(r) == ["x"]
     assert len(r.errors) == 1 and r.errors[0].startswith("b.sieve:")
 
 
@@ -64,14 +69,16 @@ def test_stop_in_one_script_ends_them_all() -> None:
     first = compile_script("a.sieve", REQ + 'fileinto "a"; stop;')
     second = compile_script("b.sieve", REQ + 'fileinto "b";')
     r = run([first, second], view_of(parse(MAIL), size=len(MAIL), now=NOW))
-    assert labels(r) == ["a"]
+    assert locations(r) == ["a"]
 
 
 def test_flags_carry_from_one_script_to_the_next() -> None:
     a = compile_script("a.sieve", REQ + 'addflag "one";')
     b = compile_script("b.sieve", REQ + 'if hasflag "one" { addflag "two"; }')
     r = run([a, b], view_of(parse(MAIL), size=len(MAIL), now=NOW))
-    assert [e.value for e in r.of("flag")] == ["one", "two"]
+    # The internal flag-state machine carries across scripts (hasflag sees "one"); keyword flags
+    # surface as labels (ADR 0008).
+    assert labels(r) == ["one", "two"]
 
 
 def test_sending_code_is_not_imported_anywhere_in_the_package() -> None:

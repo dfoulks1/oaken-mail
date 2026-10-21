@@ -32,7 +32,7 @@ it). They run **in name order** (`10-lists.sieve`, `20-work.sieve`), and `stop` 
 ```sieve
 require ["fileinto", "imap4flags", "vnd.oaken.analysis"];
 
-# Mailing lists get a label and are marked read.
+# Mailing lists go in a folder and are marked read.
 if exists "list-id" {
     fileinto "Lists";
     addflag "\\Seen";
@@ -67,10 +67,11 @@ Oaken reads and organizes mail. It does not deliver it, so Sieve actions map ont
 | Action | In Oaken |
 | --- | --- |
 | `keep`, or nothing decided | disposition `inbox` |
-| `fileinto "X"` | label `X`, disposition `filed` (the implicit keep is cancelled). `fileinto "INBOX"` is a keep. |
-| `fileinto :copy "X"` | label `X` and disposition `inbox` |
+| `fileinto "X"` | **folder** (location) `X`, disposition `filed` (the implicit keep is cancelled). `fileinto "INBOX"` is a keep. A message lives in one folder: the first `fileinto` wins. |
+| `fileinto :copy "X"` | folder `X` and disposition `inbox` |
 | `discard` | disposition `discarded`: **hidden from default views, never deleted** |
-| `addflag`, `setflag`, `removeflag` | flags on the message (`\Seen`, `\Flagged` or a keyword) |
+| `addflag`/`setflag`/`removeflag` of `\Seen` or `\Flagged` | flags on the message (read / starred) |
+| `addflag "keyword"` (a non-`\` keyword) | **label** `keyword`: a search tag |
 | `redirect`, `reject`, `ereject`, `vacation` | a **suppressed intent**, recorded and shown, **never executed** |
 | `skip_enrich` (`vnd.oaken.analysis`) | the message is never sent to a model |
 | `stop` | ends all scripts |
@@ -110,10 +111,16 @@ backup of `raw.db` should keep it.
 
 | Column | Meaning |
 | --- | --- |
-| `kind` | `disposition`, `label`, `flag`, `intent` or `analysis` |
-| `value` | `filed`, `Lists`, `\Seen`, `redirect x@example.net`, `skip_enrich` |
+| `kind` | `disposition`, `location`, `label`, `flag`, `intent`, `analysis` or `enrichment` |
+| `value` | `filed`, `Work` (a folder), `Lists` (a label), `\Seen`, `redirect x@example.net`, `skip_enrich` |
 | `source` | `sieve` (a person's own attributes can use another source later) |
 | `rule` | `10-lists.sieve:4`, the file and line, so a UI can say **why** |
+
+A **location** is the folder a filed message is organized into (single-valued per source, like the
+disposition); a **label** is a search tag (many per message). They are distinguished by `kind`, so a
+UI can show folders apart from tags (see [ADR 0008](../adr/index.html)). The `enrichment` kind is a
+namespaced escape hatch (`<producer>:<key>=<data>`) for enrichers and plugins to attach their own
+data without a schema change.
 
 A re-run replaces only the `sieve` rows of that message, in one transaction. `message_filters`
 records the hash of the script set that last ran on each message. Edit a script and the hash changes,

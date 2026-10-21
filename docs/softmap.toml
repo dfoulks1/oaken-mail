@@ -532,7 +532,7 @@ layer = "ingest"
 status = "built"
 prompt = "06c"
 path = "src/oaken/mail/sieve"
-summary = "The user's Sieve (RFC 5228) scripts organize mail as it lands: a disposition, labels, flags and an analysis marker, stored as attributes in raw.db. A small engine of our own; sending actions are recorded and never executed."
+summary = "The user's Sieve (RFC 5228) scripts organize mail as it lands: a disposition, a folder (location), labels, flags and an analysis marker, stored as attributes in raw.db. A small engine of our own; sending actions are recorded and never executed."
 uses = ["parsing", "rawstore"]
 untrusted = true
 types = [
@@ -540,7 +540,7 @@ types = [
   ["SieveResult", "frozen dataclass", "The disposition (inbox, filed, discarded), the rule that decided it and the effects, each with script:line."],
   ["MessageView", "dataclass", "What a script may look at: headers, envelope, size and body text. Never attachments."],
   ["FilterEngine", "class", "Loads the scripts, filters a message and stores the attributes, or refilters stale messages."],
-  ["AttrStore", "class", "message_attrs in raw.db: replace per source, list by label or disposition, counts, stale detection."],
+  ["AttrStore", "class", "message_attrs in raw.db (kinds: disposition, location, label, flag, intent, analysis, enrichment): replace per source, list by kind, counts, stale detection."],
 ]
 funcs = [
   ["compile_script(name, text) -> Script", "Parse and validate; raises SieveError with a line number."],

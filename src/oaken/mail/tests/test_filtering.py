@@ -77,7 +77,7 @@ async def test_filtering_stores_disposition_labels_flags_and_rules(rig: Rig) -> 
     got = {(a.kind, a.value, a.source, a.rule) for a in await rig.attrs.get(mid)}
     assert got == {
         ("disposition", "filed", "sieve", "10-lists.sieve:2"),
-        ("label", "Newsletters", "sieve", "10-lists.sieve:2"),
+        ("location", "Newsletters", "sieve", "10-lists.sieve:2"),
         ("flag", "\\Seen", "sieve", "10-lists.sieve:2"),
         ("analysis", "skip_enrich", "sieve", "10-lists.sieve:2"),
     }
@@ -139,7 +139,7 @@ async def test_rerun_replaces_only_sieve_rows(rig: Rig) -> None:
     rows = {(a.source, a.kind, a.value) for a in await rig.attrs.get(mid)}
     assert rows == {
         ("sieve", "disposition", "filed"),
-        ("sieve", "label", "Two"),
+        ("sieve", "location", "Two"),
         ("user", "label", "Mine"),
         ("user", "flag", "\\Flagged"),
     }
@@ -156,7 +156,7 @@ async def test_refilter_walks_only_stale_messages_and_is_idempotent(rig: Rig) ->
     assert (await eng2.refilter(limit=2)).filtered == 2  # resumable in pieces
     assert len(await rig.attrs.stale(eng2.report.sha256)) == 3
     assert (await eng2.refilter()).filtered == 3
-    assert await rig.attrs.message_ids("label", "x", limit=10) == sorted(ids)
+    assert await rig.attrs.message_ids("location", "x", limit=10) == sorted(ids)
 
 
 async def test_deleted_messages_are_not_listed_or_counted(rig: Rig) -> None:
@@ -165,8 +165,8 @@ async def test_deleted_messages_are_not_listed_or_counted(rig: Rig) -> None:
     eng = rig.engine()
     await eng.refilter()
     await rig.store.mark_deleted(a)
-    assert await rig.attrs.message_ids("label", "x") == [b]
-    assert await rig.attrs.counts("label") == {"x": 1}
+    assert await rig.attrs.message_ids("location", "x") == [b]
+    assert await rig.attrs.counts("location") == {"x": 1}
     assert await rig.attrs.counts("disposition") == {"filed": 1}
 
 
@@ -199,7 +199,7 @@ async def test_scripts_run_in_name_order(rig: Rig) -> None:
     rig.script("10-a.sieve", 'require "fileinto"; fileinto "first"; stop;')
     mid = await rig.put("p", PLAIN)
     await rig.engine().filter_message(mid)
-    assert await rig.attrs.counts("label") == {"first": 1}
+    assert await rig.attrs.counts("location") == {"first": 1}
 
 
 async def test_script_set_hash_changes_with_any_script(rig: Rig) -> None:

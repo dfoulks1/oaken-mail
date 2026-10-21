@@ -56,23 +56,20 @@
   <aside class="ok-sidebar">
     <button class="btn btn-oaken btn-compose" data-action="compose"><i class="bi bi-pencil-square"></i>Compose</button>
     <nav class="ok-nav">
-      <a href="index.html?folder=inbox" class="active"><i class="bi bi-inbox"></i>Inbox<span class="count unread">12</span></a>
-      <a href="index.html?folder=star"><i class="bi bi-star"></i>Starred</a>
-      <a href="index.html?folder=snooze"><i class="bi bi-clock"></i>Snoozed</a>
-      <a href="index.html?folder=sent"><i class="bi bi-send"></i>Sent</a>
-      <a href="index.html?folder=drafts"><i class="bi bi-file-earmark"></i>Drafts<span class="count">3</span></a>
-      <a href="index.html?folder=archive"><i class="bi bi-archive"></i>Archive</a>
-      <a href="index.html?folder=spam"><i class="bi bi-exclamation-octagon"></i>Spam</a>
-      <a href="index.html?folder=trash"><i class="bi bi-trash3"></i>Trash</a>
+      <a href="index.html?folder=inbox" class="active"><i class="bi bi-inbox"></i>Inbox</a>
+      <a href="index.html?folder=discarded"><i class="bi bi-trash3"></i>Discarded</a>
       <div class="ok-nav-heading">Folders <button class="btn btn-sm btn-ghost p-0 px-1" data-bs-toggle="modal" data-bs-target="#newFolderModal" title="New folder"><i class="bi bi-plus-lg"></i></button></div>
-      <a href="index.html?folder=dev@lists"><i class="bi bi-folder2"></i>dev@lists<span class="count">24</span></a>
-      <a href="index.html?folder=users@lists"><i class="bi bi-folder2"></i>users@lists<span class="count">5</span></a>
-      <a href="index.html?folder=private@board"><i class="bi bi-folder2"></i>private@board</a>
+      <!-- Folders (organization) are rendered from the backend by assets/oaken.js (list_labels
+           .locations). Distinct fileinto destinations become folders. The demo supplies dummy
+           folders via assets/demo-fixtures.js; empty on a fresh mailbox. -->
+      <div data-oaken-folders>
+        <div class="small text-muted px-3 py-1">No folders yet.</div>
+      </div>
       <div class="ok-nav-heading">Labels <button class="btn btn-sm btn-ghost p-0 px-1" data-bs-toggle="modal" data-bs-target="#newLabelModal" title="New label"><i class="bi bi-plus-lg"></i></button></div>
-      <a href="index.html?label=board"><span class="ok-label-dot" style="background:var(--ok-feather-purple)"></span>Board</a>
-      <a href="index.html?label=infra"><span class="ok-label-dot" style="background:var(--ok-primary)"></span>Infra</a>
-      <a href="index.html?label=releases"><span class="ok-label-dot" style="background:var(--ok-feather-orange)"></span>Releases</a>
-      <a href="index.html?label=personal"><span class="ok-label-dot" style="background:var(--ok-feather-amber)"></span>Personal</a>
+      <!-- Labels (search tags) are rendered from the backend (list_labels.labels). -->
+      <div data-oaken-labels>
+        <div class="small text-muted px-3 py-1">No tags yet.</div>
+      </div>
       <div class="ok-nav-heading">More</div>
       <a href="contacts.html"><i class="bi bi-person-lines-fill"></i>Contacts</a>
       <a href="settings.html"><i class="bi bi-gear"></i>Settings</a>

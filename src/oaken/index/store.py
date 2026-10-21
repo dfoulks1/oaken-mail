@@ -72,6 +72,7 @@ class SearchFilters:
     list_id: str | None = None
     labels: tuple[str, ...] = ()
     disposition: str | None = None  # None hides discarded mail; "any" shows everything
+    location: str | None = None  # a folder (kind='location'); None means no folder filter
     include_discarded: bool = False
     list_all: bool = False  # with no words, list the newest messages even with no other filter
 
@@ -91,6 +92,7 @@ class SearchHit:
     disposition: str
     has_attachments: bool
     chunk_id: int | None = None  # the chunk that matched best; None for a listing
+    location: str | None = None  # the folder, if the message is filed into one
 
 
 @dataclass(frozen=True, slots=True)
@@ -277,10 +279,11 @@ class IndexStore:
         *,
         disposition: str = "inbox",
         labels: Sequence[str] = (),
+        location: str | None = None,
         force: bool = False,
     ) -> IndexResult:
         """Index one message. Idempotent: with the same content hash nothing but the organization
-        (disposition and labels) is touched, and no chunk is written."""
+        (disposition, location and labels) is touched, and no chunk is written."""
         if disposition not in DISPOSITIONS:
             raise ValueError(f"unknown disposition {disposition!r}")
         a = analysis
@@ -324,13 +327,13 @@ class IndexStore:
             )
             created = row is None
             if row is not None and row["content_hash"] == digest and not force:
-                await self._set_organization(tx, message_id, disposition, label_set)
+                await self._set_organization(tx, message_id, disposition, label_set, location)
                 return IndexResult(message_id, False, False, 0, 0, len(chunks), thread_key, joined)
             await tx.execute(
                 "INSERT INTO docs (message_id, account_id, thread_key, subject_key, subject,"
                 " from_addr, from_name, to_json, date_utc, list_id, has_attachments,"
                 " attachments_json, cleaned_text, content_hash, parse_warnings_json,"
-                " disposition, indexed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                " disposition, location, indexed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
                 " ON CONFLICT (message_id) DO UPDATE SET account_id = excluded.account_id,"
                 " thread_key = excluded.thread_key, subject_key = excluded.subject_key,"
                 " subject = excluded.subject, from_addr = excluded.from_addr,"
@@ -340,7 +343,8 @@ class IndexStore:
                 " attachments_json = excluded.attachments_json,"
                 " cleaned_text = excluded.cleaned_text, content_hash = excluded.content_hash,"
                 " parse_warnings_json = excluded.parse_warnings_json,"
-                " disposition = excluded.disposition, indexed_at = excluded.indexed_at",
+                " disposition = excluded.disposition, location = excluded.location,"
+                " indexed_at = excluded.indexed_at",
                 (
                     message_id,
                     account_id,
@@ -358,6 +362,7 @@ class IndexStore:
                     digest,
                     json.dumps(warnings),
                     disposition,
+                    location,
                     fmt_ts(self.clock.now()),
                 ),
             )
@@ -424,11 +429,15 @@ class IndexStore:
         )
 
     async def _set_organization(
-        self, tx: Tx, message_id: str, disposition: str, labels: list[str]
+        self, tx: Tx, message_id: str, disposition: str, labels: list[str], location: str | None
     ) -> bool:
         changed = await tx.execute(
             "UPDATE docs SET disposition = ? WHERE message_id = ? AND disposition != ?",
             (disposition, message_id, disposition),
+        )
+        changed += await tx.execute(
+            "UPDATE docs SET location = ? WHERE message_id = ? AND location IS NOT ?",
+            (location, message_id, location),
         )
         current = [
             r["label"]
@@ -442,16 +451,20 @@ class IndexStore:
         return changed > 0
 
     async def set_organization(
-        self, message_id: MessageId, disposition: str, labels: Sequence[str]
+        self,
+        message_id: MessageId,
+        disposition: str,
+        labels: Sequence[str],
+        location: str | None = None,
     ) -> bool:
-        """Refresh a message's disposition and labels (after Sieve ran). False if the message is
-        not indexed (yet); the indexer passes the current values when it gets there."""
+        """Refresh a message's disposition, labels and location (after Sieve ran). False if the
+        message is not indexed (yet); the indexer passes the current values when it gets there."""
         if disposition not in DISPOSITIONS:
             raise ValueError(f"unknown disposition {disposition!r}")
         async with self.db.transaction() as tx:
             if not await tx.fetchone("SELECT 1 FROM docs WHERE message_id = ?", (message_id,)):
                 return False
-            await self._set_organization(tx, message_id, disposition, sorted(set(labels)))
+            await self._set_organization(tx, message_id, disposition, sorted(set(labels)), location)
             return True
 
     async def delete_message(self, message_id: MessageId) -> bool:
@@ -588,6 +601,9 @@ class IndexStore:
                 " AND l.label = ?)"
             )
             args.append(label)
+        if f.location is not None:
+            clauses.append("d.location = ?")
+            args.append(f.location)
         explicit = bool(clauses) or bool(
             q.disposition or f.disposition or f.include_discarded or f.list_all
         )
@@ -732,6 +748,7 @@ class IndexStore:
             disposition=d["disposition"],
             has_attachments=bool(d["has_attachments"]),
             chunk_id=int(chunk_id) if chunk_id is not None else None,
+            location=d["location"] if "location" in d.keys() else None,
         )
 
     # -- integrity --------------------------------------------------------------------------

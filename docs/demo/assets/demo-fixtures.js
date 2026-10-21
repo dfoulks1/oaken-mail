@@ -80,6 +80,8 @@
           (m.subject + " " + m.from_name + " " + m.snippet).toLowerCase().includes(q));
         if (input.unread_only) items = items.filter((m) => m.is_read === false);
         if (input.label) items = items.filter((m) => (m.labels || []).includes(input.label));
+        if (input.location) items = items.filter((m) => (m.tags || []).includes(input.location));
+        if (input.disposition === "inbox") items = items.filter((m) => !(m.tags || []).length);
         return { request_id: "demo", status: "ok", output: { items, truncated: false, warnings: [], degraded: false } };
       }
       case "get_message": {
@@ -92,8 +94,20 @@
       }
       case "list_accounts":
         return { request_id: "demo", status: "ok", output: { accounts: FIX_ACCOUNTS } };
-      case "list_labels":
-        return { request_id: "demo", status: "ok", output: { labels: ["Board", "Infra", "Releases", "Personal"] } };
+      case "list_labels": {
+        // Folders (locations) come from the mailing-list "tags"; labels are the search tags.
+        const locations = {}, labels = {};
+        let inbox = 0;
+        for (const m of FIX_MESSAGES) {
+          (m.tags || []).forEach((t) => { locations[t] = (locations[t] || 0) + 1; });
+          (m.labels || []).forEach((l) => { labels[l] = (labels[l] || 0) + 1; });
+          if (!(m.tags || []).length) inbox += 1;
+        }
+        return {
+          request_id: "demo", status: "ok",
+          output: { labels, locations, dispositions: { inbox, filed: FIX_MESSAGES.length - inbox } },
+        };
+      }
       // Mutations: the demo just acknowledges, changing nothing on a server.
       case "mark_read": case "mark_unread": case "sync_now":
       case "summarize_message": case "undo":

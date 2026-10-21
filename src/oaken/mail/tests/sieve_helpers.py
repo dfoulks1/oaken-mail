@@ -38,5 +38,9 @@ def labels(r: SieveResult) -> list[str]:
     return [e.value for e in r.of("label")]
 
 
+def locations(r: SieveResult) -> list[str]:
+    return [e.value for e in r.of("location")]
+
+
 def flags(r: SieveResult) -> list[str]:
     return [e.value for e in r.of("flag")]

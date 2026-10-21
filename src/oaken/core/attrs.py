@@ -1,9 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Organization attributes in ``raw.db``: labels, flags and a disposition per message.
+"""Organization attributes in ``raw.db``: a disposition, a location (folder), labels and flags
+per message, plus enrichment data.
 
 A re-run of a source (``sieve``) replaces that source's rows for the message in one transaction
 and leaves every other source alone. ``message_filters`` records which scripts last ran, so a
 changed script set marks messages stale without touching them.
+
+Kinds (ADR 0008): ``disposition`` (inbox/filed/discarded, one per source), ``location`` (the
+folder a filed message lives in, one per source), ``label`` (search tags, many), ``flag``
+(``\\Seen``/``\\Flagged``/keywords), ``intent`` (suppressed sends), ``analysis`` (skip_enrich),
+``enrichment`` (a namespaced escape hatch for enrichers and plugins, many).
 """
 
 import json
@@ -16,7 +22,10 @@ from oaken.core.db import Database
 from oaken.core.errors import NotFound
 from oaken.core.ids import AccountId, MessageId
 
-KINDS = ("disposition", "label", "flag", "intent", "analysis")
+KINDS = ("disposition", "location", "label", "flag", "intent", "analysis", "enrichment")
+# Kinds that may hold at most one value per (message, source), enforced in the DB by a partial
+# unique index and checked here for a friendly error.
+SINGLE_VALUED = ("disposition", "location")
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,9 +59,17 @@ class AttrStore:
         errors: Sequence[str] = (),
     ) -> None:
         """Make ``attrs`` the whole truth of ``source`` for this message. All or nothing."""
+        seen_single: dict[str, str] = {}
         for a in attrs:
             if a.kind not in KINDS:
                 raise ValueError(f"unknown attribute kind {a.kind!r}")
+            if a.kind in SINGLE_VALUED:
+                prior = seen_single.get(a.kind)
+                if prior is not None and prior != a.value:
+                    raise ValueError(
+                        f"{a.kind} is single-valued per source, got {prior!r} and {a.value!r}"
+                    )
+                seen_single[a.kind] = a.value
         async with self.db.transaction() as tx:
             if not await tx.fetchone("SELECT 1 FROM messages WHERE id = ?", (message_id,)):
                 raise NotFound(f"no such message: {message_id}")

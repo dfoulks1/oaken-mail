@@ -26,7 +26,7 @@ from oaken.mail.sieve.parser import Arg, Node, SieveError
 from oaken.mail.sieve.script import Script
 
 Disposition = Literal["inbox", "filed", "discarded"]
-Kind = Literal["label", "flag", "intent", "analysis"]
+Kind = Literal["location", "label", "flag", "intent", "analysis"]
 
 _SYSTEM_FLAGS: Final = {
     "\\seen": "\\Seen",
@@ -94,6 +94,7 @@ class _State:
     effects: list[Effect] = field(default_factory=list)
     keep: str | None = None  # rule of an explicit keep
     filed: str | None = None  # rule of the first fileinto
+    located: bool = False  # a location (folder) has been set; a message lives in one folder
     discard: str | None = None
     flags: list[str] = field(default_factory=list)
     steps: int = 0
@@ -134,7 +135,10 @@ def _result(state: _State, errors: tuple[str, ...]) -> SieveResult:
         disposition, rule = "inbox", "implicit-keep"
     if disposition != "discarded":
         for flag in state.flags:
-            effects.append(Effect("flag", flag, rule))
+            # System flags (\Seen, \Flagged, …) are flags: read/starred state. A keyword flag
+            # (no leading backslash) is a search tag — a label (ADR 0008).
+            kind: Kind = "flag" if flag.startswith("\\") else "label"
+            effects.append(Effect(kind, flag, rule))
     return SieveResult(disposition, rule, tuple(_unique(effects)), errors, state.steps)
 
 
@@ -243,7 +247,11 @@ class _Run:
         if mailbox.casefold() == "inbox":
             self.state.keep = self.state.keep or self.rule(n)
             return
-        self.emit("label", mailbox, n)
+        # fileinto is organization (ADR 0008): the mailbox is a folder/location, not a search tag.
+        # A message lives in one folder, so only the first fileinto sets the location.
+        if not self.state.located:
+            self.emit("location", mailbox, n)
+            self.state.located = True
         if ":copy" in n.tags:
             self.state.keep = self.state.keep or self.rule(n)
         else:

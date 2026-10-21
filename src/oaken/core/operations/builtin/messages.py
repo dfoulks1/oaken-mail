@@ -29,6 +29,7 @@ assert set(DISPOSITIONS) <= {"inbox", "filed", "discarded"}  # noqa: S101 (keeps
 class MessageFilter(BaseModel):
     account_id: str | None = None
     label: str | None = None
+    location: str | None = None  # a folder (kind='location'); the sidebar sets this
     from_: str | None = Field(default=None, alias="from")
     after: datetime | None = None
     before: datetime | None = None
@@ -43,6 +44,7 @@ class MessageFilter(BaseModel):
             after=self.after,
             before=self.before,
             labels=(self.label,) if self.label else (),
+            location=self.location,
             disposition=self.disposition,
         )
 
@@ -263,6 +265,7 @@ class GetMessageOutput(BaseModel):
     date: datetime | None = None
     labels: list[str] = Field(default_factory=list)
     disposition: str = "inbox"
+    location: str | None = None  # the folder it is filed into, if any
     is_read: bool | None = None
     indexed: bool = True  # False: stored, but not parsed yet (no text)
     text: str = ""
@@ -287,7 +290,7 @@ async def get_message(ctx: OpContext, inp: GetMessageInput) -> GetMessageOutput:
     if stored.deleted_at is not None:
         raise NotFound(f"no such message: {inp.message_id}")
     doc = await ctx.svc.index.get_doc(mid)
-    disposition, labels = await ctx.svc.need_indexer().organization(mid)
+    disposition, labels, location = await ctx.svc.need_indexer().organization(mid)
     flags = await read_flags(ctx.svc.raw, [mid])
     out = GetMessageOutput(
         message_id=mid,
@@ -295,6 +298,7 @@ async def get_message(ctx: OpContext, inp: GetMessageInput) -> GetMessageOutput:
         date=stored.internal_date,
         labels=labels,
         disposition=disposition,
+        location=location,
         is_read=flags.get(mid),
         indexed=doc is not None,
     )
@@ -360,14 +364,15 @@ class ListLabelsInput(BaseModel):
 
 
 class ListLabelsOutput(BaseModel):
-    labels: dict[str, int]  # label -> messages carrying it
+    labels: dict[str, int]  # label -> messages carrying it (search tags)
     dispositions: dict[str, int]  # inbox, filed, discarded -> messages
-    content_is_untrusted: bool = True  # a label can come from the mail's own server
+    locations: dict[str, int]  # folder -> messages filed into it (organization)
+    content_is_untrusted: bool = True  # a label or folder name can come from the mail's own server
 
 
 @operation(
     "list_labels",
-    "Every label and disposition with how many live messages carry it.",
+    "Every label, folder (location) and disposition with how many live messages carry it.",
     permission="read",
     input=ListLabelsInput,
     output=ListLabelsOutput,
@@ -377,6 +382,7 @@ async def list_labels(ctx: OpContext, inp: ListLabelsInput) -> ListLabelsOutput:
     return ListLabelsOutput(
         labels=await ctx.svc.attrs.counts("label"),
         dispositions=await ctx.svc.attrs.counts("disposition"),
+        locations=await ctx.svc.attrs.counts("location"),
     )
 
 

@@ -3,7 +3,7 @@
 
 import pytest
 
-from oaken.mail.tests.sieve_helpers import MAIL, go, labels
+from oaken.mail.tests.sieve_helpers import MAIL, go, locations
 
 EXAMPLE = """# Example Sieve Filter
 # Declare any optional features or extension used by the script
@@ -71,7 +71,7 @@ def mail(headers: str) -> bytes:
 )
 def test_rfc_5228_section_10_example(headers: str, disposition: str, folder: list[str]) -> None:
     r = go(EXAMPLE, mail(headers))
-    assert (r.disposition, labels(r)) == (disposition, folder)
+    assert (r.disposition, locations(r)) == (disposition, folder)
 
 
 def test_keywords_are_case_insensitive() -> None:
@@ -79,7 +79,7 @@ def test_keywords_are_case_insensitive() -> None:
         'REQUIRE "fileinto"; IF HEADER :IS "Subject" "[dev] quarterly report 2026" '
         '{ FILEINTO "x"; }'
     )
-    assert labels(r) == ["x"]
+    assert locations(r) == ["x"]
 
 
 def test_header_matches_the_whole_unfolded_value() -> None:
@@ -105,4 +105,4 @@ def test_size_over_and_under_use_the_raw_message_size() -> None:
 
 def test_text_block_as_a_string() -> None:
     script = 'require "fileinto";\nfileinto text:\nq\n.\n;'
-    assert labels(go(script)) == ["q"]
+    assert locations(go(script)) == ["q"]
