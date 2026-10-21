@@ -14,12 +14,23 @@ UI shows it, exactly as the CLI reports a core-down.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import json
+import os
+import signal
+import socket
+import subprocess  # noqa: S404 (starts our own interpreter, never a shell)
 import sys
+import time
 from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
 
 import uvicorn
 
 from oaken import __version__
+from oaken.api.runtime import pid_alive
+from oaken.core import paths
 from oaken_cli.discovery import Endpoint, discover
 from oaken_cli.exits import CoreUnavailable, ExitCode
 from oaken_webui.app import build_app
@@ -27,6 +38,7 @@ from oaken_webui.app import build_app
 PROG = "oaken-webui"
 LOOPBACK = "127.0.0.1"
 DEFAULT_PORT = 47813  # obscure, high-numbered, well clear of common dev ports
+PID_FILE = "webui.json"  # beside core's runtime file; says which process serves the UI, and where
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,6 +49,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"{PROG} {__version__}")
     parser.add_argument(
         "--port", type=int, default=DEFAULT_PORT, help=f"port to listen on (default {DEFAULT_PORT})"
+    )
+    parser.add_argument(
+        "--detach", action="store_true", help="run in the background and return once it is serving."
+    )
+    parser.add_argument(
+        "--stop", action="store_true", help="stop a UI server that was started with --detach."
     )
     parser.add_argument(
         "--url",
@@ -75,8 +93,98 @@ def _configure_logging(verbose: int) -> None:
     configure_logging(settings, stream=sys.stderr)
 
 
+def _pid_path() -> Path:
+    return paths.runtime_file(PID_FILE)
+
+
+def _running() -> dict[str, int] | None:
+    """The pid file's contents if that server is alive, else ``None``."""
+    try:
+        data = json.loads(_pid_path().read_text())
+        pid, port = int(data["pid"]), int(data["port"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return {"pid": pid, "port": port} if pid_alive(pid) else None
+
+
+def _listening(port: int) -> bool:
+    with contextlib.suppress(OSError), socket.create_connection((LOOPBACK, port), timeout=0.2):
+        return True
+    return False
+
+
+def _detach(args: argparse.Namespace, argv: Sequence[str]) -> int:
+    """Start ourselves again in the background (a new session on POSIX, so closing the terminal
+    does not stop it) and wait until the port answers."""
+    found = _running()
+    if found is not None:
+        print(
+            f"{PROG}: already running (pid {found['pid']}) on http://{LOOPBACK}:{found['port']}",
+            file=sys.stderr,
+        )
+        return int(ExitCode.ERROR)
+    flags: dict[str, Any] = {}
+    if sys.platform == "win32":  # pragma: no cover (Windows only)
+        flags["creationflags"] = 0x00000008 | 0x00000200  # DETACHED_PROCESS | NEW_PROCESS_GROUP
+    else:
+        flags["start_new_session"] = True
+    child_args = [a for a in argv if a != "--detach"]
+    child = subprocess.Popen(  # noqa: S603 (our own interpreter, fixed arguments)
+        [sys.executable, "-m", "oaken_webui.main", *child_args],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        close_fds=True,
+        **flags,
+    )
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        if _listening(args.port) and _running() is not None:
+            print(
+                f"{PROG}: serving the Oaken Mail UI on http://{LOOPBACK}:{args.port} "
+                f"(pid {child.pid}); stop it with {PROG} --stop",
+                file=sys.stderr,
+            )
+            return int(ExitCode.OK)
+        if child.poll() is not None:
+            print(
+                f"{PROG}: exited while starting (code {child.returncode}); is port "
+                f"{args.port} in use? Run without --detach to see why.",
+                file=sys.stderr,
+            )
+            return int(ExitCode.ERROR)
+        time.sleep(0.05)
+    print(f"{PROG}: did not start listening within 15s", file=sys.stderr)
+    return int(ExitCode.ERROR)
+
+
+def _stop() -> int:
+    found = _running()
+    if found is None:
+        print(f"{PROG}: not running", file=sys.stderr)
+        return int(ExitCode.ERROR)
+    sig = signal.CTRL_BREAK_EVENT if sys.platform == "win32" else signal.SIGTERM  # type: ignore[attr-defined,unused-ignore]
+    with contextlib.suppress(ProcessLookupError):
+        os.kill(found["pid"], sig)
+    deadline = time.monotonic() + 10
+    while pid_alive(found["pid"]) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    if pid_alive(found["pid"]):
+        print(f"{PROG}: pid {found['pid']} did not stop within 10s", file=sys.stderr)
+        return int(ExitCode.ERROR)
+    with contextlib.suppress(OSError):
+        _pid_path().unlink()  # uvicorn re-raises SIGTERM, so the server's own cleanup is skipped
+    print(f"{PROG}: stopped", file=sys.stderr)
+    return int(ExitCode.OK)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
     args = build_parser().parse_args(argv)
+    if args.stop:
+        return _stop()
+    if args.detach:
+        return _detach(args, argv)
     _configure_logging(args.verbose)
     try:
         endpoint = _endpoint(args)
@@ -95,10 +203,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     server = uvicorn.Server(config)
     print(f"{PROG}: serving the Oaken Mail UI on http://{LOOPBACK}:{args.port}", file=sys.stderr)
+    found = _running()
+    if found is not None:
+        print(
+            f"{PROG}: already running (pid {found['pid']}) on http://{LOOPBACK}:{found['port']}",
+            file=sys.stderr,
+        )
+        return int(ExitCode.ERROR)
+    pid_file = _pid_path()
+    pid_file.write_text(json.dumps({"pid": os.getpid(), "port": args.port}))
     try:
         server.run()
     except KeyboardInterrupt:
         return int(ExitCode.ERROR)
+    finally:
+        with contextlib.suppress(OSError):
+            pid_file.unlink()
     return int(ExitCode.OK)
 
 
