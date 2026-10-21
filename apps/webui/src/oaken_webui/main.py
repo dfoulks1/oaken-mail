@@ -159,7 +159,13 @@ def _detach(args: argparse.Namespace) -> int:
     )
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:
-        if _listening(args.port) and _running() is not None:
+        found = _running()
+        if _listening(args.port) and found is not None and found["pid"] == child.pid:
+            # Something else may be holding the port, and the child writes its pid file just before
+            # it tries to bind: only believe it if it is still alive a moment later.
+            time.sleep(0.4)
+            if child.poll() is not None:
+                continue  # the next pass reports that it exited
             print(
                 f"{PROG}: serving the Oaken Mail UI on http://{LOOPBACK}:{args.port} "
                 f"(pid {child.pid}); stop it with {PROG} stop",
