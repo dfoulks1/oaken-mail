@@ -147,13 +147,15 @@ class HttpApiClient(_Base, ApiClient):
         *,
         confirm: bool = False,
         confirmation_token: str | None = None,
+        timeout: float | None = None,  # noqa: ASYNC109
     ) -> CallResult:
         body = {
             "input": dict(payload or {}),
             "confirm": confirm,
             "confirmation_token": confirmation_token,
         }
-        data = (await self._request("POST", f"/v1/operations/{name}", json=body)).json()
+        extra: dict[str, Any] = {} if timeout is None else {"timeout": timeout}
+        data = (await self._request("POST", f"/v1/operations/{name}", json=body, **extra)).json()
         proposal = data.get("proposal")
         return CallResult(
             request_id=str(data.get("request_id", "")),

@@ -127,8 +127,10 @@ class ApiClient(ABC):
         *,
         confirm: bool = False,
         confirmation_token: str | None = None,
+        timeout: float | None = None,  # noqa: ASYNC109
     ) -> CallResult:
-        """Run one operation.
+        """Run one operation. ``timeout`` (seconds) replaces the transport's default wait for the
+        answer, for the few operations that are slow by nature, such as ``ask`` on a local model.
 
         ``confirm=True`` is the CLI saying *the person at the terminal asked for this exact
         action*; it is how a human-class caller pre-confirms a mutation. A mutation that is neither

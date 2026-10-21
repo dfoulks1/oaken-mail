@@ -12,6 +12,7 @@ from collections.abc import AsyncIterator, Mapping
 from contextlib import redirect_stdout
 from pathlib import Path
 
+import httpx2
 import pytest
 from pydantic import BaseModel
 
@@ -247,3 +248,32 @@ async def test_wait_for_a_job_reports_failure_and_times_out_cleanly(
     assert await _wait_for_job(client, "j2", 10) == "failed"
     with pytest.raises(CliError):
         await _wait_for_job(client, "never", 0.3)
+
+
+class _Capture(httpx2.AsyncBaseTransport):
+    """Answers every call with an empty success and remembers the timeouts it was given."""
+
+    def __init__(self) -> None:
+        self.timeouts: list[dict[str, float | None]] = []
+
+    async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
+        self.timeouts.append(request.extensions["timeout"])
+        return httpx2.Response(200, json={"status": "ok", "output": {}})
+
+
+async def test_a_call_can_wait_longer_than_the_transport_default() -> None:
+    transport = _Capture()
+    client = HttpApiClient(Endpoint("http://127.0.0.1:1", TOKEN), transport=transport)
+    await client.call("ask", {"question": "q"})
+    await client.call("ask", {"question": "q"}, timeout=300.0)
+    await client.aclose()
+    default, longer = transport.timeouts
+    assert default["read"] == 60.0 and longer["read"] == 300.0
+
+
+async def test_ask_takes_a_timeout_and_defaults_to_five_minutes() -> None:
+    from oaken_cli.main import build_parser
+
+    parser = build_parser()
+    assert parser.parse_args(["ask", "q"]).timeout == 300.0
+    assert parser.parse_args(["ask", "q", "--timeout", "900"]).timeout == 900.0

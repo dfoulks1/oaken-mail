@@ -66,6 +66,7 @@ class InProcessApiClient(ApiClient):
         *,
         confirm: bool = False,
         confirmation_token: str | None = None,
+        timeout: float | None = None,  # noqa: ASYNC109 (in process there is no transport to time)
     ) -> CallResult:
         result = await self._core.call(
             name,

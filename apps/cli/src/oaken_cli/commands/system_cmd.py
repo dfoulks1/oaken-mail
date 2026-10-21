@@ -225,7 +225,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
 
 
 async def _ask(client: ApiClient, args: argparse.Namespace) -> int:
-    result = await client.call("ask", {"question": args.question})
+    result = await client.call("ask", {"question": args.question}, timeout=args.timeout)
     out = result.output if isinstance(result.output, dict) else {}
 
     def text() -> None:

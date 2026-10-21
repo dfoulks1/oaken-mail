@@ -241,6 +241,13 @@ def _register_system(
         "ask", help="Answer a question from the mail, citing the messages.", parents=[g]
     )
     ask.add_argument("question", help="The question to answer.")
+    ask.add_argument(
+        "--timeout",
+        type=float,
+        default=300.0,
+        metavar="S",
+        help="Give up waiting for the answer after S seconds (a local model can be slow).",
+    )
     ask.set_defaults(func=_lazy("system_cmd", "cmd_ask"))
 
     pipeline = sub.add_parser(
