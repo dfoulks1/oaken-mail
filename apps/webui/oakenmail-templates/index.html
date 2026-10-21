@@ -53,27 +53,9 @@
     </div>
   </header>
   <div class="ok-body">
-  <aside class="ok-sidebar">
-    <button class="btn btn-oaken btn-compose" data-action="compose"><i class="bi bi-pencil-square"></i>Compose</button>
-    <nav class="ok-nav">
-      <a href="index.html?folder=inbox" class="active"><i class="bi bi-inbox"></i>Inbox</a>
-      <a href="index.html?folder=discarded"><i class="bi bi-trash3"></i>Discarded</a>
-      <div class="ok-nav-heading">Folders <button class="btn btn-sm btn-ghost p-0 px-1" data-bs-toggle="modal" data-bs-target="#newFolderModal" title="New folder"><i class="bi bi-plus-lg"></i></button></div>
-      <!-- Folders (organization) are rendered from the backend by assets/oaken.js (list_labels
-           .locations). Distinct fileinto destinations become folders. The demo supplies dummy
-           folders via assets/demo-fixtures.js; empty on a fresh mailbox. -->
-      <div data-oaken-folders>
-        <div class="small text-muted px-3 py-1">No folders yet.</div>
-      </div>
-      <div class="ok-nav-heading">Labels <button class="btn btn-sm btn-ghost p-0 px-1" data-bs-toggle="modal" data-bs-target="#newLabelModal" title="New label"><i class="bi bi-plus-lg"></i></button></div>
-      <!-- Labels (search tags) are rendered from the backend (list_labels.labels). -->
-      <div data-oaken-labels>
-        <div class="small text-muted px-3 py-1">No tags yet.</div>
-      </div>
-      <div class="ok-nav-heading">More</div>
-      <a href="contacts.html"><i class="bi bi-person-lines-fill"></i>Contacts</a>
-      <a href="settings.html"><i class="bi bi-gear"></i>Settings</a>
-    </nav>
+  <aside class="ok-sidebar" data-oaken-sidebar>
+    <!-- The one sidebar, injected by assets/oaken.js (Oaken.sidebar). This empty aside is the
+         no-JS fallback. Do not hardcode entries here; edit SIDEBAR_HTML in oaken.js. -->
   </aside>
 
   <main class="ok-main" data-layout="split">
