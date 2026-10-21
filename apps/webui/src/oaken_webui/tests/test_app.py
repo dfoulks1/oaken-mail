@@ -70,7 +70,9 @@ def _webui_client(core: FakeCore | None, *, static_dir: Path | None = None) -> h
     transport = httpx2.ASGITransport(app=core) if core is not None else None
     endpoint = Endpoint(base_url="http://127.0.0.1:0", token="test-token")
     app = build_app(endpoint=endpoint, transport=transport, static_dir=static_dir)
-    return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://ui")
+    return httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:47813"
+    )
 
 
 @pytest.fixture
@@ -115,6 +117,43 @@ async def test_v1_is_proxied_with_the_token_and_the_ui_caller_class(ui_tree: Pat
     assert b'"query"' in core.seen["body"]
 
 
+async def test_a_same_origin_post_from_the_browser_works_and_page_headers_are_not_forwarded(
+    ui_tree: Path,
+) -> None:
+    core = FakeCore()
+    page = {
+        "origin": "http://127.0.0.1:47813",
+        "referer": "http://127.0.0.1:47813/",
+        "sec-fetch-site": "same-origin",
+        "cookie": "a=b",
+    }
+    async with _webui_client(core, static_dir=ui_tree) as c:
+        r = await c.post("/v1/operations/search", json={"input": {}}, headers=page)
+        assert r.status_code == 200
+    # Core must not see the page's origin: it would take the proxy for a cross-origin caller.
+    assert not {"origin", "referer", "cookie", "sec-fetch-site"} & set(core.seen["headers"])
+
+
+async def test_a_cross_origin_post_is_refused_before_it_reaches_core(ui_tree: Path) -> None:
+    core = FakeCore()
+    async with _webui_client(core, static_dir=ui_tree) as c:
+        for headers in (
+            {"origin": "https://evil.example"},
+            {"sec-fetch-site": "cross-site"},
+        ):
+            r = await c.post("/v1/operations/search", json={"input": {}}, headers=headers)
+            assert r.status_code == 403 and r.json()["code"] == "bad_origin"
+    assert core.seen == {}
+
+
+async def test_a_non_loopback_host_name_is_refused(ui_tree: Path) -> None:
+    core = FakeCore()
+    async with _webui_client(core, static_dir=ui_tree) as c:
+        r = await c.get("/v1/operations/search", headers={"host": "rebind.example"})
+        assert r.status_code == 400 and r.json()["code"] == "bad_host"
+    assert core.seen == {}
+
+
 async def test_query_string_is_forwarded(ui_tree: Path) -> None:
     core = FakeCore()
     async with _webui_client(core, static_dir=ui_tree) as c:
@@ -138,7 +177,7 @@ async def test_core_down_is_reported_as_503(ui_tree: Path) -> None:
     endpoint = Endpoint(base_url="http://127.0.0.1:1", token="test-token")
     app = build_app(endpoint=endpoint, static_dir=ui_tree)
     async with httpx2.AsyncClient(
-        transport=httpx2.ASGITransport(app=app), base_url="http://ui"
+        transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:47813"
     ) as c:
         r = await c.post("/v1/operations/search", json={"input": {}})
         assert r.status_code == 503

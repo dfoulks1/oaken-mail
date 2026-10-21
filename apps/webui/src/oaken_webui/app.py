@@ -57,6 +57,42 @@ _HOP_BY_HOP = frozenset(
 )
 
 
+# What only a browser sends. The proxy is a trusted, server-side client of core, so these are not
+# forwarded: core's own guard would take the page's Origin for a cross-origin caller and refuse
+# every POST. The same checks are made here instead, against the UI's own origin (``_same_origin``).
+_BROWSER_ONLY = frozenset(
+    {
+        "origin",
+        "referer",
+        "cookie",
+        "sec-fetch-site",
+        "sec-fetch-mode",
+        "sec-fetch-dest",
+        "sec-fetch-user",
+    }
+)
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+_LOOPBACK_NAMES = frozenset({"127.0.0.1", "localhost", "[::1]"})
+
+
+def _bad_request(request: Request) -> JSONResponse | None:
+    """Refuse a request that is not from a page this server served. The proxy holds the API token,
+    so a page on another site (or a rebinding host name) must not be able to use it."""
+    host = request.headers.get("host", "").lower()
+    if host.rpartition(":")[0] not in _LOOPBACK_NAMES and host not in _LOOPBACK_NAMES:
+        return JSONResponse({"code": "bad_host", "message": "this host name is not allowed"}, 400)
+    if request.method in _SAFE_METHODS:
+        return None
+    origin = request.headers.get("origin")
+    if (origin is not None and origin != f"http://{host}") or (
+        request.headers.get("sec-fetch-site") == "cross-site"
+    ):
+        return JSONResponse(
+            {"code": "bad_origin", "message": "cross-origin requests are not allowed"}, 403
+        )
+    return None
+
+
 def ui_dir() -> Path:
     """Where the browser UI lives: the packaged copy if present, else the source templates."""
     packaged = Path(__file__).parent / "ui"
@@ -108,12 +144,15 @@ class Proxy:
         )
 
     def _headers(self, request: Request, token: str) -> dict[str, str]:
-        out = {k: v for k, v in request.headers.items() if k.lower() not in _HOP_BY_HOP}
+        skip = _HOP_BY_HOP | _BROWSER_ONLY
+        out = {k: v for k, v in request.headers.items() if k.lower() not in skip}
         out["authorization"] = f"Bearer {token}"
         out["x-oaken-client"] = UI_CLIENT  # the UI caller class, never raised to mcp
         return out
 
     async def handle(self, request: Request) -> Response:
+        if (refused := _bad_request(request)) is not None:
+            return refused
         try:
             endpoint = self._endpoint()
         except CoreUnavailable as exc:
