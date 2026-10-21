@@ -1,0 +1,218 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Set up Oaken from scratch · Oaken Mail</title>
+<meta name="description" content="A first-time setup of Oaken Mail: install with uv, write config.toml, pull the Ollama models, add an account, store its credential in the keyring, start the daemon, sync, and turn on the MCP server.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Set up Oaken from scratch · Oaken Mail">
+<meta property="og:description" content="A first-time setup of Oaken Mail: install with uv, write config.toml, pull the Ollama models, add an account, store its credential in the keyring, start the daemon, sync, and turn on the MCP server.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="index.html"><img src="assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">From a fresh checkout to a synced mailbox and a connected AI client</div>
+    <div class="docnav"><a class="home-link" href="index.html">&#8962; Home</a>
+      <div class="label">Start</div>
+      <a class="doc-link" href="mcp.html">Connect an AI client</a>
+      <a class="doc-link current" href="getting-started.html" aria-current="page">Set up Oaken from scratch</a>
+      <a class="doc-link" href="keyring.html">Store credentials in your keyring</a>
+      <a class="doc-link" href="providers/gmail.html">Connect Gmail</a>
+      <a class="doc-link" href="providers/smtp.html">Send through your own SMTP server</a>
+      <a class="doc-link" href="providers/imap.html">Connect any IMAP server</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="architecture/overview.html">Architecture overview</a>
+      <a class="doc-link" href="architecture/jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="architecture/software-map.html">Software map</a>
+      <a class="doc-link" href="architecture/swarm.html">The swarm</a>
+      <a class="doc-link" href="architecture/storage.html">Raw storage</a>
+      <a class="doc-link" href="architecture/daemon.html">The daemon and the local API</a>
+      <a class="doc-link" href="architecture/parsing.html">Parsing and cleaning</a>
+      <a class="doc-link" href="architecture/sieve.html">Sieve filtering</a>
+      <a class="doc-link" href="architecture/index.html">The search index</a>
+      <a class="doc-link" href="plugins.html">Writing a plugin</a>
+      <a class="doc-link" href="architecture/vectors.html">The vector store</a>
+      <a class="doc-link" href="architecture/ingest-pipeline.html">The ingest pipeline</a>
+      <a class="doc-link" href="architecture/ai-safety.html">Prompt safety and workspaces</a>
+      <a class="doc-link" href="architecture/read-state.html">Read state</a>
+      <a class="doc-link" href="architecture/sync-schedule.html">Sync schedule</a>
+      <a class="doc-link" href="architecture/operations.html">Operations</a>
+      <a class="doc-link" href="architecture/retrieval.html">Retrieval and ask</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="reference/plugin-contracts.html">Plugin contracts</a>
+      <a class="doc-link" href="reference/operations.html">Operations</a>
+      <a class="doc-link" href="reference/cli.html">CLI</a>
+      <a class="doc-link" href="reference/evaluation.html">Evaluation results</a>
+      <a class="doc-link" href="reference/api.html">HTTP API</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="contributing.html">Contributing</a>
+      <a class="doc-link" href="adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="security.html">Security policy</a>
+      <a class="doc-link" href="code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#1-install"><span class="num">1</span>1. Install</a>
+      <a class="nav-link" href="#2-write-configtoml"><span class="num">2</span>2. Write `config.toml`</a>
+      <a class="nav-link" href="#3-get-the-local-models"><span class="num">3</span>3. Get the local models</a>
+      <a class="nav-link" href="#4-add-an-account"><span class="num">4</span>4. Add an account</a>
+      <a class="nav-link" href="#5-store-the-credential"><span class="num">5</span>5. Store the credential</a>
+      <a class="nav-link" href="#6-start-the-daemon-and-check-it"><span class="num">6</span>6. Start the daemon and check it</a>
+      <a class="nav-link" href="#7-sync-and-look"><span class="num">7</span>7. Sync and look</a>
+      <a class="nav-link" href="#8-optional-connect-an-ai-client"><span class="num">8</span>8. Optional: connect an AI client</a>
+      <a class="nav-link" href="#9-optional-the-web-ui"><span class="num">9</span>9. Optional: the web UI</a>
+      <a class="nav-link" href="#if-something-fails"><span class="num">10</span>If something fails</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <h1 class="display-6">Set up Oaken from scratch</h1>
+    <p class="lead">This walks through a first setup on one machine: install, the config file, the local model, one mail account, the daemon, a first sync, and, if you want it, the MCP server. Each step says how to check that it worked.</p>
+  </header>
+<p>Oaken is pre-alpha and is run from a source checkout. Everything below stays on your machine.</p>
+
+<section id="1-install" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>1. Install</h2></div>
+<p>You need Python 3.11 or newer and uv.</p>
+<div class="code"><pre class="highlight"><code class="language-bash">git<span class="w"> </span>clone<span class="w"> </span>https://github.com/dfoulks1/oaken-mail
+<span class="nb">cd</span><span class="w"> </span>oaken-mail
+uv<span class="w"> </span>sync
+uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>--help
+</code></pre></div>
+<p>There is no global install yet, so run commands as <code>uv run oaken ...</code> from the checkout, or
+activate the virtual environment (<code>source .venv/bin/activate</code>) to type <code>oaken</code> alone.</p>
+</section>
+<section id="2-write-configtoml" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>2. Write <code>config.toml</code></h2></div>
+<p>The file lives outside the repository, in your per-user config directory
+(<code>~/.config/oaken/</code> on Linux). Start from the documented template:</p>
+<div class="code"><pre class="highlight"><code class="language-bash">mkdir<span class="w"> </span>-p<span class="w"> </span>~/.config/oaken
+cp<span class="w"> </span>config.example.toml<span class="w"> </span>~/.config/oaken/config.toml
+</code></pre></div>
+<p>Every section has defaults, so you only keep what you change. Set <code>OAKEN_HOME=/some/dir</code> to put
+everything under one directory instead. <strong>Never put a password or token in this file</strong>; step 5
+stores them in your keyring. See <a href="keyring.html">Store credentials in your keyring</a> if you have not
+used one before.</p>
+<p>The template's <code>[plugins.gmail]</code> table is live, not commented out. If you do not use Gmail, delete
+it, or Oaken will report the Gmail provider as unhealthy for want of a client file.</p>
+</section>
+<section id="3-get-the-local-models" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>3. Get the local models</h2></div>
+<p>Oaken runs a local Ollama by default. It never pulls models itself, so
+pull the ones named in <code>[ai]</code> (these are the defaults):</p>
+<div class="code"><pre class="highlight"><code class="language-bash">ollama<span class="w"> </span>pull<span class="w"> </span>nomic-embed-text<span class="w">     </span><span class="c1"># the embedder</span>
+ollama<span class="w"> </span>pull<span class="w"> </span>qwen2.5:3b<span class="w">           </span><span class="c1"># the language model</span>
+</code></pre></div>
+<p>To use a model you already have, set <code>llm_model</code> (and <code>embed_model</code>) under <code>[ai]</code> in <code>config.toml</code>.</p>
+</section>
+<section id="4-add-an-account" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>4. Add an account</h2></div>
+<p>Pick the provider that matches the account:</p>
+<ul>
+<li><strong>Gmail</strong>: <a href="providers/gmail.html">Connect Gmail</a>. You create your own Google OAuth client
+(Desktop app, <code>gmail.modify</code> scope, published to Production) and save its JSON where
+<code>client_secret_file</code> points.</li>
+<li><strong>Any IMAP server</strong>: <a href="providers/imap.html">Connect any IMAP server</a>.</li>
+<li><strong>Sending through your own server</strong>: <a href="providers/smtp.html">SMTP</a>.</li>
+</ul>
+<p>Then register the account. On a terminal this asks for the provider, an id, a display name and the
+provider's non-secret settings:</p>
+<div class="code"><pre class="highlight"><code class="language-bash">uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>admin<span class="w"> </span>account<span class="w"> </span>add
+uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>admin<span class="w"> </span>account<span class="w"> </span>list
+</code></pre></div>
+<p>The account id (letters, digits, <code>-</code> and <code>_</code>) names the provider instance, <code>gmail@&lt;id&gt;</code>, and its
+keyring entry.</p>
+</section>
+<section id="5-store-the-credential" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>5. Store the credential</h2></div>
+<div class="code"><pre class="highlight"><code class="language-bash">uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>auth<span class="w"> </span>gmail<span class="w"> </span>--account<span class="w"> </span>&lt;id&gt;<span class="w">     </span><span class="c1"># opens Google's consent page</span>
+uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>auth<span class="w"> </span>imap<span class="w"> </span>--account<span class="w"> </span>&lt;id&gt;<span class="w">      </span><span class="c1"># or: asks for the password, no echo</span>
+</code></pre></div>
+<p>The credential goes to the OS keyring and is never printed. Add <code>--check</code> to test one that is
+already stored.</p>
+</section>
+<section id="6-start-the-daemon-and-check-it" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>6. Start the daemon and check it</h2></div>
+<div class="code"><pre class="highlight"><code class="language-bash">uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>start<span class="w"> </span>--detach
+uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>status<span class="w">                  </span><span class="c1"># prints the pid and the loopback port</span>
+uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>plugins<span class="w">                 </span><span class="c1"># your account's provider row should say healthy</span>
+uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>admin<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span>&lt;id&gt;<span class="w"> </span><span class="c1"># a "problem:" line says why one is not</span>
+</code></pre></div>
+<p>Core serves a small API on loopback only. Its token is the file <code>api_token</code> in the config
+directory. <a href="architecture/daemon.html">The daemon and the local API</a> explains the rest.</p>
+</section>
+<section id="7-sync-and-look" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>7. Sync and look</h2></div>
+<div class="code"><pre class="highlight"><code class="language-bash">uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>sync<span class="w"> </span>--account<span class="w"> </span>&lt;id&gt;<span class="w"> </span>--wait
+uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>search<span class="w"> </span><span class="s2">"invoice"</span>
+</code></pre></div>
+<p>The first sync of a large mailbox takes a while by design. Mail is stored under your user data
+directory (<code>~/.local/share/oaken/</code> on Linux). A schedule then keeps the account current; see
+<a href="architecture/sync-schedule.html">Sync schedule</a>.</p>
+</section>
+<section id="8-optional-connect-an-ai-client" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>8. Optional: connect an AI client</h2></div>
+<p>The MCP server is off until you turn it on. Add this to <code>config.toml</code> and restart core:</p>
+<div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[api]</span>
+<span class="n">mcp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</code></pre></div>
+<p>Then follow <a href="mcp.html">Connect an AI client</a> to point Claude Desktop or another client at
+<code>oaken mcp</code>. Changes made through it always ask for confirmation first.</p>
+</section>
+<section id="9-optional-the-web-ui" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>9. Optional: the web UI</h2></div>
+<p>With core running, <code>uv run oaken-webui</code> serves the web UI on port 47813 of <code>127.0.0.1</code>. It is a
+separate client that proxies to core and keeps the API token on the server side.</p>
+</section>
+<section id="if-something-fails" class="doc-section"><div class="section-head"><span class="section-num">10</span><h2>If something fails</h2></div>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Message</th>
+<th>Likely cause</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>no OS keyring is available</code></td>
+<td>The keyring is locked or not running. See <a href="keyring.html">the keyring page</a>.</td>
+</tr>
+<tr>
+<td><code>client_secret_file is missing or is not a Google OAuth client JSON</code></td>
+<td>The file does not exist, or is a <code>web</code> client. It must be a Desktop-app client with an <code>installed</code> block.</td>
+</tr>
+<tr>
+<td><code>core is already running</code></td>
+<td>A daemon is up. <code>oaken status</code> shows where; <code>oaken stop</code> ends it.</td>
+</tr>
+<tr>
+<td><code>core_not_running</code> from a tool call</td>
+<td>Start it with <code>oaken start --detach</code>.</td>
+</tr>
+</tbody>
+</table></div>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="assets/site.js"></script>
+
+
+</body>
+</html>

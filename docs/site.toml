@@ -95,6 +95,14 @@ id = "architecture/daemon"
 file = "architecture/daemon.md"
 
 [[pages]]
+id = "getting-started"
+file = "getting-started.md"
+
+[[pages]]
+id = "keyring"
+file = "keyring.md"
+
+[[pages]]
 id = "providers/gmail"
 file = "providers/gmail.md"
 

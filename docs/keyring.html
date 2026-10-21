@@ -1,0 +1,176 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Store credentials in your keyring · Oaken Mail</title>
+<meta name="description" content="How Oaken uses the OS keyring: the service and entry names, the oaken auth commands that store credentials, a quick check that the keyring works, how to inspect entries with Seahorse, and what the no-keyring error means.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Store credentials in your keyring · Oaken Mail">
+<meta property="og:description" content="How Oaken uses the OS keyring: the service and entry names, the oaken auth commands that store credentials, a quick check that the keyring works, how to inspect entries with Seahorse, and what the no-keyring error means.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="index.html"><img src="assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">Where Oaken keeps passwords and tokens, and how to check that your keyring works</div>
+    <div class="docnav"><a class="home-link" href="index.html">&#8962; Home</a>
+      <div class="label">Start</div>
+      <a class="doc-link" href="mcp.html">Connect an AI client</a>
+      <a class="doc-link" href="getting-started.html">Set up Oaken from scratch</a>
+      <a class="doc-link current" href="keyring.html" aria-current="page">Store credentials in your keyring</a>
+      <a class="doc-link" href="providers/gmail.html">Connect Gmail</a>
+      <a class="doc-link" href="providers/smtp.html">Send through your own SMTP server</a>
+      <a class="doc-link" href="providers/imap.html">Connect any IMAP server</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="architecture/overview.html">Architecture overview</a>
+      <a class="doc-link" href="architecture/jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="architecture/software-map.html">Software map</a>
+      <a class="doc-link" href="architecture/swarm.html">The swarm</a>
+      <a class="doc-link" href="architecture/storage.html">Raw storage</a>
+      <a class="doc-link" href="architecture/daemon.html">The daemon and the local API</a>
+      <a class="doc-link" href="architecture/parsing.html">Parsing and cleaning</a>
+      <a class="doc-link" href="architecture/sieve.html">Sieve filtering</a>
+      <a class="doc-link" href="architecture/index.html">The search index</a>
+      <a class="doc-link" href="plugins.html">Writing a plugin</a>
+      <a class="doc-link" href="architecture/vectors.html">The vector store</a>
+      <a class="doc-link" href="architecture/ingest-pipeline.html">The ingest pipeline</a>
+      <a class="doc-link" href="architecture/ai-safety.html">Prompt safety and workspaces</a>
+      <a class="doc-link" href="architecture/read-state.html">Read state</a>
+      <a class="doc-link" href="architecture/sync-schedule.html">Sync schedule</a>
+      <a class="doc-link" href="architecture/operations.html">Operations</a>
+      <a class="doc-link" href="architecture/retrieval.html">Retrieval and ask</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="reference/plugin-contracts.html">Plugin contracts</a>
+      <a class="doc-link" href="reference/operations.html">Operations</a>
+      <a class="doc-link" href="reference/cli.html">CLI</a>
+      <a class="doc-link" href="reference/evaluation.html">Evaluation results</a>
+      <a class="doc-link" href="reference/api.html">HTTP API</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="contributing.html">Contributing</a>
+      <a class="doc-link" href="adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="security.html">Security policy</a>
+      <a class="doc-link" href="code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#what-the-keyring-is"><span class="num">1</span>What the keyring is</a>
+      <a class="nav-link" href="#what-oaken-stores-there"><span class="num">2</span>What Oaken stores there</a>
+      <a class="nav-link" href="#store-a-credential"><span class="num">3</span>Store a credential</a>
+      <a class="nav-link" href="#check-that-your-keyring-works"><span class="num">4</span>Check that your keyring works</a>
+      <a class="nav-link" href="#look-at-the-entries"><span class="num">5</span>Look at the entries</a>
+      <a class="nav-link" href="#when-there-is-no-keyring"><span class="num">6</span>When there is no keyring</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <h1 class="display-6">Store credentials in your keyring</h1>
+    <p class="lead">Oaken never writes a password or token to a file or an environment variable. It asks your operating system&#39;s keyring to keep them, and this page shows what that means, how to check it works, and what to do when it does not.</p>
+  </header>
+
+<section id="what-the-keyring-is" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>What the keyring is</h2></div>
+<p>The keyring is an encrypted store run by your desktop session. Programs ask it to save and fetch
+small secrets. On Linux it is usually GNOME Keyring or KWallet, speaking the Secret Service
+protocol; on macOS it is Keychain; on Windows it is Credential Locker. It is normally unlocked by
+your login password when you sign in.</p>
+</section>
+<section id="what-oaken-stores-there" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>What Oaken stores there</h2></div>
+<p>Each secret is one entry, found by a <strong>service</strong> and a <strong>user</strong> name. Oaken always uses the service
+<code>oaken</code>; the user is <code>&lt;kind&gt;:&lt;account&gt;</code>.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Provider</th>
+<th>Entry user</th>
+<th>What is stored</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Gmail</td>
+<td><code>gmail:&lt;account&gt;</code></td>
+<td>the OAuth refresh token</td>
+</tr>
+<tr>
+<td>IMAP</td>
+<td><code>imap:&lt;account&gt;</code></td>
+<td>the password</td>
+</tr>
+<tr>
+<td>SMTP</td>
+<td><code>smtp:&lt;account&gt;</code></td>
+<td>the password</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>&lt;account&gt;</code> is the <code>account</code> setting of the provider, which is <code>default</code> when you do not set it.
+Access tokens are kept in memory only. The Gmail OAuth <em>client</em> JSON is not a secret of this kind:
+it stays a file, named by <code>client_secret_file</code>.</p>
+<p>There is no setting that points Oaken at a file or an environment variable for a credential, and
+the settings store refuses keys that look like secrets (<code>token</code>, <code>password</code> and similar).</p>
+</section>
+<section id="store-a-credential" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Store a credential</h2></div>
+<p>You do not write to the keyring yourself. Run the command for the provider:</p>
+<div class="code"><pre class="highlight"><code>oaken auth gmail --account default     # opens Google's consent page, stores the refresh token
+oaken auth imap --account default      # asks for the password without echoing it
+oaken auth smtp --account default      # the same
+</code></pre></div>
+<p>For IMAP and SMTP the password can also be piped in with <code>--password-stdin</code>. It is never taken as a
+command-line argument and never printed. If the account has two-step verification, use an app
+password. <code>--account</code> may be left out when the provider has exactly one account.</p>
+<p>Add <code>--check</code> to see whether a credential is stored and works without changing it.</p>
+</section>
+<section id="check-that-your-keyring-works" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Check that your keyring works</h2></div>
+<p>This stores, reads and removes a throwaway entry that has nothing to do with Oaken:</p>
+<div class="code"><pre class="highlight"><code>python3 -c "import keyring; keyring.set_password('test','me','hello'); print(keyring.get_password('test','me')); keyring.delete_password('test','me')"
+</code></pre></div>
+<p>If it prints <code>hello</code>, the keyring works. If it hangs or fails, it is locked or unreachable.</p>
+</section>
+<section id="look-at-the-entries" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Look at the entries</h2></div>
+<p>A graphical keyring manager shows what is stored. On GNOME, install <strong>Seahorse</strong> (&quot;Passwords and
+Keys&quot;) and open the <em>Login</em> keyring: entries written by Oaken are labelled with the service
+<code>oaken</code>. You can delete one there to reset an account, then run <code>oaken auth</code> again. The secret
+itself is shown only if you ask and the keyring is unlocked.</p>
+</section>
+<section id="when-there-is-no-keyring" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>When there is no keyring</h2></div>
+<p>Oaken stops with an error such as <em>no OS keyring is available, so the password cannot be stored
+safely</em>. It does not fall back to a file. Usual causes:</p>
+<ul>
+<li><strong>The keyring is locked.</strong> Unlock it; a prompt normally appears, and your login password opens it.</li>
+<li><strong>No Secret Service is running.</strong> Install and start one (for example <code>gnome-keyring</code>).</li>
+<li><strong>No desktop session</strong>, as over SSH or in a container. There is no D-Bus session to talk to. Run
+the command from your desktop session, or start a session with <code>dbus-run-session</code> and unlock a
+keyring inside it.</li>
+</ul>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="assets/site.js"></script>
+
+
+</body>
+</html>

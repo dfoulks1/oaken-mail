@@ -35,7 +35,9 @@ demo/login.html
 demo/message.html
 demo/search.html
 demo/settings.html
+getting-started.html
 index.html
+keyring.html
 mcp.html
 plugins.html
 providers/gmail.html
