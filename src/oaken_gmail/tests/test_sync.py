@@ -81,11 +81,79 @@ async def test_the_history_id_is_recorded_before_listing_so_nothing_is_missed() 
     late = google.add()  # arrives while the first sync is still paging
     rest, final = await pull(rig, cursor)
     news, _ = await pull(rig, final)
-    # The listing may or may not have caught it; the history from before listing surely does
-    # (a repeat is harmless: core stores a provider id once).
-    assert ids_of(news) == [late]
-    assert len(set(ids_of(first + rest))) == 250 + (late in ids_of(rest))
+    # The pull after it arrived catches up on it before carrying on listing, so it is delivered
+    # once here and the caught-up cursor has nothing left to report (a repeat would be harmless).
+    assert ids_of(rest).count(late) >= 1 and ids_of(news) == []
+    assert len(set(ids_of(first + rest))) == 251
     await rig.provider.stop()
+
+
+async def test_mail_that_arrives_during_a_long_crawl_comes_before_the_rest_of_the_past() -> None:
+    google = FakeGoogle()
+    google.fill(500)
+    rig = await started(google)
+    first, cursor = await pull(rig, None, stop_after=1)
+    before = Cursor.parse(cursor)
+    assert before is not None and before.page and before.since is None
+    late = [google.add() for _ in range(3)]
+    batches, mid = await pull(rig, cursor, stop_after=2)
+    assert ids_of(batches[:1]) == late  # the very first batch is what is new
+    assert all(ids_of(batches).count(m) == 1 for m in late)  # each delivered once, not again
+    assert len(batches) == 2 and batches[1].messages  # then the crawl goes on
+    state = Cursor.parse(mid)
+    assert state is not None and state.mode == "full" and state.page != before.page
+    assert state.since is not None and int(state.since) > int(before.history)
+    assert state.history == before.history  # the crawl's own snapshot is untouched
+    await rig.provider.stop()
+
+
+async def test_the_crawl_ends_in_incremental_mode_from_where_the_catch_up_stopped() -> None:
+    google = FakeGoogle()
+    google.fill(250)
+    rig = await started(google)
+    _, cursor = await pull(rig, None, stop_after=1)
+    google.add()
+    _, final = await pull(rig, cursor)
+    state = Cursor.parse(final)
+    assert state is not None and state.mode == "inc" and int(state.history) > int(google.hid) - 2
+    google.add()
+    after, _ = await pull(rig, final)
+    assert len(ids_of(after)) == 1  # only what came after, nothing re-delivered
+    await rig.provider.stop()
+
+
+async def test_a_catch_up_interrupted_between_pages_resumes_without_losing_mail() -> None:
+    google = FakeGoogle()
+    google.fill(300)
+    rig = await started(google)
+    _, cursor = await pull(rig, None, stop_after=1)
+    late = [google.add() for _ in range(8)]  # history comes 3 records to a page
+    first, mid = await pull(rig, cursor, stop_after=1)
+    state = Cursor.parse(mid)
+    assert state is not None and state.since_page  # stopped in the middle of the catch-up
+    rest, _ = await pull(rig, mid)
+    got = set(ids_of(first + rest))
+    assert set(late) <= got and len(ids_of(first)) < len(late)
+    await rig.provider.stop()
+
+
+async def test_a_history_id_that_expires_mid_crawl_starts_the_listing_over_and_says_so() -> None:
+    google = FakeGoogle()
+    google.fill(250)
+    rig = await started(google)
+    _, cursor = await pull(rig, None, stop_after=1)
+    google.add()
+    google.expire_history()
+    batches, final = await pull(rig, cursor)
+    assert len(set(ids_of(batches))) == 251 and Cursor.parse(final).mode == "inc"  # type: ignore[union-attr]
+    assert [type(e) for e in rig.events] == [GmailFullResync]
+    await rig.provider.stop()
+
+
+def test_a_cursor_written_before_catch_up_existed_still_reads() -> None:
+    old = '{"mode": "full", "history": "76109835", "page": "tok"}'
+    state = Cursor.parse(old)
+    assert state == Cursor("full", "76109835", "tok") and state.since is None
 
 
 async def test_incremental_sync_sees_adds_deletes_reads_stars_and_label_changes() -> None:

@@ -7,9 +7,12 @@ core understands. Spam and Trash are never synced (a message moved there is repo
 
 The sync cursor is a small JSON text:
 
-* ``{"mode":"full", "history":H, "page":T}``: a first sync in progress. ``H`` is the mailbox
-  history id read *before* listing began, so nothing that arrives meanwhile is missed; ``T`` is
-  the list page to continue from.
+* ``{"mode":"full", "history":H, "page":T, "since":S, "since_page":P}``: a first sync in
+  progress. ``H`` is the mailbox history id read *before* listing began, so nothing that arrives
+  meanwhile is missed; ``T`` is the list page to continue from. The listing runs newest first
+  from that moment, so mail that arrives during a long crawl would otherwise wait for its end:
+  every pull therefore first catches up on the history since ``S`` (``H`` until the first
+  catch-up; ``P`` continues a multi-page answer), then carries on listing.
 * ``{"mode":"inc", "history":H, "page":T?}``: caught up; the next pull asks Gmail what changed
   since ``H`` (``T`` continues a multi-page answer).
 """
@@ -17,6 +20,7 @@ The sync cursor is a small JSON text:
 import asyncio
 import base64
 import binascii
+import dataclasses
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Sequence
 from dataclasses import dataclass, field
@@ -79,9 +83,19 @@ class Cursor:
     mode: str  # "full" or "inc"
     history: str
     page: str | None = None
+    since: str | None = None  # full mode: history caught up to; None means ``history``
+    since_page: str | None = None  # full mode: continues a multi-page catch-up
 
     def dump(self) -> str:
-        return json.dumps({"mode": self.mode, "history": self.history, "page": self.page})
+        return json.dumps(
+            {
+                "mode": self.mode,
+                "history": self.history,
+                "page": self.page,
+                "since": self.since,
+                "since_page": self.since_page,
+            }
+        )
 
     @classmethod
     def parse(cls, text: str | None) -> "Cursor | None":
@@ -90,7 +104,13 @@ class Cursor:
         try:
             d = json.loads(text)
             if d["mode"] in {"full", "inc"} and str(d["history"]):
-                return cls(d["mode"], str(d["history"]), d.get("page") or None)
+                return cls(
+                    d["mode"],
+                    str(d["history"]),
+                    d.get("page") or None,
+                    d.get("since") or None,
+                    d.get("since_page") or None,
+                )
         except (ValueError, KeyError, TypeError):
             pass
         log.warning("gmail cursor not understood; starting a full sync")
@@ -231,6 +251,19 @@ class GmailProvider(BaseProvider):
                     GmailFullResync(ts=self.ctx.clock.now(), reason="history id expired")
                 )
                 state = None
+        if state is not None:  # a crawl in progress: today's mail first, the rest of the past after
+            caught: list[Cursor] = []
+            try:
+                async for batch in self._catch_up(state, caught):
+                    yield batch
+            except _HistoryExpired:
+                log.warning("gmail history id expired mid-crawl; starting the full sync over")
+                await self.ctx.publish(
+                    GmailFullResync(ts=self.ctx.clock.now(), reason="history id expired")
+                )
+                state = None
+            else:
+                state = caught[0]
         async for batch in self._full(state):
             yield batch
 
@@ -252,15 +285,46 @@ class GmailProvider(BaseProvider):
             data = await self.api.request("GET", "/messages", params=params)
             ids = [m["id"] for m in data.get("messages", [])]
             page = data.get("nextPageToken") or None
-            nxt = Cursor("full", state.history, page) if page else Cursor("inc", state.history)
+            nxt = (
+                dataclasses.replace(state, page=page)
+                if page
+                else Cursor("inc", state.since or state.history)
+            )
             yield PullBatch(messages=await self._fetch(ids), next_cursor=nxt.dump())
             if not page:
                 return
 
     async def _incremental(self, state: Cursor) -> AsyncIterator[PullBatch]:
-        page = state.page
+        async for batch in self._history(
+            state.history, state.page, lambda hist, page: Cursor("inc", hist, page)
+        ):
+            yield batch
+
+    async def _catch_up(self, state: Cursor, out: list[Cursor]) -> AsyncIterator[PullBatch]:
+        """What changed since the last catch-up (or since the crawl began), delivered before the
+        crawl goes on. The cursor keeps the crawl's page and only moves ``since`` forward. When it
+        is done, ``out`` holds the cursor to carry on from."""
+        done: list[str] = []
+
+        def make(hist: str, page: str | None) -> Cursor:
+            if page is None:
+                done.append(hist)
+            return dataclasses.replace(state, since=hist, since_page=page)
+
+        async for batch in self._history(state.since or state.history, state.since_page, make):
+            yield batch
+        out.append(
+            dataclasses.replace(state, since=done[-1] if done else state.since, since_page=None)
+        )
+
+    async def _history(
+        self, start: str, page: str | None, make: Callable[[str, str | None], Cursor]
+    ) -> AsyncIterator[PullBatch]:
+        """Pages of Gmail history from ``start``. ``make(history_id, page)`` builds the cursor to
+        resume from: the same ``start`` and the next page while there is more, the newest history
+        id once the answer is complete."""
         while True:
-            params: dict[str, Any] = {"startHistoryId": state.history, "maxResults": 500}
+            params: dict[str, Any] = {"startHistoryId": start, "maxResults": 500}
             if page:
                 params["pageToken"] = page
             try:
@@ -271,8 +335,8 @@ class GmailProvider(BaseProvider):
             for rec in data.get("history", []):
                 self._read_record(rec, plan)
             page = data.get("nextPageToken") or None
-            latest = str(data.get("historyId") or state.history)
-            nxt = Cursor("inc", state.history, page) if page else Cursor("inc", latest)
+            latest = str(data.get("historyId") or start)
+            nxt = make(start, page) if page else make(latest, None)
             yield PullBatch(
                 messages=await self._fetch(list(plan.fetch)),
                 deleted_provider_ids=tuple(plan.delete),
