@@ -95,6 +95,38 @@ def read_reason(caller: CallerContext, *, after_summary: bool = False) -> str:
     return f"{who}_summarized" if after_summary else f"{who}_marked"
 
 
+def star_reason(caller: CallerContext) -> str:
+    """Why a star changed, from who asked (parallels ``read_reason``)."""
+    return f"{'user' if caller.actor.kind == 'user' else 'mcp'}_flagged"
+
+
+async def star_preview(ctx: OpContext, ids: Sequence[str], flagged: bool) -> Preview:
+    """What starring (or unstarring) ``ids`` would change: ids with before and after."""
+    rows: dict[str, bool] = {}
+    for i in range(0, len(ids), IN_LIMIT):
+        part = ids[i : i + IN_LIMIT]
+        marks = ",".join("?" * len(part))
+        for r in await ctx.svc.raw.db.fetchall(
+            "SELECT s.message_id, s.is_starred FROM message_state s"  # noqa: S608
+            " JOIN messages m ON m.id = s.message_id WHERE m.deleted_at IS NULL"
+            f" AND s.message_id IN ({marks})",
+            part,
+        ):
+            rows[r["message_id"]] = bool(r["is_starred"])
+    changes = [
+        Change(target=m, field="is_starred", before=rows[m], after=flagged)
+        for m in ids
+        if m in rows and rows[m] != flagged
+    ]
+    word = "starred" if flagged else "unstarred"
+    same = sum(1 for m in ids if m in rows and rows[m] == flagged)
+    missing = sum(1 for m in ids if m not in rows)
+    note = f"Mark {len(changes)} message(s) {word}"
+    if same or missing:
+        note += f" ({same} already {word}, {missing} not found)"
+    return Preview(summary=note, changes=changes, total_changes=len(changes))
+
+
 async def mark_preview(ctx: OpContext, ids: Sequence[str], read: bool) -> Preview:
     """What marking ``ids`` read (or unread) would change: ids with before and after."""
     rows: dict[str, bool] = {}

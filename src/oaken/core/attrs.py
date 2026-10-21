@@ -143,6 +143,56 @@ class AttrStore:
         )
         return {r["value"]: r["n"] for r in rows}
 
+    async def mailbox_counts(
+        self, *, account_id: AccountId | None = None, include_discarded: bool = False
+    ) -> dict[str, dict[str, tuple[int, int]]]:
+        """Everything a sidebar needs in one pass: for each of ``disposition``, ``location`` and
+        ``label``, a ``{value: (total, unread)}`` map, plus a synthetic ``starred`` group with a
+        single ``starred`` key counting messages that carry ``\\Flagged`` (``message_state``).
+        Discarded mail is left out of ``location``/``label``/``starred`` unless ``include_discarded``
+        (``disposition`` always reports every bucket, so the sidebar can show the Discarded count).
+        A message with no state row is unread and unstarred."""
+        acct = str(account_id) if account_id else None
+        groups: dict[str, dict[str, tuple[int, int]]] = {}
+        # disposition/location/label from message_attrs, with an unread count via message_state.
+        for kind in ("disposition", "location", "label"):
+            # For location/label, hide messages whose disposition is 'discarded' unless asked.
+            hide = (
+                ""
+                if kind == "disposition" or include_discarded
+                else " AND NOT EXISTS (SELECT 1 FROM message_attrs d WHERE d.message_id = m.id"
+                " AND d.kind = 'disposition' AND d.value = 'discarded')"
+            )
+            rows = await self.db.fetchall(
+                "SELECT a.value AS v, COUNT(DISTINCT a.message_id) AS total,"  # noqa: S608
+                " COUNT(DISTINCT CASE WHEN COALESCE(s.is_read, 0) = 0 THEN a.message_id END)"
+                " AS unread"
+                " FROM message_attrs a JOIN messages m ON m.id = a.message_id"
+                " LEFT JOIN message_state s ON s.message_id = m.id"
+                f" WHERE a.kind = ? AND m.deleted_at IS NULL{hide}"
+                " AND (? IS NULL OR m.account_id = ?)"
+                " GROUP BY a.value ORDER BY a.value",
+                (kind, acct, acct),
+            )
+            groups[kind] = {r["v"]: (r["total"], r["unread"]) for r in rows}
+        # starred: carries \Flagged (message_state.is_starred), excluding discarded unless asked.
+        hide = (
+            ""
+            if include_discarded
+            else " AND NOT EXISTS (SELECT 1 FROM message_attrs d WHERE d.message_id = m.id"
+            " AND d.kind = 'disposition' AND d.value = 'discarded')"
+        )
+        row = await self.db.fetchone(
+            "SELECT COUNT(*) AS total,"  # noqa: S608
+            " COUNT(CASE WHEN COALESCE(s.is_read, 0) = 0 THEN 1 END) AS unread"
+            " FROM message_state s JOIN messages m ON m.id = s.message_id"
+            f" WHERE s.is_starred = 1 AND m.deleted_at IS NULL{hide}"
+            " AND (? IS NULL OR m.account_id = ?)",
+            (acct, acct),
+        )
+        groups["starred"] = {"starred": ((row["total"], row["unread"]) if row else (0, 0))}
+        return groups
+
     async def stale(
         self,
         scripts_sha256: str,

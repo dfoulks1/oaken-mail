@@ -42,13 +42,20 @@ def examples(a: MessageId, job_id: str = "none") -> dict[str, Any]:
         "authorization_status": {"account_id": "main"},
         "list_jobs": {}, "cancel_job": {"job_id": job_id}, "retry_job": {"job_id": job_id},
         "pause_backfill": {}, "resume_backfill": {}, "retry_parked": {"all": True},
-        "list_mailbox": {}, "create_folder": {"path": "Lists/Dev"}, "create_label": {"name": "x"},
+        "list_mailbox": {}, "mailbox_counts": {}, "create_folder": {"path": "Lists/Dev"},
+        "create_label": {"name": "x"},
         "move_to_folder": {"ids": [a], "path": "Work"},
         "set_labels": {"ids": [a], "add": ["x"]},
+        "remove_account": {"account_id": "no-such-account"},  # NotFound: do not remove a live one
+        "sieve_get": {"name": "none.sieve"}, "sieve_save": {"name": "x.sieve", "text": "keep;"},
+        "sieve_delete": {"name": "x.sieve"},
     }  # fmt: skip
 
 
 MARKING = {"mark_read", "mark_unread", "undo", "message_presented"}
+# set_flagged changes star state (not read state) and writes \Flagged back: it is exercised on its
+# own, not in the loop that asserts nothing writes a flag.
+FLAGGING = {"set_flagged"}
 
 
 async def test_no_operation_that_does_not_mark_read_changes_read_state(ops: Ops) -> None:
@@ -63,7 +70,9 @@ async def test_no_operation_that_does_not_mark_read_changes_read_state(ops: Ops)
     job = await ops.svc.queue.enqueue("ingest.enrich", _P())
     table = examples(a, str(job.job_id))
     declared = {o.name for o in core_operations() if o.marks_read}
-    assert set(table) | MARKING == {o.name for o in core_operations()}, "add a case for the new one"
+    assert set(table) | MARKING | FLAGGING == {o.name for o in core_operations()}, (
+        "add a case for the new one"
+    )
     assert declared == MARKING | {"summarize_message"}
     for name, payload in table.items():
         try:
@@ -71,7 +80,7 @@ async def test_no_operation_that_does_not_mark_read_changes_read_state(ops: Ops)
         except NotImplementedYet:
             assert name in {"search", "ask"}
         except NotFound:
-            assert name == "revoke_agent"  # there is no such agent to revoke
+            assert name in {"revoke_agent", "remove_account", "sieve_get"}
         except InvalidInput:  # the fake provider has no password and no consent flow
             assert name in {"set_account_password", "start_authorization"}
         assert await ops.read_count() == 0, f"{name} changed read state"

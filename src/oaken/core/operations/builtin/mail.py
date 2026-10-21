@@ -14,7 +14,12 @@ from pydantic import BaseModel, Field
 from oaken.ai.summarize import MAX_BODY_CHARS, SUMMARY
 from oaken.core.errors import Conflict, NotFound, OakenError
 from oaken.core.ids import AccountId, MessageId
-from oaken.core.operations.builtin.common import mark_preview, read_reason
+from oaken.core.operations.builtin.common import (
+    mark_preview,
+    read_reason,
+    star_preview,
+    star_reason,
+)
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import AnyOperation, Change, Preview, operation
 from oaken.core.untrusted import UntrustedText
@@ -115,8 +120,9 @@ async def _undo_entry(ctx: OpContext, audit_id: str) -> list[AuditEntry]:
 
 async def _preview_undo(ctx: OpContext, inp: UndoInput) -> Preview:
     entries = await _undo_entry(ctx, inp.audit_id)
+    field = "is_starred" if entries and entries[0].op == "set_flagged" else "is_read"
     changes = [
-        Change(target=m, field="is_read", before=a, after=bool(b))
+        Change(target=m, field=field, before=a, after=bool(b))
         for e in entries
         for (m, a), b in zip(e.after.items(), e.before.values(), strict=False)
     ]
@@ -140,6 +146,33 @@ async def _preview_undo(ctx: OpContext, inp: UndoInput) -> Preview:
 )
 async def undo(ctx: OpContext, inp: UndoInput) -> MarkOutput:
     r = await ctx.svc.need_readstate().undo(inp.audit_id, actor=ctx.caller.actor, confirm=True)
+    return mark_output(r)
+
+
+class FlagInput(BaseModel):
+    ids: list[str] = Field(min_length=1)
+    flagged: bool = True  # True: star; False: unstar
+
+
+async def _preview_flag(ctx: OpContext, inp: FlagInput) -> Preview:
+    return await star_preview(ctx, ctx.limits.ids(inp.ids), inp.flagged)
+
+
+@operation(
+    "set_flagged",
+    "Star or unstar messages. Written back to the mailbox through \\Flagged; undoable.",
+    permission="mutate",
+    input=FlagInput,
+    output=MarkOutput,
+    mcp="off",  # a model changing what the user starred is the user's call to enable (prompt 25)
+    preview=_preview_flag,
+    audit="service",
+)
+async def set_flagged(ctx: OpContext, inp: FlagInput) -> MarkOutput:
+    ids = [MessageId(i) for i in ctx.limits.ids(inp.ids)]
+    r = await ctx.svc.need_readstate().set_flagged(
+        ids, inp.flagged, star_reason(ctx.caller), actor=ctx.caller.actor, confirm=True
+    )
     return mark_output(r)
 
 
@@ -367,6 +400,7 @@ OPERATIONS: tuple[AnyOperation, ...] = (
     mark_read,
     mark_unread,
     undo,
+    set_flagged,
     message_presented,
     message_dismissed,
     summarize_message,

@@ -46,6 +46,16 @@ class RS:
         assert row is not None
         return bool(row["is_read"])
 
+    async def is_starred(self, mid: MessageId) -> bool:
+        row = await self.rig.raw_db.fetchone(
+            "SELECT is_starred FROM message_state WHERE message_id = ?", (mid,)
+        )
+        assert row is not None
+        return bool(row["is_starred"])
+
+    def server_has_flag(self, provider_id: str, flag: str) -> bool:
+        return flag in self.rig.provider.messages[provider_id].provider_flags
+
     async def marker(self, mid: MessageId) -> str | None:
         row = await self.rig.raw_db.fetchone(
             "SELECT local_dirty_json FROM message_state WHERE message_id = ?", (mid,)

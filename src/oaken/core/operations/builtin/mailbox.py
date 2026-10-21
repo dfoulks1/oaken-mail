@@ -5,7 +5,7 @@ yet: sorting someone's mail is theirs to enable."""
 
 from pydantic import BaseModel, Field
 
-from oaken.core.ids import MessageId
+from oaken.core.ids import AccountId, MessageId
 from oaken.core.mailbox import SEP
 from oaken.core.operations.builtin.system import Empty
 from oaken.core.operations.context import OpContext
@@ -175,8 +175,54 @@ async def set_labels(ctx: OpContext, inp: TagInput) -> TagOutput:
     return TagOutput(changed=changed)
 
 
+class CountsInput(BaseModel):
+    account_id: str | None = None  # merged across accounts when omitted
+    # discarded is excluded from locations/labels/starred by default
+    include_discarded: bool = False
+
+
+class MailboxCounts(BaseModel):
+    inbox: Counts = Counts()
+    starred: Counts = Counts()
+    discarded: Counts = Counts()
+    locations: dict[str, Counts] = Field(default_factory=dict)
+    labels: dict[str, Counts] = Field(default_factory=dict)
+    content_is_untrusted: bool = True  # a folder or label name can come from the mail's own Sieve
+
+
+@operation(
+    "mailbox_counts",
+    "The sidebar's numbers in one call: Inbox, Starred and Discarded, every folder (location) and"
+    " every label, each with how many messages and how many are unread. No mail content.",
+    permission="read",
+    input=CountsInput,
+    output=MailboxCounts,
+    mcp="on",
+)
+async def mailbox_counts(ctx: OpContext, inp: CountsInput) -> MailboxCounts:
+    account = AccountId(inp.account_id) if inp.account_id else None
+    g = await ctx.svc.attrs.mailbox_counts(
+        account_id=account, include_discarded=inp.include_discarded
+    )
+
+    def c(group: str, key: str) -> Counts:
+        total, unread = g.get(group, {}).get(key, (0, 0))
+        return Counts(total=total, unread=unread)
+
+    return MailboxCounts(
+        inbox=c("disposition", "inbox"),
+        starred=c("starred", "starred"),
+        discarded=c("disposition", "discarded"),
+        locations={
+            k: Counts(total=t, unread=u) for k, (t, u) in sorted(g.get("location", {}).items())
+        },
+        labels={k: Counts(total=t, unread=u) for k, (t, u) in sorted(g.get("label", {}).items())},
+    )
+
+
 OPERATIONS: tuple[AnyOperation, ...] = (
     list_mailbox,
+    mailbox_counts,
     create_folder,
     create_label,
     move_to_folder,

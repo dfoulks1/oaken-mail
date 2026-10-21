@@ -32,7 +32,7 @@ from oaken.core.actors import USER, Actor
 from oaken.core.clock import Clock, fmt_ts
 from oaken.core.db import Tx
 from oaken.core.errors import Conflict, NotFound, OakenError, PermissionDenied
-from oaken.core.events import EventBus, MessageReadChanged
+from oaken.core.events import Event, EventBus, MessageReadChanged, MessageStarChanged
 from oaken.core.ids import AccountId, MessageId
 from oaken.core.jobs import PRIORITY_USER, Job, JobQueue, JobRunner, PermanentJobError
 from oaken.core.logging import get_logger
@@ -54,7 +54,13 @@ IN_LIMIT = 500  # ids per ``IN (...)`` query
 # ``auto_mark = false`` turns these off; an explicit mark read or unread (any other reason, a
 # summary the person chose to mark read included) is never affected by it.
 AUTOMATIC = frozenset({"user_opened"})
-READ_OPS = frozenset({"mark_read", "mark_unread", "undo"})
+READ_OPS = frozenset({"mark_read", "mark_unread", "undo", "set_flagged"})
+
+# The two flag states this service owns. Each maps a message_state column to the IMAP-style flag
+# written back through the provider, and to the audit field name clients read.
+FLAG_SEEN = "is_read"
+FLAG_STARRED = "is_starred"
+_FLAG_OF = {FLAG_SEEN: SEEN, FLAG_STARRED: FLAGGED}
 
 # Asked with an account id: the provider instance that serves that account, if it can write flags.
 ProviderFor = Callable[[str], Provider | None]
@@ -169,6 +175,24 @@ class ReadState:
     ) -> ReadResult:
         return await self._mark(ids, False, reason, actor, confirm, "mark_unread")
 
+    async def set_flagged(
+        self,
+        ids: Iterable[MessageId],
+        flagged: bool,
+        reason: str,
+        *,
+        actor: Actor = USER,
+        confirm: bool = False,
+    ) -> ReadResult:
+        """Star or unstar messages (the ``\\Flagged`` flag). Local first, written back through the
+        provider's ``flags.write`` exactly as read state is, audited and undoable. This is the only
+        way a star reaches ``set_flags``: no other caller may (prompt 25)."""
+        self._gate(actor, reason, confirm)
+        wanted = {MessageId(i): flagged for i in dict.fromkeys(ids)}
+        return await self._apply(
+            wanted, reason=reason, op="set_flagged", actor=actor, field=FLAG_STARRED
+        )
+
     async def _mark(
         self,
         ids: Iterable[MessageId],
@@ -182,7 +206,7 @@ class ReadState:
         if reason in AUTOMATIC and not self.cfg.auto_mark:
             return ReadResult(skipped="auto_mark_off")
         wanted = {MessageId(i): read for i in dict.fromkeys(ids)}
-        return await self._apply(wanted, reason=reason, op=op, actor=actor)
+        return await self._apply(wanted, reason=reason, op=op, actor=actor, field=FLAG_SEEN)
 
     @staticmethod
     def _gate(actor: Actor, reason: str, confirm: bool) -> None:
@@ -211,9 +235,10 @@ class ReadState:
         if entry.undone_by:
             raise Conflict(f"audit entry {audit_id} was already undone by {entry.undone_by}")
         entries = [e for e in await self.audit.batch(entry.batch_id) if e.undone_by is None]
+        field = FLAG_STARRED if entry.op == "set_flagged" else FLAG_SEEN
         wanted = {MessageId(m): bool(v) for e in entries for m, v in e.before.items()}
         result = await self._apply(
-            wanted, reason="user_undo", op="undo", actor=actor, always_record=True
+            wanted, reason="user_undo", op="undo", actor=actor, field=field, always_record=True
         )
         await self.audit.mark_undone([e.id for e in entries], result.audit_ids[0])
         return result
@@ -291,11 +316,12 @@ class ReadState:
         reason: str,
         op: str,
         actor: Actor,
+        field: str = FLAG_SEEN,
         always_record: bool = False,
     ) -> ReadResult:
         batch_id = new_audit_id()
         out = _Outcome()
-        events: list[MessageReadChanged] = []
+        events: list[Event] = []
         announce = []
         ids = list(wanted)
         step = self.cfg.audit_chunk
@@ -310,10 +336,10 @@ class ReadState:
                     r = rows.get(mid)
                     if r is None or r["deleted_at"]:
                         out.missing.append(mid)
-                    elif bool(r["is_read"]) == wanted[mid]:
+                    elif bool(r[field]) == wanted[mid]:
                         out.unchanged.append(mid)
                     else:
-                        before[mid], after[mid] = bool(r["is_read"]), wanted[mid]
+                        before[mid], after[mid] = bool(r[field]), wanted[mid]
                 if not after and not (always_record and not out.audit_ids):
                     continue
                 await self.audit.record(
@@ -322,17 +348,19 @@ class ReadState:
                 )  # fmt: skip
                 out.audit_ids.append(audit_id)
                 now = fmt_ts(self.clock.now())
-                for mid, read in after.items():
+                for mid, value in after.items():
                     r = rows[mid]
-                    marker: dict[str, Any] = {"is_read": read, "audit_id": audit_id, "ts": now}
+                    marker: dict[str, Any] = {
+                        "field": field, field: value, "audit_id": audit_id, "ts": now
+                    }  # fmt: skip
                     error: str | None = None
                     if self.provider_for(r["account_id"]) is None:
                         error = f"{NO_PROVIDER}: account {r['account_id']!r} uses {r['provider']!r}"
                         marker["error"] = error
                     await tx.execute(
-                        "UPDATE message_state SET is_read = ?, local_dirty_json = ?"
+                        f"UPDATE message_state SET {field} = ?, local_dirty_json = ?"  # noqa: S608
                         " WHERE message_id = ?",
-                        (int(read), json.dumps(marker), mid),
+                        (int(value), json.dumps(marker), mid),
                     )
                     if error is None:
                         _, change = await self.queue.enqueue_in(
@@ -344,17 +372,11 @@ class ReadState:
                     else:
                         out.local_only.append(MessageId(mid))
                     out.changed.append(MessageId(mid))
-                    events.append(
-                        MessageReadChanged(
-                            ts=self.clock.now(), account_id=AccountId(r["account_id"]),
-                            message_id=MessageId(mid), read=read, reason=reason,
-                            audit_id=audit_id, local_only=error is not None, error=error,
-                        )
-                    )  # fmt: skip
+                    events.append(self._state_event(field, r, value, reason, audit_id, error))
         await self.queue.announce(*announce)
         await self._publish(events)
         log.info(
-            "read state changed", op=op, reason=reason, actor=actor.kind,
+            "flag state changed", op=op, field=field, reason=reason, actor=actor.kind,
             changed=len(out.changed), local_only=len(out.local_only),
         )  # fmt: skip
         return ReadResult(
@@ -366,7 +388,24 @@ class ReadState:
             batch_id=batch_id if out.audit_ids else None,
         )
 
-    async def _publish(self, events: Iterable[MessageReadChanged]) -> None:
+    def _state_event(
+        self, field: str, r: Row, value: bool, reason: str, audit_id: str, error: str | None
+    ) -> Event:
+        """The right event for the field that changed: read state or star."""
+        common = dict(
+            ts=self.clock.now(),
+            account_id=AccountId(r["account_id"]),
+            message_id=MessageId(r["id"]),
+            reason=reason,
+            audit_id=audit_id,
+            local_only=error is not None,
+            error=error,
+        )
+        if field == FLAG_STARRED:
+            return MessageStarChanged(starred=value, **common)  # type: ignore[arg-type]
+        return MessageReadChanged(read=value, **common)  # type: ignore[arg-type]
+
+    async def _publish(self, events: Iterable[Event]) -> None:
         if self.bus is not None:
             for e in events:
                 await self.bus.publish(e)
@@ -431,7 +470,9 @@ class ReadState:
                 error = f"{NO_PROVIDER}: account {r['account_id']!r} uses {r['provider']!r}"
                 await self._park(r, marker, error)
                 raise PermanentJobError(error)
-            add, remove = ({SEEN}, set()) if marker["is_read"] else (set(), {SEEN})
+            field = marker.get("field", FLAG_SEEN)  # legacy markers held only is_read
+            flag = _FLAG_OF[field]
+            add, remove = ({flag}, set()) if marker[field] else (set(), {flag})
             try:
                 await provider.set_flags([r["provider_id"]], add, remove)
             except Exception as exc:
@@ -462,13 +503,12 @@ class ReadState:
             "UPDATE message_state SET local_dirty_json = ? WHERE message_id = ?",
             (json.dumps(marker), r["id"]),
         )
+        field = marker.get("field", FLAG_SEEN)
         await self._publish(
             [
-                MessageReadChanged(
-                    ts=self.clock.now(), account_id=AccountId(r["account_id"]),
-                    message_id=MessageId(r["id"]), read=bool(marker["is_read"]),
-                    reason="write_back_failed", audit_id=marker.get("audit_id"),
-                    local_only=True, error=error,
+                self._state_event(
+                    field, r, bool(marker[field]), "write_back_failed",
+                    marker.get("audit_id", ""), error,
                 )
             ]
         )  # fmt: skip
