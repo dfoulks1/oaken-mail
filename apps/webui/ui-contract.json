@@ -18,7 +18,7 @@
       "degraded"
     ],
     "get_message": [
-      "message_id", "subject", "from_name", "from_addr", "to_addrs", "cc_addrs", "date",
+      "message_id", "thread_key", "subject", "from_name", "from_addr", "to_addrs", "cc_addrs", "date",
       "labels", "location", "is_read", "starred", "text", "attachments",
       "message_id_header", "references"
     ],

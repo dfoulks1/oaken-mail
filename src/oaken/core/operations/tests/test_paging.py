@@ -191,3 +191,18 @@ async def test_a_sort_that_cannot_apply_is_said_not_silently_dropped(ops: Ops) -
     assert any("unread_first" in w for w in kw.warnings) and kw.total == 3
     none = await ops.out("search", {"query": "", "sort": "sender_asc"})
     assert none.total == 3  # no words: it is a listing, in that order
+
+
+async def test_list_messages_can_be_limited_to_one_thread_oldest_first(ops: Ops) -> None:
+    ids = await ops.add(4)
+    key = (await ops.out("get_message", {"message_id": ids[1]})).thread_key
+    await ops.rig.index.db.execute(
+        "UPDATE docs SET thread_key = ? WHERE message_id IN (?, ?)", (key, ids[0], ids[2])
+    )
+    thread = await ops.out("list_messages", {"thread_key": key, "sort": "date_asc"})
+    assert {i.message_id for i in thread.items} == {ids[0], ids[1], ids[2]} and thread.total == 3
+    dates = [i.date for i in thread.items]
+    assert dates == sorted(dates)
+    starred_only = await ops.out("list_messages", {"thread_key": key, "unread_only": True})
+    assert starred_only.total == 3  # the state filters compose with it
+    assert (await ops.out("list_messages", {"thread_key": "no-such-thread"})).total == 0

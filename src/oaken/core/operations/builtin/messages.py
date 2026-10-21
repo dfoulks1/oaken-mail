@@ -42,6 +42,7 @@ class MessageFilter(BaseModel):
     unread_only: bool = False
     starred: bool | None = None  # True: only starred; False: only unstarred
     has_attachment: bool | None = None
+    thread_key: str | None = None  # one conversation: every message sharing this key
 
     model_config = {"populate_by_name": True}
 
@@ -55,6 +56,7 @@ class MessageFilter(BaseModel):
             location=self.location,
             disposition=self.disposition,
             has_attachments=self.has_attachment,
+            thread_key=self.thread_key,
         )
 
     @property
@@ -209,7 +211,6 @@ async def search_keyword(ctx: OpContext, inp: SearchKeywordInput) -> MessageList
 class SearchInput(MessageFilter):
     query: str = Field(max_length=1000)
     limit: int | None = Field(default=None, ge=1)
-    thread_key: str | None = None
     category: list[str] = Field(default_factory=list)  # from the triage enrichment
     min_priority: int | None = Field(default=None, ge=0, le=3)
     offset: int = Field(default=0, ge=0)

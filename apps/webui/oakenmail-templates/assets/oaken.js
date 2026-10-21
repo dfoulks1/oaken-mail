@@ -506,25 +506,62 @@
     });
   }
 
+  const THREAD_MAX = 100;
+
+  // The other messages of the conversation, oldest first. A failure here must not stop the opened
+  // message from showing, so it answers an empty list.
+  async function fetchThread(key) {
+    if (!key) return [];
+    try {
+      const { output } = await api("list_messages", {
+        thread_key: key, sort: "date_asc", disposition: "any", limit: THREAD_MAX,
+      });
+      return (output && output.items) || [];
+    } catch (_) {
+      return [];
+    }
+  }
+
   async function loadReader(container, messageId, opts) {
     container.classList.add("ok-loading");
     try {
       const { output } = await api("get_message", { message_id: messageId, include_text: true });
-      container.innerHTML = readerHtml(output || {});
+      const b = output || {};
+      const thread = await fetchThread(b.thread_key);
+      container.innerHTML = readerHtml(b, thread);
       // The reader starts hidden (d-none) beside the "Select a message" placeholder: swap them.
       container.classList.remove("d-none");
       qs(".ok-empty", container.parentElement)?.classList.add("d-none");
+      qs(".ok-thread-msg.current", container)?.scrollIntoView({ block: "start" });
       // Opening a message is a user action: core marks it read after its configured delay (and
       // only if auto-marking is on). message_presented is a mutation, so it must be confirmed or
       // core answers with a proposal and arms nothing. The row and the badges change when core
       // announces MessageReadChanged (live updates below), not before.
-      if (opts && opts.markPresented && output && output.message_id) {
-        api("message_presented", { message_id: output.message_id }, { confirm: true }).catch(() => {});
+      if (opts && opts.markPresented && b.message_id) {
+        api("message_presented", { message_id: b.message_id }, { confirm: true }).catch(() => {});
       }
     } catch (e) {
       toast(e.message || "Could not open message.");
     } finally {
       container.classList.remove("ok-loading");
+    }
+  }
+
+  // Expanding a collapsed card of the thread fetches its text the first time. Mail is untrusted:
+  // the body goes in as text, never markup.
+  async function openThreadCard(card) {
+    if (!card || card.dataset.loaded || !card.dataset.id) return;
+    card.dataset.loaded = "1";
+    const body = qs(".ok-msg-body", card);
+    if (body) body.textContent = "Loading…";
+    try {
+      const { output } = await api("get_message", { message_id: card.dataset.id, include_text: true });
+      if (body) body.textContent = (output && output.text) || "(no text)";
+      api("message_presented", { message_id: card.dataset.id }, { confirm: true }).catch(() => {});
+    } catch (e) {
+      delete card.dataset.loaded;
+      if (body) body.textContent = "Could not load this message.";
+      toast((e && e.message) || "Could not open message.");
     }
   }
 
@@ -534,28 +571,51 @@
     return (b.to_addrs || []).map((a) => (a.name ? `${a.name} <${a.address}>` : a.address)).join(", ");
   }
 
-  function readerHtml(b) {
+  const initialsOf = (name) =>
+    (name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+
+  // One card of the thread. The opened message arrives with its text; the others show a line of
+  // snippet and fetch the rest when expanded.
+  function cardHtml(m, { current, text, atts, to }) {
+    const who = m.from_name || m.from_addr || "";
+    return (
+      `<article class="ok-thread-msg${current ? " current" : " collapsed"}" data-id="${esc(m.message_id || "")}"${current ? ' data-loaded="1"' : ""}>` +
+      `<header data-action="toggle-thread"><span class="ok-avatar">${esc(initialsOf(who))}</span>` +
+      `<div class="flex-grow-1"><div><span class="fw-semibold">${esc(m.from_name || "")}</span> <span class="small text-muted">&lt;${esc(m.from_addr || "")}&gt;</span>` +
+      (m.is_read === false && !current ? ` <span class="badge text-bg-primary ms-1">Unread</span>` : "") + `</div>` +
+      (to ? `<div class="small text-muted">to ${esc(to)}</div>` : "") +
+      (current ? "" : `<div class="small text-muted ok-thread-snippet">${esc(m.snippet || "")}</div>`) + `</div>` +
+      `<span class="small text-muted">${esc(current ? m.date || "" : fmtDate(m.date))}</span></header>` +
+      `<div class="ok-msg-body" style="white-space:pre-wrap">${current ? (text ? esc(text) : "(no text)") : ""}${atts ? `<div class="mt-3">${atts}</div>` : ""}</div>` +
+      `</article>`
+    );
+  }
+
+  function readerHtml(b, thread) {
     const tags = []
       .concat((b.tags || []).map((t) => tag(t)))
       .concat((b.labels || []).map((l) => tag(l, window.Oaken.labelColor(l))))
       .join("");
-    const initials = (b.from_name || b.from_addr || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
     const atts = (b.attachments || [])
       .map((a) => `<a class="ok-attach" href="#"><i class="bi ${esc(a.icon || "bi-file-earmark")} fs-5"></i><span>${esc(a.filename)}<br><span class="small text-muted">${esc(a.size || "")}</span></span></a>`)
       .join("");
     // b.text is the cleaned plain text core produced. Mail is untrusted: it is escaped and shown
     // as text, never as markup.
+    const current = cardHtml(b, { current: true, text: b.text, atts, to: recipients(b) });
+    const others = (thread || []).filter((m) => m.message_id);
+    const all = others.length > 1 || (others.length === 1 && others[0].message_id !== b.message_id);
+    const cards = all
+      ? others.map((m) => (m.message_id === b.message_id ? current : cardHtml(m, { current: false }))).join("")
+      : current;
+    // A thread that did not list the opened message (filtered, or past the cap) still shows it.
+    const body = all && !others.some((m) => m.message_id === b.message_id) ? cards + current : cards;
     return (
       `<div class="ok-reader-inner">` +
       `<h1>${esc(b.subject)}</h1>` +
-      `<div class="d-flex gap-2 mb-4 flex-wrap">${tags}</div>` +
-      `<article class="ok-thread-msg">` +
-      `<header data-action="toggle-thread"><span class="ok-avatar">${esc(initials)}</span>` +
-      `<div class="flex-grow-1"><div><span class="fw-semibold">${esc(b.from_name || "")}</span> <span class="small text-muted">&lt;${esc(b.from_addr || "")}&gt;</span></div>` +
-      (recipients(b) ? `<div class="small text-muted">to ${esc(recipients(b))}</div>` : "") + `</div>` +
-      `<span class="small text-muted">${esc(b.date || "")}</span></header>` +
-            `<div class="ok-msg-body" style="white-space:pre-wrap">${b.text ? esc(b.text) : "(no text)"}${atts ? `<div class="mt-3">${atts}</div>` : ""}</div>` +
-      `</article></div>`
+      (all ? `<div class="small text-muted mb-2">${others.length} messages in this conversation</div>` : "") +
+      `<div class="d-flex gap-2 mb-4 flex-wrap">${tags}</div>` + body +
+      (others.length >= THREAD_MAX ? `<div class="small text-muted">Showing the first ${THREAD_MAX} messages.</div>` : "") +
+      `</div>`
     );
   }
 
@@ -824,6 +884,11 @@
       const id = new URL(window.location.href).searchParams.get("id") || reader.dataset.oakenReader;
       loadReader(reader, id, { markPresented: true });
     }
+    // A collapsed card of the thread loads its text the first time it is opened.
+    document.addEventListener("click", (e) => {
+      const h = e.target.closest(".ok-thread-msg > header");
+      if (h) openThreadCard(h.parentElement);
+    });
     // Source modal (View source) pulls the raw headers on demand.
     document.addEventListener("click", (e) => {
       const b = e.target.closest("[data-oaken-source]");
