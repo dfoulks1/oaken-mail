@@ -215,12 +215,55 @@ async def authorization_status(ctx: OpContext, inp: AccountRef) -> Authorization
     return AuthorizationStatus(state=state, detail=detail)
 
 
+class RemoveAccountOutput(BaseModel):
+    removed: bool
+    schedules_removed: int = Field(
+        default=0, description="How many sync schedules the account had, now gone."
+    )
+    restart_needed: bool = Field(
+        default=False,
+        description="A started provider instance keeps serving until core restarts; it is no "
+        "longer offered for a new sync.",
+    )
+    mail_kept: bool = Field(
+        default=True,
+        description="Stored messages, raw bytes and attributes are kept (purge is a separate op).",
+    )
+
+
+@operation(
+    "remove_account",
+    "Remove an account and its sync schedules. Stored mail is kept; the credential is dropped.",
+    permission="mutate",
+    input=AccountRef,
+    output=RemoveAccountOutput,
+    mcp="never",
+)
+async def remove_account(ctx: OpContext, inp: AccountRef) -> RemoveAccountOutput:
+    account_id = AccountId(inp.account_id)
+    await ctx.svc.raw.get_account(account_id)  # NotFound for a typo, before any change
+    sync = ctx.svc.need_sync()
+    schedules_removed = 0
+    for sched in await sync.schedules():
+        if sched.account_id == inp.account_id:
+            if await sync.remove(sched.account_id, sched.folder, actor=ctx.caller.actor):
+                schedules_removed += 1
+    removed = await ctx.svc.raw.delete_account(account_id)
+    sync.accounts.forget(inp.account_id)
+    return RemoveAccountOutput(
+        removed=removed,
+        schedules_removed=schedules_removed,
+        restart_needed=True,
+    )
+
+
 OPERATIONS: tuple[AnyOperation, ...] = (
     get_account,
     create_account,
     set_account_config,
     set_account_password,
     check_account,
+    remove_account,
     start_authorization,
     authorization_status,
 )

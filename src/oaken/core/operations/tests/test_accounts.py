@@ -16,6 +16,7 @@ from oaken.core.errors import (
     PluginError,
     ProviderError,
 )
+from oaken.core.ids import AccountId
 from oaken.core.operations.tests import conftest as ops_conftest
 from oaken.core.operations.tests.conftest import Ops, agent
 from oaken.plugins.contracts import Health
@@ -157,9 +158,27 @@ async def test_a_failed_authorization_says_why(acct: Ops, monkeypatch: pytest.Mo
     assert status.state == "failed" and "access_denied" in status.detail
 
 
+async def test_remove_account_deletes_the_row_and_keeps_stored_mail(acct: Ops) -> None:
+    await acct.out("create_account", {"account_id": "work", "provider": "pw", "display_name": "W"})
+    # Store a message for the account; removing the account must keep it (prompt 24 Q2).
+    mid, _ = await acct.rig.raw.put_message(AccountId("work"), "pid-1", b"From: a@b\r\n\r\nhi")
+    out = await acct.out("remove_account", {"account_id": "work"})
+    assert out.removed and out.mail_kept and out.restart_needed
+    with pytest.raises(NotFound):
+        await acct.call("get_account", {"account_id": "work"})
+    assert "work" not in {a.account_id for a in (await acct.out("list_accounts", {})).accounts}
+    # The mail is still there.
+    assert await acct.rig.raw.get_raw(mid) == b"From: a@b\r\n\r\nhi"
+
+
+async def test_remove_account_is_not_found_for_a_typo(acct: Ops) -> None:
+    with pytest.raises(NotFound):
+        await acct.call("remove_account", {"account_id": "ghost"})
+
+
 async def test_none_of_these_is_offered_to_an_agent(acct: Ops) -> None:
     names = {
         "get_account", "create_account", "set_account_config", "set_account_password",
-        "check_account", "start_authorization", "authorization_status",
+        "check_account", "remove_account", "start_authorization", "authorization_status",
     }  # fmt: skip
     assert not names & {o.name for o in await acct.client.visible(agent())}

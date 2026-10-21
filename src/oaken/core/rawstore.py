@@ -236,23 +236,37 @@ class RawStore:
             raise ConfigError(f"account config must be JSON-serializable: {exc}") from exc
         now = self.clock.now()
         async with self.db.transaction() as tx:
-            if await tx.fetchone("SELECT 1 FROM accounts WHERE id = ?", (account_id,)):
-                raise Conflict(f"account already exists: {account_id}")
-            await tx.execute(
-                "INSERT INTO accounts (id, provider, display_name, created_at, config_json)"
-                " VALUES (?,?,?,?,?)",
-                (account_id, provider.strip(), display_name.strip(), fmt_ts(now), blob),
+            existing = await tx.fetchone(
+                "SELECT removed_at FROM accounts WHERE id = ?", (account_id,)
             )
+            if existing is not None and existing["removed_at"] is None:
+                raise Conflict(f"account already exists: {account_id}")
+            if existing is not None:  # a soft-removed id: revive it, keeping its stored mail
+                await tx.execute(
+                    "UPDATE accounts SET provider = ?, display_name = ?, created_at = ?,"
+                    " config_json = ?, removed_at = NULL WHERE id = ?",
+                    (provider.strip(), display_name.strip(), fmt_ts(now), blob, account_id),
+                )
+            else:
+                await tx.execute(
+                    "INSERT INTO accounts (id, provider, display_name, created_at, config_json)"
+                    " VALUES (?,?,?,?,?)",
+                    (account_id, provider.strip(), display_name.strip(), fmt_ts(now), blob),
+                )
         return Account(AccountId(account_id), provider.strip(), display_name.strip(), now, config)
 
     async def get_account(self, account_id: AccountId) -> Account:
-        row = await self.db.fetchone("SELECT * FROM accounts WHERE id = ?", (account_id,))
+        row = await self.db.fetchone(
+            "SELECT * FROM accounts WHERE id = ? AND removed_at IS NULL", (account_id,)
+        )
         if row is None:
             raise NotFound(f"no such account: {account_id}")
         return _account(row)
 
     async def list_accounts(self) -> list[Account]:
-        rows = await self.db.fetchall("SELECT * FROM accounts ORDER BY created_at, id")
+        rows = await self.db.fetchall(
+            "SELECT * FROM accounts WHERE removed_at IS NULL ORDER BY created_at, id"
+        )
         return [_account(r) for r in rows]
 
     async def set_account_config(self, account_id: AccountId, config: dict[str, Any]) -> Account:
@@ -268,6 +282,25 @@ class RawStore:
         if not changed:
             raise NotFound(f"no such account: {account_id}")
         return await self.get_account(account_id)
+
+    async def delete_account(self, account_id: AccountId) -> bool:
+        """Soft-remove the account: its stored mail is kept (prompt 24 Q2) and still owns its
+        ``account_id`` foreign key, so the row stays but is marked ``removed_at`` and hidden from
+        ``get_account``/``list_accounts``. Sync cursors are cleared (a re-added account re-syncs
+        from scratch). Purging the mail itself is a separate confirmed operation. Returns False if
+        there was no such live account."""
+        async with self.db.transaction() as tx:
+            row = await tx.fetchone(
+                "SELECT 1 FROM accounts WHERE id = ? AND removed_at IS NULL", (account_id,)
+            )
+            if row is None:
+                return False
+            await tx.execute(
+                "UPDATE accounts SET removed_at = ? WHERE id = ?",
+                (fmt_ts(self.clock.now()), account_id),
+            )
+            await tx.execute("DELETE FROM sync_cursors WHERE account_id = ?", (account_id,))
+        return True
 
     # -- messages ---------------------------------------------------------------------------
     async def put_message(

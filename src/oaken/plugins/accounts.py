@@ -56,6 +56,13 @@ class AccountProviders:
             return self.host.get_started("provider", name)  # type: ignore[no-any-return]
         return self.host.get("provider", name)  # type: ignore[no-any-return]
 
+    def forget(self, account_id: str) -> None:
+        """Stop tracking a removed account. The running provider instance keeps serving until core
+        restarts (``remove_account`` reports ``restart_needed``), but it is no longer offered for a
+        new sync, and ``start`` will not revive it because its row is gone."""
+        self._names.pop(account_id, None)
+        self._problems.pop(account_id, None)
+
     def problem(self, account_id: str) -> str | None:
         """Why this account cannot sync right now, or None if its provider is healthy."""
         try:
