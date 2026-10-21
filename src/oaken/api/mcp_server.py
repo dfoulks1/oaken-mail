@@ -18,8 +18,8 @@ and the size and concurrency limits are the guard's (``oaken.api.guard``); the s
 header, makes the caller ``mcp``.
 """
 
+import asyncio
 import json
-from contextlib import AsyncExitStack
 from typing import Any
 
 import mcp_types as types
@@ -136,7 +136,8 @@ class McpServer:
             stateless=True,
             max_request_body_size=cfg.mcp_max_body_bytes,
         )
-        self._stack: AsyncExitStack | None = None
+        self._runner: asyncio.Task[None] | None = None
+        self._release = asyncio.Event()
 
     # -- the door ----------------------------------------------------------------------------
     @property
@@ -158,15 +159,32 @@ class McpServer:
 
     # -- lifecycle ---------------------------------------------------------------------------
     async def start(self) -> None:
-        if self._stack is None:
-            stack = AsyncExitStack()
-            await stack.enter_async_context(self.manager.run())
-            self._stack = stack
+        """Run the session manager in a task of its own: its task group must be entered and left in
+        the same task, and ``stop`` may be called from another."""
+        if self._runner is not None:
+            return
+        ready: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+        self._release = asyncio.Event()
+
+        async def hold() -> None:
+            try:
+                async with self.manager.run():
+                    ready.set_result(None)
+                    await self._release.wait()
+            except BaseException as exc:
+                if not ready.done():
+                    ready.set_exception(exc)
+                else:
+                    raise
+
+        self._runner = asyncio.create_task(hold(), name="oaken-mcp")
+        await ready
 
     async def stop(self) -> None:
-        stack, self._stack = self._stack, None
-        if stack is not None:
-            await stack.aclose()
+        runner, self._runner = self._runner, None
+        if runner is not None:
+            self._release.set()
+            await runner
 
     # -- tools -------------------------------------------------------------------------------
     @staticmethod
