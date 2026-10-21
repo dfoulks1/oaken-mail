@@ -197,6 +197,13 @@
 <td>The raw headers of a message, and optionally its raw bytes, for inspection. Not for MCP.</td>
 </tr>
 <tr>
+<td><code>get_thread</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>A conversation as a tree: every message that shares a thread, in reading order, each with its parent and depth.</td>
+</tr>
+<tr>
 <td><code>list_accounts</code></td>
 <td>read</td>
 <td>on by default</td>
@@ -267,6 +274,13 @@
 <td>Every sync schedule: when it next runs, how the last run went, and whether it is paused.</td>
 </tr>
 <tr>
+<td><code>mailbox_counts</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>The sidebar's numbers in one call: Inbox, Starred and Discarded, every folder (location) and every label, each with how many messages and how many are unread. No mail content.</td>
+</tr>
+<tr>
 <td><code>mark_read</code></td>
 <td>mutate</td>
 <td>on by default</td>
@@ -335,6 +349,13 @@
 <td>never</td>
 <td>no</td>
 <td>Rebuild the search index from the raw store (resumable).</td>
+</tr>
+<tr>
+<td><code>remove_account</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Remove an account and its sync schedules. Stored mail is kept; the credential is dropped.</td>
 </tr>
 <tr>
 <td><code>remove_schedule</code></td>
@@ -414,6 +435,13 @@
 <td>Store an account's password in the OS keyring (SMTP and IMAP). It is never shown again.</td>
 </tr>
 <tr>
+<td><code>set_flagged</code></td>
+<td>mutate</td>
+<td>off until you turn it on</td>
+<td>no</td>
+<td>Star or unstar messages. Written back to the mailbox through \Flagged; undoable.</td>
+</tr>
+<tr>
 <td><code>set_labels</code></td>
 <td>mutate</td>
 <td>never</td>
@@ -442,11 +470,32 @@
 <td>Compile a Sieve script and report the first error, with its line.</td>
 </tr>
 <tr>
+<td><code>sieve_delete</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Remove one Sieve script. It stops running on the next filter pass.</td>
+</tr>
+<tr>
+<td><code>sieve_get</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>Read one Sieve script's text, so an editor can load it.</td>
+</tr>
+<tr>
 <td><code>sieve_list</code></td>
 <td>read</td>
 <td>never</td>
 <td>no</td>
 <td>List the Sieve scripts on disk, and any skipped with the reason.</td>
+</tr>
+<tr>
+<td><code>sieve_save</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Compile a Sieve script and, only if it compiles, save it so it runs on the next filter pass.</td>
 </tr>
 <tr>
 <td><code>sieve_test</code></td>
@@ -505,7 +554,7 @@
 <h3 id="ask"><code>ask</code></h3>
 <p>Every quote is checked against the message it cites; claims that fail are dropped, and with none left the answer is <code>insufficient_evidence</code>. Never marks anything read.</p>
 <ul>
-<li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>question</code>, <code>thread_key</code>?</li>
+<li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>unread_only</code>?, <code>starred</code>?, <code>has_attachment</code>?, <code>thread_key</code>?, <code>question</code></li>
 <li>Output: <code>answer</code>, <code>message_ids</code>?, <code>citations</code>?, <code>confidence</code>?, <code>insufficient_evidence</code>?, <code>dropped_claims</code>?, <code>degraded</code>?, <code>degraded_reason</code>?, <code>evidence_tokens</code>?, <code>full_body_tokens</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
 </ul>
 <h3 id="authorization-status"><code>authorization_status</code></h3>
@@ -572,7 +621,7 @@
 <p>The cleaned text (quotes and signatures removed), cut to the caller's limit. Reading a message here does not change read state: only opening or summarizing it, by the user, does.</p>
 <ul>
 <li>Input: <code>message_id</code>, <code>include_text</code>?, <code>text_chars</code>?</li>
-<li>Output: <code>message_id</code>, <code>account_id</code>, <code>thread_key</code>?, <code>subject</code>?, <code>from_addr</code>?, <code>from_name</code>?, <code>date</code>?, <code>labels</code>?, <code>disposition</code>?, <code>location</code>?, <code>is_read</code>?, <code>indexed</code>?, <code>text</code>?, <code>truncated</code>?, <code>attachments</code>?, <code>content_is_untrusted</code>?</li>
+<li>Output: <code>message_id</code>, <code>account_id</code>, <code>thread_key</code>?, <code>subject</code>?, <code>from_addr</code>?, <code>from_name</code>?, <code>date</code>?, <code>labels</code>?, <code>disposition</code>?, <code>location</code>?, <code>is_read</code>?, <code>starred</code>?, <code>to_addrs</code>?, <code>cc_addrs</code>?, <code>message_id_header</code>?, <code>in_reply_to</code>?, <code>references</code>?, <code>indexed</code>?, <code>text</code>?, <code>truncated</code>?, <code>attachments</code>?, <code>content_is_untrusted</code>?</li>
 </ul>
 <h3 id="get-message-rules"><code>get_message_rules</code></h3>
 <p>How a message was filed: its labels, flags and disposition, and the rule behind each.</p>
@@ -585,6 +634,12 @@
 <ul>
 <li>Input: <code>message_id</code>, <code>include_raw</code>?</li>
 <li>Output: <code>message_id</code>, <code>size_raw</code>, <code>in_lfs</code>, <code>headers</code>, <code>raw_base64</code>?, <code>truncated</code>?</li>
+</ul>
+<h3 id="get-thread"><code>get_thread</code></h3>
+<p>Ask by any message id or by thread key. <code>parent_id</code> is the message it replies to (the nearest ancestor we hold when its direct parent never arrived); a message that answers nothing we have is a root. Never marks anything read.</p>
+<ul>
+<li>Input: <code>message_id</code>?, <code>thread_key</code>?, <code>limit</code>?</li>
+<li>Output: <code>thread_key</code>, <code>items</code>?, <code>total</code>?, <code>truncated</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
 </ul>
 <h3 id="list-accounts"><code>list_accounts</code></h3>
 <p>The configured accounts: id, provider and display name (never credentials).</p>
@@ -623,10 +678,10 @@
 <li>Output: <code>inbox</code>, <code>discarded</code>, <code>folders</code>, <code>labels</code>, <code>content_is_untrusted</code>?</li>
 </ul>
 <h3 id="list-messages"><code>list_messages</code></h3>
-<p>Newest first. Snippets by default; <code>include_text</code> adds the cleaned text within the reply's character budget. Never marks anything read.</p>
+<p>Newest first unless <code>sort</code> says otherwise. Snippets by default; <code>include_text</code> adds the cleaned text within the reply's character budget. Never marks anything read.</p>
 <ul>
-<li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>limit</code>?, <code>include_text</code>?, <code>text_chars</code>?</li>
-<li>Output: <code>items</code>, <code>truncated</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
+<li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>unread_only</code>?, <code>starred</code>?, <code>has_attachment</code>?, <code>thread_key</code>?, <code>limit</code>?, <code>offset</code>?, <code>sort</code>?, <code>include_text</code>?, <code>text_chars</code>?</li>
+<li>Output: <code>items</code>, <code>truncated</code>?, <code>offset</code>?, <code>total</code>?, <code>total_exact</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
 </ul>
 <h3 id="list-operations"><code>list_operations</code></h3>
 <p>Every operation with its permission class, and whether MCP clients may call it.</p>
@@ -645,6 +700,12 @@
 <ul>
 <li>Input: <code>crontab</code>?</li>
 <li>Output: <code>schedules</code>, <code>crontab</code>?</li>
+</ul>
+<h3 id="mailbox-counts"><code>mailbox_counts</code></h3>
+<p>The sidebar's numbers in one call: Inbox, Starred and Discarded, every folder (location) and every label, each with how many messages and how many are unread. No mail content.</p>
+<ul>
+<li>Input: <code>account_id</code>?, <code>include_discarded</code>?</li>
+<li>Output: <code>inbox</code>?, <code>starred</code>?, <code>discarded</code>?, <code>locations</code>?, <code>labels</code>?, <code>content_is_untrusted</code>?</li>
 </ul>
 <h3 id="mark-read"><code>mark_read</code></h3>
 <p>Mark messages read. Written back to the mailbox; undoable.</p>
@@ -706,6 +767,12 @@
 <li>Input: <code>account_id</code>?, <code>force</code>?</li>
 <li>Output: <code>job_id</code>, <code>created</code></li>
 </ul>
+<h3 id="remove-account"><code>remove_account</code></h3>
+<p>Remove an account and its sync schedules. Stored mail is kept; the credential is dropped.</p>
+<ul>
+<li>Input: <code>account_id</code></li>
+<li>Output: <code>removed</code>, <code>schedules_removed</code>?, <code>restart_needed</code>?, <code>mail_kept</code>?</li>
+</ul>
 <h3 id="remove-schedule"><code>remove_schedule</code></h3>
 <p>Remove a sync schedule (a per-folder one, or an account's, which stops its sync).</p>
 <ul>
@@ -751,14 +818,14 @@
 <h3 id="search"><code>search</code></h3>
 <p>Each hit says which retrievers found it (<code>why</code>). When the embedder or the vectors are unavailable the keyword results still come back, with <code>degraded</code> set. Never marks read.</p>
 <ul>
-<li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>query</code>, <code>limit</code>?, <code>thread_key</code>?, <code>category</code>?, <code>min_priority</code>?, <code>unread_only</code>?</li>
-<li>Output: <code>items</code>, <code>truncated</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?, <code>degraded</code>?, <code>degraded_reason</code>?</li>
+<li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>unread_only</code>?, <code>starred</code>?, <code>has_attachment</code>?, <code>thread_key</code>?, <code>query</code>, <code>limit</code>?, <code>category</code>?, <code>min_priority</code>?, <code>offset</code>?, <code>sort</code>?</li>
+<li>Output: <code>items</code>, <code>truncated</code>?, <code>offset</code>?, <code>total</code>?, <code>total_exact</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?, <code>degraded</code>?, <code>degraded_reason</code>?</li>
 </ul>
 <h3 id="search-keyword"><code>search_keyword</code></h3>
 <p>Hits come back with the matching words marked <code>**like this**</code>. Never marks read.</p>
 <ul>
-<li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>query</code>, <code>limit</code>?</li>
-<li>Output: <code>items</code>, <code>truncated</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
+<li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>unread_only</code>?, <code>starred</code>?, <code>has_attachment</code>?, <code>thread_key</code>?, <code>query</code>, <code>limit</code>?, <code>offset</code>?, <code>sort</code>?</li>
+<li>Output: <code>items</code>, <code>truncated</code>?, <code>offset</code>?, <code>total</code>?, <code>total_exact</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
 </ul>
 <h3 id="set-account-config"><code>set_account_config</code></h3>
 <p>Replace an account's non-secret settings.</p>
@@ -771,6 +838,12 @@
 <ul>
 <li>Input: <code>account_id</code>, <code>password</code></li>
 <li>Output: <code>stored</code></li>
+</ul>
+<h3 id="set-flagged"><code>set_flagged</code></h3>
+<p>Star or unstar messages. Written back to the mailbox through \Flagged; undoable.</p>
+<ul>
+<li>Input: <code>ids</code>, <code>flagged</code>?</li>
+<li>Output: <code>changed</code>, <code>unchanged</code>, <code>missing</code>, <code>local_only</code>, <code>audit_ids</code>, <code>batch_id</code>?, <code>skipped</code>?</li>
 </ul>
 <h3 id="set-labels"><code>set_labels</code></h3>
 <p>Add labels to messages (made if new) and remove labels the person added earlier.</p>
@@ -796,11 +869,29 @@
 <li>Input: <code>script</code>, <code>name</code>?</li>
 <li>Output: <code>ok</code>, <code>error</code>?, <code>line</code>?, <code>requires</code>?, <code>sha256</code>?</li>
 </ul>
+<h3 id="sieve-delete"><code>sieve_delete</code></h3>
+<p>Remove one Sieve script. It stops running on the next filter pass.</p>
+<ul>
+<li>Input: <code>name</code></li>
+<li>Output: <code>deleted</code></li>
+</ul>
+<h3 id="sieve-get"><code>sieve_get</code></h3>
+<p>Read one Sieve script's text, so an editor can load it.</p>
+<ul>
+<li>Input: <code>name</code></li>
+<li>Output: <code>name</code>, <code>text</code>, <code>sha256</code></li>
+</ul>
 <h3 id="sieve-list"><code>sieve_list</code></h3>
 <p>List the Sieve scripts on disk, and any skipped with the reason.</p>
 <ul>
 <li>Input: none</li>
 <li>Output: <code>enabled</code>, <code>directory</code>, <code>sha256</code>, <code>scripts</code>, <code>problems</code></li>
+</ul>
+<h3 id="sieve-save"><code>sieve_save</code></h3>
+<p>Compile a Sieve script and, only if it compiles, save it so it runs on the next filter pass.</p>
+<ul>
+<li>Input: <code>name</code>, <code>text</code></li>
+<li>Output: <code>saved</code>, <code>check</code>, <code>sha256</code>?</li>
 </ul>
 <h3 id="sieve-test"><code>sieve_test</code></h3>
 <p>Run a Sieve script on one message and show each effect and its rule. Stores nothing.</p>

@@ -137,6 +137,10 @@
 <td>Show one message (cleaned text, or --raw/--headers).</td>
 </tr>
 <tr>
+<td><a href="#thread"><code>thread</code></a></td>
+<td>Show a conversation as a tree: who replied to whom (* marks unread).</td>
+</tr>
+<tr>
 <td><a href="#summarize"><code>summarize</code></a></td>
 <td>Summarize messages with the local model.</td>
 </tr>
@@ -332,6 +336,9 @@
 <li><code>--unread</code> — Only unread messages.</li>
 <li><code>--keyword</code> — Keyword search only (no model, no vectors).</li>
 <li><code>--limit</code> — Maximum results.</li>
+<li><code>--offset</code> — Skip this many (paging).</li>
+<li><code>--starred</code> — Only starred messages.</li>
+<li><code>--has-attachment</code> — Only messages with an attachment.</li>
 </ul>
 <h3 id="show"><code>show</code></h3>
 <p>Show one message (cleaned text, or --raw/--headers).</p>
@@ -343,6 +350,16 @@
 <ul>
 <li><code>--raw</code> — Include the raw bytes (base64 in --json).</li>
 <li><code>--headers</code> — Show only the raw headers.</li>
+</ul>
+<h3 id="thread"><code>thread</code></h3>
+<p>Show a conversation as a tree: who replied to whom (* marks unread).</p>
+<p>Arguments:</p>
+<ul>
+<li><code>message_id</code> — Any message in the conversation.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--limit</code> — Most messages to show.</li>
 </ul>
 <h3 id="summarize"><code>summarize</code></h3>
 <p>Summarize messages with the local model.</p>

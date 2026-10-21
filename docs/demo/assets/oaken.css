@@ -168,6 +168,15 @@ h1, h2, h3, h4, h5, h6, .ok-brand, .modal-title { font-family: var(--ok-font-hea
 .ok-msg .star { color: var(--ok-muted); }
 .ok-msg .star.on { color: var(--ok-accent-2); }
 .ok-tag { font-size: .7rem; padding: .1rem .5rem; border-radius: 999px; background: var(--ok-surface-2); color: var(--ok-fg); white-space: nowrap; display: inline-flex; align-items: center; gap: .3rem; }
+.ok-msg[hidden] { display: none !important; }
+.ok-fold { cursor: pointer; user-select: none; display: flex; align-items: center; gap: .4rem; }
+.ok-fold:hover { color: var(--ok-text, inherit); }
+.ok-fold-icon { font-size: .7rem; transition: transform .12s; }
+.ok-fold.closed .ok-fold-icon { transform: rotate(-90deg); }
+.ok-fold-count { margin-left: auto; font-weight: 500; opacity: .7; }
+.ok-sentinel { list-style: none; text-align: center; font-size: .8rem; color: var(--ok-muted); padding: .75rem; min-height: 1px; }
+.ok-sentinel:empty { padding: 0; }
+.ok-sort { width: auto; min-width: 8.5rem; }
 .ok-list-group { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--ok-muted); padding: .9rem 1rem .4rem; font-weight: 600; background: var(--ok-surface); position: sticky; top: 0; z-index: 1; }
 
 /* Density */
@@ -190,6 +199,13 @@ h1, h2, h3, h4, h5, h6, .ok-brand, .modal-title { font-family: var(--ok-font-hea
 .ok-thread-msg header { display: flex; gap: .85rem; align-items: center; padding: 1rem 1.25rem; }
 .ok-thread-msg.collapsed .ok-msg-body { display: none; }
 .ok-thread-msg.collapsed header { cursor: pointer; }
+.ok-thread-msg { margin-left: calc(var(--ok-depth, 0) * 1.25rem); }
+.ok-thread-msg.nested { border-left: 3px solid var(--ok-border); }
+.ok-thread-msg.current { border-color: var(--ok-accent, var(--bs-primary)); }
+.ok-thread-msg.collapsed header:hover { background: var(--ok-hover, rgba(127,127,127,.08)); }
+.ok-thread-who { min-width: 0; }  /* lets a long snippet shrink instead of pushing the date out */
+.ok-thread-snippet { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ok-thread-date { flex: 0 0 auto; margin-left: auto; white-space: nowrap; text-align: right; align-self: flex-start; }
 .ok-msg-body { padding: 0 1.25rem 1.25rem 4.1rem; line-height: 1.65; }
 .ok-quote { border-left: 3px solid var(--ok-accent-2); padding-left: 1rem; color: var(--ok-muted); }
 .ok-attach { display: inline-flex; align-items: center; gap: .6rem; border: 1px solid var(--ok-border); border-radius: .6rem; padding: .5rem .8rem; margin: .25rem .5rem .25rem 0; background: var(--ok-surface-2); color: var(--ok-fg); text-decoration: none; font-size: .88rem; }

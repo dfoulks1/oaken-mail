@@ -175,7 +175,7 @@ tokens. See <a href="../mcp.html">Connect an AI client</a>.</p>
 <td>POST</td>
 <td><code>/v1/operations/{name}</code></td>
 <td>API token</td>
-<td>Call one operation. 57 exist.</td>
+<td>Call one operation. 64 exist.</td>
 </tr>
 </tbody>
 </table></div>
@@ -282,6 +282,12 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/get_raw</code></td>
 </tr>
 <tr>
+<td><code>get_thread</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/get_thread</code></td>
+</tr>
+<tr>
 <td><code>list_accounts</code></td>
 <td>read</td>
 <td>on by default</td>
@@ -342,6 +348,12 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/list_schedules</code></td>
 </tr>
 <tr>
+<td><code>mailbox_counts</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/mailbox_counts</code></td>
+</tr>
+<tr>
 <td><code>mark_read</code></td>
 <td>mutate</td>
 <td>on by default</td>
@@ -400,6 +412,12 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td>mutate</td>
 <td>never</td>
 <td><code>POST /v1/operations/rebuild_index</code></td>
+</tr>
+<tr>
+<td><code>remove_account</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/remove_account</code></td>
 </tr>
 <tr>
 <td><code>remove_schedule</code></td>
@@ -468,6 +486,12 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/set_account_password</code></td>
 </tr>
 <tr>
+<td><code>set_flagged</code></td>
+<td>mutate</td>
+<td>off until turned on</td>
+<td><code>POST /v1/operations/set_flagged</code></td>
+</tr>
+<tr>
 <td><code>set_labels</code></td>
 <td>mutate</td>
 <td>never</td>
@@ -492,10 +516,28 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/sieve_check</code></td>
 </tr>
 <tr>
+<td><code>sieve_delete</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/sieve_delete</code></td>
+</tr>
+<tr>
+<td><code>sieve_get</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/sieve_get</code></td>
+</tr>
+<tr>
 <td><code>sieve_list</code></td>
 <td>read</td>
 <td>never</td>
 <td><code>POST /v1/operations/sieve_list</code></td>
+</tr>
+<tr>
+<td><code>sieve_save</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/sieve_save</code></td>
 </tr>
 <tr>
 <td><code>sieve_test</code></td>
@@ -606,6 +648,11 @@ resume from the in-memory ring. If that id is older than the ring, or from befor
 <td><code>MessageReadChanged</code></td>
 <td>Message read changed.</td>
 <td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>message_id</code>, <code>read</code>, <code>reason</code>, <code>audit_id</code>, <code>local_only</code>, <code>error</code></td>
+</tr>
+<tr>
+<td><code>MessageStarChanged</code></td>
+<td>A message was starred or unstarred (the <code>\Flagged</code> flag). Same local-first, written-back shape as <code>MessageReadChanged</code>: <code>local_only</code> while no provider can write it, with <code>error</code>.</td>
+<td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>message_id</code>, <code>starred</code>, <code>reason</code>, <code>audit_id</code>, <code>local_only</code>, <code>error</code></td>
 </tr>
 <tr>
 <td><code>MessageStored</code></td>

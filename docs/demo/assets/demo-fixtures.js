@@ -16,6 +16,10 @@
       subject: "[VOTE] Release Example Server 2.4.63", from_name: "Sam Sample", from_addr: "sam@example.com",
       date: "9:12 AM", snippet: "Please vote on releasing this package. The vote is open for at least 72 hours…",
       labels: ["Releases"], tags: ["dev@lists"], is_read: false, starred: true, has_attachments: true },
+    { message_id: "m-vote-reply", account_id: "demo", thread_key: "t-vote", group: "Today",
+      subject: "Re: [VOTE] Release Example Server 2.4.63", from_name: "Dana Grey", from_addr: "dana@example.com",
+      date: "9:40 AM", snippet: "+1 (binding). Checked the signatures and ran the test suite on two platforms…",
+      labels: ["Releases"], tags: ["dev@lists"], is_read: false, starred: false, has_attachments: false },
     { message_id: "m-maint", account_id: "demo", thread_key: "t-maint", group: "Today",
       subject: "Planned maintenance: mail relays, Oct 22", from_name: "Infrastructure", from_addr: "infra@example.com",
       date: "8:47 AM", snippet: "We will be rotating the outbound relays on Thursday between 14:00 and 16:00 UTC…",
@@ -47,8 +51,13 @@
   ];
 
   const FIX_BODY = {
+    "m-vote-reply": {
+      message_id: "m-vote-reply", thread_key: "t-vote", subject: "Re: [VOTE] Release Example Server 2.4.63",
+      from_name: "Dana Grey", from_addr: "dana@example.com", to: "dev@lists.example.com",
+      date: "Tue, 20 Oct 2026 09:40 -0400", labels: ["Releases"], tags: ["dev@lists"], text: "+1 (binding)\n\nChecked the signatures and ran the test suite on two platforms.", attachments: [],
+    },
     "m-vote-2463": {
-      message_id: "m-vote-2463", subject: "[VOTE] Release Example Server 2.4.63",
+      message_id: "m-vote-2463", thread_key: "t-vote", subject: "[VOTE] Release Example Server 2.4.63",
       from_name: "Sam Sample", from_addr: "sam@example.com", to: "dev@lists.example.com",
       date: "Tue, 20 Oct 2026 09:12 -0400", labels: ["Releases"], tags: ["dev@lists"],
       security: "Signed (DKIM: example.com) · TLS",
@@ -78,11 +87,20 @@
         const q = (input.query || "").trim().toLowerCase();
         if (q) items = items.filter((m) =>
           (m.subject + " " + m.from_name + " " + m.snippet).toLowerCase().includes(q));
+        if (input.thread_key) items = items.filter((m) => m.thread_key === input.thread_key);
         if (input.unread_only) items = items.filter((m) => m.is_read === false);
         if (input.label) items = items.filter((m) => (m.labels || []).includes(input.label));
         if (input.location) items = items.filter((m) => (m.tags || []).includes(input.location));
         if (input.disposition === "inbox") items = items.filter((m) => !(m.tags || []).length);
-        return { request_id: "demo", status: "ok", output: { items, truncated: false, warnings: [], degraded: false } };
+        const total = items.length, off = input.offset || 0, lim = input.limit || 50;
+        items = items.slice(off, off + lim);
+        return { request_id: "demo", status: "ok", output: { items, truncated: off + lim < total, total, total_exact: true, offset: off, warnings: [], degraded: false } };
+      }
+      case "get_thread": {
+        const m = FIX_MESSAGES.find((x) => x.message_id === input.message_id);
+        const items = FIX_MESSAGES.filter((x) => m && x.thread_key === m.thread_key)
+          .map((x, i) => ({ ...x, parent_id: i ? FIX_MESSAGES.find((y) => y.thread_key === m.thread_key).message_id : null, depth: i ? 1 : 0 }));
+        return { request_id: "demo", status: "ok", output: { thread_key: m ? m.thread_key : "", items, total: items.length, truncated: false } };
       }
       case "get_message": {
         const body = FIX_BODY[input.message_id] || FIX_BODY["m-vote-2463"];
