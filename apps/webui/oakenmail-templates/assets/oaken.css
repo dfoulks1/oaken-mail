@@ -168,6 +168,15 @@ h1, h2, h3, h4, h5, h6, .ok-brand, .modal-title { font-family: var(--ok-font-hea
 .ok-msg .star { color: var(--ok-muted); }
 .ok-msg .star.on { color: var(--ok-accent-2); }
 .ok-tag { font-size: .7rem; padding: .1rem .5rem; border-radius: 999px; background: var(--ok-surface-2); color: var(--ok-fg); white-space: nowrap; display: inline-flex; align-items: center; gap: .3rem; }
+.ok-msg[hidden] { display: none !important; }
+.ok-fold { cursor: pointer; user-select: none; display: flex; align-items: center; gap: .4rem; }
+.ok-fold:hover { color: var(--ok-text, inherit); }
+.ok-fold-icon { font-size: .7rem; transition: transform .12s; }
+.ok-fold.closed .ok-fold-icon { transform: rotate(-90deg); }
+.ok-fold-count { margin-left: auto; font-weight: 500; opacity: .7; }
+.ok-sentinel { list-style: none; text-align: center; font-size: .8rem; color: var(--ok-muted); padding: .75rem; min-height: 1px; }
+.ok-sentinel:empty { padding: 0; }
+.ok-sort { width: auto; min-width: 8.5rem; }
 .ok-list-group { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--ok-muted); padding: .9rem 1rem .4rem; font-weight: 600; background: var(--ok-surface); position: sticky; top: 0; z-index: 1; }
 
 /* Density */

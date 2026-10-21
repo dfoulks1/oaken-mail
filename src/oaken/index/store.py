@@ -126,6 +126,23 @@ def _sender(addrs: Sequence[Address]) -> tuple[str, str, str]:
     return a.address, a.name, (f"{a.name} <{a.address}>" if a.name else a.address)
 
 
+# How a listing can be ordered by what the index holds. ``relevance`` is the ranked search's own
+# order. Read state lives in raw.db, so "unread first" is done above the index, not here.
+SORTS: Final = {
+    "date_desc": "d.date_utc DESC, d.message_id",
+    "date_asc": "d.date_utc ASC, d.message_id",
+    "sender_asc": "LOWER(COALESCE(NULLIF(d.from_name, ''), d.from_addr)) ASC, d.date_utc DESC",
+    "sender_desc": "LOWER(COALESCE(NULLIF(d.from_name, ''), d.from_addr)) DESC, d.date_utc DESC",
+    # one leading Re:/Fwd:/Fw: ignored, so a reply sorts beside the message it answers
+    "subject_asc": (
+        "LOWER(TRIM(CASE WHEN LOWER(d.subject) LIKE 're:%' THEN SUBSTR(d.subject, 4)"
+        " WHEN LOWER(d.subject) LIKE 'fwd:%' THEN SUBSTR(d.subject, 5)"
+        " WHEN LOWER(d.subject) LIKE 'fw:%' THEN SUBSTR(d.subject, 4)"
+        " ELSE d.subject END)) ASC, d.date_utc DESC"
+    ),
+}
+
+
 def _like(value: str) -> str:
     return "%" + value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
 
@@ -632,10 +649,12 @@ class IndexStore:
         *,
         any_term: bool = False,
         offset: int = 0,
+        sort: str = "relevance",
     ) -> SearchResult:
         """BM25-ranked search, one hit per message (its best chunk) with a highlighted snippet.
         With no words in the query but some filters it lists the newest matching messages.
-        ``offset`` skips that many of the best hits (for paging)."""
+        ``offset`` skips that many of the best hits (for paging). ``sort`` is ``relevance`` (a
+        search's own ranking, newest first when there are no words) or a key in ``SORTS``."""
         f = filters or SearchFilters()
         offset = max(0, offset)
         q = parse_query(query, self.cfg, any_term=any_term)
@@ -646,7 +665,7 @@ class IndexStore:
                 return SearchResult((), q, q.warnings)
             listing_sql = (
                 f"SELECT d.* FROM docs d WHERE 1 = 1{where}"  # noqa: S608 (placeholders only)
-                " ORDER BY d.date_utc DESC, d.message_id LIMIT ? OFFSET ?"
+                f" ORDER BY {SORTS.get(sort, SORTS['date_desc'])} LIMIT ? OFFSET ?"
             )
             rows = await self.db.fetchall(listing_sql, [*args, k, offset])
             hits = [
@@ -664,7 +683,12 @@ class IndexStore:
                 " SELECT r.chunk_id, r.message_id, r.score FROM ranked r"
                 " JOIN docs d ON d.message_id = r.message_id WHERE r.rn = 1"
                 # ties: newest first
-                " ORDER BY r.score, d.date_utc DESC, r.message_id LIMIT ? OFFSET ?"
+                + (
+                    " ORDER BY r.score, d.date_utc DESC, r.message_id"
+                    if sort not in SORTS
+                    else f" ORDER BY {SORTS[sort]}"
+                )
+                + " LIMIT ? OFFSET ?"
             )
             best = await self.db.fetchall(ranked_sql, [q.match, *args, k, offset])
         except StorageError as exc:  # the parser should make this impossible; never leak it

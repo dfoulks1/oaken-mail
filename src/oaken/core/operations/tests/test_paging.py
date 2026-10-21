@@ -118,3 +118,76 @@ async def test_get_message_carries_the_reader_and_reply_fields(ops: Ops) -> None
     assert [x.address for x in m.to_addrs]  # recipients come from the raw message
     assert m.message_id_header  # the Message-ID header, for In-Reply-To
     assert isinstance(m.cc_addrs, list) and isinstance(m.references, list)
+
+
+async def test_sorting_a_listing_by_date_sender_and_subject(ops: Ops) -> None:
+    ids = await ops.add(5)
+    newest = await ops.out("list_messages")
+    oldest = await ops.out("list_messages", {"sort": "date_asc"})
+    dates = [i.date for i in oldest.items]
+    assert dates == sorted(dates)  # oldest first
+    assert [i.date for i in newest.items] == sorted(dates, reverse=True)
+    assert sorted(i.message_id for i in oldest.items) == sorted(ids)
+    by_sender = await ops.out("list_messages", {"sort": "sender_asc"})
+    names = [(i.from_name or i.from_addr).lower() for i in by_sender.items]
+    assert names == sorted(names)
+    reverse = await ops.out("list_messages", {"sort": "sender_desc"})
+    assert [(i.from_name or i.from_addr).lower() for i in reverse.items] == names[::-1]
+    subjects = [i.subject for i in (await ops.out("list_messages", {"sort": "subject_asc"})).items]
+    assert subjects == sorted(subjects)
+    # a reply sorts beside what it answers: one leading Re:/Fwd: is ignored
+    await ops.rig.index.db.execute(
+        "UPDATE docs SET subject = 'Re: Subject 2' WHERE message_id = ?", (ids[4],)
+    )
+    keys = [i.subject for i in (await ops.out("list_messages", {"sort": "subject_asc"})).items]
+    assert keys.index("Re: Subject 2") == keys.index("Subject 2") + 1 or (
+        keys.index("Re: Subject 2") == keys.index("Subject 2") - 1
+    )
+
+
+async def test_a_sorted_listing_pages_without_gaps_or_repeats(ops: Ops) -> None:
+    ids = await ops.add(7)
+    seen: list[str] = []
+    for off in (0, 3, 6):
+        page = await ops.out("list_messages", {"sort": "sender_desc", "limit": 3, "offset": off})
+        seen += [i.message_id for i in page.items]
+        assert page.total == 7
+    assert sorted(seen) == sorted(ids) and len(seen) == len(set(seen))
+
+
+async def test_unread_first_puts_unread_ahead_and_pages_across_the_boundary(ops: Ops) -> None:
+    ids = await ops.add(6)
+    read = ids[::2]  # three read, three unread
+    await ops.out("mark_read", {"ids": list(read)})
+    whole = await ops.out("list_messages", {"sort": "unread_first"})
+    flags = [i.is_read for i in whole.items]
+    assert flags == sorted(flags)  # every False (unread) before every True (read)
+    assert whole.total == 6 and sum(1 for f in flags if not f) == 3
+    paged: list[str] = []
+    for off in (0, 2, 4):  # the second page straddles unread and read
+        page = await ops.out("list_messages", {"sort": "unread_first", "limit": 2, "offset": off})
+        paged += [i.message_id for i in page.items]
+        assert page.total == 6
+    assert paged == [i.message_id for i in whole.items]
+    only_unread = await ops.out("list_messages", {"sort": "unread_first", "unread_only": True})
+    assert all(i.is_read is False for i in only_unread.items) and only_unread.total == 3
+
+
+async def test_a_sorted_search_orders_all_matches_and_says_it_is_keyword(ops: Ops) -> None:
+    await ops.add(5)
+    out = await ops.out("search", {"query": "quokkas", "sort": "sender_desc"})
+    names = [(i.from_name or i.from_addr).lower() for i in out.items]
+    assert names == sorted(names, reverse=True) and out.total == 5
+    assert out.degraded and "keyword" in out.degraded_reason
+    ranked = await ops.out("search", {"query": "quokkas"})
+    assert not ranked.degraded or ranked.degraded_reason  # relevance is unchanged
+
+
+async def test_a_sort_that_cannot_apply_is_said_not_silently_dropped(ops: Ops) -> None:
+    await ops.add(3)
+    out = await ops.out("search", {"query": "quokkas", "sort": "date_asc", "unread_only": True})
+    assert any("ranked instead" in w for w in out.warnings)
+    kw = await ops.out("search_keyword", {"query": "quokkas", "sort": "unread_first"})
+    assert any("unread_first" in w for w in kw.warnings) and kw.total == 3
+    none = await ops.out("search", {"query": "", "sort": "sender_asc"})
+    assert none.total == 3  # no words: it is a listing, in that order

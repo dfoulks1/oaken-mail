@@ -20,11 +20,14 @@ from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import AnyOperation, operation
 from oaken.core.rawstore import header_block
 from oaken.core.search import HybridFilters
-from oaken.index.query import DISPOSITIONS
-from oaken.index.store import SearchFilters
+from oaken.index.query import DISPOSITIONS, parse_query
+from oaken.index.store import SORTS, SearchFilters
 from oaken.mail.parse import parse
 
 Disposition = Literal["inbox", "filed", "discarded", "any"]
+Sort = Literal[
+    "relevance", "date_desc", "date_asc", "sender_asc", "sender_desc", "subject_asc", "unread_first"
+]
 assert set(DISPOSITIONS) <= {"inbox", "filed", "discarded"}  # noqa: S101 (keeps the Literal honest)
 
 
@@ -63,6 +66,7 @@ class MessageFilter(BaseModel):
 class ListMessagesInput(MessageFilter):
     limit: int | None = Field(default=None, ge=1)
     offset: int = Field(default=0, ge=0)  # skip this many (for paging)
+    sort: Sort = "relevance"  # a listing has no relevance: it is newest first
     include_text: bool = False  # the cleaned text of each, cut to the limits
     text_chars: int | None = Field(default=None, ge=1)  # per message
 
@@ -77,6 +81,63 @@ class MessageList(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+@dataclasses.dataclass
+class Page:
+    hits: list[Any]
+    more: bool
+    total: int | None
+    exact: bool
+    warnings: list[str]
+    why: dict[str, list[str]] = dataclasses.field(default_factory=dict)
+
+
+async def _unread_first(
+    ctx: OpContext, inp: MessageFilter, query: str, k: int, offset: int, extra: dict[str, Any]
+) -> Page:
+    """Unread messages (newest first), then the read ones. Read state is in raw.db, so this asks
+    the retrieval service twice: for the unread, then for what is left to fill the page."""
+    retrieval = ctx.svc.need_retrieval()
+
+    def only(unread: bool) -> HybridFilters:
+        return hybrid_filters(inp, unread=unread, unread_only=False, **extra)
+
+    first = await retrieval.search(query, only(True), k, offset=offset)
+    hits = [h.hit for h in first.hits]
+    unread_total = first.total or 0
+    exact = first.total_exact
+    total = unread_total
+    if not inp.unread_only:
+        need = k - len(hits)
+        rest = await retrieval.search(
+            query, only(False), max(need, 1), offset=max(0, offset - unread_total) if need else 0
+        )
+        if need > 0:
+            hits += [h.hit for h in rest.hits][:need]
+        total += rest.total or 0
+        exact = exact and rest.total_exact
+    return Page(hits, offset + len(hits) < total, total, exact, list(first.warnings))
+
+
+async def _listing(
+    ctx: OpContext, inp: Any, query: str, k: int, extra: dict[str, Any] | None = None
+) -> Page:
+    """A page with nothing to rank by, in the order asked for (newest first by default)."""
+    sort = inp.sort if inp.sort != "relevance" else "date_desc"
+    if sort == "unread_first":
+        return await _unread_first(ctx, inp, query, k, inp.offset, extra or {})
+    if inp.needs_state:  # unread and starred come from raw.db: the retrieval service applies them
+        found = await ctx.svc.need_retrieval().search(
+            query, hybrid_filters(inp, sort=sort, **(extra or {})), k + 1, offset=inp.offset
+        )
+        hits = [h.hit for h in found.hits]
+        return Page(hits[:k], len(hits) > k, found.total, found.total_exact, list(found.warnings))
+    result = await ctx.svc.index.keyword_search(
+        query, inp.filters(), k=k + 1, offset=inp.offset, sort=sort
+    )
+    total = await ctx.svc.index.count(query, inp.filters())
+    return Page(list(result.hits[:k]), len(result.hits) > k, total, True, list(result.warnings))
+
+
 @operation(
     "list_messages",
     "List the newest messages that match the filters, with a short snippet of each.",
@@ -86,27 +147,12 @@ class MessageList(BaseModel):
     mcp="on",
 )
 async def list_messages(ctx: OpContext, inp: ListMessagesInput) -> MessageList:
-    """Newest first. Snippets by default; ``include_text`` adds the cleaned text within the
-    reply's character budget. Never marks anything read."""
+    """Newest first unless ``sort`` says otherwise. Snippets by default; ``include_text`` adds the
+    cleaned text within the reply's character budget. Never marks anything read."""
     k = ctx.limits.results(inp.limit)
-    if inp.needs_state:  # unread and starred come from raw.db: the retrieval service applies them
-        found = await ctx.svc.need_retrieval().search(
-            "", hybrid_filters(inp), k + 1, offset=inp.offset
-        )
-        hits = [h.hit for h in found.hits][:k]
-        more, total, exact, warnings = (
-            len(found.hits) > k,
-            found.total,
-            found.total_exact,
-            found.warnings,
-        )
-    else:
-        result = await ctx.svc.index.keyword_search("", inp.filters(), k=k + 1, offset=inp.offset)
-        hits = list(result.hits[:k])
-        total = await ctx.svc.index.count("", inp.filters())
-        more, exact, warnings = len(result.hits) > k, True, result.warnings
+    page = await _listing(ctx, inp, "", k)
     budget = ctx.limits.budget()
-    items = await items_from_hits(ctx, hits, budget)
+    items = await items_from_hits(ctx, page.hits, budget)
     if inp.include_text:
         per = inp.text_chars or ctx.limits.max_chars
         for item in items:
@@ -114,11 +160,11 @@ async def list_messages(ctx: OpContext, inp: ListMessagesInput) -> MessageList:
             item.text = budget.take(doc["cleaned_text"], per) if doc else ""
     return MessageList(
         items=items,
-        truncated=budget.truncated or more,
-        warnings=list(warnings),
+        truncated=budget.truncated or page.more,
+        warnings=page.warnings,
         offset=inp.offset,
-        total=total,
-        total_exact=exact,
+        total=page.total,
+        total_exact=page.exact,
     )
 
 
@@ -126,6 +172,7 @@ class SearchKeywordInput(MessageFilter):
     query: str = Field(max_length=1000)
     limit: int | None = Field(default=None, ge=1)
     offset: int = Field(default=0, ge=0)
+    sort: Sort = "relevance"  # best match first, or any key but unread_first (not an index key)
 
 
 @operation(
@@ -139,8 +186,13 @@ class SearchKeywordInput(MessageFilter):
 async def search_keyword(ctx: OpContext, inp: SearchKeywordInput) -> MessageList:
     """Hits come back with the matching words marked ``**like this**``. Never marks read."""
     k = ctx.limits.results(inp.limit)
+    notes: list[str] = []
+    if inp.needs_state:
+        notes.append("unread_only and starred apply to search and list_messages, not here")
+    if inp.sort == "unread_first":
+        notes.append("unread_first needs read state: use search or list_messages; ranked instead")
     result = await ctx.svc.index.keyword_search(
-        inp.query, inp.filters(), k=k + 1, offset=inp.offset
+        inp.query, inp.filters(), k=k + 1, offset=inp.offset, sort=inp.sort
     )
     total = await ctx.svc.index.count(inp.query, inp.filters())
     budget = ctx.limits.budget()
@@ -148,7 +200,7 @@ async def search_keyword(ctx: OpContext, inp: SearchKeywordInput) -> MessageList
     return MessageList(
         items=items,
         truncated=budget.truncated or len(result.hits) > k,
-        warnings=list(result.warnings),
+        warnings=[*notes, *result.warnings],
         offset=inp.offset,
         total=total,
     )
@@ -161,6 +213,7 @@ class SearchInput(MessageFilter):
     category: list[str] = Field(default_factory=list)  # from the triage enrichment
     min_priority: int | None = Field(default=None, ge=0, le=3)
     offset: int = Field(default=0, ge=0)
+    sort: Sort = "relevance"  # relevance (the default) keeps the ranked order
 
 
 class SearchOutput(MessageList):
@@ -191,21 +244,59 @@ async def search(ctx: OpContext, inp: SearchInput) -> SearchOutput:
     """Each hit says which retrievers found it (``why``). When the embedder or the vectors are
     unavailable the keyword results still come back, with ``degraded`` set. Never marks read."""
     k = ctx.limits.results(inp.limit)
-    filters = hybrid_filters(
-        inp,
-        thread_key=inp.thread_key,
-        categories=tuple(inp.category),
-        min_priority=inp.min_priority,
-    )
-    found = await ctx.svc.need_retrieval().search(inp.query, filters, k + 1, offset=inp.offset)
+    extra: dict[str, Any] = {
+        "thread_key": inp.thread_key,
+        "categories": tuple(inp.category),
+        "min_priority": inp.min_priority,
+    }
     budget = ctx.limits.budget()
+    notes: list[str] = []
+    if inp.sort != "relevance":
+        q = parse_query(inp.query, ctx.svc.settings.index)
+        raw_only = (
+            inp.needs_state
+            or bool(inp.category)
+            or inp.min_priority is not None
+            or any(x is not None for x in (q.unread, q.starred, q.min_priority))
+            or bool(q.categories)
+        )
+        if not q.has_text:  # nothing to rank by: a listing, in the order asked for
+            page = await _listing(ctx, inp, inp.query, k, extra)
+            items = await items_from_hits(ctx, page.hits, budget, markers=True)
+            return SearchOutput(
+                items=items,
+                truncated=budget.truncated or page.more,
+                warnings=page.warnings,
+                offset=inp.offset,
+                total=page.total,
+                total_exact=page.exact,
+            )
+        if inp.sort in SORTS and not raw_only:
+            # Sorted by a key the index holds: keyword matches, all of them, in that order.
+            result = await ctx.svc.index.keyword_search(
+                inp.query, inp.filters(), k=k + 1, offset=inp.offset, sort=inp.sort
+            )
+            items = await items_from_hits(ctx, result.hits[:k], budget, markers=True)
+            return SearchOutput(
+                items=items,
+                truncated=budget.truncated or len(result.hits) > k,
+                warnings=list(result.warnings),
+                degraded=True,
+                degraded_reason="sorted results are keyword matches (relevance mixes in meaning)",
+                offset=inp.offset,
+                total=await ctx.svc.index.count(inp.query, inp.filters()),
+            )
+        notes.append(f"sort {inp.sort} cannot be combined with these filters here: ranked instead")
+    found = await ctx.svc.need_retrieval().search(
+        inp.query, hybrid_filters(inp, **extra), k + 1, offset=inp.offset
+    )
     items = await items_from_hits(ctx, [h.hit for h in found.hits[:k]], budget, markers=True)
     for item, h in zip(items, found.hits, strict=False):
         item.why = list(h.why)
     return SearchOutput(
         items=items,
         truncated=budget.truncated or len(found.hits) > k,
-        warnings=list(found.warnings),
+        warnings=[*notes, *found.warnings],
         degraded=found.degraded,
         degraded_reason=found.degraded_reason,
         offset=inp.offset,

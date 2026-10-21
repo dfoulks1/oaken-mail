@@ -45,9 +45,11 @@ class HybridFilters:
 
     index: SearchFilters = field(default_factory=SearchFilters)
     unread_only: bool = False
+    unread: bool | None = None  # True: only unread; False: only read (None: either)
     categories: tuple[str, ...] = ()
     min_priority: int | None = None
     starred: bool | None = None
+    sort: str = "relevance"  # a listing (no words) can be ordered by a key in ``SORTS``
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,7 +154,8 @@ class HybridSearch:
         offset = max(0, offset)
         need = offset + k  # fetch enough to skip ``offset`` and still fill a page
         starred = q.starred if q.starred is not None else f.starred
-        unread = q.unread if q.unread is not None else (True if f.unread_only else None)
+        own = f.unread if f.unread is not None else (True if f.unread_only else None)
+        unread = q.unread if q.unread is not None else own
         categories = tuple(dict.fromkeys((*f.categories, *q.categories)))
         priorities = [p for p in (f.min_priority, q.min_priority) if p is not None]
         min_priority = max(priorities) if priorities else None
@@ -342,7 +345,9 @@ class HybridSearch:
         raw_only = unread is not None or starred is not None or categories or min_priority
         if not raw_only:
             # Only the index filters apply, so it can page and count exactly on its own.
-            res = await self.index.keyword_search(text, index_filters, k, offset=offset)
+            res = await self.index.keyword_search(
+                text, index_filters, k, offset=offset, sort=f.sort
+            )
             total = await self.index.count(text, index_filters)
             return HybridResult(
                 hits=tuple(HybridHit(hit=h, why=("filter",)) for h in res.hits),
@@ -356,7 +361,7 @@ class HybridSearch:
         n = min(need * self.cfg.overfetch, self.cfg.max_candidates)
         while True:
             # the query's operators (from:, after:, label:) are applied by the index itself
-            res = await self.index.keyword_search(text, index_filters, n)
+            res = await self.index.keyword_search(text, index_filters, n, sort=f.sort)
             passing = await eligible(
                 self.raw,
                 [h.message_id for h in res.hits],

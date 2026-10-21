@@ -204,50 +204,138 @@
       `<input class="form-check-input m-0" type="checkbox" aria-label="Select">` +
       `<button class="btn btn-sm btn-ghost p-0 star${starOn}" data-action="star" aria-label="Star"><i class="bi ${starIcon}"></i></button>` +
       `<span class="from">${esc(m.from_name || m.from_addr)}</span>` +
-      `<span class="date">${clip}${esc(m.date || "")}</span>` +
+      `<span class="date">${clip}${esc(fmtDate(m.date))}</span>` +
       `<span class="line2"><span class="subject">${esc(m.subject)}</span>` +
       `<span class="snippet">— ${snippet}…</span>${tags}</span>` +
       `</li>`
     );
   }
 
-  function groupedListHtml(items) {
-    if (!items.length) return '<li class="ok-empty-row text-muted p-4 text-center">No messages.</li>';
-    let html = "", group = null;
+  /* ---- the message list: lazy infinite scroll, sort, and folds ----
+   * Rows load PAGE at a time as the list nears its end. A fold groups the rows by the sort key
+   * (a day for date, a sender for sender, a subject for subject, unread/read), so the order and
+   * the folds always agree. Counts on a fold are of the rows loaded so far. Which folds are
+   * closed is remembered per view in this browser. */
+  const PAGE = 40;
+  const REFRESH_PAGES = 5; // a refresh re-fetches what is loaded, up to this many pages
+  const SORTS = [
+    ["date_desc", "Newest first"], ["date_asc", "Oldest first"], ["sender_asc", "Sender A–Z"],
+    ["sender_desc", "Sender Z–A"], ["subject_asc", "Subject"], ["unread_first", "Unread first"],
+  ];
+  const store = {
+    get(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { window.localStorage.setItem(k, v); } catch (e) { /* private window */ } },
+  };
+  const view = { key: "", items: [], total: null, exact: true, more: false, loading: false,
+    token: 0, sort: "date_desc", folded: new Set(), last: null, counts: {} };
+  let observer = null;
+
+  const isSearch = (op) => op === "search" || op === "search_keyword";
+  const sortFamily = (sort) => sort.split("_")[0]; // date | sender | subject | unread
+  function chosenSort(op) {
+    const stored = store.get(isSearch(op) ? "oaken.sort.search" : "oaken.sort");
+    const ok = SORTS.some(([v]) => v === stored) || (isSearch(op) && stored === "relevance");
+    return ok ? stored : (isSearch(op) ? "relevance" : "date_desc");
+  }
+
+  function dayLabel(d) {
+    const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const diff = Math.round((today - day) / 86400000);
+    if (diff === 0) return "Today";
+    if (diff === 1) return "Yesterday";
+    if (diff > 1 && diff < 7) return d.toLocaleDateString(undefined, { weekday: "long" });
+    return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric",
+      year: d.getFullYear() === now.getFullYear() ? undefined : "numeric" });
+  }
+  function fmtDate(iso) {
+    const d = new Date(iso);
+    if (!iso || isNaN(d)) return String(iso || "");
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() === now.getFullYear() ? undefined : "numeric" });
+  }
+  // The subject with one leading Re:/Fwd:/Fw: removed: the same rule the server sorts by.
+  const bareSubject = (s) => String(s || "").replace(/^\s*(re|fwd|fw):/i, "").trim();
+
+  // {key, label} of the fold a row belongs to under this sort, or null for no folds (best match).
+  function foldOf(m, sort) {
+    if (m.group) return { key: "g:" + m.group, label: m.group }; // the demo fixtures name groups
+    if (sort === "date_desc" || sort === "date_asc") {
+      const d = new Date(m.date);
+      if (!m.date || isNaN(d)) return { key: "d:unknown", label: "No date" };
+      return { key: "d:" + d.getFullYear() + "-" + d.getMonth() + "-" + d.getDate(), label: dayLabel(d) };
+    }
+    if (sort === "sender_asc" || sort === "sender_desc") {
+      const name = m.from_name || m.from_addr || "(unknown)";
+      return { key: "s:" + name.toLowerCase(), label: name };
+    }
+    if (sort === "subject_asc") {
+      const s = bareSubject(m.subject) || "(no subject)";
+      return { key: "t:" + s.toLowerCase(), label: s };
+    }
+    if (sort === "unread_first") {
+      return m.is_read === false ? { key: "u:unread", label: "Unread" } : { key: "u:read", label: "Read" };
+    }
+    return null;
+  }
+
+  function foldsKey() { return "oaken.folds:" + view.key + ":" + sortFamily(view.sort); }
+  function loadFolds() {
+    try { return new Set(JSON.parse(store.get(foldsKey()) || "[]")); } catch (e) { return new Set(); }
+  }
+  function saveFolds() { store.set(foldsKey(), JSON.stringify(Array.from(view.folded).slice(-300))); }
+
+  function rowsHtml(items) {
+    let html = "";
     for (const m of items) {
-      if (m.group && m.group !== group) { group = m.group; html += `<div class="ok-list-group">${esc(group)}</div>`; }
-      html += rowHtml(m);
+      const fold = foldOf(m, view.sort);
+      if (fold && (!view.last || view.last.key !== fold.key)) {
+        const closed = view.folded.has(fold.key);
+        html += `<div class="ok-list-group ok-fold${closed ? " closed" : ""}" role="button" tabindex="0" aria-expanded="${closed ? "false" : "true"}" data-fold="${esc(fold.key)}">` +
+          `<i class="bi bi-chevron-down ok-fold-icon"></i><span class="ok-fold-label">${esc(fold.label)}</span><span class="ok-fold-count"></span></div>`;
+      }
+      if (fold) {
+        view.last = fold;
+        view.counts[fold.key] = (view.counts[fold.key] || 0) + 1;
+      }
+      let row = rowHtml(m);
+      if (fold && view.folded.has(fold.key)) row = row.replace("<li ", `<li hidden data-fold-key="${esc(fold.key)}" `);
+      else if (fold) row = row.replace("<li ", `<li data-fold-key="${esc(fold.key)}" `);
+      html += row;
     }
     return html;
   }
 
-  const PAGE = 50;
-  let pageOffset = 0; // where the list starts; reset whenever the folder, label or query changes
-  let pageKey = "";
-
-  // "1–50 of 1,284" from the operation's own offset and total, and the Newer/Older buttons.
-  function renderPager(output, shown) {
-    const text = qs("[data-oaken-pager-text]");
-    const prev = qs("[data-oaken-page='-1']");
-    const next = qs("[data-oaken-page='1']");
-    const total = output && typeof output.total === "number" ? output.total : null;
-    const from = shown ? pageOffset + 1 : 0;
-    const to = pageOffset + shown;
-    const exact = !output || output.total_exact !== false;
-    if (text) {
-      text.textContent = total === null ? "" :
-        shown ? `${from.toLocaleString()}–${to.toLocaleString()} of ${exact ? "" : "about "}${total.toLocaleString()}` : "0 messages";
-    }
-    if (prev) prev.disabled = pageOffset === 0;
-    if (next) next.disabled = !(output && (output.truncated || (total !== null && to < total)));
+  function updateFoldCounts(list) {
+    qsa(".ok-fold", list).forEach((h) => {
+      const n = view.counts[h.dataset.fold] || 0;
+      const el = qs(".ok-fold-count", h);
+      if (el) el.textContent = n ? String(n) : "";
+    });
   }
 
-  async function loadList(container, keepChecked) {
-    const list = qs(".ok-list", container) || container;
-    const op = container.dataset.oakenList || "list_messages"; // "list_messages" | "search"
+  function renderStatus() {
+    const text = qs("[data-oaken-pager-text]");
+    if (!text) return;
+    const n = view.items.length;
+    if (view.total === null) { text.textContent = ""; return; }
+    text.textContent = n ? `${n.toLocaleString()} of ${view.exact ? "" : "about "}${view.total.toLocaleString()}` : "0 messages";
+  }
+
+  function setSentinel(list) {
+    let s = qs(".ok-sentinel", list);
+    if (!s) { s = document.createElement("li"); s.className = "ok-sentinel"; list.appendChild(s); }
+    s.textContent = view.loading ? "Loading…" : "";
+    s.hidden = !view.more && !view.loading;
+    return s;
+  }
+
+  function inputFor(container, op) {
     const input = {};
     const url = new URL(window.location.href);
-    if (op === "search" || op === "search_keyword") input.query = url.searchParams.get("q") || "";
+    if (isSearch(op)) input.query = url.searchParams.get("q") || "";
     const label = url.searchParams.get("label");
     if (label) input.label = label;
     // Folders (ADR 0008): ?location=X filters to a filed folder; ?folder=inbox|filed|discarded
@@ -256,24 +344,71 @@
     if (location) { input.location = location; input.disposition = "any"; }
     const folder = url.searchParams.get("folder");
     if (folder && ["inbox", "filed", "discarded"].includes(folder)) input.disposition = folder;
-    const key = op + "|" + url.search;
-    if (key !== pageKey) { pageKey = key; pageOffset = 0; }
-    input.limit = PAGE;
-    input.offset = pageOffset;
+    input.sort = view.sort;
+    return { input, key: op + "|" + view.sort + "|" + url.search };
+  }
+
+  function sortMenu(op) {
+    const sel = qs("[data-oaken-sort]");
+    if (!sel) return;
+    const options = (isSearch(op) ? [["relevance", "Best match"]] : []).concat(SORTS);
+    if (sel.dataset.for !== (isSearch(op) ? "search" : "list")) {
+      sel.innerHTML = options.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("");
+      sel.dataset.for = isSearch(op) ? "search" : "list";
+    }
+    sel.value = view.sort;
+  }
+
+  async function fetchPage(op, input, offset, limit) {
+    const { output } = await api(op, { ...input, limit, offset });
+    return output || {};
+  }
+
+  // (Re)load the list: a fresh view starts at the top; a refresh of the same view re-fetches the
+  // rows already loaded (so a read-state change shows) and keeps the scroll position.
+  async function loadList(container, keepChecked) {
+    const list = qs(".ok-list", container) || container;
+    const op = container.dataset.oakenList || "list_messages"; // "list_messages" | "search"
+    view.sort = chosenSort(op);
+    const { input, key } = inputFor(container, op);
+    const sameView = key === view.key;
+    const want = sameView ? Math.min(Math.max(view.items.length, PAGE), PAGE * REFRESH_PAGES) : PAGE;
+    const token = ++view.token;
+    sortMenu(op);
     container.classList.add("ok-loading");
     try {
-      const { output } = await api(op, input);
-      const items = (output && output.items) || [];
-      renderPager(output, items.length);
+      let items = [], out = {};
+      while (items.length < want) {
+        out = await fetchPage(op, input, items.length, Math.min(PAGE, want - items.length));
+        if (token !== view.token) return; // a newer load replaced this one
+        const got = out.items || [];
+        items = items.concat(got);
+        if (!got.length || !(out.truncated || (typeof out.total === "number" && items.length < out.total))) break;
+      }
+      const scroll = sameView ? container.scrollTop : 0;
+      view.key = key;
+      view.items = items;
+      view.total = typeof out.total === "number" ? out.total : null;
+      view.exact = out.total_exact !== false;
+      view.more = !!(out.truncated || (view.total !== null && items.length < view.total));
+      view.last = null; view.counts = {};
+      view.folded = loadFolds();
       itemsById.clear();
       items.forEach((m) => itemsById.set(m.message_id, m));
-      list.innerHTML = groupedListHtml(items);
+      list.innerHTML = items.length ? rowsHtml(items) : '<li class="ok-empty-row text-muted p-4 text-center">No messages.</li>';
+      setSentinel(list);
+      updateFoldCounts(list);
       (keepChecked || []).forEach((id) => {
         const box = qs(`.ok-msg[data-id="${CSS.escape(id)}"] input[type=checkbox]`, list);
         if (box) box.checked = true;
       });
-      if (output && output.degraded) toast("Search ran keyword-only (meaning search unavailable).");
+      if (out.degraded && out.degraded_reason) toast(out.degraded_reason.charAt(0).toUpperCase() + out.degraded_reason.slice(1) + ".");
+      else if (out.degraded) toast("Search ran keyword-only (meaning search unavailable).");
+      (out.warnings || []).forEach((w) => toast(w));
+      renderStatus();
       bindRows(container);
+      container.scrollTop = scroll;
+      watchEnd(container, list, op, input);
     } catch (e) {
       toast(e.message || "Could not load messages.");
     } finally {
@@ -281,18 +416,82 @@
     }
   }
 
+  // The next page, when the end of the list comes into view (a little early, so it is ready).
+  async function loadMore(container, list, op, input, token) {
+    if (view.loading || !view.more || token !== view.token) return;
+    view.loading = true;
+    setSentinel(list);
+    try {
+      const out = await fetchPage(op, input, view.items.length, PAGE);
+      if (token !== view.token) return;
+      // Only rows not already shown: a core that ignores offset would repeat the first page.
+      const got = (out.items || []).filter((m) => !itemsById.has(m.message_id));
+      got.forEach((m) => itemsById.set(m.message_id, m));
+      view.items = view.items.concat(got);
+      if (typeof out.total === "number") { view.total = out.total; view.exact = out.total_exact !== false; }
+      view.more = !!got.length && !!(out.truncated || (view.total !== null && view.items.length < view.total));
+      const html = rowsHtml(got);
+      const sentinel = setSentinel(list);
+      const before = list.children.length;
+      sentinel.insertAdjacentHTML("beforebegin", html);
+      bindRows(container, Array.from(list.children).slice(before - 1, -1));
+      updateFoldCounts(list);
+      renderStatus();
+    } catch (e) {
+      view.more = false;
+      toast(e.message || "Could not load more messages.");
+    } finally {
+      view.loading = false;
+      const s = setSentinel(list);
+      if (view.more && observer) { observer.unobserve(s); observer.observe(s); } // still in view? go on
+    }
+  }
+
+  function watchEnd(container, list, op, input) {
+    if (observer) observer.disconnect();
+    if (!("IntersectionObserver" in window)) return;
+    const token = view.token;
+    observer = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) loadMore(container, list, op, input, token);
+    }, { root: container, rootMargin: "0px 0px 400px 0px" });
+    const s = qs(".ok-sentinel", list);
+    if (s) observer.observe(s);
+  }
+
+  // Fold and unfold a group (click, or Enter/Space on the focused header).
+  function toggleFold(h) {
+    const key = h.dataset.fold;
+    const closed = !view.folded.has(key);
+    if (closed) view.folded.add(key); else view.folded.delete(key);
+    h.classList.toggle("closed", closed);
+    h.setAttribute("aria-expanded", closed ? "false" : "true");
+    qsa(`.ok-msg[data-fold-key="${CSS.escape(key)}"]`, h.parentElement).forEach((r) => { r.hidden = closed; });
+    saveFolds();
+  }
   document.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-oaken-page]");
+    const h = e.target.closest(".ok-fold");
+    if (h) toggleFold(h);
+  });
+  document.addEventListener("keydown", (e) => {
+    const h = e.target.closest && e.target.closest(".ok-fold");
+    if (h && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggleFold(h); }
+  });
+  document.addEventListener("change", (e) => {
+    const sel = e.target.closest && e.target.closest("[data-oaken-sort]");
     const container = qs("[data-oaken-list]");
-    if (!b || b.disabled || !container) return;
-    pageOffset = Math.max(0, pageOffset + Number(b.dataset.oakenPage) * PAGE);
+    if (!sel || !container) return;
+    const op = container.dataset.oakenList || "list_messages";
+    store.set(isSearch(op) ? "oaken.sort.search" : "oaken.sort", sel.value);
+    view.key = ""; // a different order is a fresh view: back to the top
     loadList(container);
   });
 
   /* Clicking a row: split layout loads the reader inline; otherwise follow the link. Mirrors the
    * presentation handler but also fetches the body when a reader pane is present. */
-  function bindRows(container) {
-    qsa(".ok-msg[data-id]", container).forEach((row) => {
+  function bindRows(container, rows) {
+    (rows || qsa(".ok-msg[data-id]", container)).forEach((row) => {
+      if (!row.matches || !row.matches(".ok-msg[data-id]") || row.dataset.bound) return;
+      row.dataset.bound = "1";
       row.addEventListener("click", (e) => {
         if (e.target.closest("input,button,a")) return;
         const reader = qs("[data-oaken-reader]");
