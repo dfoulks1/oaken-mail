@@ -245,11 +245,16 @@ is <code>UntrustedText</code>.</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">class</span><span class="w"> </span><span class="nc">Answer</span><span class="p">(</span><span class="n">SafeOutput</span><span class="p">):</span>
     <span class="n">title</span><span class="p">:</span> <span class="nb">str</span>
 
+
 <span class="n">TITLE</span> <span class="o">=</span> <span class="n">PromptBuilder</span><span class="p">(</span><span class="s2">"my.title"</span><span class="p">,</span> <span class="s2">"1"</span><span class="p">,</span> <span class="s2">"Give the email a three-word title."</span><span class="p">,</span> <span class="n">Answer</span><span class="p">)</span>
 
 <span class="n">answer</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">llm</span><span class="o">.</span><span class="n">generate_cached</span><span class="p">(</span>
-    <span class="n">TITLE</span><span class="p">,</span> <span class="n">msg</span><span class="o">.</span><span class="n">subject</span><span class="p">,</span> <span class="n">msg</span><span class="o">.</span><span class="n">body</span><span class="p">,</span>
-    <span class="n">content_hash</span><span class="o">=</span><span class="n">msg</span><span class="o">.</span><span class="n">message_id</span><span class="p">,</span> <span class="n">account_id</span><span class="o">=</span><span class="n">msg</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span> <span class="n">message_id</span><span class="o">=</span><span class="n">msg</span><span class="o">.</span><span class="n">message_id</span><span class="p">,</span>
+    <span class="n">TITLE</span><span class="p">,</span>
+    <span class="n">msg</span><span class="o">.</span><span class="n">subject</span><span class="p">,</span>
+    <span class="n">msg</span><span class="o">.</span><span class="n">body</span><span class="p">,</span>
+    <span class="n">content_hash</span><span class="o">=</span><span class="n">msg</span><span class="o">.</span><span class="n">message_id</span><span class="p">,</span>
+    <span class="n">account_id</span><span class="o">=</span><span class="n">msg</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span>
+    <span class="n">message_id</span><span class="o">=</span><span class="n">msg</span><span class="o">.</span><span class="n">message_id</span><span class="p">,</span>
 <span class="p">)</span>
 </code></pre></div>
 <p>Core picks the workspace from the account (a <code>secure</code> one only reaches a local model), answers a

@@ -1,6 +1,7 @@
 # 27 — Contacts / people
 
-**Read first:** `docs/prompts/00-context.md`. **Depends on:** 06, 07, 13, 16, 17, 21, 22.
+**Read first:** `docs/prompts/00-context.md` and `docs/prompts/21b-webui-client-foundation.md`.
+**Depends on:** 06, 07, 13, 16, 17, 21, 21b, 22.
 
 ## Goal
 
@@ -45,7 +46,25 @@ operation**. This is the largest of the UI prompts and starts with a design deci
    17's table.
 6. **UI**: a contacts page listing people with counts and last-seen, search/sort, and a person
    view that lists their messages (reusing the message list component) — replacing the mockup with
-   real data, and showing the empty state when there is no mail yet.
+   real data, and showing the empty state when there is no mail yet. Concretely (from 21b A6):
+   - **Left list:** `list_people {query, sort, limit, offset}`; the "Filter contacts" box is the
+     `query` (debounced, server-side; names and addresses are untrusted text, inserted as text).
+     Each row: initials avatar, best name, address, message count.
+   - **Right panel:** `get_person {address}` → name, address(es), counts, first/last seen, accounts;
+     "Recent messages" is `Oaken.list.mount` (21b C6) over `list_messages {participant}`.
+   - **Email button** → `Oaken.compose.open({to:[address]})` (28); it carries
+     `data-oaken-requires="send_message"`.
+   - **Removed from the live UI** (derived data has nothing to store): the "New" button, the
+     Edit button, the contact modal (first/last name, group, notes), the Groups row, the PGP key row
+     and the per-person group tag. Their templates may stay for the demo only.
+   - **Autocomplete for compose (28):** `list_people {query, limit:8, sort:"frequency"}` is the data
+     source for recipient chips; keep the response small and never log the query.
+7. **Open questions (defaults in bold):**
+   - Q1: counts include **both** sent and received messages for a person (participant), with the
+     split available in `get_person`.
+   - Q2: addresses that look automated (no-reply, list addresses) are **included but flagged
+     `automated:true`** so the UI can hide them by default; no heuristic beyond common local parts
+     and a `List-Id` header, recorded in the ADR.
 
 ## Acceptance criteria
 

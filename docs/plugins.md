@@ -134,11 +134,16 @@ An enricher never gets a backend. It is handed `ctx.llm` in `start()` and asks t
 class Answer(SafeOutput):
     title: str
 
+
 TITLE = PromptBuilder("my.title", "1", "Give the email a three-word title.", Answer)
 
 answer = await self.ctx.llm.generate_cached(
-    TITLE, msg.subject, msg.body,
-    content_hash=msg.message_id, account_id=msg.account_id, message_id=msg.message_id,
+    TITLE,
+    msg.subject,
+    msg.body,
+    content_hash=msg.message_id,
+    account_id=msg.account_id,
+    message_id=msg.message_id,
 )
 ```
 

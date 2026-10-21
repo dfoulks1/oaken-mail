@@ -34,21 +34,26 @@ review it before starting the next.
 | 19 | [security-hardening](19-security-hardening.md) | Injection suite, localhost threat tests, audit review | 16–18 |
 | 20 | [oss-docs](20-oss-docs.md) | README, site content, plugin guide, ADRs, roadmap; site verified | all |
 | 21 | [webui-server](21-webui-server.md) | `oaken-webui`: a thin client that serves the UI and proxies `/v1/*` to core (core stays headless) | 16, 17 |
+| 21b | [webui-client-foundation](21b-webui-client-foundation.md) | The UI function ⇄ operation map, the contract gaps, and the shared client JS (api seam, safe text renderer, sidebar/list/reader, capability gate, sync button) | 13, 16, 21 |
 | 22 | [api-parity](22-api-parity.md) | Expand the API for the UI; audit registry ⇄ CLI ⇄ UI; enforce 1:1 CLI/UI parity (one backend) | 13, 16, 17, 21 |
-| 23 | [plugin-settings](23-plugin-settings.md) | Configure plugins: load/test/save (`get`/`check`/`set_plugin_config`), schema form, `config.toml` round-trip, reload | 04, 13, 21, 22 |
+| 23 | [plugin-settings](23-plugin-settings.md) | Plugins only: per-plugin TOML textarea load/test/save, enable/disable (`enabled` on the base class), write-only secret rows, the shared config-section writer and live settings reload | 04, 13, 21, 22 |
 | 24 | [accounts-onboarding](24-accounts-onboarding.md) | Add/auth/test/configure accounts; Gmail "listen but not send" (receive-only) | 11–12b, 23 |
 | 25 | [folders-labels-counts](25-folders-labels-counts.md) | Sidebar chrome: folders, labels and unread counts (new `mailbox_counts` op) | 07, 12, 22 |
 | 26 | [sieve-management](26-sieve-management.md) | Manage Sieve in the UI: list/check/test + a write path (`sieve_save`/`delete`, never over MCP) | 06c, 22 |
 | 27 | [contacts-people](27-contacts-people.md) | People view derived from mail (`list_people`/`get_person`); derive-vs-store ADR | 06, 07, 22 |
+| 28 | [compose-and-send](28-compose-and-send.md) | Identities, `send_message` (permission `send`, never MCP), outbox job, the one compose controller in the UI | 11, 11b, 21b, 22, 24, 27 |
+| 29 | [system-settings](29-system-settings.md) | Core settings, storage figures, vacuum, cache stats/clear, event tail, MCP exposure link | 13, 21b, 22, 23 |
+| 30 | [pipeline-management](30-pipeline-management.md) | Manage the queue: job list with ids, pause/resume, retry, cancel, live concurrency, interactive-over-background priority | 05, 13, 17, 21b, 22 |
+| 31 | [workspace-management](31-workspace-management.md) | List/get/check/set/remove workspaces (Oaken's confidentiality levels) from the UI and CLI; `[workspaces.*]` stays the one source of truth | 10, 13, 22, 23 |
+| 32 | [mcp-settings](32-mcp-settings.md) | Settings → MCP: the `[mcp]` section in a textarea (`allow_send`, `workspaces=[]`, enable/disable), operation list with presets, workspace scoping, live reload | 13, 18, 22, 23, 29, 31 |
 
 ## Not written yet (deliberately)
 
-- **Compose/send** (after the read side, search and AI are solid; send is never exposed over MCP).
 - **Legacy-DB importer** (only if wanted), **packaging**
   (systemd/launchd, installers), **at-rest encryption**, **plugin sandboxing**,
   **embedding-throughput tuning on CPU**.
 
-The **Web UI** is now a written phase (prompts 21–27): its own thin-client app (`oaken-webui`)
+The **Web UI** is now a written phase (prompts 21–29; start with 21b, the map): its own thin-client app (`oaken-webui`)
 that serves the UI and proxies the general API, plus the registry operations each UI feature needs,
 built with 1:1 CLI/UI parity (one backend).
 

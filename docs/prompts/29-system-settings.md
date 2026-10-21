@@ -1,0 +1,84 @@
+# 29 — System settings, storage, logs
+
+**Read first:** `docs/prompts/00-context.md`, `docs/prompts/21b-webui-client-foundation.md`.
+**Depends on:** 13, 21b, 22, 23.
+
+## Goal
+
+Back the Settings panes that no earlier UI prompt covers: **core settings** (AI token-thrift and
+retrieval keys, read-state timing, sync defaults), **Storage & Data** (sizes and maintenance),
+**Logs** (audit, events, export), the **enrichment cache** numbers and clear, and the reserved
+**MCP exposure** link (the MCP tab itself is built in 23). Prompt 23 handles *plugin* config; this handles core's own `config.toml`
+sections, with the same load → check → save shape.
+
+## Decisions already taken
+
+- Same rule as 23: scoped, comment-preserving read-modify-write of `config.toml`; env overrides
+  (`OAKEN_*`) are reported, never silently shadowed; secrets never pass through here.
+- Only an **allow-listed** set of core keys is editable from a client. Anything that changes where
+  data lives, binds a port, or touches security (`api.*`, paths, token files) is not editable here.
+  The one exception is the `[mcp]` section, added to the allow-list by prompt 32 (which owns it).
+- Presentation prefs (theme, density, layout, composing prefs) stay in `localStorage` (21b).
+- MCP policy is **not** decided here: it is prompt 32 (the `[mcp]` section edited through these
+  same generic `get/check/set_settings` operations). Workspaces are 31.
+
+## Requirements (operations first)
+
+1. **`get_settings(section)`** — `read`: the editable keys of one core section, their JSON Schema,
+   current values and which are overridden by env. Sections: `index`, `retrieval`, `read_state`,
+   `ui` (`mark_read_delay_ms`), `sync` (defaults), `ai` (token-thrift toggles, top-k). Non-allow-listed
+   keys are absent.
+2. **`check_settings(section, values)`** — `read`, persists nothing; field-level errors.
+3. **`set_settings(section, values)`** — `mutate`, confirm-gated, audited (keys changed, never
+   values for anything that could be sensitive), `mcp="never"`. Says plainly which keys take effect
+   live and which need a restart (`restart_needed`).
+4. **Storage figures.** Extend `status` (or add `storage_info`, `read`) with `raw_db_bytes`,
+   `index_db_bytes`, `data_dir`, `quarantine_dir`, `quarantined_files`. Sizes come from the
+   filesystem, not a scan of mail. (The mockup's numbers are fiction until this exists.)
+5. **Maintenance.** `rebuild_index` and `reprocess` exist. Add **`vacuum`** (`mutate`, streaming job,
+   `mcp="never"`, one at a time, refuses while a rebuild runs). "Open quarantine folder" is
+   **removed** from the UI; show the path with a copy button (a browser cannot open a local folder).
+6. **Enrichment cache.** `usage_summary` returns calls/tokens/cache saved. Add `cache_stats`
+   (`read`: entries, bytes, prompt version, hit rate) and **`clear_cache`** (`mutate`,
+   confirm-gated, audited, `mcp="never"`; clears derived LLM results only, never mail or the index).
+7. **Logs.** `list_audit` exists (add `since` and a `cursor` for paging, plus a filter by `op`
+   already there). The Events tab reads `GET /v1/events` live; add an `events_tail` (`read`) that
+   returns the last N events from the JSON-lines log so the tab has history on load. Export is a
+   client-side download of the loaded rows.
+8. **MCP exposure.** Built in **23** (the MCP tab: Default / Extended / Locked over
+   `list_operations`/`set_operation_exposure`). Here, Settings only links to it. **No new policy.**
+9. **CLI.** `oaken settings get|check|set SECTION`, `oaken storage`, `oaken vacuum`,
+   `oaken cache stats|clear`, `oaken events --tail`. Update 17's table.
+
+## UI
+
+- Settings → AI & Models: the Ollama endpoint/models form is **23** (plugin config); the token-thrift
+  toggles and top-k are `get/check/set_settings("ai")` rendered by `Oaken.form.fromSchema` (21b C7),
+  each section with its own **Test/Save** (the single global "Save changes" button is removed).
+- Schedule pane: the "Default interval / Max concurrent / Min interval" rows are `get_settings("sync")`
+  (read-only for `min_interval`, which is a floor).
+- Storage & Data and Logs panes load lazily (21b C7); streaming maintenance shows `Oaken.job.watch`.
+- Security pane: **hidden** (no backing); the MCP exposure pane replaces its purpose.
+
+## Acceptance criteria
+
+- Round-trip test per section: `get` → edit → `check` → `set` → `get`; unrelated config and comments
+  untouched; an env override is reported; a non-allow-listed key is refused.
+- `restart_needed` is correct for a live key and a restart key.
+- `cache stats`/`clear_cache` only touch the LLM cache (a test confirms mail rows and index rows are
+  unchanged).
+- Storage numbers match the file sizes on a seeded data directory.
+- `vacuum` refuses while a rebuild runs.
+- The parity test from 22 covers every new operation for the CLI and the UI; none is on MCP except the
+  existing exposure operations as before.
+- `ruff`, `ruff format --check`, `mypy`, `pytest` and the docs check are green.
+
+## Open questions (defaults in bold)
+
+- **Q1 — Editable core keys:** **only those listed above**; the list is a constant in one place.
+- **Q2 — `vacuum`:** **ship it** (cheap and the mockup promises it).
+- **Q3 — MCP pane:** **ship the pane read/toggle only**, pending your capability discussion.
+
+## Report-back checkpoint
+
+End with the six sections from `00-context.md`. Then stop.

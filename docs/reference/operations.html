@@ -201,7 +201,7 @@
 <td>read</td>
 <td>on by default</td>
 <td>no</td>
-<td>Every label and disposition with how many live messages carry it.</td>
+<td>Every label, folder (location) and disposition with how many live messages carry it.</td>
 </tr>
 <tr>
 <td><code>list_messages</code></td>
@@ -428,7 +428,7 @@
 <h3 id="ask"><code>ask</code></h3>
 <p>Every quote is checked against the message it cites; claims that fail are dropped, and with none left the answer is <code>insufficient_evidence</code>. Never marks anything read.</p>
 <ul>
-<li>Input: <code>account_id</code>?, <code>label</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>question</code>, <code>thread_key</code>?</li>
+<li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>question</code>, <code>thread_key</code>?</li>
 <li>Output: <code>answer</code>, <code>message_ids</code>?, <code>citations</code>?, <code>confidence</code>?, <code>insufficient_evidence</code>?, <code>dropped_claims</code>?, <code>degraded</code>?, <code>degraded_reason</code>?, <code>evidence_tokens</code>?, <code>full_body_tokens</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
 </ul>
 <h3 id="authorization-status"><code>authorization_status</code></h3>
@@ -477,7 +477,7 @@
 <p>The cleaned text (quotes and signatures removed), cut to the caller's limit. Reading a message here does not change read state: only opening or summarizing it, by the user, does.</p>
 <ul>
 <li>Input: <code>message_id</code>, <code>include_text</code>?, <code>text_chars</code>?</li>
-<li>Output: <code>message_id</code>, <code>account_id</code>, <code>thread_key</code>?, <code>subject</code>?, <code>from_addr</code>?, <code>from_name</code>?, <code>date</code>?, <code>labels</code>?, <code>disposition</code>?, <code>is_read</code>?, <code>indexed</code>?, <code>text</code>?, <code>truncated</code>?, <code>attachments</code>?, <code>content_is_untrusted</code>?</li>
+<li>Output: <code>message_id</code>, <code>account_id</code>, <code>thread_key</code>?, <code>subject</code>?, <code>from_addr</code>?, <code>from_name</code>?, <code>date</code>?, <code>labels</code>?, <code>disposition</code>?, <code>location</code>?, <code>is_read</code>?, <code>indexed</code>?, <code>text</code>?, <code>truncated</code>?, <code>attachments</code>?, <code>content_is_untrusted</code>?</li>
 </ul>
 <h3 id="get-message-rules"><code>get_message_rules</code></h3>
 <p>How a message was filed: its labels, flags and disposition, and the rule behind each.</p>
@@ -510,15 +510,15 @@
 <li>Output: <code>entries</code></li>
 </ul>
 <h3 id="list-labels"><code>list_labels</code></h3>
-<p>Every label and disposition with how many live messages carry it.</p>
+<p>Every label, folder (location) and disposition with how many live messages carry it.</p>
 <ul>
 <li>Input: none</li>
-<li>Output: <code>labels</code>, <code>dispositions</code>, <code>content_is_untrusted</code>?</li>
+<li>Output: <code>labels</code>, <code>dispositions</code>, <code>locations</code>, <code>content_is_untrusted</code>?</li>
 </ul>
 <h3 id="list-messages"><code>list_messages</code></h3>
 <p>Newest first. Snippets by default; <code>include_text</code> adds the cleaned text within the reply's character budget. Never marks anything read.</p>
 <ul>
-<li>Input: <code>account_id</code>?, <code>label</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>limit</code>?, <code>include_text</code>?, <code>text_chars</code>?</li>
+<li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>limit</code>?, <code>include_text</code>?, <code>text_chars</code>?</li>
 <li>Output: <code>items</code>, <code>truncated</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
 </ul>
 <h3 id="list-operations"><code>list_operations</code></h3>
@@ -614,13 +614,13 @@
 <h3 id="search"><code>search</code></h3>
 <p>Each hit says which retrievers found it (<code>why</code>). When the embedder or the vectors are unavailable the keyword results still come back, with <code>degraded</code> set. Never marks read.</p>
 <ul>
-<li>Input: <code>account_id</code>?, <code>label</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>query</code>, <code>limit</code>?, <code>thread_key</code>?, <code>category</code>?, <code>min_priority</code>?, <code>unread_only</code>?</li>
+<li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>query</code>, <code>limit</code>?, <code>thread_key</code>?, <code>category</code>?, <code>min_priority</code>?, <code>unread_only</code>?</li>
 <li>Output: <code>items</code>, <code>truncated</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?, <code>degraded</code>?, <code>degraded_reason</code>?</li>
 </ul>
 <h3 id="search-keyword"><code>search_keyword</code></h3>
 <p>Hits come back with the matching words marked <code>**like this**</code>. Never marks read.</p>
 <ul>
-<li>Input: <code>account_id</code>?, <code>label</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>query</code>, <code>limit</code>?</li>
+<li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>query</code>, <code>limit</code>?</li>
 <li>Output: <code>items</code>, <code>truncated</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
 </ul>
 <h3 id="set-account-config"><code>set_account_config</code></h3>

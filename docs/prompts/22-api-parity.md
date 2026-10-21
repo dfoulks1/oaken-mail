@@ -1,6 +1,8 @@
 # 22 — API expansion and CLI/UI parity
 
-**Read first:** `docs/prompts/00-context.md`. **Depends on:** 13, 16, 17, 21.
+**Read first:** `docs/prompts/00-context.md` and `docs/prompts/21b-webui-client-foundation.md`
+(the function ⇄ operation map and the contract gaps this prompt must close).
+**Depends on:** 13, 16, 17, 21, 21b.
 
 ## Goal
 
@@ -10,7 +12,7 @@ backend; parity is a property of the architecture, and this prompt turns it into
 contract rather than a hope. It also audits what is missing today and sets the rule the UI-feature
 prompts (23–27) follow.
 
-## The rule (applies to 23–27, and to all future UI/CLI work)
+## The rule (applies to 23–29, and to all future UI/CLI work)
 
 Every user-facing capability is a **registry operation first**. A prompt adds, in this order:
 
@@ -36,8 +38,10 @@ No client ever holds business logic. If the UI needs something the CLI cannot al
    - map each CLI command (prompt 17) to its operation(s);
    - map each UI surface (the pages under `apps/webui/oakenmail-templates/`) to the operation(s) it
      needs, and mark which are **missing** from the registry today. Known gaps to record (built by
-     23–27, not here): plugin config load/test/save; per-folder/label **unread counts**; a Sieve
-     **write** path; **contacts/people**. Note also any read op the UI needs that only exists as a
+     23–29, not here): plugin config load/test/save (23); accounts onboarding and receive-only
+     (24); per-folder/label **unread counts** and **star** (25); a Sieve **write** path (26);
+     **contacts/people** (27); **send, identities** (28); **core settings, storage, cache,
+     vacuum, event tail** (29). Note also any read op the UI needs that only exists as a
      CLI convenience, and vice versa.
 2. **Parity test.** Add a test that asserts, for a declared set of "UI capabilities", each maps to a
    registered operation that is exposed on the general (non-MCP) surface and reachable by a thin
@@ -49,10 +53,27 @@ No client ever holds business logic. If the UI needs something the CLI cannot al
    `streaming`, MCP exposure, and input/output JSON Schema. Fill any missing field. The UI's forms
    and the CLI's `--help`/`op` fallback are both built from this.
 4. **No MCP leakage.** The audit and a test confirm the UI/CLI parity set never includes an
-   operation whose only intended surface is MCP, and that send is absent from both (send is a later
-   phase and never on MCP).
-5. **This prompt adds the contract and the audit, not the missing features.** The missing
-   operations are delivered by 23–27, each of which must satisfy the parity test for its feature.
+   operation whose only intended surface is MCP. `send` operations (built by 28) are **in** the
+   UI/CLI parity set and **never** on MCP (the registry ceiling is unchanged; how MCP and plugin
+   capability permissions are managed is a separate discussion, 21b Q6).
+5. **Close the read-side contract gaps (21b section B, G1–G4).** These are changes to existing
+   operations, not new features, and they are this prompt's real build work:
+   - `MessageItem` and `GetMessageOutput` gain `starred` and `location`; `GetMessageOutput` also
+     gains `to_addrs`, `cc_addrs`, `message_id_header`, `references` (needed by the reader and by
+     reply in 28). Attachments keep `content_type`/`size` (bytes); the client derives icon/format.
+   - `list_messages`, `search_keyword` and `search` gain `offset` and return `total` (a count of
+     rows matching the filters, not of the page), so the UI can show "a–b of N" and page.
+   - `MessageFilter` gains `location`, `starred` and `has_attachment`; `participant` is added by 27.
+   - The index query parser gains `to:`, `subject:`, `has:attachment`, `in:`/`location:` (folder) and
+     `is:starred`, in the same safe-quoting style as `from:`. This touches prompt 07's code: add
+     tests there and say so in the report. The advanced-search form in the UI composes a plain query
+     string from these operators; there is no second query language.
+   - Fix the `list_labels` and `get_message` fixture shapes in `demo-fixtures.js` (21b C1).
+6. **A contract test for the UI.** Add the `FIELDS` table from 21b (the fields each render path
+   reads) and a test that every field exists in the operation's output schema.
+7. **This prompt adds the contract, the audit and the read-side gaps above, not the missing
+   features.** The missing operations are delivered by 23–29, each of which must satisfy the parity
+   test for its feature.
 
 ## Acceptance criteria
 
@@ -63,6 +84,10 @@ No client ever holds business logic. If the UI needs something the CLI cannot al
   failure mode).
 - `/v1/operations` carries the full per-op metadata a client needs; a test checks the required
   fields are present for every operation.
+- `list_messages`/`search` page correctly (`offset`, `total`) and honour `location`, `starred`,
+  `has_attachment`; the new query operators are tested including hostile input (the parser never
+  raises and never passes user text to FTS5 unquoted).
+- The UI contract test (requirement 6) passes against the real output schemas.
 - `ruff`, `ruff format --check`, `mypy`, `pytest` and the docs check are green.
 
 ## Report-back checkpoint

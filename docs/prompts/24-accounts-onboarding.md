@@ -1,6 +1,7 @@
 # 24 — Accounts and onboarding
 
-**Read first:** `docs/prompts/00-context.md`. **Depends on:** 11, 11b, 11c, 12b, 13, 17, 21, 22, 23.
+**Read first:** `docs/prompts/00-context.md` and `docs/prompts/21b-webui-client-foundation.md`.
+**Depends on:** 11, 11b, 11c, 12b, 13, 17, 21, 21b, 22, 23.
 
 ## Goal
 
@@ -41,8 +42,37 @@ and preventing a send capability from being enabled for that account.
    `op` fallback plus named verbs for the common ones; update 17's table.
 6. **UI** onboarding: pick a provider (Gmail / IMAP+SMTP / IMAP-only), authenticate, test, set
    per-account options (display name, receive-only, sync defaults), and land in an (empty) mailbox.
-   Plugin-level settings reuse prompt 23's form; account-level settings are their own ops.
+   Plugin-level settings reuse prompt 23's TOML textarea section; account-level settings are their own ops.
 7. **MCP ceiling.** Account mutations are `mcp="never"`; reads may be `mcp="off"`.
+8. **The Settings → Accounts pane, mapped (from 21b A8).** Build exactly this:
+   - **List:** `list_accounts` for the rows, `get_account` per row for provider settings and
+     `problem`, `list_schedules` for "synced N min ago", state and cadence. The status dot is derived
+     from `problem` and the schedule's `paused`/`last_result`, in one client function. The
+     capability tags (`auth`, `sync.pull`, `flags.write`, `send`, `folders`) come from
+     `list_plugins` for that provider, **minus `send` when the account is receive-only**. The
+     mockup's "cursor 184213 · 12,904 messages" text is fiction: show only what an operation returns
+     (message count would need a count in `get_account` or `status`; add it or omit it).
+   - **Add account** dropdown: Google (Gmail API), IMAP mailbox, SMTP (send only). Each opens a short
+     wizard: `create_account` → credential (`start_authorization` + poll `authorization_status`, or
+     `set_account_password`) → `check_account` → options → done. A wizard step that fails keeps the
+     account created-but-unusable and says so; it never claims success. The password input posts
+     straight to `set_account_password` and is cleared; it is never stored in JS state beyond the
+     request.
+   - **Pause / Resume / Sync now:** `pause_schedule` / `resume_schedule` / `sync_now` (exist).
+   - **Re-authenticate:** `start_authorization`, shown for an `invalid_grant`/`needs-auth` state.
+   - **Manage:** a panel with `get_account.config_schema` rendered by `Oaken.form.fromSchema`
+     (21b C7), the receive-only switch, display name, `send_via` and `signature` (28 reads these),
+     and **Remove**.
+   - **SMTP (send only)** has no mailbox: no sync button, no schedule, shown as "Ready" from
+     `check_account`.
+9. **Send routing interlock (with 28).** The receive-only setting must be the same non-secret key
+   28 reads to compute `can_send` for `list_identities`. One key, one reader; add a test in 28's
+   suite that flips it and watches the identity change.
+10. **Open questions (defaults in bold):**
+    - Q1: a newly added Gmail account defaults to **receive-only** until the user turns send on
+      (28 ships send, so this default is a visible choice in the wizard, not a hidden one).
+    - Q2: `remove_account` **keeps the mail** already stored unless the user also asks to purge it;
+      purge is a separate confirmed operation and not built here.
 
 ## Acceptance criteria
 
