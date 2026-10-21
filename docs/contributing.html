@@ -79,7 +79,8 @@
       <a class="nav-link" href="#repository-layout"><span class="num">3</span>Repository layout</a>
       <a class="nav-link" href="#ground-rules"><span class="num">4</span>Ground rules</a>
       <a class="nav-link" href="#ai-tooling"><span class="num">5</span>AI tooling</a>
-      <a class="nav-link" href="#documentation"><span class="num">6</span>Documentation</a>
+      <a class="nav-link" href="#picking-up-a-prompt"><span class="num">6</span>Picking up a prompt</a>
+      <a class="nav-link" href="#documentation"><span class="num">7</span>Documentation</a>
     </nav></div>
   </div></div>
 </nav>
@@ -181,7 +182,287 @@ announcements, security advisories) must be reviewed by a committer before publi
 labeled as AI-generated (EU AI Act). Reviewing it as you would any other contribution is enough.</li>
 </ul>
 </section>
-<section id="documentation" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Documentation</h2></div>
+<section id="picking-up-a-prompt" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Picking up a prompt</h2></div>
+<p>Oaken Mail is built from a numbered series of self-contained prompts, one per session, in
+<a href="https://github.com/dfoulks1/oaken-mail/tree/main/docs/prompts"><code>docs/prompts/</code></a> (the index is
+<code>docs/prompts/README.md</code>). Each one says what to build, what it depends on, its acceptance
+criteria and a report-back checkpoint. You can run one by hand or with an AI coding tool, and
+anyone can take an <strong>Open</strong> one.</p>
+<p>To run one:</p>
+<ol>
+<li>Read <code>docs/prompts/00-context.md</code> (the rules and the decisions already taken), this guide, the
+ADRs and the architecture page for the part you touch.</li>
+<li>Pick a prompt below that is <strong>Open</strong> and whose dependencies are <strong>Built</strong>. If it says
+<strong>In progress</strong>, ask on the issue or pull request first: somebody is already on it.</li>
+<li>Start the session with: <em>&quot;Read <code>docs/prompts/00-context.md</code>, then execute
+<code>docs/prompts/NN-….md</code>.&quot;</em> Where a prompt and the code or the docs disagree, the code and the
+docs win; stop and report instead of guessing.</li>
+<li>Do the work with tests (next to the code, no network), then run the checks under
+<a href="#development-setup">Development setup</a> and <a href="#documentation">Documentation</a>.</li>
+<li><strong>In the same pull request, update the table below</strong> (and <code>docs/softmap.toml</code> if you built or
+changed a component). A prompt that is built but still marked Open sends the next contributor to
+redo it.</li>
+</ol>
+<h3 id="status-of-the-prompts">Status of the prompts</h3>
+<p><em>As of 2026-10-21 (commit <code>23323ce</code>).</em> <strong>Built</strong> means the prompt's deliverables are in <code>main</code>
+with tests. <strong>Partly</strong> says what is done and what is left. A <strong>Written</strong> prompt has a plan and no
+code yet.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>#</th>
+<th>Prompt</th>
+<th>Status</th>
+<th>What is left, or where to look</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>01</td>
+<td>bootstrap</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>01a</td>
+<td>docs-site-scaffold</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>02</td>
+<td>core-foundation</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>03</td>
+<td>events-and-jobs</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>03b</td>
+<td>swarm-foundations</td>
+<td>Built</td>
+<td>External agents; see 33 for enrichment through them</td>
+</tr>
+<tr>
+<td>04</td>
+<td>plugin-host</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>05</td>
+<td>raw-store</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>06</td>
+<td>parsing-and-cleaning</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>06c</td>
+<td>sieve-filtering</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>07</td>
+<td>index-and-fts</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>08</td>
+<td>vector-store</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>09</td>
+<td>ingest-pipeline</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>10</td>
+<td>ollama-and-prompt-safety</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>11</td>
+<td>gmail-plugin</td>
+<td>Built</td>
+<td>New mail now arrives ahead of a long first sync's backlog</td>
+</tr>
+<tr>
+<td>11b</td>
+<td>smtp-send</td>
+<td>Built</td>
+<td>Provider only; the send operation is 28</td>
+</tr>
+<tr>
+<td>11c</td>
+<td>imap-provider</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>12</td>
+<td>read-state</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>12b</td>
+<td>sync-scheduling</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>13</td>
+<td>operation-registry</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>14</td>
+<td>enrichers</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>15</td>
+<td>retrieval-and-ask</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>16</td>
+<td>api-daemon</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>17</td>
+<td>cli-client</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>18</td>
+<td>mcp-server</td>
+<td>Built</td>
+<td>Both doors: <code>/mcp</code> and <code>/mcp/agent</code></td>
+</tr>
+<tr>
+<td>19</td>
+<td>security-hardening</td>
+<td><strong>Open</strong></td>
+<td>The dedicated pass (injection suite across all surfaces, localhost threat tests, audit review) has not been run. Enricher injection tests and ADR 0005 exist</td>
+</tr>
+<tr>
+<td>20</td>
+<td>oss-docs</td>
+<td>Partly</td>
+<td>The site, getting started, MCP and keyring pages and this guide exist. The full pass (roadmap, plugin guide, verification) has not been run</td>
+</tr>
+<tr>
+<td>21</td>
+<td>webui-server</td>
+<td>Built</td>
+<td><code>oaken-webui</code> start, stop, restart and status</td>
+</tr>
+<tr>
+<td>21b</td>
+<td>webui-client-foundation</td>
+<td><strong>In progress</strong></td>
+<td>Server items D1–D4, the shared sidebar and the API seam are in. Check the prompt's C list before starting; another session is on it</td>
+</tr>
+<tr>
+<td>22</td>
+<td>api-parity</td>
+<td>Built</td>
+<td>Paging, totals, sort, stars, thread tree, query operators</td>
+</tr>
+<tr>
+<td>23</td>
+<td>plugin-settings</td>
+<td><strong>Open</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>24</td>
+<td>accounts-onboarding</td>
+<td>Partly</td>
+<td>Account operations are built (create, check, configure, password, authorize, remove). The onboarding screens and Gmail receive-only are open</td>
+</tr>
+<tr>
+<td>25</td>
+<td>folders-labels-counts</td>
+<td>Built</td>
+<td>Nested folders, labels, unread counts, stars</td>
+</tr>
+<tr>
+<td>26</td>
+<td>sieve-management</td>
+<td>Partly</td>
+<td><code>sieve_get</code>, <code>sieve_save</code> and <code>sieve_delete</code> are built. The Sieve screen in the UI is open</td>
+</tr>
+<tr>
+<td>27</td>
+<td>contacts-people</td>
+<td><strong>Open</strong></td>
+<td><code>contacts.html</code> is still a mockup</td>
+</tr>
+<tr>
+<td>28</td>
+<td>compose-and-send</td>
+<td><strong>Open</strong></td>
+<td>There is no <code>send_message</code> operation yet</td>
+</tr>
+<tr>
+<td>29</td>
+<td>system-settings</td>
+<td><strong>Open</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>30</td>
+<td>pipeline-management</td>
+<td>Partly</td>
+<td>Job list, cancel, retry, parked retry and pausing embed and enrich exist. Check the prompt's list for live concurrency and priority</td>
+</tr>
+<tr>
+<td>31</td>
+<td>workspace-management</td>
+<td><strong>Open</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>32</td>
+<td>mcp-settings</td>
+<td><strong>Open</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>33</td>
+<td>agent-enrichment</td>
+<td><strong>Written</strong></td>
+<td>Not built. The <code>/mcp/agent</code> door works but a claimed <code>ingest.enrich</code> job carries only ids and cannot store an answer</td>
+</tr>
+</tbody>
+</table></div>
+<p>Not written yet, on purpose: a legacy-database importer, packaging (systemd, launchd,
+installers), at-rest encryption, plugin sandboxing, and embedding-throughput tuning on CPU.</p>
+</section>
+<section id="documentation" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>Documentation</h2></div>
 <p>The project website is generated <strong>locally</strong> from the Markdown in <code>docs/</code> and the generated
 HTML is committed beside it; GitHub Pages serves the <code>main</code> branch's <code>/docs</code> folder. CI does not
 build it. After changing docs (or the software map), regenerate, check and commit the result:</p>

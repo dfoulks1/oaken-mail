@@ -88,6 +88,81 @@ Contributions produced with generative AI tooling must follow the ASF's
   announcements, security advisories) must be reviewed by a committer before publishing, or be
   labeled as AI-generated (EU AI Act). Reviewing it as you would any other contribution is enough.
 
+## Picking up a prompt
+
+Oaken Mail is built from a numbered series of self-contained prompts, one per session, in
+[`docs/prompts/`](https://github.com/dfoulks1/oaken-mail/tree/main/docs/prompts) (the index is
+`docs/prompts/README.md`). Each one says what to build, what it depends on, its acceptance
+criteria and a report-back checkpoint. You can run one by hand or with an AI coding tool, and
+anyone can take an **Open** one.
+
+To run one:
+
+1. Read `docs/prompts/00-context.md` (the rules and the decisions already taken), this guide, the
+   ADRs and the architecture page for the part you touch.
+2. Pick a prompt below that is **Open** and whose dependencies are **Built**. If it says
+   **In progress**, ask on the issue or pull request first: somebody is already on it.
+3. Start the session with: *"Read `docs/prompts/00-context.md`, then execute
+   `docs/prompts/NN-….md`."* Where a prompt and the code or the docs disagree, the code and the
+   docs win; stop and report instead of guessing.
+4. Do the work with tests (next to the code, no network), then run the checks under
+   [Development setup](#development-setup) and [Documentation](#documentation).
+5. **In the same pull request, update the table below** (and `docs/softmap.toml` if you built or
+   changed a component). A prompt that is built but still marked Open sends the next contributor to
+   redo it.
+
+### Status of the prompts
+
+*As of 2026-10-21 (commit `23323ce`).* **Built** means the prompt's deliverables are in `main`
+with tests. **Partly** says what is done and what is left. A **Written** prompt has a plan and no
+code yet.
+
+| # | Prompt | Status | What is left, or where to look |
+|---|---|---|---|
+| 01 | bootstrap | Built | |
+| 01a | docs-site-scaffold | Built | |
+| 02 | core-foundation | Built | |
+| 03 | events-and-jobs | Built | |
+| 03b | swarm-foundations | Built | External agents; see 33 for enrichment through them |
+| 04 | plugin-host | Built | |
+| 05 | raw-store | Built | |
+| 06 | parsing-and-cleaning | Built | |
+| 06c | sieve-filtering | Built | |
+| 07 | index-and-fts | Built | |
+| 08 | vector-store | Built | |
+| 09 | ingest-pipeline | Built | |
+| 10 | ollama-and-prompt-safety | Built | |
+| 11 | gmail-plugin | Built | New mail now arrives ahead of a long first sync's backlog |
+| 11b | smtp-send | Built | Provider only; the send operation is 28 |
+| 11c | imap-provider | Built | |
+| 12 | read-state | Built | |
+| 12b | sync-scheduling | Built | |
+| 13 | operation-registry | Built | |
+| 14 | enrichers | Built | |
+| 15 | retrieval-and-ask | Built | |
+| 16 | api-daemon | Built | |
+| 17 | cli-client | Built | |
+| 18 | mcp-server | Built | Both doors: `/mcp` and `/mcp/agent` |
+| 19 | security-hardening | **Open** | The dedicated pass (injection suite across all surfaces, localhost threat tests, audit review) has not been run. Enricher injection tests and ADR 0005 exist |
+| 20 | oss-docs | Partly | The site, getting started, MCP and keyring pages and this guide exist. The full pass (roadmap, plugin guide, verification) has not been run |
+| 21 | webui-server | Built | `oaken-webui` start, stop, restart and status |
+| 21b | webui-client-foundation | **In progress** | Server items D1–D4, the shared sidebar and the API seam are in. Check the prompt's C list before starting; another session is on it |
+| 22 | api-parity | Built | Paging, totals, sort, stars, thread tree, query operators |
+| 23 | plugin-settings | **Open** | |
+| 24 | accounts-onboarding | Partly | Account operations are built (create, check, configure, password, authorize, remove). The onboarding screens and Gmail receive-only are open |
+| 25 | folders-labels-counts | Built | Nested folders, labels, unread counts, stars |
+| 26 | sieve-management | Partly | `sieve_get`, `sieve_save` and `sieve_delete` are built. The Sieve screen in the UI is open |
+| 27 | contacts-people | **Open** | `contacts.html` is still a mockup |
+| 28 | compose-and-send | **Open** | There is no `send_message` operation yet |
+| 29 | system-settings | **Open** | |
+| 30 | pipeline-management | Partly | Job list, cancel, retry, parked retry and pausing embed and enrich exist. Check the prompt's list for live concurrency and priority |
+| 31 | workspace-management | **Open** | |
+| 32 | mcp-settings | **Open** | |
+| 33 | agent-enrichment | **Written** | Not built. The `/mcp/agent` door works but a claimed `ingest.enrich` job carries only ids and cannot store an answer |
+
+Not written yet, on purpose: a legacy-database importer, packaging (systemd, launchd,
+installers), at-rest encryption, plugin sandboxing, and embedding-throughput tuning on CPU.
+
 ## Documentation
 
 The project website is generated **locally** from the Markdown in `docs/` and the generated

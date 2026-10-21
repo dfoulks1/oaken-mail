@@ -5,6 +5,10 @@ in order. Copy this directory into the `oaken-mail` checkout (`docs/prompts/`) f
 execute `docs/prompts/NN-….md`."* Each prompt ends with a report-back checkpoint;
 review it before starting the next.
 
+**Which prompts are built, partly built or open is kept in
+[`CONTRIBUTING.md`](../../CONTRIBUTING.md#picking-up-a-prompt)** (published on the docs site). Update it
+in the same change that builds a prompt.
+
 | # | Prompt | Delivers | Depends on |
 |---|---|---|---|
 | 01 | [bootstrap](01-bootstrap.md) | Clean repo, Apache-2.0, CI, secret scanning, legacy-data safeguard | — |
