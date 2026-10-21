@@ -289,3 +289,23 @@ h1, h2, h3, h4, h5, h6, .ok-brand, .modal-title { font-family: var(--ok-font-hea
   .ok-float { width: calc(100vw - 2rem); }
   .ok-dock { right: 1rem; }
 }
+
+/* Data-layer states (added with the API wiring) */
+.ok-loading { position: relative; }
+.ok-loading::after {
+  content: ""; position: absolute; inset: 0; z-index: 5;
+  background: var(--ok-surface, #fff); opacity: .35;
+}
+.ok-loading .ok-list { opacity: .5; transition: opacity .15s; }
+
+.ok-toast-host {
+  position: fixed; bottom: 1.25rem; left: 50%; transform: translateX(-50%);
+  z-index: 1080; display: flex; flex-direction: column; gap: .5rem; align-items: center;
+}
+.ok-toast {
+  background: var(--ok-surface-2, #222); color: var(--ok-text, #fff);
+  border: 1px solid var(--ok-border, rgba(0,0,0,.15)); border-radius: 999px;
+  padding: .5rem 1rem; font-size: .875rem; box-shadow: 0 6px 24px rgba(0,0,0,.25);
+  opacity: 0; transform: translateY(8px); transition: opacity .2s, transform .2s;
+}
+.ok-toast.show { opacity: 1; transform: none; }

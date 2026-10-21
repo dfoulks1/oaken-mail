@@ -1,5 +1,7 @@
 <!doctype html>
-<html lang="en" data-oaken-theme="oak-light" data-bs-theme="light">
+<!-- data-oaken-demo: see index.html. Mockup mode fills the reader from assets/api.js dummy data;
+     the live server drops this and the same JS calls get_message / get_raw on the daemon. -->
+<html lang="en" data-oaken-demo data-oaken-theme="oak-light" data-bs-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -91,11 +93,11 @@
           <div class="dropdown"><button class="btn btn-sm btn-ghost" data-bs-toggle="dropdown" title="More"><i class="bi bi-three-dots"></i></button>
             <ul class="dropdown-menu dropdown-menu-end">
               <li><button class="dropdown-item">Mark as unread</button></li><li><button class="dropdown-item">Snooze…</button></li>
-              <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#sourceModal">View source</button></li>
+              <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#sourceModal" data-oaken-source="m-vote-2463">View source</button></li>
               <li><button class="dropdown-item">Print</button></li><li><button class="dropdown-item">Block sender</button></li></ul></div>
           <a class="btn btn-sm btn-ghost ms-auto" href="message.html?popout=1" data-action="popout" title="Open in new window"><i class="bi bi-box-arrow-up-right"></i></a>
         </div>
-      <div class="ok-scroll">
+      <div class="ok-scroll" data-oaken-reader="m-vote-2463">
           <div class="ok-reader-inner">
             <h1>[VOTE] Release Example Server 2.4.63</h1>
             <div class="d-flex gap-2 mb-4 flex-wrap"><span class="ok-tag">dev@lists</span><span class="ok-tag"><span class="ok-label-dot" style="background:var(--ok-feather-orange)"></span>Releases</span></div>
@@ -167,7 +169,7 @@
           </div>
     </div>
     <div class="d-flex align-items-center gap-2 p-3 border-top">
-      <button class="btn btn-oaken px-4">Send</button>
+      <button class="btn btn-oaken px-4" data-oaken-action="send">Send</button>
       <button class="btn btn-ghost" title="Schedule send"><i class="bi bi-clock"></i></button>
       <span class="small text-muted ms-auto">Draft saved</span>
     </div>
@@ -203,7 +205,7 @@
             <div class="form-check form-switch ms-2 small mb-0"><input class="form-check-input" type="checkbox" id="plainM"><label class="form-check-label" for="plainM">Plain text</label></div>
           </div>
       </div>
-      <div class="modal-footer justify-content-start"><button class="btn btn-oaken px-4">Send</button><button class="btn btn-ghost" data-bs-dismiss="modal">Discard</button></div>
+      <div class="modal-footer justify-content-start"><button class="btn btn-oaken px-4" data-oaken-action="send">Send</button><button class="btn btn-ghost" data-bs-dismiss="modal">Discard</button></div>
     </div>
   </div>
 </div>
@@ -245,6 +247,7 @@
   <div class="modal-footer"><button class="btn btn-ghost" data-bs-dismiss="modal">Cancel</button><button class="btn btn-danger rounded-pill px-3">Delete</button></div></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="assets/api.js"></script>
 <script src="assets/oaken.js"></script>
 
 <div class="modal fade" id="sourceModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
