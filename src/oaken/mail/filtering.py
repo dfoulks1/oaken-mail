@@ -9,12 +9,15 @@ those. Changing a script therefore re-derives organization without touching the 
 
 import asyncio
 import hashlib
+import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from oaken.core import paths
 from oaken.core.attrs import Attr, AttrStore
 from oaken.core.clock import Clock
+from oaken.core.errors import ConfigError
 from oaken.core.events import EventBus, MessageFiltered
 from oaken.core.ids import AccountId, MessageId
 from oaken.core.logging import get_logger
@@ -73,6 +76,49 @@ def load_scripts(directory: Path, settings: MailSettings) -> LoadReport:
     for s in scripts:
         digest.update(f"{s.name}\0{s.sha256}\0".encode())
     return LoadReport(tuple(scripts), tuple(problems), digest.hexdigest())
+
+
+SCRIPT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.sieve$")
+
+
+def check_script_name(name: str) -> str:
+    """The file name a sieve script is written under, or ``ConfigError``. Run order is by name
+    (prompt 26 Q2), so a client suggests an ``NN-name.sieve`` prefix; here we only enforce safety:
+    one path segment of ``[A-Za-z0-9._-]`` ending ``.sieve``, no separators, no ``..``."""
+    if os.sep in name or (os.altsep and os.altsep in name) or name in {".", ".."}:
+        raise ConfigError("a script name is a single file name, with no path separators")
+    if not SCRIPT_NAME.match(name):
+        raise ConfigError("a script name is letters, digits, '.', '_' or '-', ending '.sieve'")
+    return name
+
+
+def save_script(directory: Path, name: str, text: str) -> None:
+    """Write ``<name>`` into ``directory`` atomically and owner-only, replacing just that one
+    script and leaving the rest untouched (the project's O_EXCL + os.replace pattern)."""
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / check_script_name(name)
+    tmp = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, target)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+    target.chmod(0o600)
+
+
+def delete_script(directory: Path, name: str) -> bool:
+    """Remove one script. Returns False if it was not there. Other scripts are untouched."""
+    target = directory / check_script_name(name)
+    try:
+        target.unlink()
+    except FileNotFoundError:
+        return False
+    return True
 
 
 class FilterEngine:

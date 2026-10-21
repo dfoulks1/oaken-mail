@@ -92,3 +92,80 @@ async def test_sieve_list_reads_the_folder_afresh(ops: Ops) -> None:
     out = await ops.out("sieve_list", {}, CLI)
     assert [s.name for s in out.scripts] == ["a.sieve"]
     assert [p.name for p in out.problems] == ["b.sieve"]
+
+
+def _point_sieve_at(ops: Ops, folder: object) -> None:
+    """Make the sieve ops read and write ``folder`` (an absolute dir), the pattern used above."""
+    s = ops.svc.settings
+    ops.svc.settings = s.model_copy(
+        update={
+            "mail": s.mail.model_copy(
+                update={"sieve": s.mail.sieve.model_copy(update={"dir": str(folder)})}
+            )
+        }
+    )
+
+
+async def test_sieve_save_persists_a_valid_script_and_sieve_get_reads_it_back(ops: Ops) -> None:
+    folder = ops.rig.sieve_dir
+    _point_sieve_at(ops, folder)
+    (folder / "00-keep.sieve").write_text("keep;\n")  # another script that must survive
+    out = await ops.out("sieve_save", {"name": "10-work.sieve", "text": SCRIPT})
+    assert out.saved and out.check.ok and out.sha256
+    assert (folder / "10-work.sieve").read_text() == SCRIPT
+    assert (folder / "00-keep.sieve").read_text() == "keep;\n", "other scripts untouched"
+    got = await ops.out("sieve_get", {"name": "10-work.sieve"})
+    assert got.text == SCRIPT and got.sha256 == out.sha256
+
+
+async def test_sieve_save_refuses_an_uncompilable_script_and_writes_nothing(ops: Ops) -> None:
+    folder = ops.rig.sieve_dir
+    _point_sieve_at(ops, folder)
+    out = await ops.out("sieve_save", {"name": "bad.sieve", "text": "keep;\nbogus;\n"})
+    assert not out.saved and not out.check.ok and out.check.line == 2
+    assert not (folder / "bad.sieve").exists(), "a refused save leaves no file"
+
+
+async def test_sieve_save_is_owner_only(ops: Ops) -> None:
+    import stat
+
+    folder = ops.rig.sieve_dir
+    _point_sieve_at(ops, folder)
+    await ops.out("sieve_save", {"name": "10-x.sieve", "text": "keep;\n"})
+    mode = stat.S_IMODE((folder / "10-x.sieve").stat().st_mode)  # noqa: ASYNC240
+    assert mode == 0o600
+
+
+async def test_sieve_delete_removes_exactly_one(ops: Ops) -> None:
+    folder = ops.rig.sieve_dir
+    _point_sieve_at(ops, folder)
+    (folder / "10-a.sieve").write_text("keep;\n")
+    (folder / "20-b.sieve").write_text("keep;\n")
+    out = await ops.out("sieve_delete", {"name": "10-a.sieve"})
+    assert out.deleted and not (folder / "10-a.sieve").exists()
+    assert (folder / "20-b.sieve").exists(), "the other script stays"
+    missing = await ops.out("sieve_delete", {"name": "10-a.sieve"})
+    assert not missing.deleted
+
+
+async def test_sieve_get_is_not_found_for_a_missing_script(ops: Ops) -> None:
+    _point_sieve_at(ops, ops.rig.sieve_dir)
+    with pytest.raises(NotFound):
+        await ops.call("sieve_get", {"name": "nope.sieve"})
+
+
+async def test_a_bad_script_name_is_refused(ops: Ops) -> None:
+    from oaken.core.errors import ConfigError
+
+    _point_sieve_at(ops, ops.rig.sieve_dir)
+    for bad in ("../escape.sieve", "sub/dir.sieve", "noext", "has space.sieve"):
+        with pytest.raises(ConfigError):
+            await ops.call("sieve_save", {"name": bad, "text": "keep;\n"})
+
+
+async def test_the_sieve_write_ops_are_never_offered_to_an_agent(ops: Ops) -> None:
+    visible = {o.name for o in await ops.client.visible(agent())}
+    assert not ({"sieve_save", "sieve_delete", "sieve_get"} & visible)
+    # and the whole set is mcp="never" in the registry
+    for name in ("sieve_save", "sieve_delete", "sieve_get", "sieve_check", "sieve_test"):
+        assert ops.registry.get(name).mcp == "never"

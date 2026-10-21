@@ -10,12 +10,18 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from oaken.core.errors import InvalidInput
+from oaken.core.errors import InvalidInput, NotFound
 from oaken.core.ids import MessageId
 from oaken.core.operations.builtin.system import Empty
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import AnyOperation, operation
-from oaken.mail.filtering import load_scripts, scripts_dir
+from oaken.mail.filtering import (
+    check_script_name,
+    delete_script,
+    load_scripts,
+    save_script,
+    scripts_dir,
+)
 from oaken.mail.parse import parse
 from oaken.mail.sieve import SieveError, compile_script, run, view_of
 
@@ -155,4 +161,95 @@ async def sieve_list(ctx: OpContext, inp: Empty) -> ListScriptsOutput:
     )
 
 
-OPERATIONS: tuple[AnyOperation, ...] = (sieve_check, sieve_test, sieve_list)
+class GetScriptInput(BaseModel):
+    name: str = Field(max_length=128)
+
+
+class GetScriptOutput(BaseModel):
+    name: str
+    text: str
+    sha256: str
+
+
+@operation(
+    "sieve_get",
+    "Read one Sieve script's text, so an editor can load it.",
+    permission="read",
+    input=GetScriptInput,
+    output=GetScriptOutput,
+    mcp="never",
+)
+async def sieve_get(ctx: OpContext, inp: GetScriptInput) -> GetScriptOutput:
+    import hashlib
+
+    name = check_script_name(inp.name)
+    directory = scripts_dir(ctx.svc.settings.mail)
+    path = directory / name
+    try:
+        text = await asyncio.to_thread(path.read_text, encoding="utf-8")
+    except FileNotFoundError:
+        raise NotFound(f"no such script: {name}") from None
+    return GetScriptOutput(name=name, text=text, sha256=hashlib.sha256(text.encode()).hexdigest())
+
+
+class SaveScriptInput(BaseModel):
+    name: str = Field(max_length=128)
+    text: str = Field(max_length=1_000_000)
+
+
+class SaveScriptOutput(BaseModel):
+    saved: bool
+    check: CheckOutput
+    sha256: str | None = None
+
+
+@operation(
+    "sieve_save",
+    "Compile a Sieve script and, only if it compiles, save it so it runs on the next filter pass.",
+    permission="mutate",
+    input=SaveScriptInput,
+    output=SaveScriptOutput,
+    mcp="never",  # writing the user's own filters is never offered to an agent (prompt 26)
+)
+async def sieve_save(ctx: OpContext, inp: SaveScriptInput) -> SaveScriptOutput:
+    settings = ctx.svc.settings.mail
+    name = check_script_name(inp.name)
+    checked, script = _check(name, inp.text, settings.sieve.max_script_bytes)
+    if script is None:  # refuse to persist anything that does not compile (prompt 26 req 1)
+        return SaveScriptOutput(saved=False, check=checked)
+    directory = scripts_dir(settings)
+    await asyncio.to_thread(save_script, directory, name, inp.text)
+    return SaveScriptOutput(saved=True, check=checked, sha256=checked.sha256)
+
+
+class DeleteScriptInput(BaseModel):
+    name: str = Field(max_length=128)
+
+
+class DeleteScriptOutput(BaseModel):
+    deleted: bool
+
+
+@operation(
+    "sieve_delete",
+    "Remove one Sieve script. It stops running on the next filter pass.",
+    permission="mutate",
+    input=DeleteScriptInput,
+    output=DeleteScriptOutput,
+    mcp="never",
+)
+async def sieve_delete(ctx: OpContext, inp: DeleteScriptInput) -> DeleteScriptOutput:
+    name = check_script_name(inp.name)
+    directory = scripts_dir(ctx.svc.settings.mail)
+    done = await asyncio.to_thread(delete_script, directory, name)
+    return DeleteScriptOutput(deleted=done)
+
+
+OPERATIONS: tuple[AnyOperation, ...] = (
+    sieve_check,
+    sieve_test,
+    sieve_list,
+    sieve_get,
+    sieve_save,
+    sieve_delete,
+)

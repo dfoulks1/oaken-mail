@@ -92,10 +92,14 @@ def test_what_is_never_offered_over_mcp_is_what_the_user_was_promised() -> None:
         "resume_schedule", "remove_schedule", "set_operation_exposure", "list_operations",
         "list_audit", "message_presented", "message_dismissed",
     } <= never  # fmt: skip
-    # Scripts are files the person edits, not operations: nothing writes one. The sieve operations
-    # only check, try and list them, and are never offered to an agent.
-    sieve = [o for o in core_operations() if "sieve" in o.name]
-    assert sieve and all(o.permission == "read" and not o.mcp_allowed for o in sieve)
+    # Sieve scripts are the person's own configuration: writing one is a local, confirmed,
+    # audited action (prompt 26) and reading/testing one is local too. Either way, no sieve
+    # operation is ever offered to an agent over MCP.
+    sieve = {o.name: o for o in core_operations() if "sieve" in o.name}
+    assert sieve and all(not o.mcp_allowed for o in sieve.values())
+    assert {"sieve_check", "sieve_test", "sieve_list", "sieve_get"} <= set(sieve)
+    assert all(sieve[n].permission == "read" for n in ("sieve_check", "sieve_test", "sieve_list"))
+    assert all(sieve[n].permission == "mutate" for n in ("sieve_save", "sieve_delete"))
 
 
 def test_bad_names_are_refused() -> None:
