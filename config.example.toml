@@ -1,0 +1,130 @@
+# Oaken Mail — example configuration
+# =====================================================================================
+# Copy this to your real config location and edit it:
+#
+#     cp config.example.toml ~/.config/oaken/config.toml      # Linux
+#     # macOS: ~/Library/Application Support/oaken/config.toml
+#     # Windows: %APPDATA%\oaken\config.toml
+#     # or set OAKEN_HOME=/some/dir to relocate everything under <dir>/config/config.toml
+#
+# Precedence: built-in defaults < config.toml < OAKEN_* environment variables.
+# Unknown top-level keys are an error. Every section has defaults, so you only set what you
+# change — the values shown below are the DEFAULTS unless noted. Commented lines are optional.
+#
+# SECRETS NEVER GO IN THIS FILE. OAuth refresh tokens and IMAP/SMTP passwords live in the OS
+# keyring. This file only names the OAuth *client* JSON for Gmail; the token is obtained by the
+# authorization flow and stored in the keyring (service "oaken", user "<kind>:<account>").
+# =====================================================================================
+
+
+# --- Gmail provider -------------------------------------------------------------------
+# Bring your own Google OAuth client. Scope is gmail.modify only (no permanent delete, no drafts).
+#   1. Google Cloud Console → create an OAuth 2.0 Client ID, type "Desktop app", Gmail API enabled.
+#   2. PUBLISH the app to Production. A Testing-mode app expires refresh tokens after ~7 days.
+#   3. Download the client JSON; point client_secret_file at it.
+#   4. Authorize (stores the refresh token in the keyring). Spam and Trash are never synced.
+[plugins.gmail]
+client_secret_file = "/path/to/gmail_client_secret.json"   # absolute path to the OAuth client JSON
+account = "default"            # names the keyring entry: oaken / gmail:<account>; one per account
+include_labels = []            # label names/ids to sync; empty = all mail
+exclude_labels = []            # label names/ids to skip; Spam and Trash are always excluded
+# page_size = 100              # messages per full-sync batch (1–500)
+# concurrency = 8              # requests in flight at once (1–50)
+# timeout = 30.0               # seconds per request
+# max_retries = 5              # extra tries on 429 / rate-limit / 5xx
+# backoff = 1.0                # seconds, doubled each retry
+
+
+# --- IMAP provider (any server) -------------------------------------------------------
+# TLS is always on; there is no plaintext option. The password lives only in the keyring.
+# [plugins.imap]
+# host = "imap.example.com"
+# port = 993                   # default: 993 for tls, 143 for starttls
+# security = "tls"             # "tls" (implicit) or "starttls" (upgrade); never plaintext
+# username = "you@example.com"
+# account = "default"          # keyring entry: oaken / imap:<account>
+# include_folders = []         # folder names; empty = every folder
+# exclude_folders = []         # Junk and Trash are always excluded
+# trash_folder = ""            # where "trash" moves mail, if the server does not say
+# archive_folder = ""          # where "archive" moves mail, if the server does not say
+# page_size = 25               # messages fetched per command (1–200)
+# flag_scan_limit = 2000       # newest messages re-read for flag changes (no CONDSTORE)
+# timeout = 60.0               # seconds, connecting and per command
+
+
+# --- SMTP (send only) -----------------------------------------------------------------
+# Sends only; it never receives. TLS required. Password in the keyring. (Sending is a later phase.)
+# [plugins.smtp]
+# host = "smtp.example.com"
+# port = 587                   # default: 587 for starttls, 465 for tls
+# security = "starttls"        # "starttls" (upgrade) or "tls" (implicit); never plaintext
+# username = ""                # defaults to from_address
+# from_address = "you@example.com"
+# account = "default"          # keyring entry: oaken / smtp:<account>
+# timeout = 30.0
+
+
+# --- Local AI (Ollama) ----------------------------------------------------------------
+# Oaken runs a LOCAL Ollama by default; nothing leaves the machine. The model names live in [ai];
+# [plugins.ollama] only tunes the connection. Pull the models first: `ollama pull <name>`.
+# [plugins.ollama]
+# base_url = "http://127.0.0.1:11434"   # loopback only unless ai.allow_remote = true
+# model = ""                   # empty: use ai.embed_model / ai.llm_model below
+# keep_alive = "5m"            # how long Ollama keeps the model loaded after a call
+# timeout = 120.0
+# max_retries = 2
+# backoff = 0.5
+# batch_size = 32              # texts per embed call (1–1024)
+
+
+# --- AI model selection and token budgets ---------------------------------------------
+# [ai]
+# embedder = "ollama"
+# embed_model = "nomic-embed-text"
+# llm_backend = "ollama"
+# llm_model = "qwen2.5:3b"     # small on purpose; set a larger model for better analysis
+# allow_remote = false         # a backend talking to a non-loopback address refuses unless true
+# vector_store = "sqlite-vec"
+# enrich_max_input_tokens = 3000
+# ask_context_tokens = 3000
+# chunk_tokens = 256
+# chunk_overlap = 32           # cannot exceed half of chunk_tokens
+
+
+# --- Sync schedule defaults (for a NEW account; live schedule is edited in the database) ---
+# [sync]
+# provider = "gmail"
+# interval_seconds = 900       # every 15 minutes
+# timezone = "UTC"             # IANA name; matters for cron schedules and quiet hours
+# min_interval_seconds = 60    # floor enforced when a schedule is set (providers have quotas)
+# max_concurrent = 2           # accounts syncing at once; the rest wait
+# backoff_max_seconds = 3600
+# backoff_jitter = 0.2
+# batch_size = 100
+
+
+# --- Local HTTP API (loopback only) ---------------------------------------------------
+# The CLI and the web UI server reach core here. Binds 127.0.0.1 only; the token is a file in the
+# config dir (mode 0600). The web UI is served by the separate `oaken-webui` app, not by core.
+# [api]
+# port = 0                     # 0 = pick a free port; the runtime file records the chosen one
+# mcp = false                  # mount the MCP server at /mcp on this listener (its own token/limits)
+# dev_origin = ""              # one browser origin for UI dev CORS, e.g. "http://localhost:5173"
+# rate_limit_per_minute = 600
+# heartbeat_seconds = 15.0
+# shutdown_grace_seconds = 30.0
+
+
+# --- Read state -----------------------------------------------------------------------
+# [read_state]
+# auto_mark = true             # false turns off automatic marks (opening/summarizing); explicit
+#                              # mark read/unread still works
+
+# [ui]
+# mark_read_delay_ms = 2000    # how long a message must stay open before core marks it read
+
+
+# --- Logging --------------------------------------------------------------------------
+# [log]
+# level = "INFO"               # DEBUG | INFO | WARNING | ERROR
+# format = "console"           # "console" or "json"
