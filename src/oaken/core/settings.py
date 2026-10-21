@@ -341,8 +341,13 @@ class UISettings(_Section):
 class APISettings(_Section):
     host: Literal["127.0.0.1"] = "127.0.0.1"  # fixed: the API is never exposed off-host
     port: int = Field(default=0, ge=0, le=65535)  # 0 = pick a free port
-    # The MCP server (prompt 18) mounts on this listener when true; nothing mounts yet.
+    # The MCP server (ADR 0004) mounts at ``/mcp`` on this listener when true. It has its own
+    # token and its own limits, so a heavy MCP call cannot starve the general API.
     mcp: bool = False
+    mcp_max_body_bytes: int = Field(default=64 * 1024, ge=1024)
+    mcp_max_concurrent: int = Field(default=8, ge=1, le=256)
+    # Bytes of one tool result (a larger one is refused with ``result_too_large``).
+    mcp_max_result_bytes: int = Field(default=64 * 1024, ge=1024)
     # A folder of static files served at ``/`` (the web UI, a later phase). Empty or missing: a
     # placeholder page.
     static_dir: str = ""

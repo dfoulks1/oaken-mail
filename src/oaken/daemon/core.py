@@ -11,7 +11,8 @@ import oaken
 from oaken.ai import LLMCache, LLMService, Workspaces
 from oaken.ai.access import WorkspaceLLM
 from oaken.api import Api, ApiServer
-from oaken.api.runtime import TOKEN_FILE, load_or_create_token
+from oaken.api.mcp_server import McpServer
+from oaken.api.runtime import MCP_TOKEN_FILE, TOKEN_FILE, load_or_create_token
 from oaken.core import paths
 from oaken.core.agents import AgentRegistry
 from oaken.core.attrs import AttrStore
@@ -55,12 +56,14 @@ class Core:
         *,
         clock: Clock | None = None,
         token_path: Path | None = None,
+        mcp_token_path: Path | None = None,
         discover: object | None = None,
     ) -> None:
         self.settings = settings or Settings.load()
         self.clock = clock or SystemClock()
         self.bus = EventBus()
         self.token_path = token_path or paths.config_dir() / TOKEN_FILE
+        self.mcp_token_path = mcp_token_path or self.token_path.with_name(MCP_TOKEN_FILE)
         self._discover = discover
         self._open = False
         self._started: list[str] = []
@@ -135,6 +138,10 @@ class Core:
         self.registry = registry
         self.client = CoreClient(registry, self.services)
         self.api = Api(self.client, token=load_or_create_token(self.token_path))
+        self.mcp: McpServer | None = None
+        if s.api.mcp:
+            self.mcp = McpServer(self.client, token=load_or_create_token(self.mcp_token_path))
+            self.api.mount(self.mcp.surface, self.mcp)
         self.server = ApiServer(self.api, host=s.api.host, port=s.api.port)
         self._open = True
 
@@ -149,6 +156,9 @@ class Core:
             self.runner.start()
             self.scheduler.start()
             self._started.append("jobs")
+            if self.mcp is not None:
+                await self.mcp.start()
+                self._started.append("mcp")
             port = await self.server.start()
             self._started.append("api")
         except BaseException:
@@ -161,6 +171,7 @@ class Core:
         grace = self.settings.api.shutdown_grace_seconds
         steps = {
             "api": self.server.stop,
+            "mcp": self._stop_mcp,
             "jobs": lambda: self._stop_jobs(grace),
             "sync": self.sync.stop,
             "host": self._stop_host,
@@ -176,6 +187,10 @@ class Core:
             await self.readstate.close()
             await self.index.close()
             await self.raw_db.close()
+
+    async def _stop_mcp(self) -> None:
+        if self.mcp is not None:
+            await self.mcp.stop()
 
     async def _stop_host(self) -> None:
         await self.accounts.authorizations.close()

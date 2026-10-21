@@ -23,6 +23,7 @@ from oaken.core.clock import Clock
 from oaken.core.errors import ConfigError, Conflict
 
 TOKEN_FILE = "api_token"  # noqa: S105 (a filename, not a secret)
+MCP_TOKEN_FILE = "mcp_token"  # noqa: S105 (a filename, not a secret)
 RUNTIME_FILE = "runtime.json"
 
 

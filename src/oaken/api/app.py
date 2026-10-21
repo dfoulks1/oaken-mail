@@ -188,7 +188,10 @@ class Api:
         """Serve ``app`` at ``surface.prefix`` behind the same guard, with its own token and limits.
         The MCP server (prompt 18) mounts here; the surface, not a header, sets its class."""
         self.policy.surfaces.append(surface)
-        self.starlette.router.routes.insert(0, Mount(surface.prefix.rstrip("/"), app=app))
+        base = surface.prefix.rstrip("/")
+        # Both spellings, not a ``Mount``: a Mount does not match its own bare path, and a client
+        # that posts to ``/mcp`` must not be redirected.
+        self.starlette.router.routes[0:0] = [Route(base, app), Route(base + "/{rest:path}", app)]
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         await self.app(scope, receive, send)

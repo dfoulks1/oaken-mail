@@ -12,6 +12,7 @@ dependencies = [
     "httpx2>=2.15.1",
     "imapclient>=4.1.0",
     "keyring>=25.7.0",
+    "mcp>=1.0",
     "platformdirs>=4.13.5",
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.1",
