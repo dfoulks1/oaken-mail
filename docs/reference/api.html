@@ -175,7 +175,7 @@ tokens. See <a href="../mcp.html">Connect an AI client</a>.</p>
 <td>POST</td>
 <td><code>/v1/operations/{name}</code></td>
 <td>API token</td>
-<td>Call one operation. 46 exist.</td>
+<td>Call one operation. 52 exist.</td>
 </tr>
 </tbody>
 </table></div>
@@ -208,6 +208,12 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td>read</td>
 <td>never</td>
 <td><code>POST /v1/operations/authorization_status</code></td>
+</tr>
+<tr>
+<td><code>cancel_job</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/cancel_job</code></td>
 </tr>
 <tr>
 <td><code>check_account</code></td>
@@ -282,6 +288,12 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/list_audit</code></td>
 </tr>
 <tr>
+<td><code>list_jobs</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/list_jobs</code></td>
+</tr>
+<tr>
 <td><code>list_labels</code></td>
 <td>read</td>
 <td>on by default</td>
@@ -336,6 +348,12 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/message_presented</code></td>
 </tr>
 <tr>
+<td><code>pause_backfill</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/pause_backfill</code></td>
+</tr>
+<tr>
 <td><code>pause_schedule</code></td>
 <td>mutate</td>
 <td>never</td>
@@ -372,10 +390,28 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/reprocess</code></td>
 </tr>
 <tr>
+<td><code>resume_backfill</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/resume_backfill</code></td>
+</tr>
+<tr>
 <td><code>resume_schedule</code></td>
 <td>mutate</td>
 <td>never</td>
 <td><code>POST /v1/operations/resume_schedule</code></td>
+</tr>
+<tr>
+<td><code>retry_job</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/retry_job</code></td>
+</tr>
+<tr>
+<td><code>retry_parked</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/retry_parked</code></td>
 </tr>
 <tr>
 <td><code>revoke_agent</code></td>

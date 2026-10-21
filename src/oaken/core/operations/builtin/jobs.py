@@ -20,7 +20,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from oaken.core.errors import Conflict, NotExposed, PermissionDenied
-from oaken.core.ids import AgentId, JobId
+from oaken.core.ids import AccountId, AgentId, JobId
+from oaken.core.jobs import Job
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import AnyOperation, OperationRegistry, operation
 
@@ -185,3 +186,102 @@ AGENT_OPERATIONS: tuple[AnyOperation, ...] = (claim_job, heartbeat_job, complete
 def agent_registry() -> OperationRegistry:
     """The operations an external agent may call on its own door."""
     return OperationRegistry(AGENT_OPERATIONS)
+
+
+# -- the person's view of the durable queue --------------------------------------------------
+# These let the person inspect and steer the job queue (prompt 03/17). They are never offered over
+# MCP: an agent must not be able to cancel or re-run the user's work, only lease its own through the
+# agent door above. The mutations go through the confirm gate and leave a generic audit row.
+
+
+class JobOut(BaseModel):
+    id: str
+    kind: str
+    status: str
+    account_id: str | None = None
+    priority: int
+    attempts: int
+    max_attempts: int
+    last_error: str | None = None
+    parent_job_id: str | None = None
+    created_at: str
+    updated_at: str
+
+
+def _job_out(job: Job) -> JobOut:
+    return JobOut(
+        id=str(job.id),
+        kind=job.kind,
+        status=job.status,
+        account_id=str(job.account_id) if job.account_id else None,
+        priority=job.priority,
+        attempts=job.attempts,
+        max_attempts=job.max_attempts,
+        last_error=job.last_error,
+        parent_job_id=str(job.parent_job_id) if job.parent_job_id else None,
+        created_at=job.created_at.isoformat(),
+        updated_at=job.updated_at.isoformat(),
+    )
+
+
+class ListJobsInput(BaseModel):
+    status: Literal["queued", "running", "succeeded", "failed", "cancelled"] | None = None
+    kind: str | None = Field(default=None, max_length=64)
+    account_id: str | None = None
+    limit: int = Field(default=50, ge=1, le=500)
+
+
+class ListJobsOutput(BaseModel):
+    jobs: list[JobOut]
+
+
+@operation(
+    "list_jobs",
+    "The newest jobs in the durable queue, with their status, attempts and any scrubbed error.",
+    permission="read",
+    input=ListJobsInput,
+    output=ListJobsOutput,
+    mcp="on",
+)
+async def list_jobs(ctx: OpContext, inp: ListJobsInput) -> ListJobsOutput:
+    jobs = await ctx.svc.queue.query(
+        status=inp.status,
+        kind=inp.kind,
+        account_id=AccountId(inp.account_id) if inp.account_id else None,
+        limit=inp.limit,
+    )
+    return ListJobsOutput(jobs=[_job_out(j) for j in jobs])
+
+
+class JobStatusOutput(BaseModel):
+    job_id: str
+    status: str
+
+
+@operation(
+    "cancel_job",
+    "Cancel a queued job, or ask a running one to stop at its next safe point.",
+    permission="mutate",
+    input=JobRef,
+    output=JobStatusOutput,
+    mcp="never",
+)
+async def cancel_job(ctx: OpContext, inp: JobRef) -> JobStatusOutput:
+    status = await ctx.svc.queue.cancel(JobId(inp.job_id))
+    return JobStatusOutput(job_id=inp.job_id, status=status)
+
+
+@operation(
+    "retry_job",
+    "Re-queue a failed or cancelled job to run now, clearing its last error.",
+    permission="mutate",
+    input=JobRef,
+    output=JobStatusOutput,
+    mcp="never",
+)
+async def retry_job(ctx: OpContext, inp: JobRef) -> JobStatusOutput:
+    status = await ctx.svc.queue.retry(JobId(inp.job_id))
+    return JobStatusOutput(job_id=inp.job_id, status=status)
+
+
+OPERATIONS: tuple[AnyOperation, ...] = (list_jobs, cancel_job, retry_job)

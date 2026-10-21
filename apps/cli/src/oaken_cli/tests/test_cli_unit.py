@@ -72,3 +72,31 @@ def test_core_down_status_reports_not_running(monkeypatch: pytest.MonkeyPatch, t
     code = main(["status"])
     # status exits 0 whether up or down; it reports, it does not fail.
     assert code == int(ExitCode.OK)
+
+
+def test_help_verb_prints_overview(capsys: pytest.CaptureFixture[str]) -> None:
+    from oaken_cli.main import main
+
+    assert main(["help"]) == int(ExitCode.OK)
+    out = capsys.readouterr().out
+    # The orientation and the command manifest the user asked for.
+    assert "local-first" in out
+    assert "getting started:" in out and "command groups:" in out
+    assert "exit codes:" in out
+    # A sampling of commands appears in the manifest.
+    for cmd in ("start", "search", "jobs", "pipeline", "schedule"):
+        assert cmd in out
+
+
+def test_help_verb_defers_to_a_command(capsys: pytest.CaptureFixture[str]) -> None:
+    from oaken_cli.main import main
+
+    assert main(["help", "sync"]) == int(ExitCode.OK)
+    out = capsys.readouterr().out
+    assert "oaken sync" in out and "--wait" in out
+
+
+def test_help_verb_on_an_unknown_command_is_a_usage_error() -> None:
+    from oaken_cli.main import main
+
+    assert main(["help", "not-a-command"]) == int(ExitCode.USAGE)

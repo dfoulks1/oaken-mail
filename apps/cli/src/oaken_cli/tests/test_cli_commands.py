@@ -179,3 +179,66 @@ async def test_sieve_list_and_refilter(cli: Cli) -> None:
     assert listed.code == 0 and "scripts" in json.loads(listed.out)
     queued = await cli("sieve", "refilter")
     assert queued.code == 0 and "refilter queued" in queued.out
+
+
+async def test_schedule_list_set_pause_resume_remove(cli: Cli) -> None:
+    # The rig knows the "main" account; install its default schedule first.
+    await cli.ops.svc.need_sync().ensure_schedules()
+
+    listed = await cli("schedule", "list", "--json")
+    assert listed.code == 0
+    data = json.loads(listed.out)
+    assert [s["account_id"] for s in data["schedules"]] == ["main"]
+
+    # set to a new interval; a human at a terminal confirms implicitly (confirm=True).
+    setr = await cli("schedule", "set", "main", "every 30m")
+    assert setr.code == 0 and "every 30m" in setr.out
+
+    paused = await cli("schedule", "pause", "main", "--why", "travelling", "--json")
+    assert paused.code == 0 and json.loads(paused.out)["schedule"]["paused"] is True
+
+    resumed = await cli("schedule", "resume", "main", "--json")
+    assert resumed.code == 0 and json.loads(resumed.out)["schedule"]["paused"] is False
+
+    removed = await cli("schedule", "remove", "main")
+    assert removed.code == 0 and "removed schedule for main" in removed.out
+    again = await cli("schedule", "remove", "main")
+    assert again.code == 0 and "no schedule for main" in again.out
+
+
+async def test_jobs_list_show_cancel_retry(cli: Cli) -> None:
+    from pydantic import BaseModel
+
+    class _P(BaseModel):
+        note: str = "x"
+
+    e = await cli.ops.svc.queue.enqueue("ingest.enrich", _P())
+    job_id = str(e.job_id)
+
+    listed = await cli("jobs", "list", "--json")
+    assert listed.code == 0 and job_id in {j["id"] for j in json.loads(listed.out)["jobs"]}
+
+    shown = await cli("jobs", "show", job_id, "--json")
+    assert shown.code == 0 and json.loads(shown.out)["id"] == job_id
+
+    cancelled = await cli("jobs", "cancel", job_id)
+    assert cancelled.code == 0 and "cancelled" in cancelled.out
+
+    retried = await cli("jobs", "retry", job_id)
+    assert retried.code == 0 and "queued" in retried.out
+
+
+async def test_pipeline_pause_resume_and_status(cli: Cli) -> None:
+    paused = await cli("pipeline", "pause", "--why", "on battery")
+    assert paused.code == 0 and "paused" in paused.out.lower()
+
+    status = await cli("pipeline", "status", "--json")
+    assert status.code == 0 and json.loads(status.out)["llm_paused"] is True
+
+    resumed = await cli("pipeline", "resume")
+    assert resumed.code == 0 and "resumed" in resumed.out.lower()
+
+
+async def test_pipeline_parked_retry_all(cli: Cli) -> None:
+    out = await cli("pipeline", "parked", "--all", "--json")
+    assert out.code == 0 and "retried" in json.loads(out.out)

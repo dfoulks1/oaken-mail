@@ -87,14 +87,75 @@ async def _create(client: ApiClient, args: argparse.Namespace) -> int:
     return emit(args, data=result.output, text=text)
 
 
-# --- jobs (the agent protocol) --------------------------------------------------------------
+# --- jobs: one group, two audiences --------------------------------------------------------
+# The person inspects and steers the durable queue (list/show/cancel/retry) with the API token;
+# an external agent works it (claim/heartbeat/complete/fail) with its own token. Same `jobs` group,
+# routed to the right client by the subcommand.
+
+_AGENT_ACTIONS = frozenset({"claim", "heartbeat", "complete", "fail"})
 
 
 def cmd_jobs(args: argparse.Namespace) -> int:
-    return run_agent(lambda client: _jobs(client, args), args)
+    if args.action in _AGENT_ACTIONS:
+        return run_agent(lambda client: _agent_jobs(client, args), args)
+    return run(lambda client: _queue_jobs(client, args), args)
 
 
-async def _jobs(client: Any, args: argparse.Namespace) -> int:
+async def _queue_jobs(client: ApiClient, args: argparse.Namespace) -> int:
+    """The person's view of the durable queue: list, show, cancel, retry (API token)."""
+    if args.action == "list":
+        payload: dict[str, Any] = {"limit": args.limit}
+        if args.status:
+            payload["status"] = args.status
+        if args.kind:
+            payload["kind"] = args.kind
+        if args.account:
+            payload["account_id"] = args.account
+        result = await client.call("list_jobs", payload)
+        out: dict[str, Any] = result.output if isinstance(result.output, dict) else {}
+        rows = out.get("jobs", [])
+
+        def listed() -> None:
+            from oaken_cli.output import print_table, print_text
+
+            if not rows:
+                print_text("no jobs")
+                return
+            print_table(
+                rows,
+                ["id", "kind", "status", "attempts", "max_attempts", "account_id", "last_error"],
+                title="jobs",
+            )
+
+        return emit(args, data=result.output, text=listed)
+    if args.action == "show":
+        # A single job is a filtered list by id, so the person gets the same fields without a
+        # dedicated op (the id is unique).
+        result = await client.call("list_jobs", {"limit": 500})
+        out = result.output if isinstance(result.output, dict) else {}
+        match = next((j for j in out.get("jobs", []) if j.get("id") == args.job_id), None)
+        if match is None:
+            raise CliError(f"no such job: {args.job_id}", ExitCode.ERROR)
+
+        def shown() -> None:
+            from oaken_cli.output import print_text
+
+            print_text(json.dumps(match, indent=2, ensure_ascii=False))
+
+        return emit(args, data=match, text=shown)
+    op = "cancel_job" if args.action == "cancel" else "retry_job"
+    result = await client.call(op, {"job_id": args.job_id}, confirm=True)
+    out = result.output if isinstance(result.output, dict) else {}
+
+    def changed() -> None:
+        from oaken_cli.output import print_text
+
+        print_text(f"job {args.job_id}: {out.get('status', 'ok')}")
+
+    return emit(args, data=result.output, text=changed)
+
+
+async def _agent_jobs(client: Any, args: argparse.Namespace) -> int:
     if args.action == "claim":
         data = await client.claim(list(args.kind) or None)
         job = data.get("job")

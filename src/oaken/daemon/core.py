@@ -30,6 +30,7 @@ from oaken.core.scheduler import Scheduler
 from oaken.core.settings import Settings
 from oaken.index import Indexer, IndexStore
 from oaken.ingest import Backends, Pipeline, Quarantine, SyncRunner, UsageStore
+from oaken.ingest.pipeline_control import PipelineControl
 from oaken.ingest.quarantine import quarantine_dir
 from oaken.ingest.schedule import SyncService
 from oaken.mail.filtering import FilterEngine, scripts_dir
@@ -90,10 +91,13 @@ class Core:
         self.indexer = Indexer(self.raw, self.index, self.attrs, s.mail, clock, bus=bus)
         self.indexer.follow_filtering()
         self.queue = JobQueue(self.raw_db, clock, bus, settings=s.jobs, swarm=s.swarm)
-        self.runner = JobRunner(self.queue)
-        self.scheduler = Scheduler(self.raw_db, self.queue, clock)
         self.usage = UsageStore(self.raw_db, clock)
         self.audit = AuditLog(self.raw_db, clock)
+        # The durable "pause the model" switch: the runner consults it so paused stages are not
+        # claimed, and the pause survives a restart.
+        self.pipeline_control = PipelineControl(self.raw_db, clock, self.audit)
+        self.runner = JobRunner(self.queue, paused_kinds=self.pipeline_control.paused_kinds)
+        self.scheduler = Scheduler(self.raw_db, self.queue, clock)
         kwargs = {} if self._discover is None else {"discover": self._discover}
         self.host = PluginHost(s, clock, bus, **kwargs)  # type: ignore[arg-type]
         self.llm = LLMService(
@@ -131,7 +135,8 @@ class Core:
             raw=self.raw, index=self.index, attrs=self.attrs, queue=self.queue, audit=self.audit,
             settings=s, clock=clock, bus=bus, readstate=self.readstate, pipeline=self.pipeline,
             indexer=self.indexer, usage=self.usage, sync=self.sync, plugins=self.host,
-            llm=self.llm, agents=self.agents, version=oaken.__version__,
+            llm=self.llm, agents=self.agents, pipeline_control=self.pipeline_control,
+            version=oaken.__version__,
         )  # fmt: skip
         registry = core_registry()
         registry.attach_plugins(lambda: plugin_operations(self.host))

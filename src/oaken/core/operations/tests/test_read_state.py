@@ -14,7 +14,7 @@ from oaken.core.untrusted import UntrustedText
 SUMMARY = {"summary": "Alex writes about quokkas."}
 
 
-def examples(a: MessageId) -> dict[str, Any]:
+def examples(a: MessageId, job_id: str = "none") -> dict[str, Any]:
     """A valid input for every operation that does not change read state when called plainly."""
     return {
         "status": {}, "pipeline_status": {}, "usage_summary": {}, "list_accounts": {},
@@ -40,6 +40,8 @@ def examples(a: MessageId) -> dict[str, Any]:
         "set_account_password": {"account_id": "main", "password": "x"},
         "start_authorization": {"account_id": "main"},
         "authorization_status": {"account_id": "main"},
+        "list_jobs": {}, "cancel_job": {"job_id": job_id}, "retry_job": {"job_id": job_id},
+        "pause_backfill": {}, "resume_backfill": {}, "retry_parked": {"all": True},
     }  # fmt: skip
 
 
@@ -47,9 +49,16 @@ MARKING = {"mark_read", "mark_unread", "undo", "message_presented"}
 
 
 async def test_no_operation_that_does_not_mark_read_changes_read_state(ops: Ops) -> None:
+    from pydantic import BaseModel
+
+    class _P(BaseModel):
+        note: str = "x"
+
     (a, *_) = await ops.add(3)
     ops.rig.llm.responder = lambda _r: SUMMARY
-    table = examples(a)
+    # A real job so cancel_job/retry_job have something to act on (neither touches read state).
+    job = await ops.svc.queue.enqueue("ingest.enrich", _P())
+    table = examples(a, str(job.job_id))
     declared = {o.name for o in core_operations() if o.marks_read}
     assert set(table) | MARKING == {o.name for o in core_operations()}, "add a case for the new one"
     assert declared == MARKING | {"summarize_message"}

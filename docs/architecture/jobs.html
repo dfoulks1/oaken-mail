@@ -80,7 +80,8 @@
       <a class="nav-link" href="#events"><span class="num">4</span>Events</a>
       <a class="nav-link" href="#results-parents-and-actors"><span class="num">5</span>Results, parents and actors</a>
       <a class="nav-link" href="#the-scheduler"><span class="num">6</span>The scheduler</a>
-      <a class="nav-link" href="#testing"><span class="num">7</span>Testing</a>
+      <a class="nav-link" href="#pausing-the-model"><span class="num">7</span>Pausing the model</a>
+      <a class="nav-link" href="#testing"><span class="num">8</span>Testing</a>
     </nav></div>
   </div></div>
 </nav>
@@ -233,7 +234,19 @@ If the process was down for several periods, the missed runs collapse into a sin
 and month and weekday names, which is everything &quot;sync every five minutes&quot; or &quot;nightly backfill&quot;
 needs; a full library would add a dependency and time-zone handling that nothing here uses.</p>
 </section>
-<section id="testing" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>Testing</h2></div>
+<section id="pausing-the-model" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>Pausing the model</h2></div>
+<p>Two ingest stages call a model: <code>ingest.embed</code> and <code>ingest.enrich</code>. A person who wants to stop the
+machine learning from working the queue — to free the GPU, or while on battery — pauses them with
+<code>oaken pipeline pause</code> (and <code>resume</code>), or the <code>pause_backfill</code>/<code>resume_backfill</code> operations. Mail
+keeps landing and being parsed and filtered (<code>ingest.parse</code> is CPU-only); only the model-bound
+stages stop being claimed.</p>
+<p>The switch is one durable row in <code>raw.db</code> (<code>pipeline_control</code>, migration 0013), so it survives a
+restart: the runner holds a <code>paused_kinds</code> callback that reads it, and withholds those kinds from
+each claim while paused. The low-level <code>JobQueue.claim</code> stays a primitive and is unaware of the
+pause — the <strong>runner</strong> is the gate — and every change is audited. <code>pipeline_status</code> reports
+<code>llm_paused</code>.</p>
+</section>
+<section id="testing" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>Testing</h2></div>
 <p>Everything above is tested with a fake clock and no sleeping: advance the clock, call <code>drain()</code>
 on the runner or <code>tick()</code> on the scheduler, and look at the database. The tests live in
 <code>src/oaken/core/tests/</code>.</p>

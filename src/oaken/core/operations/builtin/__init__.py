@@ -25,6 +25,7 @@ def core_operations() -> tuple[AnyOperation, ...]:
         *agents.OPERATIONS,
         *enrichment.OPERATIONS,
         *filtering.OPERATIONS,
+        *jobs.OPERATIONS,
     )
 
 

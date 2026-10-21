@@ -243,6 +243,7 @@ types = [
   ["UsageStore", "class", "ai_usage in raw.db: calls, cached calls, tokens in and out, and tokens saved by caching."],
   ["Quarantine", "class", "Writes flagged attachments to an owner-only folder. Never reads, parses or runs them."],
   ["PipelineStatus", "frozen dataclass", "Per-stage counts, embedding speed, backfill state and the parked (failed) jobs with reasons."],
+  ["PipelineControl", "class", "The durable 'pause the model' switch (pipeline_control table, migration 0013): the runner stops claiming ingest.embed and ingest.enrich while llm_paused; parse and sync keep flowing. Audited."],
 ]
 funcs = [
   ["Pipeline.reprocess(stage) -> job id", "One low-priority job per stage and account; parse queues index.rebuild, embed swaps models without removing the old vectors first."],
@@ -327,8 +328,8 @@ uses = ["dbaccess", "events"]
 notifies = ["ingest"]
 types = [
   ["Job", "frozen dataclass", "One row of the jobs table."],
-  ["JobQueue", "class", "Enqueue, claim with a lease, heartbeat, complete, fail, cancel."],
-  ["JobRunner", "class", "N asyncio workers; handlers register by kind with a pydantic payload model."],
+  ["JobQueue", "class", "Enqueue, claim with a lease, heartbeat, complete, fail, cancel, query (list by status/kind/account) and retry a failed or cancelled job."],
+  ["JobRunner", "class", "N asyncio workers; handlers register by kind with a pydantic payload model. An optional paused_kinds callback withholds kinds from claiming (the model-bound stages while the person has paused the model)."],
   ["PermanentJobError", "exception", "Raised by a handler to fail without retrying."],
 ]
 funcs = [

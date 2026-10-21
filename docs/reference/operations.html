@@ -113,6 +113,13 @@
 <td>How an interactive authorization is going.</td>
 </tr>
 <tr>
+<td><code>cancel_job</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Cancel a queued job, or ask a running one to stop at its next safe point.</td>
+</tr>
+<tr>
 <td><code>check_account</code></td>
 <td>read</td>
 <td>never</td>
@@ -197,6 +204,13 @@
 <td>The newest audit-log rows: who changed what, why, and whether it can be undone.</td>
 </tr>
 <tr>
+<td><code>list_jobs</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>The newest jobs in the durable queue, with their status, attempts and any scrubbed error.</td>
+</tr>
+<tr>
 <td><code>list_labels</code></td>
 <td>read</td>
 <td>on by default</td>
@@ -260,6 +274,13 @@
 <td>The user is looking at this message: core marks it read after the configured delay.</td>
 </tr>
 <tr>
+<td><code>pause_backfill</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Pause the model-bound ingest stages (embed, enrich). Mail keeps landing and being filtered.</td>
+</tr>
+<tr>
 <td><code>pause_schedule</code></td>
 <td>mutate</td>
 <td>never</td>
@@ -302,11 +323,32 @@
 <td>Bring one pipeline stage up to date for old mail (parse, filter, embed or enrich).</td>
 </tr>
 <tr>
+<td><code>resume_backfill</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Resume the model-bound ingest stages after a pause.</td>
+</tr>
+<tr>
 <td><code>resume_schedule</code></td>
 <td>mutate</td>
 <td>never</td>
 <td>no</td>
 <td>Resume a paused sync schedule: it is due now and its failure count is cleared.</td>
+</tr>
+<tr>
+<td><code>retry_job</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Re-queue a failed or cancelled job to run now, clearing its last error.</td>
+</tr>
+<tr>
+<td><code>retry_parked</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Re-queue one parked ingest job, or with all=true every parked ingest job, to run again.</td>
 </tr>
 <tr>
 <td><code>revoke_agent</code></td>
@@ -437,6 +479,12 @@
 <li>Input: <code>account_id</code></li>
 <li>Output: <code>state</code>, <code>detail</code>?</li>
 </ul>
+<h3 id="cancel-job"><code>cancel_job</code></h3>
+<p>Cancel a queued job, or ask a running one to stop at its next safe point.</p>
+<ul>
+<li>Input: <code>job_id</code></li>
+<li>Output: <code>job_id</code>, <code>status</code></li>
+</ul>
 <h3 id="check-account"><code>check_account</code></h3>
 <p>Check the account's credential: connect, require TLS and log in. Sends and reads nothing.</p>
 <ul>
@@ -509,6 +557,12 @@
 <li>Input: <code>limit</code>?, <code>op</code>?</li>
 <li>Output: <code>entries</code></li>
 </ul>
+<h3 id="list-jobs"><code>list_jobs</code></h3>
+<p>The newest jobs in the durable queue, with their status, attempts and any scrubbed error.</p>
+<ul>
+<li>Input: <code>status</code>?, <code>kind</code>?, <code>account_id</code>?, <code>limit</code>?</li>
+<li>Output: <code>jobs</code></li>
+</ul>
 <h3 id="list-labels"><code>list_labels</code></h3>
 <p>Every label, folder (location) and disposition with how many live messages carry it.</p>
 <ul>
@@ -563,6 +617,12 @@
 <li>Input: <code>message_id</code></li>
 <li>Output: <code>armed</code></li>
 </ul>
+<h3 id="pause-backfill"><code>pause_backfill</code></h3>
+<p>Pause the model-bound ingest stages (embed, enrich). Mail keeps landing and being filtered.</p>
+<ul>
+<li>Input: <code>why</code>?</li>
+<li>Output: <code>llm_paused</code>, <code>reason</code>?</li>
+</ul>
 <h3 id="pause-schedule"><code>pause_schedule</code></h3>
 <p>Pause a sync schedule until it is resumed.</p>
 <ul>
@@ -573,7 +633,7 @@
 <p>Where ingest stands: each stage's queue, throughput and ETA, and jobs parked as failed.</p>
 <ul>
 <li>Input: none</li>
-<li>Output: <code>stages</code>, <code>docs</code>, <code>chunks</code>, <code>index_stale</code>, <code>vector_model</code>?, <code>vectors</code>, <code>embedder_model</code>?, <code>embeddings_stale</code>, <code>backfill_paused</code>, <code>quarantined_files</code>, <code>parked</code>?</li>
+<li>Output: <code>stages</code>, <code>docs</code>, <code>chunks</code>, <code>index_stale</code>, <code>vector_model</code>?, <code>vectors</code>, <code>embedder_model</code>?, <code>embeddings_stale</code>, <code>backfill_paused</code>, <code>llm_paused</code>?, <code>quarantined_files</code>, <code>parked</code>?</li>
 </ul>
 <h3 id="plugin-health"><code>plugin_health</code></h3>
 <p>Whether plugins are started and healthy, and why not if they are not.</p>
@@ -599,11 +659,29 @@
 <li>Input: <code>stage</code>, <code>account_id</code>?</li>
 <li>Output: <code>job_id</code>, <code>created</code></li>
 </ul>
+<h3 id="resume-backfill"><code>resume_backfill</code></h3>
+<p>Resume the model-bound ingest stages after a pause.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>llm_paused</code>, <code>reason</code>?</li>
+</ul>
 <h3 id="resume-schedule"><code>resume_schedule</code></h3>
 <p>Resume a paused sync schedule: it is due now and its failure count is cleared.</p>
 <ul>
 <li>Input: <code>account_id</code>, <code>folder</code>?</li>
 <li>Output: <code>schedule</code></li>
+</ul>
+<h3 id="retry-job"><code>retry_job</code></h3>
+<p>Re-queue a failed or cancelled job to run now, clearing its last error.</p>
+<ul>
+<li>Input: <code>job_id</code></li>
+<li>Output: <code>job_id</code>, <code>status</code></li>
+</ul>
+<h3 id="retry-parked"><code>retry_parked</code></h3>
+<p>Re-queue one parked ingest job, or with all=true every parked ingest job, to run again.</p>
+<ul>
+<li>Input: <code>job_id</code>?, <code>all</code>?</li>
+<li>Output: <code>retried</code></li>
 </ul>
 <h3 id="revoke-agent"><code>revoke_agent</code></h3>
 <p>Revoke an agent at once; the jobs it holds go back to the queue.</p>

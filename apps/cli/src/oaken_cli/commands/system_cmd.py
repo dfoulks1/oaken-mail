@@ -20,7 +20,53 @@ from oaken_cli.exits import ExitCode
 
 
 def cmd_pipeline(args: argparse.Namespace) -> int:
-    return run(lambda client: _pipeline(client, args), args)
+    return run(lambda client: _pipeline_dispatch(client, args), args)
+
+
+async def _pipeline_dispatch(client: ApiClient, args: argparse.Namespace) -> int:
+    sub = getattr(args, "subcommand", "status")
+    if sub == "pause":
+        result = await client.call("pause_backfill", {"why": args.why}, confirm=True)
+        return _emit_pause(args, result)
+    if sub == "resume":
+        result = await client.call("resume_backfill", {}, confirm=True)
+        return _emit_pause(args, result)
+    if sub == "parked":
+        payload: dict[str, object] = {}
+        if args.retry:
+            payload["job_id"] = args.retry
+        elif args.all:
+            payload["all"] = True
+        else:
+            from oaken_cli.exits import CliError
+
+            raise CliError("give --retry JOB_ID or --all", ExitCode.USAGE)
+        result = await client.call("retry_parked", payload, confirm=True)
+        out = result.output if isinstance(result.output, dict) else {}
+
+        def retried() -> None:
+            from oaken_cli.output import print_text
+
+            ids = out.get("retried", []) if isinstance(out, dict) else []
+            print_text(f"re-queued {len(ids)} parked job(s)")
+
+        return emit(args, data=result.output, text=retried)
+    return await _pipeline(client, args)
+
+
+def _emit_pause(args: argparse.Namespace, result: CallResult) -> int:
+    out = result.output if isinstance(result.output, dict) else {}
+
+    def text() -> None:
+        from oaken_cli.output import print_text
+
+        if out.get("llm_paused"):
+            reason = out.get("reason") or ""
+            print_text(f"model stages paused{f' ({reason})' if reason else ''}")
+        else:
+            print_text("model stages resumed")
+
+    return emit(args, data=result.output, text=text)
 
 
 async def _pipeline(client: ApiClient, args: argparse.Namespace) -> int:
@@ -46,6 +92,7 @@ async def _pipeline(client: ApiClient, args: argparse.Namespace) -> int:
             f"docs {out.get('docs', 0)}, chunks {out.get('chunks', 0)}, "
             f"vectors {out.get('vectors', 0)}"
             + (", backfill paused" if out.get("backfill_paused") else "")
+            + (", model stages PAUSED" if out.get("llm_paused") else "")
         )
         for p in out.get("parked", []) or []:
             print_text(f"parked {p.get('job_id')}: {p.get('stage')} — {p.get('error')}")

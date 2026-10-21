@@ -109,6 +109,20 @@ The cron parser is about a hundred lines with no dependency. It covers `*`, list
 and month and weekday names, which is everything "sync every five minutes" or "nightly backfill"
 needs; a full library would add a dependency and time-zone handling that nothing here uses.
 
+## Pausing the model
+
+Two ingest stages call a model: `ingest.embed` and `ingest.enrich`. A person who wants to stop the
+machine learning from working the queue — to free the GPU, or while on battery — pauses them with
+`oaken pipeline pause` (and `resume`), or the `pause_backfill`/`resume_backfill` operations. Mail
+keeps landing and being parsed and filtered (`ingest.parse` is CPU-only); only the model-bound
+stages stop being claimed.
+
+The switch is one durable row in `raw.db` (`pipeline_control`, migration 0013), so it survives a
+restart: the runner holds a `paused_kinds` callback that reads it, and withholds those kinds from
+each claim while paused. The low-level `JobQueue.claim` stays a primitive and is unaware of the
+pause — the **runner** is the gate — and every change is audited. `pipeline_status` reports
+`llm_paused`.
+
 ## Testing
 
 Everything above is tested with a fake clock and no sleeping: advance the clock, call `drain()`

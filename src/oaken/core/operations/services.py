@@ -21,6 +21,7 @@ from oaken.core.search import Retrieval
 from oaken.core.settings import Settings
 from oaken.index import Indexer, IndexStore
 from oaken.ingest import Pipeline, UsageStore
+from oaken.ingest.pipeline_control import PipelineControl
 from oaken.ingest.schedule import SyncService
 from oaken.plugins.host import PluginHost
 from oaken.readstate import AuditLog, ReadState
@@ -51,6 +52,7 @@ class Services:
     sync: SyncService | None = None
     plugins: PluginHost | None = None
     llm: LLMService | None = None
+    pipeline_control: PipelineControl | None = None
     retrieval: Retrieval | None = None  # built from the pipeline when not given
     agents: AgentRegistry | None = None
     version: str = ""
@@ -69,6 +71,9 @@ class Services:
 
     def need_sync(self) -> SyncService:
         return need(self.sync, "the sync scheduler")
+
+    def need_pipeline_control(self) -> PipelineControl:
+        return need(self.pipeline_control, "the pipeline control")
 
     def need_plugins(self) -> PluginHost:
         return need(self.plugins, "the plugin host")

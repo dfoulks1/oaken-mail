@@ -162,7 +162,7 @@
 </tr>
 <tr>
 <td><a href="#pipeline"><code>pipeline</code></a></td>
-<td>Pipeline status: stages, throughput, parked jobs.</td>
+<td>Pipeline status, and pausing the model-bound stages.</td>
 </tr>
 <tr>
 <td><a href="#usage"><code>usage</code></a></td>
@@ -202,7 +202,7 @@
 </tr>
 <tr>
 <td><a href="#jobs"><code>jobs</code></a></td>
-<td>Lease and finish jobs as an agent (OAKEN_AGENT_TOKEN).</td>
+<td>The durable job queue: list, show, cancel, retry; or work it as an agent.</td>
 </tr>
 <tr>
 <td><a href="#mcp"><code>mcp</code></a></td>
@@ -225,8 +225,16 @@
 <td>Store an account's credential (Gmail consent, SMTP or IMAP password).</td>
 </tr>
 <tr>
+<td><a href="#schedule"><code>schedule</code></a></td>
+<td>The per-account sync schedule: list, set, pause, resume, remove.</td>
+</tr>
+<tr>
 <td><a href="#completion"><code>completion</code></a></td>
 <td>Print a shell completion script (bash, zsh or fish).</td>
+</tr>
+<tr>
+<td><a href="#help"><code>help</code></a></td>
+<td>Show this help, or help for one COMMAND.</td>
 </tr>
 </tbody>
 </table></div>
@@ -392,10 +400,16 @@
 <li><code>--timeout</code> — Give up waiting for the answer after S seconds (a local model can be slow).</li>
 </ul>
 <h3 id="pipeline"><code>pipeline</code></h3>
-<p>Pipeline status: stages, throughput, parked jobs.</p>
+<p>Default shows status. 'pause'/'resume' stop and restart the model-bound ingest stages (embed, enrich) — mail keeps landing and being filtered while paused. 'parked' re-queues failed ingest jobs.</p>
 <p>Arguments:</p>
 <ul>
-<li><code>subcommand</code> — status (default).</li>
+<li><code>subcommand</code> — status (default), pause, resume, or parked.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--why</code> — A note recorded with a pause.</li>
+<li><code>--retry</code> — With 'parked': re-queue this one parked job.</li>
+<li><code>--all</code> — With 'parked': re-queue every parked ingest job.</li>
 </ul>
 <h3 id="usage"><code>usage</code></h3>
 <p>Model calls and tokens per workspace, stage and model.</p>
@@ -471,10 +485,37 @@
 <li><code>agent_id</code> — The agent id (see 'oaken agents list').</li>
 </ul>
 <h3 id="jobs"><code>jobs</code></h3>
-<p>The agent side of the queue. Authenticated by the agent's own token (OAKEN_AGENT_TOKEN or --agent-token-file); the API token is not used.</p>
+<p>Inspect and steer the durable queue (list, show, cancel, retry) with your API token. The agent protocol (claim, heartbeat, complete, fail) is authenticated by the agent's own token (OAKEN_AGENT_TOKEN or --agent-token-file) instead.</p>
 <p>Options:</p>
 <ul>
 <li><code>--agent-token-file</code> — Read the agent token from PATH.</li>
+</ul>
+<h4 id="jobs-list"><code>jobs list</code></h4>
+<p>List jobs in the queue.</p>
+<p>Options:</p>
+<ul>
+<li><code>--status</code> — Only jobs in this state.</li>
+<li><code>--kind</code> — Only this kind, e.g. ingest.enrich.</li>
+<li><code>--account</code> — Only this account.</li>
+<li><code>--limit</code> — How many (newest first, max 500).</li>
+</ul>
+<h4 id="jobs-show"><code>jobs show</code></h4>
+<p>Show one job in full.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>job_id</code> —</li>
+</ul>
+<h4 id="jobs-cancel"><code>jobs cancel</code></h4>
+<p>Cancel a queued job (or ask a running one to stop).</p>
+<p>Arguments:</p>
+<ul>
+<li><code>job_id</code> —</li>
+</ul>
+<h4 id="jobs-retry"><code>jobs retry</code></h4>
+<p>Re-queue a failed or cancelled job to run now.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>job_id</code> —</li>
 </ul>
 <h4 id="jobs-claim"><code>jobs claim</code></h4>
 <p>Lease the next job.</p>
@@ -602,11 +643,71 @@
 <li><code>--no-browser</code> — Only print the Gmail address.</li>
 <li><code>--timeout</code> — Gmail: give up after S seconds.</li>
 </ul>
+<h3 id="schedule"><code>schedule</code></h3>
+<p>When each account syncs. 'set' takes 'every 15m' or a five-field cron expression; edits are audited and take effect live. Editing a schedule is never offered over MCP.</p>
+<h4 id="schedule-list"><code>schedule list</code></h4>
+<p>Every schedule and its state.</p>
+<p>Options:</p>
+<ul>
+<li><code>--crontab</code> — Also print a read-only crontab export.</li>
+</ul>
+<h4 id="schedule-set"><code>schedule set</code></h4>
+<p>Create or change a schedule.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>account_id</code> — The account to schedule.</li>
+<li><code>schedule</code> — 'every 15m' or a five-field cron expression (UTC-aware).</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--folder</code> — A per-folder schedule (default: account).</li>
+<li><code>--timezone</code> — e.g. America/New_York (unchanged if omitted).</li>
+<li><code>--quiet</code> — Mute alerts in this window; sync still runs.</li>
+<li><code>--clear-quiet</code> — Remove the quiet window.</li>
+<li><code>--run-now</code> — Also sync immediately.</li>
+</ul>
+<h4 id="schedule-pause"><code>schedule pause</code></h4>
+<p>Pause a schedule.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>account_id</code> — The account to schedule.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--folder</code> — A per-folder schedule (default: account).</li>
+<li><code>--why</code> — A note recorded with the pause.</li>
+</ul>
+<h4 id="schedule-resume"><code>schedule resume</code></h4>
+<p>Resume a paused schedule.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>account_id</code> — The account to schedule.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--folder</code> — A per-folder schedule (default: account).</li>
+</ul>
+<h4 id="schedule-remove"><code>schedule remove</code></h4>
+<p>Remove a schedule.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>account_id</code> — The account to schedule.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--folder</code> — A per-folder schedule (default: account).</li>
+</ul>
 <h3 id="completion"><code>completion</code></h3>
 <p>Install with, for example: eval &quot;$(oaken completion bash)&quot;.</p>
 <p>Arguments:</p>
 <ul>
 <li><code>shell</code> —</li>
+</ul>
+<h3 id="help"><code>help</code></h3>
+<p>Show this help, or help for one COMMAND.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>COMMAND</code> — A command to show help for.</li>
 </ul>
 </section>
   <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>

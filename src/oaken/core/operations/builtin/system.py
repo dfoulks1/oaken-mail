@@ -88,6 +88,7 @@ class PipelineStatusOutput(BaseModel):
     embedder_model: str | None = None
     embeddings_stale: bool
     backfill_paused: bool
+    llm_paused: bool = False  # the model-bound stages (embed, enrich) are paused by the person
     quarantined_files: int
     parked: list[ParkedOut] = Field(default_factory=list)
 
@@ -102,7 +103,10 @@ class PipelineStatusOutput(BaseModel):
 )
 async def pipeline_status(ctx: OpContext, inp: Empty) -> PipelineStatusOutput:
     s = await ctx.svc.need_pipeline().pipeline_status()
-    return PipelineStatusOutput.model_validate(asdict(s))
+    out = PipelineStatusOutput.model_validate(asdict(s))
+    if ctx.svc.pipeline_control is not None:
+        out.llm_paused = (await ctx.svc.pipeline_control.state()).llm_paused
+    return out
 
 
 class UsageInput(BaseModel):
@@ -424,9 +428,88 @@ async def set_operation_exposure(ctx: OpContext, inp: ExposureInput) -> Exposure
     )
 
 
+class PauseBackfillInput(BaseModel):
+    why: str = Field(default="", max_length=500, description="A note recorded with the pause.")
+
+
+class PipelineControlOutput(BaseModel):
+    llm_paused: bool
+    reason: str = ""
+
+
+@operation(
+    "pause_backfill",
+    "Pause the model-bound ingest stages (embed, enrich). Mail keeps landing and being filtered.",
+    permission="mutate",
+    input=PauseBackfillInput,
+    output=PipelineControlOutput,
+    mcp="never",
+)
+async def pause_backfill(ctx: OpContext, inp: PauseBackfillInput) -> PipelineControlOutput:
+    state = await ctx.svc.need_pipeline_control().set_llm_paused(
+        True, actor=ctx.caller.actor, reason=inp.why or "paused by the user"
+    )
+    return PipelineControlOutput(llm_paused=state.llm_paused, reason=state.reason)
+
+
+@operation(
+    "resume_backfill",
+    "Resume the model-bound ingest stages after a pause.",
+    permission="mutate",
+    input=Empty,
+    output=PipelineControlOutput,
+    mcp="never",
+)
+async def resume_backfill(ctx: OpContext, inp: Empty) -> PipelineControlOutput:
+    state = await ctx.svc.need_pipeline_control().set_llm_paused(
+        False, actor=ctx.caller.actor, reason="resumed by the user"
+    )
+    return PipelineControlOutput(llm_paused=state.llm_paused, reason=state.reason)
+
+
+class RetryParkedInput(BaseModel):
+    job_id: str | None = Field(default=None, description="One parked job; omit with all=true.")
+    all: bool = Field(default=False, description="Retry every parked ingest job.")
+
+
+class RetryParkedOutput(BaseModel):
+    retried: list[str]
+
+
+@operation(
+    "retry_parked",
+    "Re-queue one parked ingest job, or with all=true every parked ingest job, to run again.",
+    permission="mutate",
+    input=RetryParkedInput,
+    output=RetryParkedOutput,
+    mcp="never",
+)
+async def retry_parked(ctx: OpContext, inp: RetryParkedInput) -> RetryParkedOutput:
+    from oaken.core.ids import JobId
+
+    queue = ctx.svc.queue
+    if inp.job_id and inp.all:
+        raise Conflict("give a job_id or all=true, not both")
+    if not inp.job_id and not inp.all:
+        raise Conflict("give a job_id or all=true")
+    if inp.job_id:
+        await queue.retry(JobId(inp.job_id))
+        return RetryParkedOutput(retried=[inp.job_id])
+    # Every failed ingest.* job. list() filters by one kind, so gather across the ingest kinds.
+    retried: list[str] = []
+    for kind in ("ingest.parse", "ingest.embed", "ingest.enrich", "ingest.reprocess"):
+        for job in await queue.query(status="failed", kind=kind, limit=500):
+            await queue.retry(job.id)
+            retried.append(str(job.id))
+    return RetryParkedOutput(retried=retried)
+
+
 OPERATIONS: tuple[AnyOperation, ...] = (
     status,
     pipeline_status,
+    pause_backfill,
+    resume_backfill,
+    retry_parked,
     usage_summary,
     list_accounts,
     list_plugins,

@@ -576,6 +576,56 @@ class JobQueue:
         row = await self.db.fetchone("SELECT * FROM jobs WHERE id = ?", (job_id,))
         return Job.from_row(row) if row else None
 
+    async def query(
+        self,
+        *,
+        status: str | None = None,
+        kind: str | None = None,
+        account_id: AccountId | None = None,
+        limit: int = 50,
+    ) -> list[Job]:
+        """The newest jobs matching the filters (newest first). For a person inspecting the queue;
+        the filters are optional and additive. ``limit`` is clamped to a sane maximum."""
+        where: list[str] = []
+        args: list[object] = []
+        if status is not None:
+            where.append("status = ?")
+            args.append(status)
+        if kind is not None:
+            where.append("kind = ?")
+            args.append(kind)
+        if account_id is not None:
+            where.append("account_id = ?")
+            args.append(account_id)
+        clause = (" WHERE " + " AND ".join(where)) if where else ""
+        args.append(max(1, min(limit, 500)))
+        rows = await self.db.fetchall(
+            f"SELECT * FROM jobs{clause} ORDER BY created_at DESC, id DESC LIMIT ?",  # noqa: S608
+            tuple(args),  # only "?" placeholders; the clause is built from fixed column names
+        )
+        return [Job.from_row(r) for r in rows]
+
+    async def retry(self, job_id: JobId) -> str:
+        """Re-queue a failed or cancelled job to run now, clearing its last error. Returns the
+        job's status afterwards. A job that is queued or running is left as it is (nothing to
+        retry); a succeeded job cannot be retried. Raises ``NotFound`` for an unknown id."""
+        now = self.clock.now()
+        async with self.db.transaction() as tx:
+            row = await tx.fetchone("SELECT * FROM jobs WHERE id = ?", (job_id,))
+            if row is None:
+                raise NotFound(f"no such job: {job_id}")
+            job = Job.from_row(row)
+            if job.status not in ("failed", "cancelled"):
+                return job.status
+            await tx.execute(
+                "UPDATE jobs SET status = 'queued', run_after = ?, last_error = NULL,"
+                " locked_by = NULL, locked_until = NULL, cancel_requested = 0, updated_at = ?"
+                " WHERE id = ?",
+                (fmt_ts(now), fmt_ts(now), job_id),
+            )
+        await self.announce(_Change(job.id, job.kind, "queued", job.account_id))
+        return "queued"
+
     async def children(self, parent_id: JobId) -> list[Job]:
         """The jobs enqueued with this parent, oldest first (order within a millisecond is
         arbitrary)."""
@@ -624,10 +674,14 @@ class JobRunner:
         *,
         workers: int | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        paused_kinds: Callable[[], Awaitable[Collection[str]]] | None = None,
     ) -> None:
         self.queue = queue
         self.workers = workers or queue.settings.workers
         self._sleep = sleep  # used by the lease heartbeat; replaceable in tests
+        # Optional: kinds the runner must not claim right now (e.g. the model-bound ingest stages
+        # while the person has paused the model). Consulted once per claim cycle.
+        self._paused_kinds = paused_kinds
         self._registry: dict[str, _Registration] = {}
         self._running: dict[JobId, _Running] = {}
         self._tasks: list[asyncio.Task[None]] = []
@@ -706,7 +760,8 @@ class JobRunner:
     async def _worker(self, name: str, *, idle_exit: bool) -> None:
         while not self._stopping:
             self.queue.wake.clear()
-            job = await self.queue.claim(name, list(self._registry), self._limits())
+            kinds = await self._claimable_kinds()
+            job = await self.queue.claim(name, kinds, self._limits()) if kinds else None
             if job is None:
                 if idle_exit:
                     return
@@ -715,6 +770,14 @@ class JobRunner:
             await self._execute(job, name)
             self.processed += 1
             self.queue.wake.set()  # a finished job may free a concurrency slot
+
+    async def _claimable_kinds(self) -> list[str]:
+        """The registered kinds, minus any the control says to hold back right now."""
+        kinds = list(self._registry)
+        if self._paused_kinds is None:
+            return kinds
+        paused = set(await self._paused_kinds())
+        return [k for k in kinds if k not in paused]
 
     async def _idle_wait(self) -> None:
         cap = min(self.queue.settings.lease_seconds / 2, 30.0)

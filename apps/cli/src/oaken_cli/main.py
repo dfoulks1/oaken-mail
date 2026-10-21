@@ -34,12 +34,57 @@ from oaken import __version__
 Handler = Callable[[argparse.Namespace], int]
 
 PROG = "oaken"
-DESCRIPTION = "Oaken Mail — a local-first, AI-native mail client. Thin CLI over the local core."
+DESCRIPTION = """\
+Oaken Mail — a local-first, AI-native mail client.
+
+Mail is pulled to your machine, filtered by your Sieve rules, and processed by a local model
+at ingest time, so search and question-answering are cheap. Nothing leaves your machine unless
+you configure a remote endpoint. This CLI is a thin client: every command is one call to the
+local core daemon over 127.0.0.1 — it holds no logic of its own, and never starts core for you.
+"""
+
+EPILOG = """\
+getting started:
+  oaken help                  show this overview (also: oaken --help)
+  oaken help COMMAND          help for one command (e.g. oaken help sync) — same as COMMAND --help
+  oaken start                 run the core daemon (use --detach to background it)
+  oaken admin account add     add a mail account (a wizard, or --provider/--id/--set)
+  oaken auth gmail            authorize an account (Gmail consent / SMTP / IMAP password)
+  oaken sync --wait           pull mail now and wait for it to finish
+  oaken search "quokkas"      search; oaken ask "when is the board meeting?" to ask
+  oaken show MESSAGE_ID       read one message (adds --mark-read via 'oaken read')
+
+command groups:
+  daemon        start · stop · restart · status
+  mail          search · ask · show · summarize · read · unread · undo · sync
+  organize      sieve · schedule · reprocess · rebuild-index
+  queue         jobs · pipeline · watch
+  accounts      admin · auth · accounts
+  system        status · usage · plugins · audit · operations
+  agents        agents · jobs (claim/heartbeat/complete/fail)
+  tools         operation · mcp · completion · help
+
+anything else:
+  Every capability the daemon offers is reachable without a dedicated verb via the generic
+  fallback:  oaken operation NAME --json '{...}'   (and 'oaken operation' lists them all).
+  Add --json to any command for machine-readable output.
+
+exit codes:
+  0 ok · 1 error · 2 usage · 3 core not running · 4 auth · 5 needs confirmation (re-run with --yes)
+
+docs: https://dfoulks1.github.io/oaken-mail/   ·   'oaken help COMMAND' or 'oaken COMMAND --help'.
+"""
 
 
 def build_parser() -> argparse.ArgumentParser:
     """Construct the full parser. Kept import-light so ``--help`` is cheap."""
-    parser = argparse.ArgumentParser(prog=PROG, description=DESCRIPTION, parents=[_globals(False)])
+    parser = argparse.ArgumentParser(
+        prog=PROG,
+        description=DESCRIPTION,
+        epilog=EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=[_globals(False)],
+    )
     parser.add_argument("--version", action="version", version=f"{PROG} {__version__}")
 
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
@@ -58,7 +103,14 @@ def build_parser() -> argparse.ArgumentParser:
     _register_mcp(sub, g)
     _register_content(sub)
     _register_accounts(sub)
+    _register_schedule(sub)
     _register_completion(sub, g)
+
+    # `oaken help [COMMAND]` — the same as --help, and 'oaken help sync' == 'oaken sync --help'.
+    # Handled in main() because it needs the parser itself; the marker is picked up there.
+    helpp = sub.add_parser("help", help="Show this help, or help for one COMMAND.")
+    helpp.add_argument("topic", nargs="?", metavar="COMMAND", help="A command to show help for.")
+    helpp.set_defaults(_help=True)
     # Any registry operation without its own verb above is still reachable through the generic
     # ``oaken operation NAME --json '{...}'`` fallback, so a registry change never needs a release.
     return parser
@@ -251,10 +303,28 @@ def _register_system(
     ask.set_defaults(func=_lazy("system_cmd", "cmd_ask"))
 
     pipeline = sub.add_parser(
-        "pipeline", help="Pipeline status: stages, throughput, parked jobs.", parents=[g]
+        "pipeline",
+        help="Pipeline status, and pausing the model-bound stages.",
+        parents=[g],
+        description=(
+            "Default shows status. 'pause'/'resume' stop and restart the model-bound ingest "
+            "stages (embed, enrich) — mail keeps landing and being filtered while paused. "
+            "'parked' re-queues failed ingest jobs."
+        ),
     )
     pipeline.add_argument(
-        "subcommand", nargs="?", default="status", choices=["status"], help="status (default)."
+        "subcommand",
+        nargs="?",
+        default="status",
+        choices=["status", "pause", "resume", "parked"],
+        help="status (default), pause, resume, or parked.",
+    )
+    pipeline.add_argument("--why", default="", metavar="TEXT", help="A note recorded with a pause.")
+    pipeline.add_argument(
+        "--retry", metavar="JOB_ID", help="With 'parked': re-queue this one parked job."
+    )
+    pipeline.add_argument(
+        "--all", action="store_true", help="With 'parked': re-queue every parked ingest job."
     )
     pipeline.set_defaults(func=_lazy("system_cmd", "cmd_pipeline"))
 
@@ -373,16 +443,42 @@ def _register_swarm(
 
     jobs = sub.add_parser(
         "jobs",
-        help="Lease and finish jobs as an agent (OAKEN_AGENT_TOKEN).",
+        help="The durable job queue: list, show, cancel, retry; or work it as an agent.",
         parents=[g],
         description=(
-            "The agent side of the queue. Authenticated by the agent's own token "
-            "(OAKEN_AGENT_TOKEN or --agent-token-file); the API token is not used."
+            "Inspect and steer the durable queue (list, show, cancel, retry) with your API token. "
+            "The agent protocol (claim, heartbeat, complete, fail) is authenticated by the agent's "
+            "own token (OAKEN_AGENT_TOKEN or --agent-token-file) instead."
         ),
     )
     jobs.add_argument("--agent-token-file", metavar="PATH", help="Read the agent token from PATH.")
     verbs = jobs.add_subparsers(dest="action", metavar="ACTION")
     verbs.required = True
+
+    # The person's view of the queue (API token).
+    jlist = verbs.add_parser("list", parents=[_globals(True)], help="List jobs in the queue.")
+    jlist.add_argument(
+        "--status",
+        choices=["queued", "running", "succeeded", "failed", "cancelled"],
+        help="Only jobs in this state.",
+    )
+    jlist.add_argument("--kind", metavar="KIND", help="Only this kind, e.g. ingest.enrich.")
+    jlist.add_argument("--account", metavar="ID", help="Only this account.")
+    jlist.add_argument("--limit", type=int, default=50, help="How many (newest first, max 500).")
+    jshow = verbs.add_parser("show", parents=[_globals(True)], help="Show one job in full.")
+    jshow.add_argument("job_id")
+    jcancel = verbs.add_parser(
+        "cancel",
+        parents=[_globals(True)],
+        help="Cancel a queued job (or ask a running one to stop).",
+    )
+    jcancel.add_argument("job_id")
+    jretry = verbs.add_parser(
+        "retry", parents=[_globals(True)], help="Re-queue a failed or cancelled job to run now."
+    )
+    jretry.add_argument("job_id")
+
+    # The agent protocol (agent token).
     claim = verbs.add_parser("claim", parents=[_globals(True)], help="Lease the next job.")
     claim.add_argument(
         "--kind", action="append", default=[], metavar="KIND", help="Only this kind."
@@ -505,6 +601,56 @@ def _register_accounts(sub: argparse._SubParsersAction[argparse.ArgumentParser])
     auth.set_defaults(func=_lazy("account_cmd", "cmd_auth"))
 
 
+def _register_schedule(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Per-account sync schedules (prompt 12b): list and edit. Edits are never over MCP."""
+    schedule = sub.add_parser(
+        "schedule",
+        help="The per-account sync schedule: list, set, pause, resume, remove.",
+        parents=[_globals(True)],
+        description=(
+            "When each account syncs. 'set' takes 'every 15m' or a five-field cron expression; "
+            "edits are audited and take effect live. Editing a schedule is never offered over MCP."
+        ),
+    )
+    acts = schedule.add_subparsers(dest="action", metavar="ACTION")
+    acts.required = True
+
+    lst = acts.add_parser("list", parents=[_globals(True)], help="Every schedule and its state.")
+    lst.add_argument(
+        "--crontab", action="store_true", help="Also print a read-only crontab export."
+    )
+
+    def _key_args(p: argparse.ArgumentParser) -> None:
+        p.add_argument("account_id", help="The account to schedule.")
+        p.add_argument(
+            "--folder", default="", metavar="NAME", help="A per-folder schedule (default: account)."
+        )
+
+    setp = acts.add_parser("set", parents=[_globals(True)], help="Create or change a schedule.")
+    _key_args(setp)
+    setp.add_argument("schedule", help="'every 15m' or a five-field cron expression (UTC-aware).")
+    setp.add_argument(
+        "--timezone", metavar="IANA", help="e.g. America/New_York (unchanged if omitted)."
+    )
+    setp.add_argument(
+        "--quiet", metavar="HH:MM-HH:MM", help="Mute alerts in this window; sync still runs."
+    )
+    setp.add_argument("--clear-quiet", action="store_true", help="Remove the quiet window.")
+    setp.add_argument("--run-now", action="store_true", help="Also sync immediately.")
+
+    pause = acts.add_parser("pause", parents=[_globals(True)], help="Pause a schedule.")
+    _key_args(pause)
+    pause.add_argument("--why", default="", metavar="TEXT", help="A note recorded with the pause.")
+
+    resume = acts.add_parser("resume", parents=[_globals(True)], help="Resume a paused schedule.")
+    _key_args(resume)
+
+    remove = acts.add_parser("remove", parents=[_globals(True)], help="Remove a schedule.")
+    _key_args(remove)
+
+    schedule.set_defaults(func=_lazy("schedule_cmd", "cmd_schedule"))
+
+
 def _register_completion(
     sub: argparse._SubParsersAction[argparse.ArgumentParser], g: argparse.ArgumentParser
 ) -> None:
@@ -547,6 +693,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     _configure_logging(getattr(args, "verbose", 0))
     from oaken_cli.exits import CliError, ExitCode
+
+    # `oaken help [COMMAND]`: print top-level help, or defer to the command's own --help.
+    if getattr(args, "_help", False):
+        topic = getattr(args, "topic", None)
+        if topic is None:
+            parser.print_help()
+            return int(ExitCode.OK)
+        # Re-parse as 'oaken TOPIC --help', which argparse prints and exits (SystemExit 0).
+        try:
+            parser.parse_args([topic, "--help"])
+        except SystemExit as exit_:
+            return int(exit_.code or 0)
+        return int(ExitCode.OK)
 
     try:
         return int(args.func(args))
