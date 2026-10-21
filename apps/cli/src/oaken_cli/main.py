@@ -55,6 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     _register_mail(sub, g)
     _register_system(sub, g)
     _register_swarm(sub, g)
+    _register_mcp(sub, g)
     _register_content(sub)
     _register_accounts(sub)
     _register_completion(sub, g)
@@ -302,6 +303,33 @@ def _register_system(
 
     watch = sub.add_parser("watch", help="Stream core events as lines (or --json).", parents=[g])
     watch.set_defaults(func=_lazy("system_cmd", "cmd_watch"))
+
+
+def _register_mcp(
+    sub: argparse._SubParsersAction[argparse.ArgumentParser], g: argparse.ArgumentParser
+) -> None:
+    mcp = sub.add_parser(
+        "mcp",
+        help="Bridge an MCP client that speaks stdio to the MCP server in core.",
+        parents=[g],
+        description=(
+            "Reads MCP messages on stdin and forwards them to the MCP server inside the running "
+            "core, writing its answers to stdout. It adds nothing: the tools, the confirmation "
+            "step and the limits are core's. If core is not running, tool calls answer with a "
+            "core_not_running error. It never starts core. Point a stdio-only client (Claude "
+            "Desktop) at 'oaken mcp'."
+        ),
+    )
+    mcp.add_argument(
+        "--timeout", type=float, default=60.0, metavar="SECONDS", help="Give up on a call after."
+    )
+    mcp.add_argument(
+        "--agent",
+        action="store_true",
+        help="Speak to the swarm door as an agent (token from OAKEN_AGENT_TOKEN).",
+    )
+    mcp.add_argument("--agent-token-file", metavar="PATH", help="Read the agent token from a file.")
+    mcp.set_defaults(func=_lazy("mcp_cmd", "cmd_mcp"))
 
 
 def _register_swarm(
