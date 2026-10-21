@@ -15,6 +15,9 @@ plugins only. It also builds the **shared config-section writer** that 29, 31 an
 - **Secrets get special handling** and never appear in the textarea (see "Secrets").
 - **Enable/disable** is a first-class switch, backed by an `enabled` attribute on the plugin base
   class that the loader reads (see "Enabled").
+- **Capabilities are manageable too, not just config.** Each capability chip on a plugin row
+  (Gmail: `auth`, `sync.pull`, `flags.write`, `send`) can be switched off to restrict what the
+  plugin may do (see "Capabilities"). Gmail is the first target; the mechanism is generic.
 - **One source of truth:** `config.toml`. The UI and the CLI both go through the API operations
   below; nothing keeps a second copy of plugin settings.
 - Extensibility is a founding principle: the plugin contract gains `enabled` and a secret marker,
@@ -64,12 +67,46 @@ account pattern (`check_account` vs `set_account_config`) and the Sieve pattern 
 - Per-account instances (`gmail@work`) follow their base plugin's enabled state.
 - `PluginStatus` and `list_plugins` gain `enabled` and `enabled_default`.
 
+## Capabilities (restrict what a plugin may do)
+
+A plugin declares capabilities (`auth`, `sync.pull`, `flags.write`, `send` for a provider; the
+other kinds have their own, from `CAPABILITIES`). Today the host trusts them all. The user wants to
+**turn individual ones off** from the Plugins pane, starting from "everything it can do" and
+taking away, the same restriction-first idea as 32.
+
+- **Stored in the plugin's own table**, so there is still one source of truth and it shows in the
+  textarea: `[plugins.gmail] capabilities = ["auth", "sync.pull"]`. **Absent means every declared
+  capability** (today's behaviour). The list is an allow-list; it can only narrow, never grant a
+  capability the plugin did not declare (`check` rejects an unknown name).
+- **Effective capabilities** = declared ∩ configured, computed in the host. `PluginStatus` and
+  `list_plugins` return `capabilities` (declared), `capabilities_enabled` (effective) and
+  `capabilities_default`. Every lookup that routes by capability uses the **effective** set:
+  `providers_with("sync.pull")`, `providers_with("flags.write")`, `providers_with("send")`.
+- **What each off-switch means** (documented in the UI as a tooltip):
+  - `send` off: the plugin is never a send route (28's identity list shows "sending disabled for
+    this plugin"). This is how Gmail becomes **receive-only** at the plugin level; 24's
+    per-account receive-only stays as the narrower, per-account version.
+  - `flags.write` off: read/star changes stay local and the UI says so (the existing "stays local"
+    read-state outcome); nothing is written back to Gmail.
+  - `sync.pull` off: no sync for that plugin's accounts; the Sync button disables those entries
+    with the reason; existing mail is untouched.
+  - `auth` off: refused alone while any other capability is on (the account could not
+    authenticate); `check` explains. Turning off every capability is the same as disabling.
+- Per-account instances (`gmail@work`) inherit the plugin's effective set and may narrow further in
+  that account's own settings (24); an account can never exceed its plugin.
+- Applying a change is a live refresh like any other save (the instance need not restart for a
+  routing-only change; say which capabilities do and which do not).
+- Gmail's OAuth scope (`gmail.modify`) is granted once and is not reduced here; this restricts what
+  **Oaken will do** with it. Say so in the Gmail section, so no one thinks `send` off revokes the
+  Google grant.
+
 ## Requirements (operations first, per prompt 22's rule)
 
 1. **`get_plugin_config(name)`** — `read`. Returns, for this plugin only:
    - `toml`: the text of its `[plugins.<name>]` table **excluding secret fields** (an empty table
      gives a short commented template built from the schema defaults);
    - `enabled` (effective) and `enabled_default`;
+   - `capabilities`, `capabilities_enabled`, `capabilities_default` (see "Capabilities");
    - `schema`: the settings JSON Schema from `config_model` (returned, not rendered yet);
    - `secrets`: `[{field, set: bool}]`, one per secret-typed field, never a value;
    - `overridden`: keys currently overridden by `OAKEN_*` env.
@@ -79,9 +116,10 @@ account pattern (`check_account` vs `set_account_config`) and the Sieve pattern 
    (field-level errors), and where the plugin supports it starts a **throwaway instance** with the
    proposed config and runs its **health probe**. Returns `{valid, errors[{line?,field?,message}],
    health, probed}`. A valid config whose probe fails returns `valid:true, health:unhealthy`.
-3. **`set_plugin_config(name, toml, enabled?)`** — `mutate`, confirm-gated, audited. Re-runs the
+3. **`set_plugin_config(name, toml, enabled?, capabilities?)`** — `mutate`, confirm-gated, audited. Re-runs the
    `check` validation, writes the table (scoped, comment-preserving), and refreshes the plugin per
-   the reload decision. `enabled` may be passed alone (the switch). Audit records name and changed
+   the reload decision. `enabled` or `capabilities` may be passed alone (the switch, or a chip
+   toggle; they rewrite the same keys the textarea shows). Audit records name and changed
    keys, never secret values, never mail.
 4. **Secrets.** The textarea never contains one. Each secret-typed field in the schema
    (`json_schema_extra={"secret": True}`; reuse core's markers if any) gets a **write-only row below
@@ -97,8 +135,13 @@ account pattern (`check_account` vs `set_account_config`) and the Sieve pattern 
    `oaken plugins set NAME [--file F] [--enable|--disable]`, `oaken plugins secret set|clear NAME
    FIELD` (value from stdin or a hidden prompt, never argv). Add rows to 17's table.
 7. **UI** (Settings → Plugins; one section per plugin from `list_plugins`):
-   - Header: name, kind, version, capabilities, health dot with `detail`, the **Enabled switch**
-     (`set_plugin_config {enabled}`, showing the live start/stop outcome).
+   - Header, as in the existing mockup (icon, name, kind, **capability chips**, health dot with
+     `detail`, **Enabled switch**). The switch calls `set_plugin_config {enabled}` and shows the live
+     start/stop outcome. **Each capability chip is a toggle**: an enabled chip is solid, a
+     restricted one is struck through/greyed with the tooltip from "Capabilities";
+     clicking calls `set_plugin_config {capabilities}` with a confirm for `send` and `flags.write`
+     and refuses `auth` alone. Informational chips with no capability behind them (the mockup's
+     `folders`) are not clickable.
    - Body: the TOML **textarea** pre-filled by `get_plugin_config.toml` (monospace, never kept in
      `localStorage`), buttons **Test** (`check`: valid/errors with the line marked, health,
      "nothing saved"), **Save** (`set` with `confirm:true`; shows the reload outcome), **Revert**.
@@ -119,6 +162,8 @@ account pattern (`check_account` vs `set_account_config`) and the Sieve pattern 
 - Q1: disabling a provider that accounts use: **allowed, with a warning that those accounts stop
   syncing** (blocking is the alternative).
 - Q2: disabling an enricher: its cached results are **kept** (not refreshed, not purged).
+- Q4: capability off for `send`/`flags.write` asks for a **confirm** (they change what Oaken does
+  to the person's mail), the others do not.
 - Q3: the textarea shows the **effective** table, defaults as comments; keys the plugin does not
   know are kept and flagged as warnings by `check`, not rejected. **Warn, not reject.**
 
@@ -130,6 +175,11 @@ account pattern (`check_account` vs `set_account_config`) and the Sieve pattern 
   a valid config that fails a live probe it returns `valid:true, health:unhealthy`.
 - The section writer is generic and covered by its own tests (another table and comments untouched,
   atomic, owner-only, no partial file on failure).
+- **Capabilities:** with `capabilities = ["auth","sync.pull"]` on Gmail, `providers_with("send")`
+  and `providers_with("flags.write")` exclude it while `sync.pull` still routes to it; a read-state
+  change stays local and says so; the identity list reports sending disabled; an unknown capability
+  name and `auth`-alone are rejected by `check`; absent key behaves exactly as today; per-account
+  instances inherit and can only narrow; the textarea, the chips and `list_plugins` agree.
 - **Enabled:** a plugin whose class says `enabled = False` loads but does not start; a user key
   turns it on live and `false` turns a running one off live, with `list_plugins`, health events and
   the lookups agreeing; a selected-but-disabled plugin gives the "disabled" error; account

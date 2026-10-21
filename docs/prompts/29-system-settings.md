@@ -8,7 +8,7 @@
 Back the Settings panes that no earlier UI prompt covers: **core settings** (AI token-thrift and
 retrieval keys, read-state timing, sync defaults), **Storage & Data** (sizes and maintenance),
 **Logs** (audit, events, export), the **enrichment cache** numbers and clear, and the reserved
-**MCP exposure** link (the MCP tab itself is built in 23). Prompt 23 handles *plugin* config; this handles core's own `config.toml`
+**MCP exposure** link (the MCP pane itself is built in 32). Prompt 23 handles *plugin* config; this handles core's own `config.toml`
 sections, with the same load → check → save shape.
 
 ## Decisions already taken
@@ -45,7 +45,7 @@ sections, with the same load → check → save shape.
    already there). The Events tab reads `GET /v1/events` live; add an `events_tail` (`read`) that
    returns the last N events from the JSON-lines log so the tab has history on load. Export is a
    client-side download of the loaded rows.
-8. **MCP exposure.** Built in **23** (the MCP tab: Default / Extended / Locked over
+8. **MCP exposure.** Built in **32** (Settings → MCP: Default / Extended / Locked over
    `list_operations`/`set_operation_exposure`). Here, Settings only links to it. **No new policy.**
 9. **CLI.** `oaken settings get|check|set SECTION`, `oaken storage`, `oaken vacuum`,
    `oaken cache stats|clear`, `oaken events --tail`. Update 17's table.
