@@ -12,8 +12,8 @@
 
 ``/v1/health`` and the static UI are the only paths without a token, and still get 1 to 4. A
 *surface* is a path prefix with its own token and limits: the general API, the agent routes, and
-the MCP doors (the person's and an agent's). Which surface a path is on decides the caller class, never a header, so
-a token for one surface is worthless on another.
+the MCP doors (the person's and an agent's). Which surface a path is on decides the caller class,
+never a header, so a token for one surface is worthless on another.
 """
 
 import asyncio

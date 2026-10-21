@@ -17,9 +17,10 @@ ON = {"on": "on", "off": "off until you turn it on"}
 
 INTRO = """\
 Oaken Mail can lend a more capable model a narrow, audited view of your mail without the mail being
-uploaded: core runs an MCP server on your machine, and a client you choose (Claude Desktop, `ollmcp`,
-your own program) connects to it. The model sees only what a tool returns. It cannot send mail, read
-raw messages, or change anything without your confirmation. [How it is kept safe](architecture/daemon.md).
+uploaded: core runs an MCP server on your machine, and a client you choose (Claude Desktop,
+`ollmcp`, your own program) connects to it. The model sees only what a tool returns. It cannot send
+mail, read raw messages, or change anything without your confirmation. [How it is kept
+safe](architecture/daemon.md).
 
 ## Turn it on
 
@@ -32,8 +33,8 @@ mcp = true
 
 or `OAKEN_API__MCP=true` in the environment, then start core with `oaken start`. It listens on
 `127.0.0.1` only, like the rest of the API, and has a token of its own. The token is in the file
-`mcp_token` beside `api_token` in the config directory (mode 0600). It opens `/mcp` and nothing else,
-and the API token does not open `/mcp`. Turning `mcp` off removes `/mcp` entirely.
+`mcp_token` beside `api_token` in the config directory (mode 0600). It opens `/mcp` and nothing
+else, and the API token does not open `/mcp`. Turning `mcp` off removes `/mcp` entirely.
 
 ## Connect a client
 
@@ -66,17 +67,17 @@ ollmcp -j servers.json -m llama3.2:3b
 with the `servers.json` above, or add the server once with `ollmcp mcp add oaken-mail -- oaken mcp`.
 
 **A client that speaks streamable HTTP** can skip the bridge. Point it at `127.0.0.1` on core's port
-(it is in `runtime.json`, or shown by `oaken status`), path `/mcp`, over plain HTTP on loopback, with
-the header `Authorization: Bearer <the contents of mcp_token>`. The server is stateless and answers
-in JSON.
+(it is in `runtime.json`, or shown by `oaken status`), path `/mcp`, over plain HTTP on loopback,
+with the header `Authorization: Bearer <the contents of mcp_token>`. The server is stateless and
+answers in JSON.
 
 ## What a client can do
 
 The tool list is generated from the operation registry: there is no separate list to keep in step.
 You choose which tools are offered. A tool marked "off" starts hidden; turn one on or off with the
-`set_operation_exposure` operation, for example
-`oaken operation set_operation_exposure --json-input '{"scope":"operation","name":"ask","mcp":true}' --yes`.
-Nothing you set can offer a tool the table does not list.
+`set_operation_exposure` operation, for example `oaken operation set_operation_exposure --json-input
+'{"scope":"operation","name":"ask","mcp":true}' --yes`. Nothing you set can offer a tool the table
+does not list.
 
 TOOLS_TABLE
 
@@ -92,7 +93,7 @@ proposal and to call the same tool again, with the same arguments and the token,
 ```json
 {
   "status": "confirmation_required",
-  "note": "Nothing has changed yet. Tell the person what is about to change, then call mark_read again ...",
+  "note": "Nothing has changed yet. Tell the person what would change, then call again ...",
   "proposal": {
     "operation": "mark_read",
     "summary": "Mark 1 message read",
@@ -106,8 +107,8 @@ proposal and to call the same tool again, with the same arguments and the token,
 
 A model cannot confirm by saying so, because there is no flag for it. A token works once, for the
 exact call it was given for, and only for the client it was given to. A different argument, a replay
-or a token from someone else is refused. The tool descriptions say all this, so a well-behaved client
-tells you first. Every change is on the audit log.
+or a token from someone else is refused. The tool descriptions say all this, so a well-behaved
+client tells you first. Every change is on the audit log.
 
 ## Mail text is data
 
@@ -136,8 +137,8 @@ once, so a busy model cannot starve the web UI or the CLI.
 
 ## For workers: the swarm door
 
-If you have turned the [swarm](architecture/swarm.md) on, an external agent can take jobs through MCP
-as well. It connects to `/mcp/agent` (or runs `oaken mcp --agent`, with its token in
+If you have turned the [swarm](architecture/swarm.md) on, an external agent can take jobs through
+MCP as well. It connects to `/mcp/agent` (or runs `oaken mcp --agent`, with its token in
 `OAKEN_AGENT_TOKEN`) with the token you gave it when you created it, and sees only these tools:
 
 AGENT_TABLE
@@ -156,9 +157,9 @@ NEVER_LINE
 
 **Connecting a remote model to this server sends the mail excerpts the tools return to that model's
 provider.** Oaken Mail's promise is that mail leaves your machine only to clients you connect, and
-this is such a connection. A model running on your own machine keeps everything local. A hosted model
-does not: what a tool returns, within the limits above, goes to the provider and is handled under
-their terms. Turn off the tools you do not want a model to have, and prefer a local model for
+this is such a connection. A model running on your own machine keeps everything local. A hosted
+model does not: what a tool returns, within the limits above, goes to the provider and is handled
+under their terms. Turn off the tools you do not want a model to have, and prefer a local model for
 accounts you consider sensitive.
 """
 
