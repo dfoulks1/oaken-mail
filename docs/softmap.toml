@@ -83,11 +83,13 @@ notes = ["Does not auto-start core. If the daemon is not running it says so and 
 id = "mcpbridge"
 name = "MCP stdio bridge"
 layer = "clients"
-status = "planned"
+status = "built"
 prompt = "18"
+path = "apps/cli/src/oaken_cli/commands/mcp_cmd.py"
 summary = "`oaken mcp`: lets stdio-only MCP clients reach the in-core MCP server. Adds no behaviour of its own."
 uses = ["mcp"]
-notes = ["Does not start core and never opens the databases."]
+funcs = [["Bridge.handle(line) -> str | None", "Forwards one JSON-RPC message to /mcp (or /mcp/agent) and returns core's answer, or a structured MCP error."]]
+notes = ["Does not start core and never opens the databases; it imports no core code beyond discovery.", "Core down: a tool call is an isError result {code: core_not_running} with the start hint, other requests a JSON-RPC error, and initialize is answered locally so a client that starts first still connects. It finds core again on every message.", "`--agent` speaks to the swarm door with OAKEN_AGENT_TOKEN."]
 
 [[components]]
 id = "webui"
@@ -115,7 +117,7 @@ types = [
   ["EventRing", "class", "Numbers bus events and keeps the last N so Last-Event-ID can resume; says gap when it cannot."],
   ["RuntimeFile", "class", "runtime.json: pid, port, version. Owner-only, and the single-instance lock."],
 ]
-notes = ["Binds to loopback only; configuration cannot say otherwise. The token file and runtime file are mode 0600.", "uvicorn and Starlette, chosen in ADR 0005. The MCP mount is prompt 18."]
+notes = ["Binds to loopback only; configuration cannot say otherwise. The token file and runtime file are mode 0600.", "uvicorn and Starlette, chosen in ADR 0005. The MCP doors mount here (prompt 18)."]
 
 [[components]]
 id = "daemon"
@@ -137,12 +139,19 @@ notes = ["Single instance: the runtime file is created exclusively before anythi
 id = "mcp"
 name = "MCP server"
 layer = "api"
-status = "planned"
+status = "built"
 prompt = "18"
+path = "src/oaken/api/mcp_server.py"
 summary = "The AI-enabled surface of core's API and the heart of the product: a local, data-only MCP server for sensitive mail. Tools are generated from the operation registry; sending is never exposed."
 uses = ["operations"]
 untrusted = true
-notes = ["Runs whether or not the web UI does. Its own token, caller class and limits (ADR 0004).", "Mounted at /mcp on the loopback listener; `[api] mcp = false` removes it."]
+types = [
+  ["McpServer", "class", "The SDK's stateless streamable-HTTP server over a CoreClient, plus the Surface that guards it. One class for the person's door and the swarm door."],
+]
+funcs = [
+  ["McpServer._call_tool", "Calls the registry as the caller class mcp; a mutation returns a proposal and needs the token; mail-derived results are fenced as untrusted; results are compact and bounded."],
+]
+notes = ["Runs whether or not the web UI does. Its own token (mcp_token), caller class and limits (ADR 0004).", "Mounted at /mcp on the loopback listener; `[api] mcp = false` removes it. A door is exactly its own path.", "With the swarm on, a second door at /mcp/agent takes agent tokens and offers claim_job, heartbeat_job, complete_job and fail_job from an agent-only registry; the registry audits each claim, completion and failure with the agent named."]
 
 # --- Operations and services -------------------------------------------------------------
 [[components]]
@@ -340,7 +349,7 @@ funcs = [
   ["JobQueue.claim(..., agent=agent)", "Scope and quota checks inside the claim transaction."],
   ["JobQueue.complete(job, worker, result, produced_by=)", "Validates the result against the kind's schema before storing it."],
 ]
-notes = ["Off by default; a kind is offered to agents only if listed in [swarm] allowed_kinds.", "The HTTP, MCP and CLI claim operations come with prompts 16 to 18."]
+notes = ["Off by default; a kind is offered to agents only if listed in [swarm] allowed_kinds.", "Agents claim over HTTP, the CLI (`oaken jobs`) and MCP (`/mcp/agent`); all three call the same queue methods."]
 
 [[components]]
 id = "scheduler"

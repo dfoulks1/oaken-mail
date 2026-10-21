@@ -123,6 +123,10 @@ id = "reference/cli"
 generated = true
 
 [[pages]]
+id = "mcp"
+generated = true
+
+[[pages]]
 id = "reference/api"
 generated = true
 

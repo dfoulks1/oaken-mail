@@ -114,4 +114,4 @@ the same ceiling rules, with these differences:
   between loses the row, not the change. Operations that already audit atomically (read state,
   schedules, exposure) are not affected.
 - Plugin operations come from a plugin's shared instance, not from per-account instances.
-- The HTTP surface is built (the [daemon](daemon.md)), the MCP mount is not (prompt 18).
+- The HTTP surface and the MCP server are built (the [daemon](daemon.md), [Connect an AI client](../mcp.html)).

@@ -35,6 +35,7 @@
     <div class="what">CLI</div>
     <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
       <div class="label">Start</div>
+      <a class="doc-link" href="../mcp.html">Connect an AI client</a>
       <a class="doc-link" href="../providers/gmail.html">Connect Gmail</a>
       <a class="doc-link" href="../providers/smtp.html">Send through your own SMTP server</a>
       <a class="doc-link" href="../providers/imap.html">Connect any IMAP server</a>
@@ -200,6 +201,10 @@
 <tr>
 <td><a href="#jobs"><code>jobs</code></a></td>
 <td>Lease and finish jobs as an agent (OAKEN_AGENT_TOKEN).</td>
+</tr>
+<tr>
+<td><a href="#mcp"><code>mcp</code></a></td>
+<td>Bridge an MCP client that speaks stdio to the MCP server in core.</td>
 </tr>
 <tr>
 <td><a href="#enrich"><code>enrich</code></a></td>
@@ -498,6 +503,14 @@
 <ul>
 <li><code>--error</code> — What went wrong (no mail).</li>
 <li><code>--permanent</code> — Do not retry it.</li>
+</ul>
+<h3 id="mcp"><code>mcp</code></h3>
+<p>Reads MCP messages on stdin and forwards them to the MCP server inside the running core, writing its answers to stdout. It adds nothing: the tools, the confirmation step and the limits are core's. If core is not running, tool calls answer with a core_not_running error. It never starts core. Point a stdio-only client (Claude Desktop) at 'oaken mcp'.</p>
+<p>Options:</p>
+<ul>
+<li><code>--timeout</code> — Give up on a call after.</li>
+<li><code>--agent</code> — Speak to the swarm door as an agent (token from OAKEN_AGENT_TOKEN).</li>
+<li><code>--agent-token-file</code> — Read the agent token from a file.</li>
 </ul>
 <h3 id="enrich"><code>enrich</code></h3>
 <p>Run or show the enrichers (summary, triage, actions, inspector) on a message.</p>

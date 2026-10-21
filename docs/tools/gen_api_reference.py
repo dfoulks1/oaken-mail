@@ -64,6 +64,10 @@ this page is built from is served at `GET /v1/openapi.json`.
   is `400`.
 - **Errors.** `{"code": "...", "message": "..."}`. Messages never contain mail text.
 
+The MCP server is not in this document. When `[api] mcp = true` it is a separate door on the same
+listener, `/mcp`, with its own token and limits, and with the swarm on, `/mcp/agent` for agent
+tokens. See [Connect an AI client](../mcp.html).
+
 ## Routes
 """
 

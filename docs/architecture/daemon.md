@@ -1,7 +1,7 @@
 +++
 title = "The daemon and the local API"
 subtitle = "One process, one loopback port, three ways in"
-lead = "Core runs as one process that owns the databases, the plugins and the job queue, and serves a small HTTP API on 127.0.0.1. The CLI and the web UI are clients of it; MCP mounts on the same port. This page covers how it starts and stops, and how it keeps a web page or another program from using it."
+lead = "Core runs as one process that owns the databases, the plugins and the job queue, and serves a small HTTP API on 127.0.0.1. The CLI and the web UI are clients of it; the MCP server is on the same port. This page covers how it starts and stops, and how it keeps a web page or another program from using it."
 badges = [["text-bg-warning", "Pre-alpha"]]
 group = "concepts"
 order = 27
@@ -90,9 +90,12 @@ The registry has a caller class, which decides whether a person's `confirm` is a
   token from its own proposal, and operations closed to MCP are hidden and refused;
 - anything else, including `internal`, is a 400. A header can lower privilege and never raise it.
 
-The MCP server (prompt 18) mounts at `/mcp` on this listener as its own surface with its own token
-and limits, and the mount, not a header, sets its class ([ADR 0004](repo:docs/adr/0004-mcp-server-in-core.md)).
-`[api] mcp` is off.
+The MCP server mounts at `/mcp` on this listener as its own surface with its own token (`mcp_token`,
+mode 0600) and limits, and the mount, not a header, sets its class
+([ADR 0004](repo:docs/adr/0004-mcp-server-in-core.md)). It is off until `[api] mcp = true`, and then
+`/mcp` exists; with it off the path is a 404. With the swarm on as well, a second door at `/mcp/agent`
+takes agent tokens and offers only the job tools. A door is exactly its own path. See
+[Connect an AI client](../mcp.html).
 
 ## The routes
 
@@ -131,6 +134,5 @@ The audit log records what it did.
 
 ## Not built yet
 
-- The MCP mount itself (prompt 18). The surface hook and the `[api] mcp` setting exist.
 - The ring is in memory: a restart is a `gap` for every client.
 - Per-agent rate limits beyond the lease and hourly quotas in [the swarm](swarm.md).

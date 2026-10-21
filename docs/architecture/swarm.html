@@ -35,6 +35,7 @@
     <div class="what">Optional extra workers, local or not</div>
     <div class="docnav"><a class="home-link" href="../index.html">&#8962; Home</a>
       <div class="label">Start</div>
+      <a class="doc-link" href="../mcp.html">Connect an AI client</a>
       <a class="doc-link" href="../providers/gmail.html">Connect Gmail</a>
       <a class="doc-link" href="../providers/smtp.html">Send through your own SMTP server</a>
       <a class="doc-link" href="../providers/imap.html">Connect any IMAP server</a>
@@ -79,7 +80,8 @@
       <a class="nav-link" href="#fan-out-and-attribution"><span class="num">6</span>Fan-out and attribution</a>
       <a class="nav-link" href="#matching-ollama-to-the-swarm"><span class="num">7</span>Matching Ollama to the swarm</a>
       <a class="nav-link" href="#over-http-and-the-cli"><span class="num">8</span>Over HTTP and the CLI</a>
-      <a class="nav-link" href="#not-built-yet"><span class="num">9</span>Not built yet</a>
+      <a class="nav-link" href="#over-mcp"><span class="num">9</span>Over MCP</a>
+      <a class="nav-link" href="#not-built-yet"><span class="num">10</span>Not built yet</a>
     </nav></div>
   </div></div>
 </nav>
@@ -224,9 +226,20 @@ quota is a <code>429</code>, a result that does not match the kind's schema is a
 given is a <code>403</code>, and a lease it no longer holds (expired, or the agent was revoked) is a <code>409</code>.
 Revoking an agent puts its jobs back on the queue at once.</p>
 </section>
-<section id="not-built-yet" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>Not built yet</h2></div>
-<p>The MCP front end for agents arrives with the MCP prompt. Spawn budgets and loop
-guards for agents that create jobs belong with the enrichment work, where the token costs appear.</p>
+<section id="over-mcp" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>Over MCP</h2></div>
+<p>An MCP client can work the queue too. With <code>[api] mcp = true</code> and the swarm on, core has a second
+MCP door at <code>/mcp/agent</code> (or run <code>oaken mcp --agent</code> for a stdio-only client), which takes an agent's
+own token and offers four tools: <code>claim_job</code>, <code>heartbeat_job</code>, <code>complete_job</code> and <code>fail_job</code>. They
+are operations in a small registry of their own, called through the same client as every other
+operation, so they are the HTTP routes' rules rather than a copy of them: the agent's kinds,
+accounts, quotas and revocation, the schema check on a result, and the lease fence. The registry also
+writes an audit row naming the agent for each claim, completion and failure (not for the routine
+heartbeat). A claimed payload holds mail text, so it comes back inside the untrusted-text envelope.
+The person's MCP token does not open this door, an agent token does not open <code>/mcp</code>, and the agent
+tools are not on the person's tool list. See <a href="../mcp.html">Connect an AI client</a>.</p>
+</section>
+<section id="not-built-yet" class="doc-section"><div class="section-head"><span class="section-num">10</span><h2>Not built yet</h2></div>
+<p>Spawn budgets and loop guards for agents that create jobs belong with the enrichment work, where the token costs appear.</p>
 </section>
   <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
 </main>

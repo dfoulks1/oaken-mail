@@ -136,7 +136,19 @@ quota is a `429`, a result that does not match the kind's schema is a `422`, a k
 given is a `403`, and a lease it no longer holds (expired, or the agent was revoked) is a `409`.
 Revoking an agent puts its jobs back on the queue at once.
 
+## Over MCP
+
+An MCP client can work the queue too. With `[api] mcp = true` and the swarm on, core has a second
+MCP door at `/mcp/agent` (or run `oaken mcp --agent` for a stdio-only client), which takes an agent's
+own token and offers four tools: `claim_job`, `heartbeat_job`, `complete_job` and `fail_job`. They
+are operations in a small registry of their own, called through the same client as every other
+operation, so they are the HTTP routes' rules rather than a copy of them: the agent's kinds,
+accounts, quotas and revocation, the schema check on a result, and the lease fence. The registry also
+writes an audit row naming the agent for each claim, completion and failure (not for the routine
+heartbeat). A claimed payload holds mail text, so it comes back inside the untrusted-text envelope.
+The person's MCP token does not open this door, an agent token does not open `/mcp`, and the agent
+tools are not on the person's tool list. See [Connect an AI client](../mcp.html).
+
 ## Not built yet
 
-The MCP front end for agents arrives with the MCP prompt. Spawn budgets and loop
-guards for agents that create jobs belong with the enrichment work, where the token costs appear.
+Spawn budgets and loop guards for agents that create jobs belong with the enrichment work, where the token costs appear.

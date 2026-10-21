@@ -39,3 +39,13 @@ Tools are generated from the registry (`mcp_exposed`); sending is never exposed.
 - Prompt 18 now builds the in-core server first and the stdio bridge second; prompt 16 must
   leave a place to mount it.
 - ADR 0002 stands for everything else (one daemon, thin clients, two databases, plugins).
+
+## As built (prompt 18)
+
+The server is the official SDK's streamable HTTP, stateless and answering in JSON, so a call holds
+no long-lived stream against the concurrency limit. The tool list is the registry as an MCP caller
+may see it, and each call goes through `CoreClient.call`. The two-phase confirm, the untrusted
+envelope and the result shaping are the only things the transport adds. A swarm agent has a separate
+door, `/mcp/agent`, for the job operations (an agent-only registry; its token opens nothing else),
+so an agent's identity is the token and the job rules are the HTTP agent routes'. A door is exactly
+its own path. The user-facing page is "Connect an AI client" in the docs site.
