@@ -27,6 +27,8 @@ from oaken_gmail.config import TOKEN_URL
 
 log = get_logger("oaken.gmail")
 
+NOT_AUTHORIZED = "No refresh token is stored yet. Authorize the account with 'oaken auth gmail'."
+
 REAUTH_HELP = (
     "Google rejected the stored refresh token (invalid_grant), so Gmail needs to be authorized "
     "again. Common causes: the OAuth app is still in 'Testing' mode (its refresh tokens expire "
@@ -120,6 +122,7 @@ class TokenManager:
         self._expires = 0.0
         self._dead: str | None = None  # the refresh token Google rejected
         self.needs_reauthorization = False
+        self.reauth_detail = ""  # why, for the health report
         self.refreshes = 0  # how many times the token endpoint was asked, for tests and health
 
     # -- public ----------------------------------------------------------------------------
@@ -148,13 +151,14 @@ class TokenManager:
     async def _set_state(self, broken: bool, detail: str = "") -> None:
         changed = broken != self.needs_reauthorization
         self.needs_reauthorization = broken
+        self.reauth_detail = detail if broken else ""
         if changed and self._on_state:
             await self._on_state(broken, detail)
 
     async def _refresh(self) -> str:
         refresh = await self._store.get()  # read every time: another process may have rotated it
         if not refresh:
-            await self._set_state(True, "no refresh token is stored")
+            await self._set_state(True, NOT_AUTHORIZED)
             raise AuthRequired("gmail: not authorized yet; run the authorization step first")
         if self.needs_reauthorization:
             if refresh == self._dead:

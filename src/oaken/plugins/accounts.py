@@ -43,13 +43,17 @@ class AccountProviders:
                 log.warning("account has no provider", account_id=acct.id, reason=str(exc))
         return dict(self._problems)
 
-    def get(self, account_id: str) -> Provider:
-        """The started, healthy provider of this account, or ``PluginError`` saying why not."""
+    def get(self, account_id: str, *, allow_unhealthy: bool = False) -> Provider:
+        """The started, healthy provider of this account, or ``PluginError`` saying why not.
+        ``allow_unhealthy`` also returns one that started but reports itself unhealthy, which is
+        how an account whose credential is missing or dead is authorized again."""
         if account_id in self._problems:
             raise PluginError(f"account {account_id!r}: {self._problems[account_id]}")
         name = self._names.get(account_id)
         if name is None:
             raise NotFound(f"no provider was started for account {account_id!r}")
+        if allow_unhealthy:
+            return self.host.get_started("provider", name)  # type: ignore[no-any-return]
         return self.host.get("provider", name)  # type: ignore[no-any-return]
 
     def problem(self, account_id: str) -> str | None:

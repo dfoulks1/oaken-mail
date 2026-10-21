@@ -188,7 +188,7 @@ class AuthorizationStart(BaseModel):
 )
 async def start_authorization(ctx: OpContext, inp: AccountRef) -> AuthorizationStart:
     accounts = ctx.svc.need_sync().accounts
-    provider = accounts.get(inp.account_id)
+    provider = accounts.get(inp.account_id, allow_unhealthy=True)  # a dead credential is why
     if not callable(getattr(provider, "authorize", None)):
         raise InvalidInput("this account's provider has no interactive authorization")
     return AuthorizationStart(url=await accounts.authorizations.start(inp.account_id, provider))

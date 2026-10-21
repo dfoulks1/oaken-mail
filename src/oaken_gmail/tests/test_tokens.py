@@ -107,6 +107,16 @@ async def test_invalid_grant_sets_the_health_state_and_stops_asking(rig: Rig) ->
     assert rig.google.token_calls == 1
 
 
+async def test_no_stored_token_says_to_authorize_not_that_google_rejected_one(rig: Rig) -> None:
+    rig.store.token = None
+    with pytest.raises(AuthRequired, match="not authorized yet"):
+        await ping(rig)
+    health = await rig.provider.health()
+    assert not health.ok and "oaken auth gmail" in health.detail
+    assert "invalid_grant" not in health.detail
+    assert rig.google.token_calls == 0
+
+
 async def test_reauthorizing_recovers_without_a_restart(rig: Rig) -> None:
     rig.google.token_script = [400]
     with pytest.raises(AuthRequired):

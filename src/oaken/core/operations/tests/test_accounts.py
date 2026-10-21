@@ -8,9 +8,17 @@ from typing import Any, ClassVar
 
 import pytest
 
-from oaken.core.errors import ConfigError, Conflict, InvalidInput, NotFound, ProviderError
+from oaken.core.errors import (
+    ConfigError,
+    Conflict,
+    InvalidInput,
+    NotFound,
+    PluginError,
+    ProviderError,
+)
 from oaken.core.operations.tests import conftest as ops_conftest
 from oaken.core.operations.tests.conftest import Ops, agent
+from oaken.plugins.contracts import Health
 from oaken.testing.fakes import FakeProvider
 
 OPEN = "https://consent.example.invalid/start"
@@ -116,6 +124,21 @@ async def test_an_interactive_authorization_runs_in_the_background(acct: Ops) ->
             break
         await asyncio.sleep(0.02)
     assert (await acct.out("authorization_status", {"account_id": "g"})).state == "done"
+
+
+async def test_an_unhealthy_provider_can_still_be_authorized(
+    acct: Ops, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def dead(self: PwMailbox) -> Health:
+        return Health(False, "needs re-authorization")
+
+    monkeypatch.setattr(PwMailbox, "health", dead)
+    await acct.out("create_account", {"account_id": "g", "provider": "pw", "display_name": "G"})
+    await acct.host.check_health()
+    with pytest.raises(PluginError, match="unhealthy"):
+        await acct.call("check_account", {"account_id": "g"})
+    started = await acct.out("start_authorization", {"account_id": "g"})
+    assert started.url == OPEN
 
 
 async def test_a_failed_authorization_says_why(acct: Ops, monkeypatch: pytest.MonkeyPatch) -> None:

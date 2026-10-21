@@ -34,7 +34,6 @@ from oaken_gmail.api import GmailApi
 from oaken_gmail.config import GmailConfig
 from oaken_gmail.oauth import authorize, load_client
 from oaken_gmail.tokens import (
-    REAUTH_HELP,
     ClientCredentials,
     KeyringStore,
     TokenManager,
@@ -201,7 +200,7 @@ class GmailProvider(BaseProvider):
 
     async def health(self) -> Health:
         if self._api is not None and self.tokens.needs_reauthorization:
-            return Health(False, f"needs re-authorization. {REAUTH_HELP}")
+            return Health(False, f"needs re-authorization. {self.tokens.reauth_detail}")
         return Health(True)
 
     # -- auth ------------------------------------------------------------------------------

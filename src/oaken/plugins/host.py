@@ -421,6 +421,16 @@ class PluginHost:
         usable = self._usable("enricher")
         return {n: cast(Enricher, usable[n].instance) for n in sorted(usable)}
 
+    def get_started(self, kind: PluginKind, name: str) -> Any:
+        """The plugin called ``name`` if it started, healthy or not. For the few things that must
+        work on an unhealthy plugin, such as authorizing an account whose credential is missing."""
+        rec = self._records.get((kind, name))
+        if rec is None or rec.instance is None:
+            raise NotFound(f"no {kind} named {name!r}")
+        if not rec.started:
+            raise PluginError(f"{kind} {name!r} did not start: {rec.detail or 'not started'}")
+        return rec.instance
+
     def get(self, kind: PluginKind, name: str | None = None) -> Any:
         """The started, healthy plugin of ``kind`` called ``name`` (default: the configured one)."""
         return self._get(kind, name)
