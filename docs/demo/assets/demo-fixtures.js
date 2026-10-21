@@ -108,6 +108,33 @@
           output: { labels, locations, dispositions: { inbox, filed: FIX_MESSAGES.length - inbox } },
         };
       }
+      case "list_mailbox": {
+        // The sidebar structure: mailing-list tags are the demo's folders; labels are search tags.
+        const folders = {}, labels = {};
+        let inbox = 0;
+        for (const m of FIX_MESSAGES) {
+          (m.tags || []).forEach((t) => { folders[t] = (folders[t] || 0) + 1; });
+          (m.labels || []).forEach((l) => { labels[l] = (labels[l] || 0) + 1; });
+          if (!(m.tags || []).length) inbox += 1;
+        }
+        const c = (n) => ({ total: n, unread: n });
+        return {
+          request_id: "demo", status: "ok",
+          output: {
+            inbox: c(inbox), discarded: c(0),
+            folders: Object.keys(folders).sort().map((p) => ({ path: p, name: p, depth: 0, direct: c(folders[p]), tree: c(folders[p]) })),
+            labels: Object.keys(labels).sort().map((n) => ({ name: n, count: c(labels[n]) })),
+          },
+        };
+      }
+      case "create_folder":
+        return { request_id: "demo", status: "ok", output: { path: input.path || "", created: [input.path || ""] } };
+      case "create_label":
+        return { request_id: "demo", status: "ok", output: { name: input.name || "", created: true } };
+      case "move_to_folder":
+        return { request_id: "demo", status: "ok", output: { path: input.path || null, moved: input.ids || [] } };
+      case "set_labels":
+        return { request_id: "demo", status: "ok", output: { changed: input.ids || [] } };
       // Mutations: the demo just acknowledges, changing nothing on a server.
       case "mark_read": case "mark_unread": case "sync_now":
       case "summarize_message": case "undo":

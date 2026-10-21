@@ -141,6 +141,20 @@
 <td>Register an external agent and show its token once.</td>
 </tr>
 <tr>
+<td><code>create_folder</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Make a folder under Inbox, and any folders above it. A path that already exists is fine.</td>
+</tr>
+<tr>
+<td><code>create_label</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Make a label (a tag for finding mail). A label that already exists is fine.</td>
+</tr>
+<tr>
 <td><code>enrich_message</code></td>
 <td>mutate</td>
 <td>never</td>
@@ -218,6 +232,13 @@
 <td>Every label, folder (location) and disposition with how many live messages carry it.</td>
 </tr>
 <tr>
+<td><code>list_mailbox</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>The sidebar: Inbox and Discarded, the folder tree under Inbox, and labels, each with how many messages are in it and how many are unread. Empty folders and labels are included.</td>
+</tr>
+<tr>
 <td><code>list_messages</code></td>
 <td>read</td>
 <td>on by default</td>
@@ -272,6 +293,13 @@
 <td>never</td>
 <td>yes</td>
 <td>The user is looking at this message: core marks it read after the configured delay.</td>
+</tr>
+<tr>
+<td><code>move_to_folder</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>File messages into a folder under Inbox (made if new), or back into the Inbox. The person's choice beats a Sieve rule's.</td>
 </tr>
 <tr>
 <td><code>pause_backfill</code></td>
@@ -384,6 +412,13 @@
 <td>never</td>
 <td>no</td>
 <td>Store an account's password in the OS keyring (SMTP and IMAP). It is never shown again.</td>
+</tr>
+<tr>
+<td><code>set_labels</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Add labels to messages (made if new) and remove labels the person added earlier.</td>
 </tr>
 <tr>
 <td><code>set_operation_exposure</code></td>
@@ -503,6 +538,18 @@
 <li>Input: <code>label</code>, <code>kinds</code>, <code>account_ids</code>?, <code>max_leases</code>?, <code>max_per_hour</code>?</li>
 <li>Output: <code>agent</code>, <code>token</code></li>
 </ul>
+<h3 id="create-folder"><code>create_folder</code></h3>
+<p>Make a folder under Inbox, and any folders above it. A path that already exists is fine.</p>
+<ul>
+<li>Input: <code>path</code></li>
+<li>Output: <code>path</code>, <code>created</code></li>
+</ul>
+<h3 id="create-label"><code>create_label</code></h3>
+<p>Make a label (a tag for finding mail). A label that already exists is fine.</p>
+<ul>
+<li>Input: <code>name</code></li>
+<li>Output: <code>name</code>, <code>created</code></li>
+</ul>
 <h3 id="enrich-message"><code>enrich_message</code></h3>
 <p>Run the enrichers on one message now.</p>
 <ul>
@@ -567,7 +614,13 @@
 <p>Every label, folder (location) and disposition with how many live messages carry it.</p>
 <ul>
 <li>Input: none</li>
-<li>Output: <code>labels</code>, <code>dispositions</code>, <code>locations</code>, <code>content_is_untrusted</code>?</li>
+<li>Output: <code>labels</code>, <code>dispositions</code>, <code>locations</code>, <code>unread</code>?, <code>content_is_untrusted</code>?</li>
+</ul>
+<h3 id="list-mailbox"><code>list_mailbox</code></h3>
+<p>The sidebar: Inbox and Discarded, the folder tree under Inbox, and labels, each with how many messages are in it and how many are unread. Empty folders and labels are included.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>inbox</code>, <code>discarded</code>, <code>folders</code>, <code>labels</code>, <code>content_is_untrusted</code>?</li>
 </ul>
 <h3 id="list-messages"><code>list_messages</code></h3>
 <p>Newest first. Snippets by default; <code>include_text</code> adds the cleaned text within the reply's character budget. Never marks anything read.</p>
@@ -616,6 +669,12 @@
 <ul>
 <li>Input: <code>message_id</code></li>
 <li>Output: <code>armed</code></li>
+</ul>
+<h3 id="move-to-folder"><code>move_to_folder</code></h3>
+<p>File messages into a folder under Inbox (made if new), or back into the Inbox. The person's choice beats a Sieve rule's.</p>
+<ul>
+<li>Input: <code>ids</code>, <code>path</code>?</li>
+<li>Output: <code>path</code>, <code>moved</code></li>
 </ul>
 <h3 id="pause-backfill"><code>pause_backfill</code></h3>
 <p>Pause the model-bound ingest stages (embed, enrich). Mail keeps landing and being filtered.</p>
@@ -712,6 +771,12 @@
 <ul>
 <li>Input: <code>account_id</code>, <code>password</code></li>
 <li>Output: <code>stored</code></li>
+</ul>
+<h3 id="set-labels"><code>set_labels</code></h3>
+<p>Add labels to messages (made if new) and remove labels the person added earlier.</p>
+<ul>
+<li>Input: <code>ids</code>, <code>add</code>?, <code>remove</code>?</li>
+<li>Output: <code>changed</code></li>
 </ul>
 <h3 id="set-operation-exposure"><code>set_operation_exposure</code></h3>
 <p>Choose whether MCP clients may call an operation, or all of a plugin's operations.</p>

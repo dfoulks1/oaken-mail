@@ -145,7 +145,8 @@
     f.remove();
   }
 
-  window.Oaken = { setTheme, openFloatingCompose };
+  // Add to the namespace api.js already created; replacing it would drop Oaken.api.
+  window.Oaken = Object.assign(window.Oaken || {}, { setTheme, openFloatingCompose });
 })();
 
 /* ===========================================================================================
@@ -220,7 +221,7 @@
     return html;
   }
 
-  async function loadList(container) {
+  async function loadList(container, keepChecked) {
     const list = qs(".ok-list", container) || container;
     const op = container.dataset.oakenList || "list_messages"; // "list_messages" | "search"
     const input = {};
@@ -237,7 +238,14 @@
     container.classList.add("ok-loading");
     try {
       const { output } = await api(op, input);
-      list.innerHTML = groupedListHtml((output && output.items) || []);
+      const items = (output && output.items) || [];
+      itemsById.clear();
+      items.forEach((m) => itemsById.set(m.message_id, m));
+      list.innerHTML = groupedListHtml(items);
+      (keepChecked || []).forEach((id) => {
+        const box = qs(`.ok-msg[data-id="${CSS.escape(id)}"] input[type=checkbox]`, list);
+        if (box) box.checked = true;
+      });
       if (output && output.degraded) toast("Search ran keyword-only (meaning search unavailable).");
       bindRows(container);
     } catch (e) {
@@ -270,13 +278,15 @@
     try {
       const { output } = await api("get_message", { message_id: messageId, include_text: true });
       container.innerHTML = readerHtml(output || {});
-      qs(".ok-empty", container)?.classList.add("d-none");
-      // Opening a message is a user action: it may mark the message read (core owns the delay and
-      // the auto_mark setting; the demo just acknowledges). Search/bulk never do this.
+      // The reader starts hidden (d-none) beside the "Select a message" placeholder: swap them.
+      container.classList.remove("d-none");
+      qs(".ok-empty", container.parentElement)?.classList.add("d-none");
+      // Opening a message is a user action: core marks it read after its configured delay (and
+      // only if auto-marking is on). message_presented is a mutation, so it must be confirmed or
+      // core answers with a proposal and arms nothing. The row and the badges change when core
+      // announces MessageReadChanged (live updates below), not before.
       if (opts && opts.markPresented && output && output.message_id) {
-        api("message_presented", { message_id: output.message_id }).catch(() => {});
-        const row = qs(`.ok-msg[data-id="${CSS.escape(output.message_id)}"]`);
-        row && row.classList.remove("unread");
+        api("message_presented", { message_id: output.message_id }, { confirm: true }).catch(() => {});
       }
     } catch (e) {
       toast(e.message || "Could not open message.");
@@ -294,7 +304,8 @@
     const atts = (b.attachments || [])
       .map((a) => `<a class="ok-attach" href="#"><i class="bi ${esc(a.icon || "bi-file-earmark")} fs-5"></i><span>${esc(a.filename)}<br><span class="small text-muted">${esc(a.size || "")}</span></span></a>`)
       .join("");
-    // b.html is the cleaned body the core produced; everything else is escaped.
+    // b.text is the cleaned plain text core produced. Mail is untrusted: it is escaped and shown
+    // as text, never as markup.
     return (
       `<div class="ok-reader-inner">` +
       `<h1>${esc(b.subject)}</h1>` +
@@ -302,10 +313,10 @@
       `<article class="ok-thread-msg">` +
       `<header data-action="toggle-thread"><span class="ok-avatar">${esc(initials)}</span>` +
       `<div class="flex-grow-1"><div><span class="fw-semibold">${esc(b.from_name || "")}</span> <span class="small text-muted">&lt;${esc(b.from_addr || "")}&gt;</span></div>` +
-      `<div class="small text-muted">to ${esc(b.to || "")}</div></div>` +
+      (b.to ? `<div class="small text-muted">to ${esc(b.to)}</div>` : "") + `</div>` +
       `<span class="small text-muted">${esc(b.date || "")}</span></header>` +
       (b.security ? `<div class="small text-muted px-3 pb-2"><i class="bi bi-shield-check text-success"></i> ${esc(b.security)}</div>` : "") +
-      `<div class="ok-msg-body">${b.html || "<p>(no text)</p>"}${atts ? `<div class="mt-3">${atts}</div>` : ""}</div>` +
+      `<div class="ok-msg-body" style="white-space:pre-wrap">${b.text ? esc(b.text) : "(no text)"}${atts ? `<div class="mt-3">${atts}</div>` : ""}</div>` +
       `</article></div>`
     );
   }
@@ -341,10 +352,22 @@
       const list = qs("[data-oaken-list]");
       if (a === "refresh") { list && loadList(list); }
       else if (a === "sync") { mutate("sync_now", {}, "Sync started."); }
-      else if (a === "mark-read") {
+      else if (a === "mark-read" || a === "mark-unread") {
         const ids = list ? selectedIds(list) : [];
         if (!ids.length) { toast("Select messages first."); return; }
-        mutate("mark_read", { ids }, `Marked ${ids.length} read.`).then(() => ids.forEach((id) => qs(`.ok-msg[data-id="${CSS.escape(id)}"]`, list)?.classList.remove("unread")));
+        const read = a === "mark-read";
+        mutate(read ? "mark_read" : "mark_unread", { ids }).then((out) => {
+          if (!out) return; // refused or failed: mutate() already said so; leave the rows alone
+          const done = new Set([...(out.changed || []), ...(out.unchanged || [])]);
+          ids.filter((id) => done.has(id)).forEach((id) => {
+            qs(`.ok-msg[data-id="${CSS.escape(id)}"]`, list)?.classList.toggle("unread", !read);
+          });
+          renderSidebar();
+          const n = (out.changed || []).length;
+          toast(`${n} marked ${read ? "read" : "unread"}` +
+            (out.local_only && out.local_only.length ? `; ${out.local_only.length} kept here only (not written back)` : "") +
+            ((out.missing || []).length ? `; ${out.missing.length} not found` : "") + ".");
+        });
       }
       else if (a === "send") {
         e.preventDefault();
@@ -359,42 +382,56 @@
    * Folders are the default dispositions plus each distinct location (ADR 0008). Labels are the
    * search tags. Both come from list_labels, so nothing is assembled from mail in the client. */
   const FOLDER_ICON = { inbox: "bi-inbox", filed: "bi-folder2", discarded: "bi-trash3" };
-  function folderLink(href, icon, name, count) {
-    const badge = count ? `<span class="count">${count}</span>` : "";
-    return `<a href="${href}"><i class="bi ${icon}"></i>${esc(name)}${badge}</a>`;
+  // A badge is the UNREAD count (like a mail client); nothing shows when there is none.
+  function badge(n) { return n ? `<span class="count unread">${n}</span>` : ""; }
+  // Put the unread count on one of the static top links (Inbox, Discarded).
+  function topBadge(folder, n) {
+    const a = qs(`.ok-nav > a[href="index.html?folder=${folder}"]`);
+    if (!a) return;
+    qs(".count", a)?.remove();
+    a.insertAdjacentHTML("beforeend", badge(n));
   }
+
+  // The structure core keeps (folders nested under Inbox, labels), cached for the menus below.
+  let mailbox = { folders: [], labels: [] };
+  const itemsById = new Map(); // message_id -> the row's data, for the label menu
+
+  // A label's colour is a UI preference, kept in this browser; core stores no colours.
+  const labelColors = {
+    all() { try { return JSON.parse(localStorage.getItem("oaken.labelColors") || "{}"); } catch { return {}; } },
+    set(name, color) {
+      try { const m = this.all(); m[name] = color; localStorage.setItem("oaken.labelColors", JSON.stringify(m)); } catch { /* private mode: the default colour is used */ }
+    },
+  };
+  const baseLabelColor = window.Oaken.labelColor;
+  window.Oaken.labelColor = (name) => labelColors.all()[name] || baseLabelColor(name);
+
+  const indent = (f) => "  ".repeat(f.depth);
 
   async function renderSidebar() {
     const folders = qs("[data-oaken-folders]");
     const labelsBox = qs("[data-oaken-labels]");
     if (!folders && !labelsBox) return;
     try {
-      const { output } = await api("list_labels", {});
-      const disp = (output && output.dispositions) || {};
-      const locs = (output && output.locations) || {};
-      const labs = (output && output.labels) || {};
+      const { output } = await api("list_mailbox", {});
+      mailbox = { folders: (output && output.folders) || [], labels: (output && output.labels) || [] };
+      topBadge("inbox", (output && output.inbox && output.inbox.unread) || 0);
+      topBadge("discarded", (output && output.discarded && output.discarded.unread) || 0);
       if (folders) {
-        let html = "";
-        // Default folders: Inbox and (if present) Discarded, by disposition.
-        html += folderLink("index.html?folder=inbox", FOLDER_ICON.inbox, "Inbox", disp.inbox || 0);
-        // Each filed location is a folder.
-        for (const name of Object.keys(locs).sort()) {
-          html += folderLink(
-            `index.html?location=${encodeURIComponent(name)}`, FOLDER_ICON.filed, name, locs[name]
-          );
-        }
-        if (disp.discarded) {
-          html += folderLink("index.html?folder=discarded", FOLDER_ICON.discarded, "Discarded", disp.discarded);
-        }
-        folders.innerHTML = html;
+        folders.innerHTML = mailbox.folders.length
+          ? mailbox.folders.map((f) =>
+              `<a href="index.html?location=${encodeURIComponent(f.path)}" title="Inbox/${esc(f.path)}" ` +
+              `style="padding-left:${0.75 + f.depth * 1.1}rem"><i class="bi ${FOLDER_ICON.filed}"></i>` +
+              `${esc(f.name)}${badge(f.tree.unread)}</a>`
+            ).join("")
+          : '<div class="small text-muted px-3 py-1">No folders yet.</div>';
       }
       if (labelsBox) {
-        const names = Object.keys(labs).sort();
-        labelsBox.innerHTML = names.length
-          ? names.map((n) =>
-              `<a href="index.html?label=${encodeURIComponent(n)}">` +
-              `<span class="ok-label-dot" style="background:${window.Oaken.labelColor(n)}"></span>` +
-              `${esc(n)}<span class="count">${labs[n]}</span></a>`
+        labelsBox.innerHTML = mailbox.labels.length
+          ? mailbox.labels.map((l) =>
+              `<a href="index.html?label=${encodeURIComponent(l.name)}">` +
+              `<span class="ok-label-dot" style="background:${window.Oaken.labelColor(l.name)}"></span>` +
+              `${esc(l.name)}${badge(l.count.unread)}</a>`
             ).join("")
           : '<div class="small text-muted px-3 py-1">No tags yet.</div>';
       }
@@ -404,9 +441,137 @@
     }
   }
 
+  /* ---- creating and using folders and labels ---- */
+  const modalOf = (el) => (el && window.bootstrap ? window.bootstrap.Modal.getOrCreateInstance(el) : null);
+  const folderOptions = (withInbox) =>
+    (withInbox ? [{ path: "", label: "Inbox" }] : []).concat(
+      mailbox.folders.map((f) => ({ path: f.path, label: indent(f) + f.name }))
+    );
+
+  function wireMailboxUi() {
+    // New folder / new label forms.
+    document.addEventListener("submit", async (e) => {
+      const form = e.target.closest("form[data-oaken-new]");
+      if (!form) return;
+      e.preventDefault();
+      const kind = form.dataset.oakenNew;
+      const name = (form.elements.name.value || "").trim();
+      if (!name) return;
+      let out;
+      if (kind === "folder") {
+        const parent = form.elements.parent ? form.elements.parent.value : "";
+        out = await mutate("create_folder", { path: parent ? `${parent}/${name}` : name });
+      } else {
+        out = await mutate("create_label", { name });
+        if (out && form.elements.color) labelColors.set(out.name, form.elements.color.value);
+      }
+      if (!out) return; // mutate() already said why
+      modalOf(form.closest(".modal"))?.hide();
+      form.reset();
+      toast(kind === "folder"
+        ? (out.created.length ? `Folder “${out.path}” created.` : `Folder “${out.path}” already exists.`)
+        : (out.created ? `Label “${out.name}” created.` : `Label “${out.name}” already exists.`));
+      renderSidebar();
+    });
+
+    // "Inside" choices follow the folders that exist.
+    document.addEventListener("show.bs.modal", (e) => {
+      const sel = qs("[data-oaken-parent-select]", e.target);
+      if (sel) {
+        sel.innerHTML = folderOptions(true).map((o) =>
+          `<option value="${esc(o.path)}">${o.path ? "" : "← "}${esc(o.label)}${o.path ? "" : " (top level)"}</option>`).join("");
+      }
+      const box = qs("[data-oaken-move-list]", e.target);
+      if (box) {
+        const list = qs("[data-oaken-list]");
+        const ids = list ? selectedIds(list) : [];
+        if (!ids.length) { e.preventDefault(); toast("Select messages first."); return; }
+        const filter = qs("[data-oaken-move-filter]", e.target);
+        const draw = () => {
+          const q = (filter.value || "").toLowerCase();
+          box.innerHTML = folderOptions(true)
+            .filter((o) => !q || o.label.toLowerCase().includes(q))
+            .map((o) => `<button type="button" class="list-group-item list-group-item-action" data-path="${esc(o.path)}">${esc(o.label)}</button>`)
+            .join("") || '<div class="small text-muted p-2">No matching folder.</div>';
+        };
+        filter.value = ""; filter.oninput = draw; draw();
+        box.onclick = async (ev) => {
+          const b = ev.target.closest("[data-path]");
+          if (!b) return;
+          const out = await mutate("move_to_folder", { ids, path: b.dataset.path || null });
+          if (!out) return;
+          modalOf(e.target)?.hide();
+          toast(`${out.moved.length} moved to ${out.path ? "Inbox/" + out.path : "Inbox"}.`);
+          loadList(list); renderSidebar();
+        };
+      }
+    });
+
+    // Label menu: a checkbox per label for the selected messages, plus "New label…".
+    document.addEventListener("show.bs.dropdown", (e) => {
+      const menu = qs("[data-oaken-label-menu]", e.target);
+      if (!menu) return;
+      const list = qs("[data-oaken-list]");
+      const ids = list ? selectedIds(list) : [];
+      if (!ids.length) { e.preventDefault(); toast("Select messages first."); return; }
+      const has = (name) => ids.every((id) => (itemsById.get(id)?.labels || []).includes(name));
+      menu.innerHTML = (mailbox.labels.length ? mailbox.labels.map((l) =>
+        `<li><label class="dropdown-item"><input class="form-check-input me-2" type="checkbox" data-label="${esc(l.name)}"${has(l.name) ? " checked" : ""}>` +
+        `<span class="ok-label-dot me-2" style="background:${window.Oaken.labelColor(l.name)}"></span>${esc(l.name)}</label></li>`).join("")
+        : '<li><span class="dropdown-item-text small text-muted">No labels yet.</span></li>') +
+        '<li><hr class="dropdown-divider"></li>' +
+        '<li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#newLabelModal">New label…</button></li>';
+      menu.onchange = async (ev) => {
+        const box = ev.target.closest("input[data-label]");
+        if (!box) return;
+        const name = box.dataset.label;
+        const out = await mutate("set_labels", box.checked ? { ids, add: [name] } : { ids, remove: [name] });
+        if (!out) { box.checked = !box.checked; return; }
+        ids.forEach((id) => {
+          const m = itemsById.get(id);
+          if (!m) return;
+          const set = new Set(m.labels || []);
+          box.checked ? set.add(name) : set.delete(name);
+          m.labels = [...set];
+        });
+        toast(`${box.checked ? "Added" : "Removed"} “${name}” on ${out.changed.length || ids.length}.`);
+        loadList(list, ids); renderSidebar();
+      };
+    });
+  }
+
+  /* ---- live updates: recompute the badges on every read-state change ----
+   * Core publishes MessageReadChanged for every way read state changes (this UI, the CLI, MCP, a
+   * Gmail sync that saw the mail read elsewhere) and MessageStored for new mail. We refresh the
+   * sidebar counts (debounced) and flip the matching row, so nothing depends on which client acted.
+   * EventSource reconnects by itself; on a gap or after a reconnect we just re-fetch. */
+  let _sidebarTimer = null;
+  function refreshSidebarSoon() {
+    clearTimeout(_sidebarTimer);
+    _sidebarTimer = setTimeout(renderSidebar, 250);
+  }
+  function watchEvents() {
+    if (typeof EventSource === "undefined" || window.Oaken.isDemo) return;
+    const es = new EventSource("/v1/events");
+    es.addEventListener("MessageReadChanged", (e) => {
+      try {
+        const d = JSON.parse(e.data);
+        const row = qs(`.ok-msg[data-id="${CSS.escape(d.message_id)}"]`);
+        row && row.classList.toggle("unread", d.read === false);
+      } catch { /* a malformed frame is ignored; the counts refresh below still runs */ }
+      refreshSidebarSoon();
+    });
+    es.addEventListener("MessageStored", refreshSidebarSoon);
+    es.addEventListener("gap", refreshSidebarSoon);
+    es.onopen = refreshSidebarSoon; // also covers a reconnect after core restarted
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshSidebarSoon(); });
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     wireActions();
+    wireMailboxUi();
     renderSidebar();
+    watchEvents();
     // Reflect the current ?q into the search box and any results heading.
     const q = new URL(window.location.href).searchParams.get("q") || "";
     qsa("[data-oaken-query]").forEach((el) => {
