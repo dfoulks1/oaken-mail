@@ -98,64 +98,11 @@
         <div class="col-12 d-flex gap-2"><button class="btn btn-oaken btn-sm px-3">Search</button><button type="button" class="btn btn-ghost btn-sm">Save as filter</button></div>
       </form></div>
       <div class="ok-scroll" data-oaken-list="search"><ul class="ok-list">
-          <div class="ok-list-group">Today</div>
-          <li class="ok-msg unread selected" data-href="message.html" tabindex="0">
-            <input class="form-check-input m-0" type="checkbox" aria-label="Select">
-            <button class="btn btn-sm btn-ghost p-0 star on" data-action="star" aria-label="Star"><i class="bi bi-star-fill"></i></button>
-            <span class="from">Sam Sample</span>
-            <span class="date"><i class="bi bi-paperclip text-muted"></i> 9:12 AM</span>
-            <span class="line2"><span class="subject">[VOTE] Release Example Server 2.4.63</span><span class="snippet">— Please vote on releasing this package. The vote is open for at least 72 hours…</span><span class="ok-tag">dev@lists</span><span class="ok-tag"><span class="ok-label-dot" style="background:var(--ok-feather-orange)"></span>Releases</span></span>
-          </li>
-          <li class="ok-msg unread" data-href="message.html" tabindex="0">
-            <input class="form-check-input m-0" type="checkbox" aria-label="Select">
-            <button class="btn btn-sm btn-ghost p-0 star" data-action="star" aria-label="Star"><i class="bi bi-star"></i></button>
-            <span class="from">Infrastructure</span>
-            <span class="date"> 8:47 AM</span>
-            <span class="line2"><span class="subject">Planned maintenance: mail relays, Oct 22</span><span class="snippet">— We will be rotating the outbound relays on Thursday between 14:00 and 16:00 UTC…</span><span class="ok-tag">users@lists</span><span class="ok-tag"><span class="ok-label-dot" style="background:var(--ok-primary)"></span>Infra</span></span>
-          </li>
-          <li class="ok-msg" data-href="message.html" tabindex="0">
-            <input class="form-check-input m-0" type="checkbox" aria-label="Select">
-            <button class="btn btn-sm btn-ghost p-0 star" data-action="star" aria-label="Star"><i class="bi bi-star"></i></button>
-            <span class="from">Riley Brook</span>
-            <span class="date"><i class="bi bi-paperclip text-muted"></i> 7:30 AM</span>
-            <span class="line2"><span class="subject">Re: ExampleCon keynote draft</span><span class="snippet">— Loved the outline. One thought on the second section — could we lead with the community story…</span><span class="ok-tag"><span class="ok-label-dot" style="background:var(--ok-feather-amber)"></span>Personal</span></span>
-          </li>
-          <div class="ok-list-group">Yesterday</div>
-          <li class="ok-msg unread" data-href="message.html" tabindex="0">
-            <input class="form-check-input m-0" type="checkbox" aria-label="Select">
-            <button class="btn btn-sm btn-ghost p-0 star on" data-action="star" aria-label="Star"><i class="bi bi-star-fill"></i></button>
-            <span class="from">Board Secretary</span>
-            <span class="date"><i class="bi bi-paperclip text-muted"></i> Mon</span>
-            <span class="line2"><span class="subject">Board meeting agenda — October</span><span class="snippet">— Attached is the draft agenda. Reports are due by Friday. Please flag anything that needs a vote…</span><span class="ok-tag">private@board</span><span class="ok-tag"><span class="ok-label-dot" style="background:var(--ok-feather-purple)"></span>Board</span></span>
-          </li>
-          <li class="ok-msg" data-href="message.html" tabindex="0">
-            <input class="form-check-input m-0" type="checkbox" aria-label="Select">
-            <button class="btn btn-sm btn-ghost p-0 star" data-action="star" aria-label="Star"><i class="bi bi-star"></i></button>
-            <span class="from">GitHub</span>
-            <span class="date"> Mon</span>
-            <span class="line2"><span class="subject">[example/oaken-ui] PR #42: theme picker</span><span class="snippet">— dana requested your review on this pull request. 3 files changed…</span></span>
-          </li>
-          <li class="ok-msg" data-href="message.html" tabindex="0">
-            <input class="form-check-input m-0" type="checkbox" aria-label="Select">
-            <button class="btn btn-sm btn-ghost p-0 star on" data-action="star" aria-label="Star"><i class="bi bi-star-fill"></i></button>
-            <span class="from">Dana Grey</span>
-            <span class="date"> Mon</span>
-            <span class="line2"><span class="subject">Lunch Thursday?</span><span class="snippet">— There's a new place near the office that does wood-fired everything. Thought of you…</span><span class="ok-tag"><span class="ok-label-dot" style="background:var(--ok-feather-amber)"></span>Personal</span></span>
-          </li>
-          <div class="ok-list-group">Earlier this week</div>
-          <li class="ok-msg" data-href="message.html" tabindex="0">
-            <input class="form-check-input m-0" type="checkbox" aria-label="Select">
-            <button class="btn btn-sm btn-ghost p-0 star" data-action="star" aria-label="Star"><i class="bi bi-star"></i></button>
-            <span class="from">Jira</span>
-            <span class="date"><i class="bi bi-paperclip text-muted"></i> Sun</span>
-            <span class="line2"><span class="subject">[jira] Created: (EXAMPLE-1201) mod_proxy timeout regression</span><span class="snippet">— Priority: Major. Affects version 2.4.62. Reproduction steps attached…</span><span class="ok-tag">dev@lists</span></span>
-          </li>
-          <li class="ok-msg" data-href="message.html" tabindex="0">
-            <input class="form-check-input m-0" type="checkbox" aria-label="Select">
-            <button class="btn btn-sm btn-ghost p-0 star" data-action="star" aria-label="Star"><i class="bi bi-star"></i></button>
-            <span class="from">Rory Stone</span>
-            <span class="date"> Sat</span>
-            <span class="line2"><span class="subject">Re: Trademark question from a downstream project</span><span class="snippet">— Thanks for looping me in. I'll draft a reply this afternoon and send it over for review…</span><span class="ok-tag"><span class="ok-label-dot" style="background:var(--ok-feather-purple)"></span>Board</span></span>
+          <!-- Results render from the search operation via assets/oaken.js. The published
+               demo supplies dummy results through assets/demo-fixtures.js. -->
+          <li class="ok-empty-row text-muted p-5 text-center">
+            <i class="bi bi-search fs-1 d-block mb-2 opacity-50"></i>
+            No results.
           </li>
       </ul></div>
     </section>
