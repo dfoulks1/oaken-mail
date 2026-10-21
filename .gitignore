@@ -236,3 +236,6 @@ site/
 
 # Synthetic test fixtures are committed (no real mail; see docs/architecture/parsing.md).
 !src/oaken/mail/tests/fixtures/**/*.eml
+
+# A real config.toml holds local settings and must never be committed (use config.example.toml).
+config.toml
