@@ -18,6 +18,7 @@ from oaken.plugins.contracts import (
     PluginJobHandler,
     PluginKind,
     PluginOperation,
+    PluginScheduledTask,
     PluginStage,
 )
 
@@ -79,6 +80,7 @@ def check_plugin(
     problems.extend(check_operations(obj))
     problems.extend(check_job_handlers(obj))
     problems.extend(check_pipeline_stages(obj))
+    problems.extend(check_scheduled_tasks(obj))
 
     ver = str(getattr(obj, "version", "") or "")
     info = PluginInfo(
@@ -225,4 +227,42 @@ def check_pipeline_stages(obj: object) -> list[str]:
             problems.append(f"{label}: version must be a non-empty string")
         if not callable(stage.handler):
             problems.append(f"{label}: handler must be an async function")
+    return problems
+
+
+def declared_scheduled_tasks(obj: object) -> list[PluginScheduledTask]:
+    """The tasks ``obj.scheduled_tasks()`` returns (none if it has no such method). Raises what
+    the method raises; ``check_scheduled_tasks`` turns that into a problem."""
+    fn = getattr(obj, "scheduled_tasks", None)
+    if not callable(fn):
+        return []
+    return list(fn())
+
+
+def check_scheduled_tasks(obj: object) -> list[str]:
+    """Problems with the scheduled tasks a plugin offers, in plain words."""
+    try:
+        tasks = declared_scheduled_tasks(obj)
+    except Exception as exc:  # a plugin that cannot say what it offers is a broken plugin
+        return [f"scheduled_tasks() failed: {type(exc).__name__}"]
+    problems: list[str] = []
+    seen: set[str] = set()
+    for task in tasks:
+        if not isinstance(task, PluginScheduledTask):
+            problems.append("scheduled_tasks() must return PluginScheduledTask values")
+            continue
+        label = f"scheduled task {task.name!r}"
+        if not _OP_NAME.match(task.name):
+            problems.append(f"{label}: a name is lower-case letters, digits and underscores")
+        if task.name in seen:
+            problems.append(f"{label} is defined twice")
+        seen.add(task.name)
+        if not (isinstance(task.job_kind, str) and task.job_kind):
+            problems.append(f"{label}: job_kind must be a non-empty string")
+        if not isinstance(task.payload, BaseModel):
+            problems.append(f"{label}: payload must be a pydantic model instance")
+        if (task.every is None) == (task.cron is None):
+            problems.append(f"{label}: give exactly one of every= (seconds) or cron=")
+        if task.every is not None and task.every <= 0:
+            problems.append(f"{label}: every must be a positive number of seconds")
     return problems

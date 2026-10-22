@@ -10,6 +10,7 @@ exactly as for a core kind. A plugin failure is reduced to its exception type, b
 quote mail — the same rule the operation bridge uses.
 """
 
+from datetime import timedelta
 from typing import Any
 
 from pydantic import BaseModel
@@ -17,6 +18,7 @@ from pydantic import BaseModel
 from oaken.core.errors import OakenError, PluginError
 from oaken.core.jobs import Job, JobRunner
 from oaken.core.logging import get_logger
+from oaken.core.scheduler import Scheduler
 from oaken.plugins.contracts import PluginJobHandler
 from oaken.plugins.host import OfferedJobHandler, PluginHost
 
@@ -28,6 +30,11 @@ PLUGIN_JOB_PREFIX = "plugin"
 def namespaced_kind(plugin: str, kind: str) -> str:
     """The job kind a plugin kind is registered under: ``plugin.<name>.<kind>``."""
     return f"{PLUGIN_JOB_PREFIX}.{plugin}.{kind}"
+
+
+def scheduled_task_name(plugin: str, task: str) -> str:
+    """The scheduler name a plugin task is seeded under: ``plugin.<name>.<task>``."""
+    return f"{PLUGIN_JOB_PREFIX}.{plugin}.{task}"
 
 
 def _adapt(host: PluginHost, offered: OfferedJobHandler) -> tuple[str, PluginJobHandler, Any]:
@@ -70,3 +77,29 @@ def register_plugin_jobs(host: PluginHost, runner: JobRunner) -> list[str]:
             continue
         registered.append(full)
     return registered
+
+
+async def seed_plugin_schedules(host: PluginHost, scheduler: Scheduler) -> list[str]:
+    """Seed each healthy plugin's scheduled tasks into ``scheduler`` as ``plugin.<name>.<task>``,
+    **only if absent** — a schedule the user has since edited or removed is left alone, the same
+    rule as the per-account sync schedules. Returns the names seeded. A task that fails to seed is
+    logged and skipped, never raised, so one bad plugin cannot stop core from starting."""
+    seeded: list[str] = []
+    for offered in host.offered_scheduled_tasks():
+        plugin, task = offered.plugin, offered.declaration
+        name = scheduled_task_name(plugin, task.name)
+        if await scheduler.next_run(name) is not None:
+            continue  # the user owns it now
+        try:
+            await scheduler.add(
+                name,
+                task.job_kind,
+                task.payload,
+                every=timedelta(seconds=task.every) if task.every is not None else None,
+                cron=task.cron,
+            )
+        except OakenError as exc:
+            log.error("plugin scheduled task refused", task=name, problem=str(exc))
+            continue
+        seeded.append(name)
+    return seeded

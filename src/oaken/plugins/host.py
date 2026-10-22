@@ -38,6 +38,7 @@ from oaken.plugins.contracts import (
     PluginKind,
     PluginOpContext,
     PluginOperation,
+    PluginScheduledTask,
     PluginStage,
     PluginStageContext,
     Provider,
@@ -49,6 +50,7 @@ from oaken.plugins.validate import (
     declared_job_handlers,
     declared_operations,
     declared_pipeline_stages,
+    declared_scheduled_tasks,
 )
 
 log = get_logger("oaken.plugins")
@@ -118,6 +120,14 @@ class OfferedPipelineStage:
 
     plugin: str
     declaration: PluginStage
+
+
+@dataclass(frozen=True)
+class OfferedScheduledTask:
+    """A recurring task a started, healthy plugin offers (seeded if absent as plugin.<name>.<t>)."""
+
+    plugin: str
+    declaration: PluginScheduledTask
 
 
 @dataclass(frozen=True)
@@ -433,6 +443,23 @@ class PluginHost:
                     log=rec.ctx.log,
                 )
         raise NotFound(f"plugin {plugin!r} is not running")
+
+    def offered_scheduled_tasks(self) -> list[OfferedScheduledTask]:
+        """The recurring tasks the healthy plugins offer via ``scheduled_tasks()``. A plugin that
+        cannot say what it offers is skipped (the problem was logged when it loaded)."""
+        out: list[OfferedScheduledTask] = []
+        for rec in self._shared():
+            try:
+                decls = declared_scheduled_tasks(rec.instance)
+            except Exception as exc:
+                log.error("plugin scheduled_tasks failed", name=rec.name, error=type(exc).__name__)
+                continue
+            out.extend(
+                OfferedScheduledTask(rec.name, d)
+                for d in decls
+                if isinstance(d, PluginScheduledTask)
+            )
+        return out
 
     def config_schema(self, kind: PluginKind, name: str) -> dict[str, Any] | None:
         """JSON Schema of a plugin's settings, if it declares ``config_model`` (pydantic)."""

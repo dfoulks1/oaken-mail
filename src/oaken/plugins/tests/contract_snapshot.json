@@ -232,6 +232,13 @@
       "changes",
       "total"
     ],
+    "PluginScheduledTask": [
+      "name",
+      "job_kind",
+      "payload",
+      "every",
+      "cron"
+    ],
     "PluginStage": [
       "name",
       "handler",

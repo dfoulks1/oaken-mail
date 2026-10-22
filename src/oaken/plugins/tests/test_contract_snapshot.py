@@ -35,6 +35,7 @@ _DATACLASSES = [
     "PluginStageContext",
     "PluginStageInput",
     "PluginStage",
+    "PluginScheduledTask",
     "Health",
     "RawMessage",
     "FlagChange",

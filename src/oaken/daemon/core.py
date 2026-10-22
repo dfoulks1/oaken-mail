@@ -36,7 +36,7 @@ from oaken.ingest.schedule import SyncService
 from oaken.mail.filtering import FilterEngine, scripts_dir
 from oaken.plugins.accounts import AccountProviders
 from oaken.plugins.host import PluginHost
-from oaken.plugins.jobs import register_plugin_jobs
+from oaken.plugins.jobs import register_plugin_jobs, seed_plugin_schedules
 from oaken.readstate import AuditLog, ReadState
 from oaken.readstate.service import providers_from_accounts
 
@@ -243,6 +243,7 @@ class Core:
 
     async def _start_jobs(self) -> None:
         register_plugin_jobs(self.host, self.runner)  # host has started; healthy plugins known
+        await seed_plugin_schedules(self.host, self.scheduler)  # seed recurring tasks if absent
         self.runner.start()
         self.scheduler.start()
 

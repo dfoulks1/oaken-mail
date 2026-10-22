@@ -315,6 +315,28 @@ class PluginStage:
     version: str = "1"
 
 
+# -- Scheduled tasks a plugin offers -----------------------------------------------------------
+# A plugin may schedule recurring work by defining ``scheduled_tasks()``. Core seeds each into the
+# scheduler as ``plugin.<name>.<task>`` **only if it is absent**, so a schedule the user has since
+# edited (interval, cron, or removed) is left alone — the same rule as the per-account sync
+# schedules. The task fires a ``job_kind`` (usually one the plugin also registers via
+# ``job_handlers()``) with a fixed ``payload``.
+
+
+@dataclass(frozen=True)
+class PluginScheduledTask:
+    """One recurring task a plugin offers. Give exactly one of ``every`` (seconds) or ``cron`` (a
+    five-field expression). ``job_kind`` is the kind enqueued when it fires — commonly the plugin's
+    own ``plugin.<name>.<kind>`` — and ``payload`` is the fixed input for that job.
+    """
+
+    name: str
+    job_kind: str
+    payload: BaseModel
+    every: float | None = None
+    cron: str | None = None
+
+
 @runtime_checkable
 class Plugin(Protocol):
     """Lifecycle, shared by every kind. All three are optional for a plugin to define."""
