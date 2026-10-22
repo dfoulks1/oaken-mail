@@ -10,3 +10,11 @@ repos:
       - id: detect-secrets
         exclude: ^docs/(.*\.html|sitemap\.xml)$  # generated; SRI hashes look like secrets
         args: ["--baseline", ".secrets.baseline"]
+  - repo: local
+    hooks:
+      - id: lint-imports
+        name: import boundaries (import-linter)
+        entry: uv run lint-imports
+        language: system
+        pass_filenames: false
+        files: \.py$|^pyproject\.toml$

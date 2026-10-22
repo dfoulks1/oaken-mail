@@ -78,6 +78,7 @@ dev = [
     "oaken-webui",
     "ruff",
     "sqlite-vec>=0.1.9",
+    "import-linter>=2.15",
 ]
 # Site tooling (docs/tools). The core runtime must not depend on it.
 docs = [
@@ -140,6 +141,143 @@ strict = true
 files = ["src", "apps/cli/src", "apps/webui/src", "tests", "docs/tools"]
 mypy_path = "docs/tools:apps/cli/src:apps/webui/src"
 
+# Import boundaries (ADR 0002, 0006, 0007, 0010). Enforced by import-linter: `uv run lint-imports`.
+# The rules encode the *intended* seams the code already relies on: core never imports a feature
+# plugin or a client; a client reaches core only through the daemon lifecycle and a few leaf
+# helpers; a feature plugin depends on the contract layer and shared leaf utilities, never the
+# stores' orchestration, the registry, the API or the daemon. Test modules are exempt (the test
+# rigs build a real Core on purpose) via the `**.tests.**` ignores.
+[tool.importlinter]
+root_packages = [
+    "oaken",
+    "oaken_cli",
+    "oaken_webui",
+    "oaken_gmail",
+    "oaken_imap",
+    "oaken_smtp",
+    "oaken_ollama",
+    "oaken_vec_sqlite",
+    "oaken_enrichers",
+]
+
+# 1. Core never imports a feature plugin or a client (ADR 0002: "core never imports provider code").
+[[tool.importlinter.contracts]]
+name = "Core is independent of feature plugins and clients"
+type = "forbidden"
+source_modules = ["oaken"]
+forbidden_modules = [
+    "oaken_cli",
+    "oaken_webui",
+    "oaken_gmail",
+    "oaken_imap",
+    "oaken_smtp",
+    "oaken_ollama",
+    "oaken_vec_sqlite",
+    "oaken_enrichers",
+]
+# Only core test modules may reference a plugin package (the shared ProviderContract rig does).
+ignore_imports = ["oaken.**.tests.** -> **"]
+
+# 2. Clients reach core only through the daemon lifecycle and sanctioned leaf helpers
+#    (ADR 0006, 0007, 0010). The forbidden set is the parts a thin client must never reach into:
+#    the stores, the pipeline/sync, the index, read state, the API app, the plugin host and the AI
+#    layer. A client may import `oaken.daemon` (to start/stop/reload the process), `oaken.core`
+#    leaves (errors, logging, settings, paths, clock, the caller/ids/events the in-process adapter
+#    translates) and `oaken.api.runtime` (to find and check a running core).
+[[tool.importlinter.contracts]]
+name = "The CLI does not reach into core internals"
+type = "forbidden"
+source_modules = ["oaken_cli"]
+# Direct imports only: the CLI legitimately imports `oaken.daemon` to start/stop/reload the
+# process, and the daemon (the composition root) transitively pulls in all of core — that is not
+# the CLI reaching in. What the CLI's own modules must never do is import a store, the API app or
+# the plugin host directly. The in-process adapter's use of `oaken.core.operations` is the
+# sanctioned seam (ADR 0006), so that package is not forbidden here.
+allow_indirect_imports = "true"
+forbidden_modules = [
+    "oaken.api.app",
+    "oaken.api.server",
+    "oaken.api.guard",
+    "oaken.api.mcp_server",
+    "oaken.plugins",
+    "oaken.ai",
+    "oaken.ingest",
+    "oaken.index",
+    "oaken.mail",
+    "oaken.readstate",
+    "oaken.core.rawstore",
+    "oaken.core.attrs",
+    "oaken.core.db",
+    "oaken.core.jobs",
+    "oaken.core.scheduler",
+    "oaken.core.mailbox",
+    "oaken.core.agents",
+]
+ignore_imports = ["oaken_cli.tests.** -> **"]
+
+[[tool.importlinter.contracts]]
+name = "The web UI does not reach into core internals"
+type = "forbidden"
+source_modules = ["oaken_webui"]
+allow_indirect_imports = "true"
+forbidden_modules = [
+    "oaken.api.app",
+    "oaken.api.server",
+    "oaken.api.guard",
+    "oaken.api.mcp_server",
+    "oaken.plugins",
+    "oaken.ai",
+    "oaken.ingest",
+    "oaken.index",
+    "oaken.mail",
+    "oaken.readstate",
+    "oaken.core.rawstore",
+    "oaken.core.attrs",
+    "oaken.core.db",
+    "oaken.core.jobs",
+    "oaken.core.scheduler",
+    "oaken.core.mailbox",
+    "oaken.core.agents",
+    "oaken.daemon",
+]
+ignore_imports = ["oaken_webui.tests.** -> **"]
+
+# 3. Feature plugins depend on the contract layer and shared leaf utilities, never the stores'
+#    orchestration, the registry, the sync/ingest pipeline, the API or the daemon. First-party
+#    infrastructure a plugin may reuse (documented, not a leak): a vector store sits beside the
+#    index and uses `oaken.core.db`; an enricher reuses `oaken.mail` text/tokenizer helpers.
+[[tool.importlinter.contracts]]
+name = "Feature plugins depend only on the contract layer and shared leaves"
+type = "forbidden"
+allow_indirect_imports = "true"
+source_modules = [
+    "oaken_gmail",
+    "oaken_imap",
+    "oaken_smtp",
+    "oaken_ollama",
+    "oaken_vec_sqlite",
+    "oaken_enrichers",
+]
+forbidden_modules = [
+    "oaken.api",
+    "oaken.daemon",
+    "oaken.ingest",
+    "oaken.index",
+    "oaken.readstate",
+    "oaken.core.operations",
+    "oaken.core.rawstore",
+    "oaken.core.attrs",
+    "oaken.core.jobs",
+    "oaken.core.scheduler",
+    "oaken.core.mailbox",
+    "oaken.core.search",
+    "oaken.core.agents",
+]
+ignore_imports = [
+    "oaken_vec_sqlite.tests.** -> **",
+    "oaken_enrichers.tests.** -> **",
+]
+
 [[tool.mypy.overrides]]
-module = ["pygments", "pygments.*", "sqlite_vec", "imapclient", "imapclient.*", "rich", "rich.*"]
+module = ["pygments", "pygments.*", "sqlite_vec", "imapclient", "imapclient.*", "rich", "rich.*", "importlinter", "importlinter.*"]
 ignore_missing_imports = true
