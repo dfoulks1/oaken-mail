@@ -45,7 +45,16 @@ from oaken.plugins.contracts import (
     PluginKind,
     VectorItem,
 )
-from oaken.plugins.validate import check_plugin, declared_capabilities
+from oaken.plugins.validate import (
+    check_job_handlers,
+    check_pipeline_stages,
+    check_plugin,
+    check_scheduled_tasks,
+    declared_capabilities,
+    declared_job_handlers,
+    declared_pipeline_stages,
+    declared_scheduled_tasks,
+)
 
 
 def make_context(kind: PluginKind, name: str = "under-test") -> PluginContext:
@@ -460,3 +469,82 @@ class VectorStoreContract:
     async def test_stats(self, store: Any) -> None:
         async with running(store, "vector_store"):
             await check_store_stats(store)
+
+
+# -- Extension hooks: job kinds, pipeline stages, scheduled tasks ------------------------------
+# These are offered by a plugin of any kind through optional methods (``job_handlers()``,
+# ``pipeline_stages()``, ``scheduled_tasks()``), so their conformance is about the *declarations*
+# being well-formed: the same checks the host runs at load. Give the suite a plugin that declares
+# the hook and it verifies core would accept it.
+
+
+async def check_job_handlers_valid(plugin: Any) -> None:
+    problems = check_job_handlers(plugin)
+    assert not problems, "; ".join(problems)
+    assert declared_job_handlers(plugin), "the plugin declares no job_handlers()"
+
+
+async def check_pipeline_stages_valid(plugin: Any) -> None:
+    problems = check_pipeline_stages(plugin)
+    assert not problems, "; ".join(problems)
+    assert declared_pipeline_stages(plugin), "the plugin declares no pipeline_stages()"
+
+
+async def check_scheduled_tasks_valid(plugin: Any) -> None:
+    problems = check_scheduled_tasks(plugin)
+    assert not problems, "; ".join(problems)
+    assert declared_scheduled_tasks(plugin), "the plugin declares no scheduled_tasks()"
+
+
+async def verify_job_handlers(make: Callable[[], Any]) -> None:
+    """Every job handler a plugin offers is well-formed (one ``AssertionError`` listing all)."""
+    plugin = make()
+    problems = check_job_handlers(plugin)
+    assert not problems and declared_job_handlers(plugin), (
+        "; ".join(problems) or "the plugin declares no job_handlers()"
+    )
+
+
+async def verify_pipeline_stages(make: Callable[[], Any]) -> None:
+    """Every pipeline stage a plugin offers is well-formed."""
+    plugin = make()
+    problems = check_pipeline_stages(plugin)
+    assert not problems and declared_pipeline_stages(plugin), (
+        "; ".join(problems) or "the plugin declares no pipeline_stages()"
+    )
+
+
+async def verify_scheduled_tasks(make: Callable[[], Any]) -> None:
+    """Every scheduled task a plugin offers is well-formed."""
+    plugin = make()
+    problems = check_scheduled_tasks(plugin)
+    assert not problems and declared_scheduled_tasks(plugin), (
+        "; ".join(problems) or "the plugin declares no scheduled_tasks()"
+    )
+
+
+class JobHandlerContract:
+    """Override ``plugin`` with an instance whose ``job_handlers()`` you want to verify."""
+
+    plugin = _abstract("plugin")
+
+    async def test_job_handlers_are_valid(self, plugin: Any) -> None:
+        await check_job_handlers_valid(plugin)
+
+
+class PipelineStageContract:
+    """Override ``plugin`` with an instance whose ``pipeline_stages()`` you want to verify."""
+
+    plugin = _abstract("plugin")
+
+    async def test_pipeline_stages_are_valid(self, plugin: Any) -> None:
+        await check_pipeline_stages_valid(plugin)
+
+
+class ScheduledTaskContract:
+    """Override ``plugin`` with an instance whose ``scheduled_tasks()`` you want to verify."""
+
+    plugin = _abstract("plugin")
+
+    async def test_scheduled_tasks_are_valid(self, plugin: Any) -> None:
+        await check_scheduled_tasks_valid(plugin)

@@ -419,6 +419,224 @@
 </tr>
 </tbody>
 </table></div>
+<h3 id="pluginjobcontext"><code>PluginJobContext</code></h3>
+<p>What a plugin's job handler receives besides its payload. Like <code>PluginOpContext</code>: the plugin's own <code>config</code>, the clock and a logger, and the registered <code>kind</code> it is running — no database handle, no queue, no job internals.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>plugin</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>kind</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>config</code></td>
+<td><code>dict[str, Any]</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>clock</code></td>
+<td><code>Clock</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>log</code></td>
+<td><code>Any</code></td>
+<td><code>required</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="pluginjobhandler"><code>PluginJobHandler</code></h3>
+<p>One job kind a plugin offers. <code>kind</code> is the plugin's local name (<code>recount</code>); core namespaces it to <code>plugin.&lt;name&gt;.&lt;kind&gt;</code>. <code>payload_model</code> and <code>result_model</code> are pydantic models: the payload is validated before the handler runs, and a result (if <code>result_model</code> is set) is validated and stored, exactly as for a core job kind. <code>concurrency</code> caps how many run at once (<code>[jobs] kind_limits</code> still wins). A plugin enqueues its kind with <code>ctx</code> helpers added later; for now core and other plugins can enqueue it by its namespaced name.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>payload_model</code></td>
+<td><code>type[BaseModel]</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>handler</code></td>
+<td><code>PluginJobHandlerFn</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>concurrency</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>result_model</code></td>
+<td><code>type[BaseModel] | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="pluginstagecontext"><code>PluginStageContext</code></h3>
+<p>What a plugin's pipeline stage receives besides its input: the plugin's own <code>config</code>, the clock and a logger. No database handle, no queue.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>plugin</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>stage</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>config</code></td>
+<td><code>dict[str, Any]</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>clock</code></td>
+<td><code>Clock</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>log</code></td>
+<td><code>Any</code></td>
+<td><code>required</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="pluginstageinput"><code>PluginStageInput</code></h3>
+<p>The message a stage runs on, after its enrichers. Everything derived from the mail is <code>UntrustedText</code>. <code>enrichments</code> is the message's stored enrichment results by enricher name (<code>summary</code>, <code>triage</code>, ...), so a stage can roll up or tag from them without re-reading the body.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>message_id</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>account_id</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>subject</code></td>
+<td><code>UntrustedText</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>body</code></td>
+<td><code>UntrustedText</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>enrichments</code></td>
+<td><code>dict[str, dict[str, Any]]</code></td>
+<td><code>empty</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="pluginstage"><code>PluginStage</code></h3>
+<p>One pipeline stage a plugin offers, run after the enrichers for each message. <code>name</code> is the plugin's local stage name; core stores its result under <code>plugin.&lt;plugin&gt;.&lt;name&gt;</code>. <code>version</code> is part of the idempotency key: bump it when the output could change, and a rerun recomputes; leave it and a rerun is a cache hit.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>handler</code></td>
+<td><code>PluginStageFn</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>version</code></td>
+<td><code>str</code></td>
+<td><code>'1'</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="pluginscheduledtask"><code>PluginScheduledTask</code></h3>
+<p>One recurring task a plugin offers. Give exactly one of <code>every</code> (seconds) or <code>cron</code> (a five-field expression). <code>job_kind</code> is the kind enqueued when it fires — commonly the plugin's own <code>plugin.&lt;name&gt;.&lt;kind&gt;</code> — and <code>payload</code> is the fixed input for that job.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>job_kind</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>payload</code></td>
+<td><code>BaseModel</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>every</code></td>
+<td><code>float | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>cron</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
 <h3 id="rawmessage"><code>RawMessage</code></h3>
 <p>One message exactly as the server holds it.</p>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">

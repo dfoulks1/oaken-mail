@@ -189,6 +189,116 @@ enrichers are all used.
 
 Core never stops because a plugin did. `start`, `stop` and `health` are all optional to define.
 
+## Extending core: operations, job kinds, pipeline stages and scheduled tasks
+
+Beyond the five kinds, a plugin of **any** kind can add capabilities with four optional methods.
+Each is collected from the healthy plugins at start-up, validated like the rest of the contract,
+and given a plugin-scoped context with **no database handle** — you return data, core stores it.
+See [ADR 0012](repo:docs/adr/0012-plugin-extension-hooks.md).
+
+### Add an operation
+
+Define `operations()` returning `PluginOperation` values. Each becomes `<plugin>.<name>` in the
+[operation registry](architecture/operations.md), under the same confirm gate and audit as core's
+own; a plugin's operations start **off** over MCP and can never mark mail read.
+
+### Add a job kind
+
+Define `job_handlers()` to run your own durable background work. Core registers each as
+`plugin.<name>.<kind>` on the job runner — the same queue, retries, leases and per-kind
+concurrency as core's own kinds.
+
+```python
+from pydantic import BaseModel
+from oaken.plugins.base import BaseEmbedder
+from oaken.plugins.contracts import PluginJobHandler
+
+
+class Recount(BaseModel):
+    text: str
+
+
+class Count(BaseModel):
+    words: int
+
+
+async def recount(ctx, payload: Recount) -> Count:  # ctx: PluginJobContext (config, clock, log)
+    return Count(words=len(payload.text.split()))
+
+
+class MyPlugin(BaseEmbedder):
+    model_id, dimensions = "mine", 384
+
+    async def embed(self, texts): ...
+
+    def job_handlers(self):
+        return [PluginJobHandler("recount", Recount, recount, result_model=Count)]
+```
+
+The handler gets its payload (validated against `payload_model`) and a `PluginJobContext`; a
+returned result is validated against `result_model` and stored on the job.
+
+### Add a pipeline stage
+
+Define `pipeline_stages()` to derive something **after the enrichers** for each message. Core stores
+the result under `plugin.<name>.<stage>` with the same content-hash idempotency as an enricher, so a
+rerun or a `reprocess` is a cache hit.
+
+```python
+from oaken.plugins.contracts import PluginStage, PluginStageContext, PluginStageInput
+
+
+async def tag(ctx: PluginStageContext, msg: PluginStageInput) -> dict:
+    # msg.enrichments holds this message's enricher results (summary, triage, ...)
+    priority = msg.enrichments.get("triage", {}).get("priority", 3)
+    return {"tag": "urgent" if priority == 0 else "normal"}
+
+
+class MyPlugin(BaseEnricher):
+    version = "1"
+
+    async def enrich(self, msg): ...
+
+    def pipeline_stages(self):
+        return [PluginStage("tag", tag, version="1")]
+```
+
+Bump a stage's `version` when its output could change; the old result is recomputed, an unchanged
+version is a cache hit. A stage failure is logged and never fails the message's enrichment.
+
+### Add a scheduled task
+
+Define `scheduled_tasks()` to run work on a schedule. Core seeds each into the scheduler as
+`plugin.<name>.<task>` **only if absent**, so a schedule you later edit or remove is left alone
+(the same rule as the sync schedules). The task fires a `job_kind` — usually your own from
+`job_handlers()` — with a fixed payload.
+
+```python
+from oaken.plugins.contracts import PluginScheduledTask
+
+
+class MyPlugin(BaseEmbedder):
+    model_id, dimensions = "mine", 384
+
+    async def embed(self, texts): ...
+
+    def job_handlers(self):
+        return [PluginJobHandler("recount", Recount, recount, result_model=Count)]
+
+    def scheduled_tasks(self):
+        return [
+            PluginScheduledTask("nightly", "plugin.mine.recount", Recount(text=""), every=86400.0)
+        ]  # once a day; or cron="0 3 * * *"
+```
+
+### Add a provider, embedder, model backend, enricher or vector store
+
+These are the five kinds above — subclass the base class, set a few attributes, override the method
+your kind needs, and register an entry point. The earlier sections are the worked examples.
+
+Every hook has a conformance suite (next section): `JobHandlerContract`, `PipelineStageContract`
+and `ScheduledTaskContract`, plus the five kind suites.
+
 ## Testing it
 
 Run the contract suite against your plugin. It is a set of pytest tests that check the behavior
@@ -209,6 +319,11 @@ There is a suite for each kind: `ProviderContract`, `EmbedderContract`, `LLMCont
 `EnricherContract` and `VectorStoreContract`. A provider test also supplies `mailbox_ids`, the ids
 of the mail in its test mailbox. If you prefer one call, `await verify_embedder(MyEmbedder)` runs
 every rule and raises a single error listing everything that failed.
+
+For the extension hooks there are `JobHandlerContract`, `PipelineStageContract` and
+`ScheduledTaskContract` (and `verify_job_handlers`, `verify_pipeline_stages`,
+`verify_scheduled_tasks`): give one your plugin instance and it checks the declarations the way the
+host does at load.
 
 `oaken.testing.fakes` has an in-memory fake of every kind (`FakeProvider` with a scriptable
 mailbox and failure injection, `FakeEmbedder`, `FakeLLM` that records every request,
