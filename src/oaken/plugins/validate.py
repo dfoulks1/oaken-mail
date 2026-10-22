@@ -18,6 +18,7 @@ from oaken.plugins.contracts import (
     PluginJobHandler,
     PluginKind,
     PluginOperation,
+    PluginStage,
 )
 
 _OP_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -77,6 +78,7 @@ def check_plugin(
 
     problems.extend(check_operations(obj))
     problems.extend(check_job_handlers(obj))
+    problems.extend(check_pipeline_stages(obj))
 
     ver = str(getattr(obj, "version", "") or "")
     info = PluginInfo(
@@ -189,4 +191,38 @@ def check_job_handlers(obj: object) -> list[str]:
         )
         if bad_concurrency:
             problems.append(f"{label}: concurrency must be a positive integer")
+    return problems
+
+
+def declared_pipeline_stages(obj: object) -> list[PluginStage]:
+    """The stages ``obj.pipeline_stages()`` returns (none if it has no such method). Raises what
+    the method raises; ``check_pipeline_stages`` turns that into a problem."""
+    fn = getattr(obj, "pipeline_stages", None)
+    if not callable(fn):
+        return []
+    return list(fn())
+
+
+def check_pipeline_stages(obj: object) -> list[str]:
+    """Problems with the pipeline stages a plugin offers, in plain words."""
+    try:
+        stages = declared_pipeline_stages(obj)
+    except Exception as exc:  # a plugin that cannot say what it offers is a broken plugin
+        return [f"pipeline_stages() failed: {type(exc).__name__}"]
+    problems: list[str] = []
+    seen: set[str] = set()
+    for stage in stages:
+        if not isinstance(stage, PluginStage):
+            problems.append("pipeline_stages() must return PluginStage values")
+            continue
+        label = f"pipeline stage {stage.name!r}"
+        if not _OP_NAME.match(stage.name):
+            problems.append(f"{label}: a name is lower-case letters, digits and underscores")
+        if stage.name in seen:
+            problems.append(f"{label} is defined twice")
+        seen.add(stage.name)
+        if not (isinstance(stage.version, str) and stage.version):
+            problems.append(f"{label}: version must be a non-empty string")
+        if not callable(stage.handler):
+            problems.append(f"{label}: handler must be an async function")
     return problems

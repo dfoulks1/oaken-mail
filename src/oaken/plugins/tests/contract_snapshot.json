@@ -232,6 +232,25 @@
       "changes",
       "total"
     ],
+    "PluginStage": [
+      "name",
+      "handler",
+      "version"
+    ],
+    "PluginStageContext": [
+      "plugin",
+      "stage",
+      "config",
+      "clock",
+      "log"
+    ],
+    "PluginStageInput": [
+      "message_id",
+      "account_id",
+      "subject",
+      "body",
+      "enrichments"
+    ],
     "PullBatch": [
       "messages",
       "deleted_provider_ids",

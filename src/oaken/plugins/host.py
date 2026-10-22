@@ -38,6 +38,8 @@ from oaken.plugins.contracts import (
     PluginKind,
     PluginOpContext,
     PluginOperation,
+    PluginStage,
+    PluginStageContext,
     Provider,
     VectorStore,
 )
@@ -46,6 +48,7 @@ from oaken.plugins.validate import (
     check_started,
     declared_job_handlers,
     declared_operations,
+    declared_pipeline_stages,
 )
 
 log = get_logger("oaken.plugins")
@@ -107,6 +110,14 @@ class OfferedJobHandler:
 
     plugin: str
     declaration: PluginJobHandler
+
+
+@dataclass(frozen=True)
+class OfferedPipelineStage:
+    """A pipeline stage a started, healthy plugin offers (run after the enrichers)."""
+
+    plugin: str
+    declaration: PluginStage
 
 
 @dataclass(frozen=True)
@@ -389,6 +400,34 @@ class PluginHost:
                 return PluginJobContext(
                     plugin=plugin,
                     kind=kind,
+                    config=dict(rec.ctx.config),
+                    clock=self.clock,
+                    log=rec.ctx.log,
+                )
+        raise NotFound(f"plugin {plugin!r} is not running")
+
+    def offered_pipeline_stages(self) -> list[OfferedPipelineStage]:
+        """The pipeline stages the healthy plugins offer via ``pipeline_stages()``. A plugin that
+        cannot say what it offers is skipped (the problem was logged when it loaded)."""
+        out: list[OfferedPipelineStage] = []
+        for rec in self._shared():
+            try:
+                decls = declared_pipeline_stages(rec.instance)
+            except Exception as exc:
+                log.error("plugin pipeline_stages failed", name=rec.name, error=type(exc).__name__)
+                continue
+            out.extend(
+                OfferedPipelineStage(rec.name, d) for d in decls if isinstance(d, PluginStage)
+            )
+        return out
+
+    def stage_context(self, plugin: str, stage: str) -> PluginStageContext:
+        """The context for one run of ``plugin``'s pipeline ``stage``. No database handle."""
+        for rec in self._shared():
+            if rec.name == plugin and rec.ctx is not None:
+                return PluginStageContext(
+                    plugin=plugin,
+                    stage=stage,
                     config=dict(rec.ctx.config),
                     clock=self.clock,
                     log=rec.ctx.log,

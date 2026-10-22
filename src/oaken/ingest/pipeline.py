@@ -23,7 +23,7 @@ import time
 from collections.abc import Collection
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -60,7 +60,7 @@ from oaken.mail.parse import parse, read_attachment
 from oaken.mail.threading import normalize_subject
 from oaken.mail.tokens import Tokenizer, load_tokenizer
 from oaken.plugins.adapt import to_enrich_output, to_vectors
-from oaken.plugins.contracts import EnrichAttachment, EnrichInput, VectorItem
+from oaken.plugins.contracts import EnrichAttachment, EnrichInput, PluginStageInput, VectorItem
 
 log = get_logger("oaken.ingest")
 
@@ -464,7 +464,55 @@ class Pipeline:
                         enricher=name,
                     )
                 )
+        await self._run_plugin_stages(message_id, doc, account, force)
         return out
+
+    async def _run_plugin_stages(
+        self, message_id: MessageId, doc: sqlite3.Row, account: AccountId, force: bool
+    ) -> None:
+        """Run the plugin pipeline stages (after the enrichers) for this message. Each is stored
+        under ``plugin.<plugin>.<stage>`` with the same content-hash idempotency as an enricher, so
+        a rerun or reprocess is a cache hit. A stage sees the message and its stored enrichments,
+        never the databases; a stage failure is logged and never fails the enrich job."""
+        stages = self.backends.pipeline_stages()
+        make_ctx = self.backends.stage_context
+        if not stages or make_ctx is None:
+            return
+        stage_input: PluginStageInput | None = None
+        for offered in stages:
+            plugin, stage = offered.plugin, offered.declaration
+            full = f"plugin.{plugin}.{stage.name}"
+            key = (doc["content_hash"], full, stage.version, "")
+            if not force and await self._cached_enrichment(message_id, key):
+                continue
+            if stage_input is None:
+                stage_input = await self._stage_input(message_id, doc)
+            try:
+                data = await stage.handler(make_ctx(plugin, stage.name), stage_input)
+                payload = json.dumps(dict(data), sort_keys=True)
+            except Exception as exc:  # a stage must never fail the message's enrich job
+                log.error("plugin stage failed", stage=full, error=type(exc).__name__)
+                continue
+            await self._store_enrichment(message_id, key, payload)
+
+    async def _stage_input(self, message_id: MessageId, doc: sqlite3.Row) -> PluginStageInput:
+        """What a plugin stage is handed: the message and its stored enrichment results."""
+        rows = await self.raw.db.fetchall(
+            "SELECT enricher, data_json FROM enrichments WHERE message_id = ?", (message_id,)
+        )
+        enrichments: dict[str, dict[str, Any]] = {}
+        for r in rows:
+            try:
+                enrichments[r["enricher"]] = json.loads(r["data_json"])
+            except (TypeError, ValueError):
+                continue
+        return PluginStageInput(
+            message_id=message_id,
+            account_id=doc["account_id"],
+            subject=UntrustedText(doc["subject"]),
+            body=UntrustedText(doc["cleaned_text"]),
+            enrichments=enrichments,
+        )
 
     async def _enrich_input(self, message_id: MessageId, doc: sqlite3.Row) -> EnrichInput:
         """What an enricher is handed: the cleaned text, every header, the attachments' metadata

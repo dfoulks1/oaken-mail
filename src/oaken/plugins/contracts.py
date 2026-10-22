@@ -261,6 +261,60 @@ class PluginJobHandler:
     result_model: type[BaseModel] | None = None
 
 
+# -- Pipeline stages a plugin offers -----------------------------------------------------------
+# A plugin may add a derivation stage that runs **after the enrichers** for a message, by defining
+# ``pipeline_stages()``. It sees the message and the enrichment results just computed, and returns
+# JSON-serializable data core stores with the same content-hash idempotency as an enricher — so a
+# rerun or a reprocess is a cache hit, never recomputed. A stage never touches the databases, runs
+# a model directly, or sees another plugin's state; it is for cheap, deterministic post-processing
+# (a tag derived from triage, a cross-enricher roll-up).
+
+
+@dataclass(frozen=True)
+class PluginStageContext:
+    """What a plugin's pipeline stage receives besides its input: the plugin's own ``config``, the
+    clock and a logger. No database handle, no queue."""
+
+    plugin: str
+    stage: str
+    config: dict[str, Any]
+    clock: Clock
+    log: Any
+
+
+@dataclass(frozen=True)
+class PluginStageInput:
+    """The message a stage runs on, after its enrichers. Everything derived from the mail is
+    ``UntrustedText``. ``enrichments`` is the message's stored enrichment results by enricher name
+    (``summary``, ``triage``, ...), so a stage can roll up or tag from them without re-reading the
+    body."""
+
+    message_id: str
+    account_id: str
+    subject: UntrustedText
+    body: UntrustedText
+    enrichments: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+
+# ``handler(ctx, msg) -> dict``. The returned dict must be JSON-serializable; core stores it under
+# the stage's name with content-hash idempotency.
+PluginStageFn = Callable[["PluginStageContext", "PluginStageInput"], Awaitable[dict[str, Any]]]
+
+
+@dataclass(frozen=True)
+class PluginStage:
+    """One pipeline stage a plugin offers, run after the enrichers for each message.
+
+    ``name`` is the plugin's local stage name; core stores its result under
+    ``plugin.<plugin>.<name>``. ``version`` is part of the idempotency key: bump it when the output
+    could change, and a rerun recomputes; leave it and a rerun is a cache hit.
+    """
+
+    name: str
+    handler: PluginStageFn
+    version: str = "1"
+
+
 @runtime_checkable
 class Plugin(Protocol):
     """Lifecycle, shared by every kind. All three are optional for a plugin to define."""
