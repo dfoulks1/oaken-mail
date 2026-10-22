@@ -113,7 +113,7 @@ To run one:
 
 ### Status of the prompts
 
-*As of 2026-10-21 (commit `23323ce`).* **Built** means the prompt's deliverables are in `main`
+*As of 2026-10-21 (commit `7ee6308`).* **Built** means the prompt's deliverables are in `main`
 with tests. **Partly** says what is done and what is left. A **Written** prompt has a plan and no
 code yet.
 
@@ -149,9 +149,9 @@ code yet.
 | 21b | webui-client-foundation | **In progress** | Server items D1–D4, the shared sidebar and the API seam are in. Check the prompt's C list before starting; another session is on it |
 | 22 | api-parity | Built | Paging, totals, sort, stars, thread tree, query operators |
 | 23 | plugin-settings | **Open** | |
-| 24 | accounts-onboarding | Partly | Account operations are built (create, check, configure, password, authorize, remove). The onboarding screens and Gmail receive-only are open |
+| 24 | accounts-onboarding | Built | Account ops plus the receive-only ("listen but not send") interlock in `oaken.mail.sendpolicy` (one key, one reader; surfaced by `get_account`/`list_accounts`), the `oaken admin account set\|remove` CLI verbs, and the Settings → Accounts onboarding UI (`accounts.html`) |
 | 25 | folders-labels-counts | Built | Nested folders, labels, unread counts, stars |
-| 26 | sieve-management | Partly | `sieve_get`, `sieve_save` and `sieve_delete` are built. The Sieve screen in the UI is open |
+| 26 | sieve-management | Built | Read/test ops plus the write path (`sieve_save`/`sieve_delete`/`sieve_get`, compile-first, atomic owner-only, never over MCP — ADR 0009), the `oaken sieve get\|save\|delete` CLI verbs with `--suggest-name`, and the Sieve editor UI (`sieve.html`) |
 | 27 | contacts-people | **Open** | `contacts.html` is still a mockup |
 | 28 | compose-and-send | **Open** | There is no `send_message` operation yet |
 | 29 | system-settings | **Open** | |

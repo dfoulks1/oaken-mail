@@ -9,7 +9,8 @@ Builds the site to a temporary directory (twice) and fails on:
 * a Markdown file under docs/ that is neither registered in site.toml nor excluded (orphan),
   a registered page with no source, bad front matter, a bad ``repo:`` link;
 * broken internal links and anchors, duplicate ids, heading-level skips, images without alt;
-* any ``http://`` URL, any external host outside the allowlist, a CDN tag without an
+* any ``http://`` URL (except loopback: 127.0.0.1/localhost/[::1], used by Oaken's own API and
+  Ollama examples), any external host outside the allowlist, a CDN tag without an
   integrity hash, unbalanced HTML;
 * output that differs between the two builds (non-determinism);
 * committed HTML in docs/ that differs from a fresh build (run build_site.py and commit).
@@ -122,8 +123,14 @@ def _check_page(cfg: Config, site: Path, page: Path, scans: dict[Path, PageScan]
     rel = page.relative_to(site).as_posix()
     scan = scans[page]
     probs = [f"{rel}: {p}" for p in scan.problems]
-    if "http://" in scan.text:
-        probs.append(f"{rel}: contains an http:// URL")
+    # Any ``http://`` URL is refused except loopback ones, which are legitimate in the config and
+    # Ollama examples (Oaken's own API and model backend run on 127.0.0.1); loopback http carries no
+    # exfiltration or downgrade risk. A real external http:// host still fails here.
+    for m in re.finditer(r"http://([^\s\"'<>/]+)", scan.text):
+        host = m.group(1).rsplit(":", 1)[0].lower()
+        if host not in {"127.0.0.1", "localhost", "[::1]", "::1"}:
+            probs.append(f"{rel}: contains an http:// URL")
+            break
     dups = sorted({i for i in scan.ids if scan.ids.count(i) > 1})
     probs += [f"{rel}: duplicate id {i!r}" for i in dups]
     probs += [f"{rel}: image without alt text ({src})" for src in scan.images_without_alt]

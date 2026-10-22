@@ -38,7 +38,7 @@ class GmailApi:
 
     def _wait(self, attempt: int) -> float:
         """Seconds to wait before retry ``attempt``: doubling, but never past ``_MAX_WAIT``."""
-        return min(self.config.backoff * 2**attempt, _MAX_WAIT)
+        return float(min(self.config.backoff * 2**attempt, _MAX_WAIT))
 
     async def request(
         self,

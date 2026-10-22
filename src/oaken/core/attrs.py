@@ -149,7 +149,8 @@ class AttrStore:
         """Everything a sidebar needs in one pass: for each of ``disposition``, ``location`` and
         ``label``, a ``{value: (total, unread)}`` map, plus a synthetic ``starred`` group with a
         single ``starred`` key counting messages that carry ``\\Flagged`` (``message_state``).
-        Discarded mail is left out of ``location``/``label``/``starred`` unless ``include_discarded``
+        Discarded mail is left out of ``location``/``label``/``starred`` unless
+        ``include_discarded``
         (``disposition`` always reports every bucket, so the sidebar can show the Discarded count).
         A message with no state row is unread and unstarred."""
         acct = str(account_id) if account_id else None

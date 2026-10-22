@@ -174,7 +174,8 @@ class MessageReadChanged(Event):
 @dataclass(frozen=True, kw_only=True)
 class MessageStarChanged(Event):
     """A message was starred or unstarred (the ``\\Flagged`` flag). Same local-first, written-back
-    shape as ``MessageReadChanged``: ``local_only`` while no provider can write it, with ``error``."""
+    shape as ``MessageReadChanged``: ``local_only`` while no provider can write it, with
+    ``error``."""
 
     account_id: AccountId
     message_id: MessageId

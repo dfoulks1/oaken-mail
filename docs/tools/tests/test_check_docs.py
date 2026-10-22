@@ -134,6 +134,16 @@ def test_check_fails_on_seeded_defect(
     assert any(expect in p for p in found), f"{name}: expected {expect!r} in {found}"
 
 
+def test_loopback_http_is_allowed_but_external_http_is_not(tree: Tree) -> None:
+    # Loopback http:// (Oaken's own API and Ollama examples) is allowed; a real host still fails.
+    tree.append(
+        "docs/alpha.md", "\nRun Ollama at `http://127.0.0.1:11434` or `http://localhost:11434`.\n"
+    )
+    assert not [p for p in problems(tree) if "http://" in p]
+    tree.append("docs/alpha.md", "\nSee [x](http://example.org/page).\n")
+    assert any("http://" in p for p in problems(tree))
+
+
 def test_excluded_paths_are_not_orphans(tree: Tree) -> None:
     seed_excluded_is_not_orphan(tree)
     assert problems(tree) == []

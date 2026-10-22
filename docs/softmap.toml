@@ -548,8 +548,11 @@ funcs = [
   ["run(scripts, view, settings) -> SieveResult", "Run scripts in order; a failing script loses only its own actions."],
   ["FilterEngine.filter_message(message_id) -> SieveResult", "Read, parse, run and store in one transaction; publishes MessageFiltered."],
   ["FilterEngine.refilter(account_id, limit) -> RefilterResult", "Filter every message whose last run is missing or made by other scripts. Resumable."],
+  ["save_script(directory, name, text)", "Atomic (O_EXCL + os.replace), owner-only (0600) write of one named *.sieve; the write path behind sieve_save (ADR 0009)."],
+  ["delete_script(directory, name) -> bool", "Remove exactly one script; the others are untouched."],
+  ["check_script_name(name) -> str", "Validate a script file name to one [A-Za-z0-9._-] segment ending .sieve; no separators or ..."],
 ]
-notes = ["redirect, reject, ereject and vacation are recorded as suppressed intents and never executed.", "editheader, include, notify and anything that opens a MIME part are refused.", "Scripts are *.sieve files in the sieve folder next to config.toml, run in name order."]
+notes = ["redirect, reject, ereject and vacation are recorded as suppressed intents and never executed.", "editheader, include, notify and anything that opens a MIME part are refused.", "Scripts are *.sieve files in the sieve folder next to config.toml, run in name order.", "The write path (sieve_save/sieve_delete) compiles before it persists and is never offered over MCP (ADR 0009)."]
 
 [[components]]
 id = "index"

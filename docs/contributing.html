@@ -205,7 +205,7 @@ changed a component). A prompt that is built but still marked Open sends the nex
 redo it.</li>
 </ol>
 <h3 id="status-of-the-prompts">Status of the prompts</h3>
-<p><em>As of 2026-10-21 (commit <code>23323ce</code>).</em> <strong>Built</strong> means the prompt's deliverables are in <code>main</code>
+<p><em>As of 2026-10-21 (commit <code>7ee6308</code>).</em> <strong>Built</strong> means the prompt's deliverables are in <code>main</code>
 with tests. <strong>Partly</strong> says what is done and what is left. A <strong>Written</strong> prompt has a plan and no
 code yet.</p>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
@@ -401,8 +401,8 @@ code yet.</p>
 <tr>
 <td>24</td>
 <td>accounts-onboarding</td>
-<td>Partly</td>
-<td>Account operations are built (create, check, configure, password, authorize, remove). The onboarding screens and Gmail receive-only are open</td>
+<td>Built</td>
+<td>Account ops plus the receive-only (&quot;listen but not send&quot;) interlock in <code>oaken.mail.sendpolicy</code> (one key, one reader; surfaced by <code>get_account</code>/<code>list_accounts</code>), the <code>oaken admin account set|remove</code> CLI verbs, and the Settings → Accounts onboarding UI (<code>accounts.html</code>)</td>
 </tr>
 <tr>
 <td>25</td>
@@ -413,8 +413,8 @@ code yet.</p>
 <tr>
 <td>26</td>
 <td>sieve-management</td>
-<td>Partly</td>
-<td><code>sieve_get</code>, <code>sieve_save</code> and <code>sieve_delete</code> are built. The Sieve screen in the UI is open</td>
+<td>Built</td>
+<td>Read/test ops plus the write path (<code>sieve_save</code>/<code>sieve_delete</code>/<code>sieve_get</code>, compile-first, atomic owner-only, never over MCP — ADR 0009), the <code>oaken sieve get|save|delete</code> CLI verbs with <code>--suggest-name</code>, and the Sieve editor UI (<code>sieve.html</code>)</td>
 </tr>
 <tr>
 <td>27</td>
