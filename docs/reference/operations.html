@@ -44,6 +44,7 @@
       <div class="label">Concepts</div>
       <a class="doc-link" href="../architecture/overview.html">Architecture overview</a>
       <a class="doc-link" href="../architecture/jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="../token-savings.html">How Oaken counts token savings</a>
       <a class="doc-link" href="../architecture/software-map.html">Software map</a>
       <a class="doc-link" href="../architecture/swarm.html">The swarm</a>
       <a class="doc-link" href="../architecture/storage.html">Raw storage</a>
@@ -407,6 +408,13 @@
 <td>Revoke an agent at once; the jobs it holds go back to the queue.</td>
 </tr>
 <tr>
+<td><code>savings_summary</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>Tokens saved, by caller: model calls the cache skipped, and mail text kept out of a client's context. Estimates.</td>
+</tr>
+<tr>
 <td><code>search</code></td>
 <td>read</td>
 <td>on by default</td>
@@ -425,7 +433,7 @@
 <td>mutate</td>
 <td>never</td>
 <td>no</td>
-<td>Replace an account's non-secret settings.</td>
+<td>Replace an account's non-secret settings (and, if given, its display name).</td>
 </tr>
 <tr>
 <td><code>set_account_password</code></td>
@@ -579,7 +587,7 @@
 <p>Add an account. Its credential is stored separately with set_account_password or start_authorization.</p>
 <ul>
 <li>Input: <code>account_id</code>, <code>provider</code>, <code>display_name</code>, <code>config</code>?</li>
-<li>Output: <code>account_id</code>, <code>provider</code>, <code>display_name</code>, <code>config</code>, <code>problem</code>?, <code>config_schema</code>?</li>
+<li>Output: <code>account_id</code>, <code>provider</code>, <code>display_name</code>, <code>config</code>, <code>receive_only</code>?, <code>capabilities</code>?, <code>problem</code>?, <code>config_schema</code>?</li>
 </ul>
 <h3 id="create-agent"><code>create_agent</code></h3>
 <p>The swarm must be enabled and every kind listed in <code>[swarm] allowed_kinds</code>.</p>
@@ -609,7 +617,7 @@
 <p>One account: provider, its non-secret settings, what the provider's settings are, and why it cannot sync if it cannot.</p>
 <ul>
 <li>Input: <code>account_id</code></li>
-<li>Output: <code>account_id</code>, <code>provider</code>, <code>display_name</code>, <code>config</code>, <code>problem</code>?, <code>config_schema</code>?</li>
+<li>Output: <code>account_id</code>, <code>provider</code>, <code>display_name</code>, <code>config</code>, <code>receive_only</code>?, <code>capabilities</code>?, <code>problem</code>?, <code>config_schema</code>?</li>
 </ul>
 <h3 id="get-enrichment"><code>get_enrichment</code></h3>
 <p>Show the stored enrichment results (summary, triage, actions, inspector) for a message.</p>
@@ -815,6 +823,12 @@
 <li>Input: <code>agent_id</code></li>
 <li>Output: <code>revoked</code></li>
 </ul>
+<h3 id="savings-summary"><code>savings_summary</code></h3>
+<p>Tokens saved, by caller: model calls the cache skipped, and mail text kept out of a client's context. Estimates.</p>
+<ul>
+<li>Input: <code>since_hours</code>?</li>
+<li>Output: <code>cache</code>, <code>context</code>, <code>totals</code>, <code>note</code>?</li>
+</ul>
 <h3 id="search"><code>search</code></h3>
 <p>Each hit says which retrievers found it (<code>why</code>). When the embedder or the vectors are unavailable the keyword results still come back, with <code>degraded</code> set. Never marks read.</p>
 <ul>
@@ -828,9 +842,9 @@
 <li>Output: <code>items</code>, <code>truncated</code>?, <code>offset</code>?, <code>total</code>?, <code>total_exact</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
 </ul>
 <h3 id="set-account-config"><code>set_account_config</code></h3>
-<p>Replace an account's non-secret settings.</p>
+<p>Replace an account's non-secret settings (and, if given, its display name).</p>
 <ul>
-<li>Input: <code>account_id</code>, <code>config</code></li>
+<li>Input: <code>account_id</code>, <code>config</code>, <code>display_name</code>?</li>
 <li>Output: <code>account</code>, <code>restart_needed</code></li>
 </ul>
 <h3 id="set-account-password"><code>set_account_password</code></h3>
@@ -909,7 +923,7 @@
 <p>A short health summary: accounts, messages, index, queue, plugins and paused schedules.</p>
 <ul>
 <li>Input: none</li>
-<li>Output: <code>version</code>, <code>accounts</code>, <code>messages</code>, <code>indexed</code>, <code>index_stale</code>, <code>queue_depth</code>?, <code>plugins_healthy</code>?, <code>plugins_total</code>?, <code>schedules_paused</code>?</li>
+<li>Output: <code>version</code>, <code>accounts</code>, <code>messages</code>, <code>indexed</code>, <code>index_stale</code>, <code>queue_depth</code>?, <code>plugins_healthy</code>?, <code>plugins_total</code>?, <code>schedules_paused</code>?, <code>schedules_failing</code>?</li>
 </ul>
 <h3 id="summarize-message"><code>summarize_message</code></h3>
 <p>Summaries are cached by content and model, and made in the message's own workspace (a <code>secure</code> one never reaches a remote model). Mail text goes to the model only as <code>UntrustedText</code>. A message that cannot be summarized says why and does not stop the others. Read state changes only if <code>mark_read</code> is true, and only for the ones that got a summary.</p>

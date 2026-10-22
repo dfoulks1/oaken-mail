@@ -44,6 +44,7 @@
       <div class="label">Concepts</div>
       <a class="doc-link" href="../architecture/overview.html">Architecture overview</a>
       <a class="doc-link" href="../architecture/jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="../token-savings.html">How Oaken counts token savings</a>
       <a class="doc-link" href="../architecture/software-map.html">Software map</a>
       <a class="doc-link" href="../architecture/swarm.html">The swarm</a>
       <a class="doc-link" href="../architecture/storage.html">Raw storage</a>
@@ -618,6 +619,30 @@
 <h4 id="sieve-list"><code>sieve list</code></h4>
 <p>The scripts core would load.</p>
 <p>No arguments.</p>
+<h4 id="sieve-get"><code>sieve get</code></h4>
+<p>Print one script's text (to edit it).</p>
+<p>Arguments:</p>
+<ul>
+<li><code>name</code> — The script file name, e.g. 10-lists.sieve.</li>
+</ul>
+<h4 id="sieve-save"><code>sieve save</code></h4>
+<p>Compiles the script first and writes it only if it compiles, atomically and owner-only. Run order is by name, so a new script is best named NN-name.sieve; 'oaken sieve save --suggest-name' prints the next free NN.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>name</code> — The script file name (e.g. 20-work.sieve).</li>
+<li><code>file</code> — The script file to read ('-' reads stdin).</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--suggest-name</code> — Print the next free NN-prefixed name and exit (give a base with --base).</li>
+<li><code>--base</code> — Base for --suggest-name (default filter).</li>
+</ul>
+<h4 id="sieve-delete"><code>sieve delete</code></h4>
+<p>Remove one script.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>name</code> — The script file name.</li>
+</ul>
 <h4 id="sieve-refilter"><code>sieve refilter</code></h4>
 <p>Re-run the scripts over stored mail (a job).</p>
 <p>Options:</p>
@@ -645,6 +670,25 @@
 <li><code>--id</code> — a-z, 0-9, - and _.</li>
 <li><code>--name</code> — A display name.</li>
 <li><code>--set</code> — A provider setting (repeatable).</li>
+<li><code>--receive-only</code> — Listen but never send (the default for a new Gmail account until send is turned on).</li>
+</ul>
+<h5 id="admin-account-set"><code>admin account set</code></h5>
+<p>Merges --set KEY=VALUE into the account's config and/or flips the receive-only switch. Credentials are never set here (use 'oaken auth').</p>
+<p>Arguments:</p>
+<ul>
+<li><code>account_id</code> —</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--set</code> — A setting to change (repeatable).</li>
+<li><code>--receive-only</code> — Mark the account receive-only (listen but never send).</li>
+<li><code>--can-send</code> — Allow this account to be a send route (undo receive-only).</li>
+</ul>
+<h5 id="admin-account-remove"><code>admin account remove</code></h5>
+<p>Remove an account and its schedules (stored mail is kept).</p>
+<p>Arguments:</p>
+<ul>
+<li><code>account_id</code> —</li>
 </ul>
 <h3 id="auth"><code>auth</code></h3>
 <p>gmail opens Google's consent and waits; smtp and imap read the password without echo. Nothing is ever printed, taken as an argument, or written to disk: the credential goes to the OS keyring.</p>

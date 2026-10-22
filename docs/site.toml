@@ -103,6 +103,10 @@ id = "keyring"
 file = "keyring.md"
 
 [[pages]]
+id = "token-savings"
+file = "token-savings.md"
+
+[[pages]]
 id = "providers/gmail"
 file = "providers/gmail.md"
 

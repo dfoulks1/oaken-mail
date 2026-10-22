@@ -1,0 +1,208 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Oaken counts token savings · Oaken Mail</title>
+<meta name="description" content="How Oaken measures token savings: cache savings (model calls skipped) and context savings (mail text kept out of a client&#39;s context window), split by CLI, UI, MCP and internal callers, with the formulas, the baseline and the caveats.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="How Oaken counts token savings · Oaken Mail">
+<meta property="og:description" content="How Oaken measures token savings: cache savings (model calls skipped) and context savings (mail text kept out of a client&#39;s context window), split by CLI, UI, MCP and internal callers, with the formulas, the baseline and the caveats.">
+<meta property="og:site_name" content="Oaken Mail">
+<link rel="icon" type="image/png" href="assets/brand/favicon.png">
+<link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link rel="stylesheet" href="assets/site.css">
+<script>(function(){var r=document.documentElement;r.classList.add('js');var t=null;try{t=localStorage.getItem('oaken-theme');}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}r.setAttribute('data-bs-theme',t);})();</script>
+
+</head>
+<body class="has-pane" data-bs-spy="scroll" data-bs-target="#toc" data-bs-root-margin="0px 0px -40%" data-bs-smooth-scroll="true" tabindex="0">
+<a class="skip visually-hidden-focusable" href="#content">Skip to content</a>
+<header class="topbar d-lg-none">
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#toc" aria-controls="toc">&#9776; Menu</button>
+  <span class="brand"><img src="assets/brand/favicon.png" alt="" aria-hidden="true" width="24" height="24"> OAKENMAIL</span>
+</header>
+<nav class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="toc" aria-label="Navigation">
+  <div class="offcanvas-header d-lg-none">
+    <span class="offcanvas-title fw-bold">Menu</span>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#toc" aria-label="Close menu"></button>
+  </div>
+  <div class="offcanvas-body"><div class="sidebar-inner">
+    <div class="top"><a class="brand" href="index.html"><img src="assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
+      <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
+    <div class="what">What the numbers in oaken usage mean, how each is worked out, and what they do not say</div>
+    <div class="docnav"><a class="home-link" href="index.html">&#8962; Home</a>
+      <div class="label">Start</div>
+      <a class="doc-link" href="mcp.html">Connect an AI client</a>
+      <a class="doc-link" href="getting-started.html">Set up Oaken from scratch</a>
+      <a class="doc-link" href="keyring.html">Store credentials in your keyring</a>
+      <a class="doc-link" href="providers/gmail.html">Connect Gmail</a>
+      <a class="doc-link" href="providers/smtp.html">Send through your own SMTP server</a>
+      <a class="doc-link" href="providers/imap.html">Connect any IMAP server</a>
+      <div class="label">Concepts</div>
+      <a class="doc-link" href="architecture/overview.html">Architecture overview</a>
+      <a class="doc-link" href="architecture/jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link current" href="token-savings.html" aria-current="page">How Oaken counts token savings</a>
+      <a class="doc-link" href="architecture/software-map.html">Software map</a>
+      <a class="doc-link" href="architecture/swarm.html">The swarm</a>
+      <a class="doc-link" href="architecture/storage.html">Raw storage</a>
+      <a class="doc-link" href="architecture/daemon.html">The daemon and the local API</a>
+      <a class="doc-link" href="architecture/parsing.html">Parsing and cleaning</a>
+      <a class="doc-link" href="architecture/sieve.html">Sieve filtering</a>
+      <a class="doc-link" href="architecture/index.html">The search index</a>
+      <a class="doc-link" href="plugins.html">Writing a plugin</a>
+      <a class="doc-link" href="architecture/vectors.html">The vector store</a>
+      <a class="doc-link" href="architecture/ingest-pipeline.html">The ingest pipeline</a>
+      <a class="doc-link" href="architecture/ai-safety.html">Prompt safety and workspaces</a>
+      <a class="doc-link" href="architecture/read-state.html">Read state</a>
+      <a class="doc-link" href="architecture/sync-schedule.html">Sync schedule</a>
+      <a class="doc-link" href="architecture/operations.html">Operations</a>
+      <a class="doc-link" href="architecture/retrieval.html">Retrieval and ask</a>
+      <div class="label">Reference</div>
+      <a class="doc-link" href="reference/plugin-contracts.html">Plugin contracts</a>
+      <a class="doc-link" href="reference/operations.html">Operations</a>
+      <a class="doc-link" href="reference/cli.html">CLI</a>
+      <a class="doc-link" href="reference/evaluation.html">Evaluation results</a>
+      <a class="doc-link" href="reference/api.html">HTTP API</a>
+      <div class="label">Project</div>
+      <a class="doc-link" href="contributing.html">Contributing</a>
+      <a class="doc-link" href="adr/index.html">Architecture decisions</a>
+      <a class="doc-link" href="security.html">Security policy</a>
+      <a class="doc-link" href="code-of-conduct.html">Code of conduct</a>
+    </div>
+    <div class="gh"><div class="label">GitHub</div>
+      <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
+    <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
+      <a class="nav-link" href="#two-savings-kept-apart"><span class="num">1</span>Two savings, kept apart</a>
+      <a class="nav-link" href="#cache-savings"><span class="num">2</span>Cache savings</a>
+      <a class="nav-link" href="#context-savings"><span class="num">3</span>Context savings</a>
+      <a class="nav-link" href="#who-is-credited"><span class="num">4</span>Who is credited</a>
+      <a class="nav-link" href="#reading-oaken-usage"><span class="num">5</span>Reading oaken usage</a>
+      <a class="nav-link" href="#what-these-numbers-do-not-say"><span class="num">6</span>What these numbers do not say</a>
+      <a class="nav-link" href="#where-this-lives"><span class="num">7</span>Where this lives</a>
+    </nav></div>
+  </div></div>
+</nav>
+<main id="content" tabindex="-1">
+  <header class="cover">
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <h1 class="display-6">How Oaken counts token savings</h1>
+    <p class="lead">Oaken saves tokens in two different ways and reports them separately. This page explains each one: what is counted, the arithmetic, who it is credited to, and the limits of an estimate.</p>
+  </header>
+
+<section id="two-savings-kept-apart" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>Two savings, kept apart</h2></div>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th></th>
+<th>Cache savings</th>
+<th>Context savings</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>What was saved</td>
+<td>A call to a local model that Oaken did not make</td>
+<td>Mail text a client did not have to read</td>
+</tr>
+<tr>
+<td>Whose tokens</td>
+<td>Oaken's own models (embedder, enrichers, summaries)</td>
+<td>The model that is calling Oaken, for example Claude over MCP</td>
+</tr>
+<tr>
+<td>What it is worth</td>
+<td>Compute and time with a local model</td>
+<td>Billed tokens when that client is hosted</td>
+</tr>
+<tr>
+<td>Where it is recorded</td>
+<td><code>ai_usage</code>, rows marked <code>cached</code></td>
+<td><code>context_savings</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>They answer different questions, so Oaken never adds them together. Where a table shows both, they
+are separate columns.</p>
+</section>
+<section id="cache-savings" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Cache savings</h2></div>
+<p>Before Oaken runs a model on a message it looks for an answer it already has for the same content
+hash, model and prompt version. If there is one, the call is skipped and a <em>cached</em> row is written
+instead. For a cached row the token counts are what the call <strong>would have</strong> cost, input plus
+output, taken from the answer that filled the cache.</p>
+<p><code>tokens_saved</code> is the sum of those cached rows. <code>tokens_in</code> and <code>tokens_out</code> are the sum of the
+calls that really ran.</p>
+<p>A large number here is normal after a rebuild, a re-enrich or a second sync: the work repeats and
+the cache answers. With a local model this saves time and energy, not money.</p>
+</section>
+<section id="context-savings" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Context savings</h2></div>
+<p>A client that reads mail through Oaken gets snippets, summaries and cited evidence, not every
+body. For each read operation that returns mail content, Oaken records two numbers:</p>
+<ul>
+<li><strong>Returned.</strong> The size of the reply as JSON, divided by four. This is what the client actually
+took in.</li>
+<li><strong>Full.</strong> For every distinct message the reply names, the length of its subject plus its cleaned
+text, added up and divided by four. This is what the client would have taken in by opening each
+of those messages whole.</li>
+</ul>
+<p>The saving for a call is <code>full - returned</code>, never less than zero. A column of percentages is
+<code>saved / full</code> for the rows it covers.</p>
+<h3 id="which-operations-are-measured">Which operations are measured</h3>
+<p><code>list_messages</code>, <code>search</code>, <code>search_keyword</code>, <code>ask</code>, <code>get_message</code>, <code>get_thread</code>, <code>get_enrichment</code>
+and <code>summarize_message</code>.</p>
+<p>Operations that change state, such as <code>mark_read</code>, are not measured. They name messages but return
+almost nothing, so they would look like large savings without saving anything.</p>
+<h3 id="an-example">An example</h3>
+<p>A search returns 5 hits as snippets. The reply is 842 tokens. The five messages in full would be
+2,067 tokens. The saving is 1,225 tokens, 59 percent.</p>
+<p><code>get_message</code> is the honest case: it returns the whole cleaned text, so it saves little or
+nothing. The web UI's <code>get_message</code> rows show exactly that.</p>
+</section>
+<section id="who-is-credited" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Who is credited</h2></div>
+<p>Every operation goes through one client that knows which door the call came in through: <code>cli</code>,
+<code>ui</code>, <code>mcp</code> or <code>internal</code> (work Oaken does on its own, such as the ingest pipeline). That door is
+recorded with each row, so <code>oaken usage</code> can show the savings by caller.</p>
+<p>Rows written before callers were tracked appear as <code>unknown</code>.</p>
+</section>
+<section id="reading-oaken-usage" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Reading oaken usage</h2></div>
+<ul>
+<li><strong>usage.</strong> Model calls actually made, per stage and model, with tokens spent and tokens saved by
+the cache. A totals row sits under a rule.</li>
+<li><strong>saved, by caller.</strong> Cache tokens saved and context tokens saved for each door, and the share of
+context kept out.</li>
+<li><strong>context kept out of the client, by operation.</strong> Calls, messages, tokens returned, the full
+cost, and the saving, for each caller and operation.</li>
+</ul>
+<p><code>oaken usage --json</code> returns the same data. <code>rows</code> holds the usage table and <code>savings</code> holds the
+other two. The <code>savings_summary</code> operation returns them too, and is available over MCP.</p>
+</section>
+<section id="what-these-numbers-do-not-say" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>What these numbers do not say</h2></div>
+<ul>
+<li><strong>They are estimates.</strong> Everything is characters divided by four, the same rough rule the rest of
+Oaken uses for tokens. A hosted model's own tokenizer will differ, usually by tens of percent.</li>
+<li><strong>The baseline is plain.</strong> &quot;Full&quot; means opening every named message in full. It does not say what
+a client would really have done without Oaken, which might have been to read less, or more. It is
+a fixed yardstick, and the same one every time.</li>
+<li><strong>Counting starts when tracking was added.</strong> Calls before that have no context rows, and the
+cache rows from before have no caller.</li>
+<li><strong>A reply's size includes everything in it.</strong> Metadata and field names count as returned
+tokens, so a very small reply can show less saving than its text alone would suggest.</li>
+<li><strong>No message text is stored.</strong> Both tables hold only counts, names and timestamps.</li>
+</ul>
+</section>
+<section id="where-this-lives" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>Where this lives</h2></div>
+<p>The recording is in <code>src/oaken/core/operations/savings.py</code> and the client that sets the caller is
+<code>src/oaken/core/operations/client.py</code>. The tables are created by the <code>0016_savings</code> migration, and
+the totals are read by the <code>savings_summary</code> operation.</p>
+</section>
+  <footer>Oaken Mail 0.0.0 · Apache-2.0</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="assets/site.js"></script>
+
+
+</body>
+</html>

@@ -735,6 +735,8 @@
       <div data-oaken-labels><div class="small text-muted px-3 py-1">No tags yet.</div></div>
       <div class="ok-nav-heading">More</div>
       <a href="contacts.html" data-page="contacts.html"><i class="bi bi-person-lines-fill"></i>Contacts</a>
+      <a href="accounts.html" data-page="accounts.html"><i class="bi bi-person-badge"></i>Accounts</a>
+      <a href="sieve.html" data-page="sieve.html"><i class="bi bi-funnel"></i>Filters</a>
       <a href="settings.html" data-page="settings.html"><i class="bi bi-gear"></i>Settings</a>
     </nav>`;
 

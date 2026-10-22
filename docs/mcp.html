@@ -44,6 +44,7 @@
       <div class="label">Concepts</div>
       <a class="doc-link" href="architecture/overview.html">Architecture overview</a>
       <a class="doc-link" href="architecture/jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="token-savings.html">How Oaken counts token savings</a>
       <a class="doc-link" href="architecture/software-map.html">Software map</a>
       <a class="doc-link" href="architecture/swarm.html">The swarm</a>
       <a class="doc-link" href="architecture/storage.html">Raw storage</a>
@@ -248,6 +249,12 @@ does not list.</p>
 <tr>
 <td><code>plugin_health</code></td>
 <td>Whether plugins are started and healthy, and why not if they are not.</td>
+<td>no</td>
+<td>on</td>
+</tr>
+<tr>
+<td><code>savings_summary</code></td>
+<td>Tokens saved, by caller: model calls the cache skipped, and mail text kept out of a client's context. Estimates.</td>
 <td>no</td>
 <td>on</td>
 </tr>

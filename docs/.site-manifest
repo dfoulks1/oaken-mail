@@ -24,6 +24,7 @@ assets/site.css
 assets/site.js
 code-of-conduct.html
 contributing.html
+demo/accounts.html
 demo/assets/api.js
 demo/assets/brand/apple-touch-icon.png
 demo/assets/brand/favicon.png
@@ -38,6 +39,7 @@ demo/login.html
 demo/message.html
 demo/search.html
 demo/settings.html
+demo/sieve.html
 getting-started.html
 index.html
 keyring.html
@@ -54,3 +56,4 @@ reference/plugin-contracts.html
 robots.txt
 security.html
 sitemap.xml
+token-savings.html

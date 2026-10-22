@@ -44,6 +44,7 @@
       <div class="label">Concepts</div>
       <a class="doc-link" href="../architecture/overview.html">Architecture overview</a>
       <a class="doc-link" href="../architecture/jobs.html">Events, jobs and the scheduler</a>
+      <a class="doc-link" href="../token-savings.html">How Oaken counts token savings</a>
       <a class="doc-link" href="../architecture/software-map.html">Software map</a>
       <a class="doc-link" href="../architecture/swarm.html">The swarm</a>
       <a class="doc-link" href="../architecture/storage.html">Raw storage</a>
@@ -175,7 +176,7 @@ tokens. See <a href="../mcp.html">Connect an AI client</a>.</p>
 <td>POST</td>
 <td><code>/v1/operations/{name}</code></td>
 <td>API token</td>
-<td>Call one operation. 64 exist.</td>
+<td>Call one operation. 65 exist.</td>
 </tr>
 </tbody>
 </table></div>
@@ -460,6 +461,12 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td>mutate</td>
 <td>never</td>
 <td><code>POST /v1/operations/revoke_agent</code></td>
+</tr>
+<tr>
+<td><code>savings_summary</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/savings_summary</code></td>
 </tr>
 <tr>
 <td><code>search</code></td>
