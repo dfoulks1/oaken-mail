@@ -5,7 +5,6 @@ Order is settings → databases and migrations → plugin host → job runner an
 Stopping is the reverse, so nothing is closed while something that uses it still runs.
 """
 
-from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 import oaken
@@ -39,6 +38,8 @@ from oaken.plugins.accounts import AccountProviders
 from oaken.plugins.host import PluginHost
 from oaken.readstate import AuditLog, ReadState
 from oaken.readstate.service import providers_from_accounts
+
+from .units import Lifecycle, ServiceUnit, unit
 
 log = get_logger("oaken.daemon")
 MIGRATIONS = Path(__file__).resolve().parents[1] / "core" / "migrations"
@@ -170,70 +171,84 @@ class Core:
                 self.mcp_agent = McpServer(agent_client, agents=self.agents)
                 self.api.mount(self.mcp_agent.surface, self.mcp_agent)
         self.server = ApiServer(self.api, host=s.api.host, port=s.api.port)
+        self._port = 0
+        self._lifecycle = Lifecycle(self._service_units(grace=s.api.shutdown_grace_seconds))
         self._open = True
+
+    def _service_units(self, *, grace: float) -> list[ServiceUnit]:
+        """The stages, in start order. Stop runs them in reverse. The names are stable (``host``,
+        ``sync``, ``jobs``, ``mcp``, ``api``): they are the daemon's ``_started`` record and appear
+        in logs. Adding a subsystem is one more entry here, not an edit to start() and stop()."""
+
+        async def start_api() -> None:
+            self._port = await self.server.start()
+
+        units = [
+            unit("host", self.host.start, self._stop_host),
+            unit("sync", self.sync.start, self.sync.stop),
+            unit("jobs", self._start_jobs, lambda: self._stop_jobs(grace)),
+        ]
+        if self.mcp is not None:
+            units.append(unit("mcp", self._start_mcp, self._stop_mcp))
+        units.append(unit("api", start_api, self.server.stop))
+        return units
 
     # -- running --------------------------------------------------------------------------
     async def start(self) -> int:
-        """Plugins, then jobs and the sync schedule, then the API. Returns the API's port."""
+        """Plugins, then jobs and the sync schedule, then the API. Returns the API's port.
+
+        The Lifecycle starts the units in order, recording each in ``self._started``; if one
+        raises it stops the already-started ones (reverse) before the error propagates. This
+        ``except`` then closes the stores too, so a failed startup leaves nothing open.
+        """
         try:
-            await self.host.start()
-            self._started.append("host")
-            await self.sync.start()
-            self._started.append("sync")
-            self.runner.start()
-            self.scheduler.start()
-            self._started.append("jobs")
-            if self.mcp is not None:
-                await self.mcp.start()
-                if self.mcp_agent is not None:
-                    await self.mcp_agent.start()
-                self._started.append("mcp")
-            port = await self.server.start()
-            self._started.append("api")
+            await self._lifecycle.start(self._started)
         except BaseException:
-            await self.stop()
+            await self._close_stores()
             raise
-        return port
+        return self._port
 
     async def stop(self) -> None:
         """Stop accepting, let jobs finish or give their leases back, close the databases.
 
-        Safe to call on a half-built core: ``start`` calls it to unwind a failed startup, and
-        ``serve`` calls it in a ``finally`` even when ``open`` raised partway through. Only stages
-        recorded in ``self._started`` are unwound (each is appended after its resource is live, so
-        the backing attribute is guaranteed to exist), and each database is closed independently so
-        one failure cannot leak the others' file handles and locks.
+        Safe to call on a half-built core: ``start`` unwinds a failed startup through here, and
+        ``serve`` calls it in a ``finally`` even when ``open`` raised partway through. The
+        Lifecycle stops only the stages recorded in ``self._started`` (in reverse); a core whose
+        ``open`` never reached the Lifecycle has an empty ``_started`` and no units, so this is a
+        no-op down to closing whatever stores were opened.
         """
-        grace = self.settings.api.shutdown_grace_seconds
+        lifecycle = getattr(self, "_lifecycle", None)
+        if lifecycle is not None:
+            await lifecycle.stop(self._started)
+        else:  # open() raised before building the Lifecycle: nothing started, clear the record
+            self._started.clear()
+        await self._close_stores()
 
-        def handler(name: str) -> Callable[[], Awaitable[None]]:
-            # Resolved lazily: only stages in self._started reach here, so the attributes they
-            # reference already exist. Building these eagerly would touch attributes that an
-            # interrupted open() never assigned (e.g. self.server), masking the real error.
-            return {
-                "api": self.server.stop,
-                "mcp": self._stop_mcp,
-                "jobs": lambda: self._stop_jobs(grace),
-                "sync": self.sync.stop,
-                "host": self._stop_host,
-            }[name]
-
-        for name in reversed(self._started):
+    async def _close_stores(self) -> None:
+        """Close the databases, each independently so one failure cannot leak the others' handles.
+        Only runs once (guarded by ``_open``), and tolerates stores an interrupted open never
+        assigned."""
+        if not self._open:
+            return
+        self._open = False
+        for closer in ("readstate", "index", "raw_db"):
+            target = getattr(self, closer, None)
+            if target is None:
+                continue
             try:
-                await handler(name)()
+                await target.close()
             except (OakenError, OSError, RuntimeError):
-                log.exception("stopping failed", step=name)
-        self._started.clear()
-        if self._open:
-            self._open = False
-            for closer in ("readstate", "index", "raw_db"):
-                target = getattr(self, closer, None)
-                if target is None:
-                    continue
-                try:
-                    await target.close()
-                except (OakenError, OSError, RuntimeError):
-                    log.exception("closing failed", store=closer)
+                log.exception("closing failed", store=closer)
+
+    async def _start_jobs(self) -> None:
+        self.runner.start()
+        self.scheduler.start()
+
+    async def _start_mcp(self) -> None:
+        if self.mcp is not None:
+            await self.mcp.start()
+            if self.mcp_agent is not None:
+                await self.mcp_agent.start()
 
     async def _stop_mcp(self) -> None:
         for door in (self.mcp_agent, self.mcp):
