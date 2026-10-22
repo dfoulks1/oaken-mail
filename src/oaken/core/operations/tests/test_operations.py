@@ -79,6 +79,7 @@ async def test_status_and_pipeline_status_and_accounts(ops: Ops) -> None:
     assert (s.version, s.accounts, s.messages, s.indexed, s.index_stale) == ("test", 1, 4, 4, False)
     assert s.plugins_total is not None and s.plugins_healthy == s.plugins_total
     assert s.schedules_paused == 0 and s.queue_depth == 0
+    assert s.schedules_failing == 0
     p = await ops.out("pipeline_status")
     assert p.docs == 4 and set(p.stages) >= {"parse", "embed", "enrich"} and p.parked == []
     accounts = await ops.out("list_accounts")

@@ -23,10 +23,10 @@ class GmailConfig(BaseModel):
     include_labels: list[str] = []  # label names or ids; empty means all mail
     exclude_labels: list[str] = []  # label names or ids; Spam and Trash are always excluded
     page_size: int = Field(default=100, ge=1, le=500)  # messages per batch of a full sync
-    concurrency: int = Field(default=8, ge=1, le=50)  # requests in flight at once
+    concurrency: int = Field(default=4, ge=1, le=50)  # requests in flight at once
     timeout: float = Field(default=30.0, gt=0)  # seconds, per request
-    max_retries: int = Field(default=5, ge=0, le=20)  # extra tries on 429 / rate limit / 5xx
-    backoff: float = Field(default=1.0, ge=0)  # seconds, doubled each retry
+    max_retries: int = Field(default=8, ge=0, le=20)  # extra tries on 429 / rate limit / 5xx
+    backoff: float = Field(default=1.0, ge=0)  # seconds, doubled each retry, at most a minute
 
     @classmethod
     def parse(cls, raw: dict[str, Any]) -> "GmailConfig":

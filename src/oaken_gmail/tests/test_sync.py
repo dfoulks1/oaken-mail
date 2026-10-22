@@ -280,6 +280,14 @@ async def test_a_rate_limit_403_and_a_5xx_back_off_exponentially_and_then_give_u
     await rig.provider.stop()
 
 
+async def test_backoff_is_capped_at_a_minute_and_rides_out_a_long_throttle() -> None:
+    google = FakeGoogle(api_script=[429] * 8)
+    rig = await started(google, backoff=1.0, max_retries=8)
+    await rig.provider.authenticate(rig.ctx)  # the ninth try succeeds
+    assert rig.sleeps == [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 60.0, 60.0]
+    await rig.provider.stop()
+
+
 async def test_a_plain_client_error_is_not_retried() -> None:
     rig = await started()
     rig.google.api_script = [400]

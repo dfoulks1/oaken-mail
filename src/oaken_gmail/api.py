@@ -20,6 +20,7 @@ from oaken_gmail.config import API, GmailConfig
 from oaken_gmail.tokens import AuthRequired, TokenManager
 
 log = get_logger("oaken.gmail")
+_MAX_WAIT = 60.0  # a per-minute quota clears within a minute; waiting longer gains nothing
 _RATE_REASONS = {"rateLimitExceeded", "userRateLimitExceeded", "quotaExceeded"}
 
 
@@ -34,6 +35,10 @@ class GmailApi:
     ) -> None:
         self.config, self.tokens, self._http, self._sleep = config, tokens, http, sleep
         self._gate = asyncio.Semaphore(config.concurrency)
+
+    def _wait(self, attempt: int) -> float:
+        """Seconds to wait before retry ``attempt``: doubling, but never past ``_MAX_WAIT``."""
+        return min(self.config.backoff * 2**attempt, _MAX_WAIT)
 
     async def request(
         self,
@@ -63,7 +68,7 @@ class GmailApi:
                     raise ProviderError(
                         f"gmail: {method} {path} failed ({type(exc).__name__})"
                     ) from None
-                await self._sleep(self.config.backoff * 2**attempt)
+                await self._sleep(self._wait(attempt))
                 continue
             code = resp.status_code
             if code < 300:
@@ -89,7 +94,7 @@ class GmailApi:
                     if limited:
                         raise QuotaExceeded(f"gmail: still rate limited after {tries} tries")
                     raise ProviderError(f"gmail: {method} {path} answered {code}")
-                await self._sleep(_delay(resp, self.config.backoff * 2**attempt))
+                await self._sleep(_delay(resp, self._wait(attempt)))
                 continue
             if code == 404:
                 raise NotFound(f"gmail: {method} {path} not found")

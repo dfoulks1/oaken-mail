@@ -30,6 +30,7 @@ class StatusOutput(BaseModel):
     plugins_healthy: int | None = None
     plugins_total: int | None = None
     schedules_paused: int | None = None
+    schedules_failing: int | None = None  # last sync failed, whether or not paused
 
 
 @operation(
@@ -56,7 +57,9 @@ async def status(ctx: OpContext, inp: Empty) -> StatusOutput:
         rows = ctx.svc.plugins.statuses()
         out.plugins_total, out.plugins_healthy = len(rows), sum(r.healthy for r in rows)
     if ctx.svc.sync is not None:
-        out.schedules_paused = sum(s.paused for s in await ctx.svc.sync.schedules())
+        scheds = await ctx.svc.sync.schedules()
+        out.schedules_paused = sum(s.paused for s in scheds)
+        out.schedules_failing = sum(s.failures > 0 for s in scheds)
     return out
 
 

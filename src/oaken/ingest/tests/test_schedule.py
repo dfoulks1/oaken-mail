@@ -428,6 +428,8 @@ async def test_other_failures_back_off_exponentially_and_a_success_resets_them(w
     assert s is not None and (s.failures, s.last_result) == (1, "error")
     assert s.last_error is not None and "boom" in s.last_error and not s.paused
     assert s.next_run == w.rig.clock.now() + timedelta(seconds=1800)  # 900 * 2
+    failed = await w.rig.queue.query(kind="sync.run", status="failed")
+    assert failed and "boom" in (failed[0].last_error or "")  # not a silent "succeeded"
 
     w.rig.clock.advance(seconds=1800)
     await w.fire()

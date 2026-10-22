@@ -38,7 +38,14 @@ from oaken.core.cron import parse_cron
 from oaken.core.errors import ConfigError, NotFound, OakenError
 from oaken.core.events import EventBus, SyncPaused, SyncScheduleChanged
 from oaken.core.ids import AccountId
-from oaken.core.jobs import PRIORITY_INGEST, PRIORITY_USER, Enqueued, Job, JobRunner
+from oaken.core.jobs import (
+    PRIORITY_INGEST,
+    PRIORITY_USER,
+    Enqueued,
+    Job,
+    JobRunner,
+    PermanentJobError,
+)
 from oaken.core.logging import get_logger
 from oaken.core.rawstore import RawStore
 from oaken.core.settings import SyncSettings
@@ -590,7 +597,7 @@ class SyncService:
             provider = self.accounts.get(payload.account_id)
         except OakenError as exc:
             await self._record(payload, sched, None, _scrub(str(exc)), quiet)
-            return
+            raise PermanentJobError(_scrub(str(exc))) from None
         result = await self.runner.sync(
             AccountId(payload.account_id),
             provider,
@@ -598,6 +605,10 @@ class SyncService:
             quiet=quiet,
         )
         await self._record(payload, sched, result, None, quiet)
+        if result.errors:
+            # The schedule row already backs off (or pauses); the job must not read as a success,
+            # and must not be retried on top of that backoff.
+            raise PermanentJobError(_scrub(result.errors[0]))
 
     async def _record(
         self,

@@ -29,9 +29,9 @@ account = "default"            # names the keyring entry: oaken / gmail:<account
 include_labels = []            # label names/ids to sync; empty = all mail
 exclude_labels = []            # label names/ids to skip; Spam and Trash are always excluded
 # page_size = 100              # messages per full-sync batch (1–500)
-# concurrency = 8              # requests in flight at once (1–50)
+# concurrency = 4              # requests in flight at once (1–50)
 # timeout = 30.0               # seconds per request
-# max_retries = 5              # extra tries on 429 / rate-limit / 5xx
+# max_retries = 8              # extra tries on 429 / rate-limit / 5xx
 # backoff = 1.0                # seconds, doubled each retry
 
 
