@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from importlib.metadata import EntryPoint, entry_points
 from typing import Any, cast
 
+from pydantic import ValidationError
+
 from oaken.core.clock import Clock
 from oaken.core.errors import NotFound, PluginError
 from oaken.core.events import EventBus, PluginHealthChanged
@@ -232,6 +234,7 @@ class PluginHost:
         )
         rec.ctx = ctx
         try:
+            self._validate_config(rec.instance, ctx.config)
             await self._call(rec.instance, "start", ctx)
             problems = check_started(rec.kind, rec.instance)
             if problems:
@@ -354,6 +357,27 @@ class PluginHost:
         model = getattr(rec.instance, "config_model", None) if rec else None
         schema = getattr(model, "model_json_schema", None)
         return schema() if callable(schema) else None
+
+    @staticmethod
+    def _validate_config(instance: Any, config: dict[str, Any]) -> None:
+        """Validate ``config`` against a plugin's ``config_model`` (a pydantic model) before it
+        starts, so a bad ``[plugins.<name>]`` table is a clear, field-level unhealthy message
+        instead of a late failure inside the plugin. A plugin that declares no ``config_model`` is
+        unaffected: its ``ctx.config`` stays the free-form dict. Raises ``PluginError`` on a
+        validation error (the caller records it as a start failure). The validated values are not
+        written back onto ``config`` — the plugin still reads its own table — this only checks."""
+        model = getattr(instance, "config_model", None)
+        validate = getattr(model, "model_validate", None)
+        if not callable(validate):
+            return
+        try:
+            validate(config)
+        except ValidationError as exc:
+            problems = "; ".join(
+                f"{'.'.join(str(p) for p in e['loc']) or 'config'}: {e['msg']}"
+                for e in exc.errors(include_input=False, include_url=False)[:5]
+            )
+            raise PluginError(f"invalid [plugins] config ({problems})") from None
 
     # -- lookup ------------------------------------------------------------------------------
     def statuses(self) -> list[PluginStatus]:
