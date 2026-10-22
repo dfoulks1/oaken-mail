@@ -1,9 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
-"""``oaken enrich run|show`` and ``oaken sieve check|test|list|refilter``.
+"""``oaken enrich run|show`` and ``oaken sieve check|test|list|get|save|delete|refilter``.
 
 Each is one registry operation. The Sieve commands read the script file here (it lives on the
 person's disk) and send its text; core compiles and runs it, so the CLI has no Sieve logic. A script
-that does not compile exits 1 with core's message, which names the line.
+that does not compile exits 1 with core's message, which names the line. ``save`` compiles before it
+persists (core refuses an uncompilable script), and ``--suggest-name`` prints the next free
+``NN-name.sieve`` since run order is by name. Writing and deleting scripts is confirm-gated and
+never offered over MCP.
 """
 
 from __future__ import annotations
@@ -68,6 +71,13 @@ async def _enrich(client: ApiClient, args: argparse.Namespace) -> int:
 
 
 def _read_script(path: str) -> tuple[str, str]:
+    if path == "-":
+        import sys
+
+        text = sys.stdin.read()
+        if len(text.encode("utf-8", "surrogatepass")) > MAX_SCRIPT:
+            raise CliError(f"stdin is larger than {MAX_SCRIPT} bytes", ExitCode.USAGE)
+        return "script.sieve", text
     p = Path(path).expanduser()
     try:
         if p.stat().st_size > MAX_SCRIPT:
@@ -93,7 +103,29 @@ def cmd_sieve(args: argparse.Namespace) -> int:
         args.script_name, args.script_text = _read_script(args.file)
     if args.action == "test" and args.eml:
         args.eml_b64 = _read_eml(args.eml)
+    if args.action == "save" and not args.suggest_name:
+        if not args.name or not args.file:
+            raise CliError("save takes a script NAME and a FILE", ExitCode.USAGE)
+        _, args.script_text = _read_script(args.file)
     return run(lambda client: _sieve(client, args), args)
+
+
+def _next_name(existing: list[str], base: str) -> str:
+    """The next free ``NN-base.sieve``: scan the two-digit prefixes in use and pick the next slot.
+    Run order is by file name (prompt 26 Q2), so a fresh script sorts after the current ones."""
+    import re
+
+    used = set()
+    for name in existing:
+        m = re.match(r"^(\d{2})-", name)
+        if m:
+            used.add(int(m.group(1)))
+    nn = 10
+    while nn in used and nn < 100:
+        nn += 10
+    while nn in used and nn < 100:
+        nn += 1
+    return f"{nn:02d}-{base}.sieve"
 
 
 async def _sieve(client: ApiClient, args: argparse.Namespace) -> int:
@@ -101,6 +133,21 @@ async def _sieve(client: ApiClient, args: argparse.Namespace) -> int:
         return await _check(client, args)
     if args.action == "test":
         return await _test(client, args)
+    if args.action == "get":
+        return await _get(client, args)
+    if args.action == "save":
+        return await _save(client, args)
+    if args.action == "delete":
+        result = await client.call("sieve_delete", {"name": args.name}, confirm=True)
+        out = result.output if isinstance(result.output, dict) else {}
+
+        def deleted() -> None:
+            from oaken_cli.output import print_text
+
+            print_text(f"{args.name}: {'deleted' if out.get('deleted') else 'was not there'}")
+
+        emit(args, data=result.output, text=deleted)
+        return int(ExitCode.OK if out.get("deleted") else ExitCode.ERROR)
     if args.action == "refilter":
         payload: dict[str, object] = {"stage": "filter"}
         if args.account:
@@ -173,3 +220,47 @@ async def _test(client: ApiClient, args: argparse.Namespace) -> int:
 
     emit(args, data=result.output, text=shown)
     return int(ExitCode.OK if check.get("ok") and not out.get("errors") else ExitCode.ERROR)
+
+
+async def _get(client: ApiClient, args: argparse.Namespace) -> int:
+    result = await client.call("sieve_get", {"name": args.name})
+    out = result.output if isinstance(result.output, dict) else {}
+
+    def shown() -> None:
+        from oaken_cli.output import print_text
+
+        print_text(out.get("text", ""))
+
+    return emit(args, data=result.output, text=shown)
+
+
+async def _save(client: ApiClient, args: argparse.Namespace) -> int:
+    if args.suggest_name:
+        listing = await client.call("sieve_list", {})
+        body = listing.output if isinstance(listing.output, dict) else {}
+        names = [s["name"] for s in body.get("scripts", [])]
+        suggestion = _next_name(names, args.base)
+
+        def named() -> None:
+            from oaken_cli.output import print_text
+
+            print_text(suggestion)
+
+        return emit(args, data={"name": suggestion}, text=named)
+    result = await client.call(
+        "sieve_save", {"name": args.name, "text": args.script_text}, confirm=True
+    )
+    out = result.output if isinstance(result.output, dict) else {}
+    check = out.get("check", {})
+
+    def shown() -> None:
+        from oaken_cli.output import print_text
+
+        if out.get("saved"):
+            print_text(f"{args.name}: saved (sha256 {out.get('sha256', '')[:12]})")
+            print_text("takes effect on the next filter run; 'oaken sieve refilter' re-runs now")
+        else:
+            print_text(f"{args.name}: not saved — {check.get('error', 'does not compile')}")
+
+    emit(args, data=result.output, text=shown)
+    return int(ExitCode.OK if out.get("saved") else ExitCode.ERROR)

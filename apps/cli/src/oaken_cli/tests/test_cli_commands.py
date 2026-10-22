@@ -181,6 +181,52 @@ async def test_sieve_list_and_refilter(cli: Cli) -> None:
     assert queued.code == 0 and "refilter queued" in queued.out
 
 
+def _point_sieve_at(cli: Cli) -> Path:
+    """Make the sieve ops read and write the rig's sieve folder (an absolute dir)."""
+    folder = Path(cli.ops.rig.sieve_dir)
+    s = cli.ops.svc.settings
+    cli.ops.svc.settings = s.model_copy(
+        update={
+            "mail": s.mail.model_copy(
+                update={"sieve": s.mail.sieve.model_copy(update={"dir": str(folder)})}
+            )
+        }
+    )
+    return folder
+
+
+async def test_sieve_save_get_and_delete(cli: Cli, tmp_path: Path) -> None:
+    folder = _point_sieve_at(cli)
+    good = tmp_path / "work.sieve"
+    good.write_text(SCRIPT)
+    saved = await cli("sieve", "save", "20-work.sieve", str(good))
+    assert saved.code == 0 and "saved" in saved.out
+    assert (folder / "20-work.sieve").read_text() == SCRIPT
+    got = await cli("sieve", "get", "20-work.sieve")
+    assert got.code == 0 and "fileinto" in got.out
+    deleted = await cli("sieve", "delete", "20-work.sieve")
+    assert deleted.code == 0 and "deleted" in deleted.out
+    assert not (folder / "20-work.sieve").exists()
+
+
+async def test_sieve_save_refuses_an_uncompilable_script(cli: Cli, tmp_path: Path) -> None:
+    folder = _point_sieve_at(cli)
+    bad = tmp_path / "bad.sieve"
+    bad.write_text("keep;\nbogus;\n")
+    run = await cli("sieve", "save", "30-bad.sieve", str(bad))
+    assert run.code == int(ExitCode.ERROR) and "not saved" in run.out
+    assert not (folder / "30-bad.sieve").exists()
+
+
+async def test_sieve_save_suggest_name_picks_the_next_free_nn(cli: Cli) -> None:
+    folder = _point_sieve_at(cli)
+    (folder / "10-lists.sieve").write_text("keep;\n")
+    (folder / "20-work.sieve").write_text("keep;\n")
+    run = await cli("sieve", "save", "--suggest-name", "--base", "newsletters", "--json")
+    assert run.code == 0
+    assert json.loads(run.out)["name"] == "30-newsletters.sieve"
+
+
 async def test_schedule_list_set_pause_resume_remove(cli: Cli) -> None:
     # The rig knows the "main" account; install its default schedule first.
     await cli.ops.svc.need_sync().ensure_schedules()

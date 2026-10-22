@@ -152,6 +152,8 @@ class AccountInfo(BaseModel):
     account_id: str
     provider: str
     display_name: str
+    receive_only: bool = False
+    capabilities: list[str] = Field(default_factory=list)
 
 
 class AccountsOutput(BaseModel):
@@ -167,12 +169,33 @@ class AccountsOutput(BaseModel):
     mcp="on",
 )
 async def list_accounts(ctx: OpContext, inp: Empty) -> AccountsOutput:
-    return AccountsOutput(
-        accounts=[
-            AccountInfo(account_id=a.id, provider=a.provider, display_name=a.display_name)
-            for a in await ctx.svc.raw.list_accounts()
-        ]
-    )
+    from oaken.core.errors import Unavailable
+    from oaken.mail.sendpolicy import effective_capabilities, is_receive_only
+    from oaken.plugins.base import inferred_capabilities
+
+    try:
+        accounts = ctx.svc.need_sync().accounts
+    except Unavailable:
+        accounts = None  # a rig with no scheduler: report receive_only, but no live capabilities
+    rows: list[AccountInfo] = []
+    for a in await ctx.svc.raw.list_accounts():
+        caps: list[str] = []
+        if accounts is not None:
+            try:
+                provider = accounts.get(a.id, allow_unhealthy=True)
+                caps = effective_capabilities(inferred_capabilities(provider, "provider"), a.config)
+            except Exception:  # noqa: BLE001 - no provider started: report no capabilities
+                caps = []
+        rows.append(
+            AccountInfo(
+                account_id=a.id,
+                provider=a.provider,
+                display_name=a.display_name,
+                receive_only=is_receive_only(a.config),
+                capabilities=caps,
+            )
+        )
+    return AccountsOutput(accounts=rows)
 
 
 class PluginInfoOut(BaseModel):

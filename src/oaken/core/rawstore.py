@@ -283,6 +283,19 @@ class RawStore:
             raise NotFound(f"no such account: {account_id}")
         return await self.get_account(account_id)
 
+    async def set_account_display_name(self, account_id: AccountId, display_name: str) -> Account:
+        """Rename an account (its non-secret label, not its id)."""
+        name = display_name.strip()
+        if not name:
+            raise ConfigError("a display name cannot be empty")
+        changed = await self.db.execute(
+            "UPDATE accounts SET display_name = ? WHERE id = ? AND removed_at IS NULL",
+            (name, account_id),
+        )
+        if not changed:
+            raise NotFound(f"no such account: {account_id}")
+        return await self.get_account(account_id)
+
     async def delete_account(self, account_id: AccountId) -> bool:
         """Soft-remove the account: its stored mail is kept (prompt 24 Q2) and still owns its
         ``account_id`` foreign key, so the row stays but is marked ``removed_at`` and hidden from

@@ -17,6 +17,8 @@ from oaken.core.errors import InvalidInput, NotFound
 from oaken.core.ids import AccountId
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import AnyOperation, operation
+from oaken.mail.sendpolicy import effective_capabilities, is_receive_only
+from oaken.plugins.base import inferred_capabilities
 from oaken.readstate.audit import new_audit_id
 
 
@@ -25,8 +27,30 @@ class AccountDetail(BaseModel):
     provider: str
     display_name: str
     config: dict[str, Any]
+    receive_only: bool = Field(
+        default=False,
+        description="Listen but never send: core refuses to route a send for this account.",
+    )
+    capabilities: list[str] = Field(
+        default_factory=list,
+        description="What the account offers (auth, sync.pull, flags.write, send), with 'send' "
+        "dropped when it is receive-only.",
+    )
     problem: str | None = Field(default=None, description="Why it cannot sync now, if it cannot.")
     config_schema: dict[str, Any] | None = None
+
+
+def _account_capabilities(ctx: OpContext, account_id: str, config: dict[str, Any]) -> list[str]:
+    """The account's effective capabilities: its provider's, minus 'send' when receive-only.
+    Reads them from the started provider instance if there is one, so the tags match what the
+    host would actually route; an account with no healthy provider reports none."""
+    accounts = ctx.svc.need_sync().accounts
+    try:
+        provider = accounts.get(account_id, allow_unhealthy=True)
+    except Exception:  # noqa: BLE001 - no provider started yet: no capabilities to report
+        return []
+    inferred = inferred_capabilities(provider, "provider")
+    return effective_capabilities(inferred, config)
 
 
 async def _detail(ctx: OpContext, account_id: str) -> AccountDetail:
@@ -38,6 +62,8 @@ async def _detail(ctx: OpContext, account_id: str) -> AccountDetail:
         provider=acct.provider,
         display_name=acct.display_name,
         config=acct.config,
+        receive_only=is_receive_only(acct.config),
+        capabilities=_account_capabilities(ctx, acct.id, acct.config),
         problem=accounts.problem(acct.id),
         config_schema=host.config_schema("provider", acct.provider),
     )
@@ -89,6 +115,9 @@ async def create_account(ctx: OpContext, inp: CreateAccountInput) -> AccountDeta
 class SetConfigInput(BaseModel):
     account_id: str
     config: dict[str, Any] = Field(description="The whole non-secret config; replaces the old.")
+    display_name: str | None = Field(
+        default=None, description="A new display name for the account, if given."
+    )
 
 
 class SetConfigOutput(BaseModel):
@@ -100,7 +129,7 @@ class SetConfigOutput(BaseModel):
 
 @operation(
     "set_account_config",
-    "Replace an account's non-secret settings.",
+    "Replace an account's non-secret settings (and, if given, its display name).",
     permission="mutate",
     input=SetConfigInput,
     output=SetConfigOutput,
@@ -108,6 +137,8 @@ class SetConfigOutput(BaseModel):
 )
 async def set_account_config(ctx: OpContext, inp: SetConfigInput) -> SetConfigOutput:
     await ctx.svc.raw.set_account_config(AccountId(inp.account_id), inp.config)
+    if inp.display_name is not None:
+        await ctx.svc.raw.set_account_display_name(AccountId(inp.account_id), inp.display_name)
     return SetConfigOutput(account=await _detail(ctx, inp.account_id), restart_needed=True)
 
 

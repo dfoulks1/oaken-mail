@@ -554,6 +554,32 @@ def _register_content(sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
     which.add_argument("--message", metavar="ID", help="A stored message.")
     which.add_argument("--eml", metavar="PATH", help="A message file.")
     acts.add_parser("list", parents=[_globals(True)], help="The scripts core would load.")
+    get = acts.add_parser(
+        "get", parents=[_globals(True)], help="Print one script's text (to edit it)."
+    )
+    get.add_argument("name", help="The script file name, e.g. 10-lists.sieve.")
+    save = acts.add_parser(
+        "save",
+        parents=[_globals(True)],
+        help="Save a script so it runs on the next filter pass (refused unless it compiles).",
+        description=(
+            "Compiles the script first and writes it only if it compiles, atomically and "
+            "owner-only. Run order is by name, so a new script is best named NN-name.sieve; "
+            "'oaken sieve save --suggest-name' prints the next free NN."
+        ),
+    )
+    save.add_argument("name", nargs="?", help="The script file name (e.g. 20-work.sieve).")
+    save.add_argument("file", nargs="?", help="The script file to read ('-' reads stdin).")
+    save.add_argument(
+        "--suggest-name",
+        action="store_true",
+        help="Print the next free NN-prefixed name and exit (give a base with --base).",
+    )
+    save.add_argument(
+        "--base", metavar="NAME", default="filter", help="Base for --suggest-name (default filter)."
+    )
+    delete = acts.add_parser("delete", parents=[_globals(True)], help="Remove one script.")
+    delete.add_argument("name", help="The script file name.")
     refilter = acts.add_parser(
         "refilter", parents=[_globals(True)], help="Re-run the scripts over stored mail (a job)."
     )
@@ -592,6 +618,48 @@ def _register_accounts(sub: argparse._SubParsersAction[argparse.ArgumentParser])
     add.add_argument(
         "--set", action="append", metavar="KEY=VALUE", help="A provider setting (repeatable)."
     )
+    add.add_argument(
+        "--receive-only",
+        dest="receive_only",
+        action="store_true",
+        default=None,
+        help="Listen but never send (the default for a new Gmail account until send is turned on).",
+    )
+    set_ = acts.add_parser(
+        "set",
+        parents=[_globals(True)],
+        help="Change an account's non-secret settings, or its receive-only switch.",
+        description=(
+            "Merges --set KEY=VALUE into the account's config and/or flips the receive-only "
+            "switch. Credentials are never set here (use 'oaken auth')."
+        ),
+    )
+    set_.add_argument("account_id")
+    set_.add_argument(
+        "--set", action="append", metavar="KEY=VALUE", help="A setting to change (repeatable)."
+    )
+    ro = set_.add_mutually_exclusive_group()
+    ro.add_argument(
+        "--receive-only",
+        dest="receive_only",
+        action="store_true",
+        default=None,
+        help="Mark the account receive-only (listen but never send).",
+    )
+    ro.add_argument(
+        "--can-send",
+        dest="receive_only",
+        action="store_false",
+        help="Allow this account to be a send route (undo receive-only).",
+    )
+    set_.set_defaults(func=_lazy("account_cmd", "cmd_set"))
+    remove = acts.add_parser(
+        "remove",
+        parents=[_globals(True)],
+        help="Remove an account and its schedules (stored mail is kept).",
+    )
+    remove.add_argument("account_id")
+    remove.set_defaults(func=_lazy("account_cmd", "cmd_remove"))
     admin.set_defaults(func=_lazy("account_cmd", "cmd_admin"))
 
     auth = sub.add_parser(

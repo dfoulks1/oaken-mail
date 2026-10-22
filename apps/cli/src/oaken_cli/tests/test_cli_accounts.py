@@ -161,3 +161,44 @@ async def test_gmail_consent_failure_is_exit_4(acli: Cli, monkeypatch: pytest.Mo
     await acli("admin", "account", "add", "--provider", "gmail", "--id", "g", "--name", "G")
     run = await acli("auth", "gmail", "--no-browser", "--timeout", "20")
     assert run.code == int(ExitCode.AUTH) and "access_denied" in run.out
+
+
+async def test_a_new_gmail_account_defaults_to_receive_only(
+    acli: Cli, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stdin(monkeypatch)  # not a tty: the non-interactive Gmail default is receive-only
+    await acli("admin", "account", "add", "--provider", "gmail", "--id", "g", "--name", "G")
+    shown = json.loads((await acli("admin", "account", "show", "g", "--json")).out)
+    assert shown["receive_only"] is True
+    # An SMTP/IMAP account is able to send by default (not receive-only).
+    await acli("admin", "account", "add", "--provider", "smtp", "--id", "s", "--name", "S")
+    smtp = json.loads((await acli("admin", "account", "show", "s", "--json")).out)
+    assert smtp["receive_only"] is False
+
+
+async def test_account_set_flips_receive_only_and_merges_settings(
+    acli: Cli, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stdin(monkeypatch)
+    await acli(
+        "admin", "account", "add", "--provider", "imap", "--id", "i", "--name", "I",
+        "--set", "host=h",
+    )  # fmt: skip
+    marked = await acli("admin", "account", "set", "i", "--receive-only", "--json")
+    assert marked.code == 0, marked.err
+    assert json.loads(marked.out)["account"]["receive_only"] is True
+    # The existing setting survives the merge.
+    assert json.loads(marked.out)["account"]["config"]["host"] == "h"
+    undone = await acli("admin", "account", "set", "i", "--can-send", "--json")
+    assert json.loads(undone.out)["account"]["receive_only"] is False
+    assert "receive_only" not in json.loads(undone.out)["account"]["config"]
+
+
+async def test_account_remove_keeps_mail(acli: Cli, monkeypatch: pytest.MonkeyPatch) -> None:
+    stdin(monkeypatch)
+    await acli("admin", "account", "add", "--provider", "imap", "--id", "gone", "--name", "Gone")
+    removed = await acli("admin", "account", "remove", "gone", "--json")
+    assert removed.code == 0, removed.err
+    assert json.loads(removed.out)["removed"] is True
+    listed = await acli("admin", "account", "list", "--json")
+    assert "gone" not in {a["account_id"] for a in json.loads(listed.out)["accounts"]}

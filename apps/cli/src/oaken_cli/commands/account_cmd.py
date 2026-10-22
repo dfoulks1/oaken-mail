@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""``oaken admin account list|show|add`` and ``oaken auth gmail|smtp|imap``.
+"""``oaken admin account list|show|add|set|remove`` and ``oaken auth gmail|smtp|imap``.
 
 The account wizard asks the questions and sends the answers to core, which stores them, so nobody
 edits a file by hand. Only non-secret settings are asked for or stored in the account. A credential
@@ -55,7 +55,9 @@ async def _admin(client: ApiClient, args: argparse.Namespace) -> int:
             if not rows:
                 print_text('no accounts; add one with "oaken admin account add"')
                 return
-            print_table(rows, ["account_id", "provider", "display_name"], title="accounts")
+            for r in rows:
+                r["send"] = "no (receive-only)" if r.get("receive_only") else "yes"
+            print_table(rows, ["account_id", "provider", "display_name", "send"], title="accounts")
 
         return emit(args, data=result.output, text=listed)
     if args.action == "show":
@@ -68,12 +70,70 @@ def _show(out: Any) -> None:
     from oaken_cli.output import print_text
 
     print_text(f"{out['account_id']}: {out['provider']} ({out['display_name']})")
+    if out.get("receive_only"):
+        print_text("  receive-only (listen but not send)")
+    caps = out.get("capabilities") or []
+    if caps:
+        print_text(f"  capabilities: {', '.join(caps)}")
     for key, value in out.get("config", {}).items():
         print_text(f"  {key} = {json.dumps(value)}")
     if not out.get("config"):
         print_text("  no settings")
     if out.get("problem"):
         print_text(f"problem: {out['problem']}")
+
+
+def cmd_set(args: argparse.Namespace) -> int:
+    return run(lambda client: _set(client, args), args)
+
+
+async def _set(client: ApiClient, args: argparse.Namespace) -> int:
+    # Read the current config, merge the changes, and write the whole thing back (the op replaces).
+    current = await client.call("get_account", {"account_id": args.account_id})
+    out = current.output if isinstance(current.output, dict) else {}
+    config = dict(out.get("config", {}))
+    config.update(_parse_settings(args.set))
+    receive_only = getattr(args, "receive_only", None)
+    if receive_only is True:
+        config["receive_only"] = True
+    elif receive_only is False:
+        config.pop("receive_only", None)
+    result = await client.call(
+        "set_account_config", {"account_id": args.account_id, "config": config}, confirm=True
+    )
+    body = result.output if isinstance(result.output, dict) else {}
+
+    def done() -> None:
+        from oaken_cli.output import print_text
+
+        account = body.get("account", {})
+        _show(account)
+        if body.get("restart_needed"):
+            print_text("(the running provider keeps its old settings until core restarts)")
+
+    return emit(args, data=result.output, text=done)
+
+
+def cmd_remove(args: argparse.Namespace) -> int:
+    return run(lambda client: _remove(client, args), args)
+
+
+async def _remove(client: ApiClient, args: argparse.Namespace) -> int:
+    result = await client.call("remove_account", {"account_id": args.account_id}, confirm=True)
+    out = result.output if isinstance(result.output, dict) else {}
+
+    def done() -> None:
+        from oaken_cli.output import print_text
+
+        print_text(
+            f"account {args.account_id} removed ({out.get('schedules_removed', 0)} schedules)"
+        )
+        if out.get("mail_kept"):
+            print_text("stored mail is kept; purge is a separate operation")
+        if out.get("restart_needed"):
+            print_text("(a started provider keeps serving until core restarts)")
+
+    return emit(args, data=result.output, text=done)
 
 
 async def _add(client: ApiClient, args: argparse.Namespace) -> int:
@@ -91,6 +151,19 @@ async def _add(client: ApiClient, args: argparse.Namespace) -> int:
     schema = providers[provider].get("config_schema") or {}
     if interactive:
         config = _wizard(schema, config)
+    # Receive-only is the "listen but not send" switch (prompt 24). A new Gmail account defaults
+    # to receive-only until the user turns send on; other providers default to able-to-send.
+    receive_only = getattr(args, "receive_only", None)
+    if receive_only is None and interactive and provider == "gmail":
+        receive_only = _ask("receive only (listen but not send)? [Y/n]", "y", True).lower() in (
+            "",
+            "y",
+            "yes",
+        )
+    elif receive_only is None and provider == "gmail":
+        receive_only = True  # the honest default for a non-interactive Gmail add
+    if receive_only:
+        config["receive_only"] = True
     result = await client.call(
         "create_account",
         {"account_id": account_id, "provider": provider, "display_name": name, "config": config},
