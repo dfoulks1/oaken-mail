@@ -6,10 +6,6 @@ badges = [["text-bg-warning", "Pre-alpha"], ["text-bg-secondary", "Local-first"]
 description = "A local-first, AI-native mail client: your mail, processed and searched on your own machine."
 +++
 
-## The name
-
-TODO(user): write a short paragraph on where the name Oaken Mail comes from.
-
 ## What it is for
 
 - **A local MCP server for sensitive mail.** Core hosts an MCP server over your local mail store, so a more capable model can search, read and act on your mail through a narrow, audited interface without the mail being uploaded anywhere. Sending is never exposed.
