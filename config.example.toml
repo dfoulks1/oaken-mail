@@ -115,6 +115,19 @@ exclude_labels = []            # label names/ids to skip; Spam and Trash are alw
 # shutdown_grace_seconds = 30.0
 
 
+# --- Swarm: optional external agents that lease jobs (OFF by default) ------------------
+# Core runs its own internal workers ([jobs] workers); the swarm is extra. An external agent (a
+# bigger model, an MCP client) leases jobs from the same queue. It is off until BOTH enabled=true
+# AND allowed_kinds is non-empty: handing a job to an external agent sends that job's mail text to
+# it (and, if it is a hosted model, to that provider), so you opt in kind by kind.
+# [swarm]
+# enabled = false              # nothing is offered to agents unless this is true
+# allowed_kinds = []           # job kinds an agent may ever lease, e.g. ["ingest.enrich"]
+# max_agents = 8               # active (unrevoked) agents
+# default_max_leases = 2       # jobs one agent may hold at once
+# default_max_per_hour = 600   # jobs one agent may claim per hour
+
+
 # --- Read state -----------------------------------------------------------------------
 # [read_state]
 # auto_mark = true             # false turns off automatic marks (opening/summarizing); explicit
