@@ -17,7 +17,8 @@ SUMMARY = {"summary": "Alex writes about quokkas."}
 def examples(a: MessageId, job_id: str = "none") -> dict[str, Any]:
     """A valid input for every operation that does not change read state when called plainly."""
     return {
-        "status": {}, "pipeline_status": {}, "usage_summary": {}, "list_accounts": {},
+        "status": {}, "pipeline_status": {}, "usage_summary": {}, "savings_summary": {},
+        "list_accounts": {},
         "list_plugins": {}, "plugin_health": {}, "list_audit": {}, "list_operations": {},
         "list_labels": {}, "list_schedules": {"crontab": True}, "list_messages": {},
         "search_keyword": {"query": "quokkas"}, "get_message": {"message_id": a},

@@ -527,6 +527,21 @@ class IndexStore:
             (message_id,),
         )
 
+    async def body_chars(self, message_ids: Sequence[str]) -> int:
+        """The characters a reader would take in by opening each of these messages in full (the
+        subject and the cleaned text). For the token-savings estimate; the text is not returned."""
+        total = 0
+        for i in range(0, len(message_ids), 500):
+            batch = list(message_ids[i : i + 500])
+            marks = ",".join("?" * len(batch))
+            row = await self.db.fetchone(
+                "SELECT COALESCE(SUM(LENGTH(subject) + LENGTH(cleaned_text)), 0) AS n FROM docs"  # noqa: S608
+                f" WHERE message_id IN ({marks})",  # placeholders only, no values
+                tuple(batch),
+            )
+            total += int(row["n"]) if row else 0
+        return total
+
     async def thread_rows(self, thread_key: str, limit: int) -> list[sqlite3.Row]:
         """The messages of a thread (oldest first) with what the tree needs. One more than
         ``limit`` comes back if there are more, so the caller can say it cut the thread."""

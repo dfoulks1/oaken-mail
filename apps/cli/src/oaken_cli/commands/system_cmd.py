@@ -11,10 +11,12 @@ JSON object) per event until interrupted.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
+from typing import Any
 
 from oaken_cli.client import ApiClient, CallResult
 from oaken_cli.commands.runtime import emit, run
-from oaken_cli.exits import ExitCode
+from oaken_cli.exits import CliError, ExitCode
 
 # --- inspection (read ops) ------------------------------------------------------------------
 
@@ -113,20 +115,90 @@ async def _usage(client: ApiClient, args: argparse.Namespace) -> int:
     result = await client.call("usage_summary", payload)
     out = result.output if isinstance(result.output, dict) else {}
     rows = out.get("rows", []) if isinstance(out, dict) else []
+    try:
+        saved: CallResult | None = await client.call(
+            "savings_summary", {k: v for k, v in payload.items() if k == "since_hours"}
+        )
+    except CliError:  # a core from before savings were tracked: show the usage table alone
+        saved = None
+    sav = saved.output if saved is not None and isinstance(saved.output, dict) else {}
 
     def text() -> None:
-        from oaken_cli.output import print_table, print_text
+        from oaken_cli.output import print_text
 
         if not rows:
             print_text("no usage recorded")
-            return
-        print_table(
-            rows,
-            ["workspace", "stage", "model_id", "calls", "tokens_in", "tokens_out", "tokens_saved"],
-            title="usage",
-        )
+        else:
+            _table(
+                rows,
+                [
+                    "workspace",
+                    "stage",
+                    "model_id",
+                    "calls",
+                    "tokens_in",
+                    "tokens_out",
+                    "tokens_saved",
+                ],
+                "usage",
+                sums=["calls", "tokens_in", "tokens_out", "tokens_saved"],
+            )
+        totals = [
+            {**t, "context_saved_pct": _pct(t["context_tokens_saved"], t["context_tokens_full"])}
+            for t in sav.get("totals", [])
+        ]
+        if totals:
+            full = sum(x["context_tokens_full"] for x in totals)
+            _table(
+                totals,
+                ["caller", "cache_tokens_saved", "context_tokens_saved", "context_saved_pct"],
+                "saved, by caller",
+                sums=["cache_tokens_saved", "context_tokens_saved"],
+                extra=lambda t: {"context_saved_pct": _pct(t["context_tokens_saved"], full)},
+            )
+        if sav.get("context"):
+            _table(
+                sav["context"],
+                [
+                    "caller",
+                    "op",
+                    "calls",
+                    "messages",
+                    "tokens_returned",
+                    "tokens_full",
+                    "tokens_saved",
+                ],
+                "context kept out of the client, by operation",
+                sums=["calls", "messages", "tokens_returned", "tokens_full", "tokens_saved"],
+            )
+        if totals:
+            print_text(sav.get("note", ""))
 
-    return emit(args, data=result.output, text=text)
+    return emit(args, data={**out, "savings": saved.output if saved else None}, text=text)
+
+
+def _table(
+    rows: list[dict[str, Any]],
+    columns: list[str],
+    title: str,
+    *,
+    sums: list[str],
+    extra: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+) -> None:
+    """Print ``rows`` with a totals row under a rule (text view only; the JSON keeps plain rows)."""
+    from oaken_cli.output import print_table
+
+    if len(rows) < 2:
+        print_table(rows, columns, title=title)
+        return
+    total = {columns[0]: "total", **{c: sum(int(r.get(c, 0)) for r in rows) for c in sums}}
+    if extra:
+        total.update(extra(total))
+    print_table([*rows, total], columns, title=title, footer_rows=1)
+
+
+def _pct(saved: int, full: int) -> str:
+    return f"{100 * saved / full:.0f}%" if full else "-"
 
 
 def cmd_plugins(args: argparse.Namespace) -> int:

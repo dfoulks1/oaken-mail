@@ -12,8 +12,10 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
+from oaken.ai.caller import CALLER
 from oaken.core.errors import InvalidInput, NotExposed, SendDisabled
 from oaken.core.logging import get_logger
+from oaken.core.operations import savings
 from oaken.core.operations.caller import CallerContext
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.exposure import ExposureStore
@@ -113,9 +115,14 @@ class CoreClient:
                     caller.request_id, proposal=await self._propose(op, ctx, inp, binding)
                 )
 
-        output = await op.handler(ctx, inp)
+        token = CALLER.set(caller.client)  # model calls inside the handler are counted to this door
+        try:
+            output = await op.handler(ctx, inp)
+        finally:
+            CALLER.reset(token)
         if not isinstance(output, op.output):
             output = op.output.model_validate(output)
+        await savings.record(self.svc, op.name, output, caller)
         if op.audit == "always" or (op.permission == "mutate" and op.audit == "registry"):
             await self._audit(op, inp, caller)
         log.info(

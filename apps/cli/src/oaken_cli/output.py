@@ -53,8 +53,10 @@ def print_table(
     *,
     title: str | None = None,
     stream: TextIO | None = None,
+    footer_rows: int = 0,
 ) -> None:
     """Render a table of ``rows`` restricted to ``columns``. Cell values are sanitized to one line.
+    The last ``footer_rows`` rows (a totals row) are set off from the rest by a rule.
 
     Uses ``rich`` when it is installed and stdout is a TTY; otherwise a plain aligned text table.
     """
@@ -62,15 +64,19 @@ def print_table(
     str_rows = [[sanitize_line(str(row.get(col, ""))) for col in columns] for row in rows]
     if is_tty(stream):
         try:
-            _rich_table(columns, str_rows, title, stream)
+            _rich_table(columns, str_rows, title, stream, footer_rows)
             return
         except ImportError:
             pass
-    _plain_table(columns, str_rows, title, stream)
+    _plain_table(columns, str_rows, title, stream, footer_rows)
 
 
 def _rich_table(
-    columns: Sequence[str], rows: Sequence[Sequence[str]], title: str | None, stream: TextIO
+    columns: Sequence[str],
+    rows: Sequence[Sequence[str]],
+    title: str | None,
+    stream: TextIO,
+    footer_rows: int = 0,
 ) -> None:
     from rich.console import Console
     from rich.table import Table
@@ -78,13 +84,19 @@ def _rich_table(
     table = Table(title=title)
     for col in columns:
         table.add_column(col)
-    for row in rows:
+    for i, row in enumerate(rows):
+        if footer_rows and i == len(rows) - footer_rows:
+            table.add_section()
         table.add_row(*row)
     Console(file=stream).print(table)
 
 
 def _plain_table(
-    columns: Sequence[str], rows: Sequence[Sequence[str]], title: str | None, stream: TextIO
+    columns: Sequence[str],
+    rows: Sequence[Sequence[str]],
+    title: str | None,
+    stream: TextIO,
+    footer_rows: int = 0,
 ) -> None:
     widths = [len(c) for c in columns]
     for row in rows:
@@ -94,6 +106,9 @@ def _plain_table(
         stream.write(f"{title}\n")
     header = "  ".join(c.ljust(widths[i]) for i, c in enumerate(columns))
     stream.write(header + "\n")
-    stream.write("  ".join("-" * widths[i] for i in range(len(columns))) + "\n")
-    for row in rows:
+    rule = "  ".join("-" * widths[i] for i in range(len(columns))) + "\n"
+    stream.write(rule)
+    for n, row in enumerate(rows):
+        if footer_rows and n == len(rows) - footer_rows:
+            stream.write(rule)
         stream.write("  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)) + "\n")
