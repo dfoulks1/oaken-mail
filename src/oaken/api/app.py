@@ -29,6 +29,7 @@ from oaken.api.openapi import build_api_openapi
 from oaken.api.ratelimit import RateLimiter
 from oaken.api.ring import EventRing
 from oaken.api.runtime import same_secret
+from oaken.api.stats import STATS_JS, STATS_LOGO, StatsCollector, render_stats
 from oaken.core.agents import TOKEN_PREFIX, Agent
 from oaken.core.errors import Conflict, OakenError, PermissionDenied
 from oaken.core.ids import JobId
@@ -145,10 +146,16 @@ class Api:
     """The ASGI application. ``bind`` it to the port once known; ``mount`` another door."""
 
     def __init__(
-        self, client: CoreClient, *, token: str, rate_now: Callable[[], float] | None = None
+        self,
+        client: CoreClient,
+        *,
+        token: str,
+        rate_now: Callable[[], float] | None = None,
+        started_at: Any = None,
     ) -> None:
         self.client = client
         self._token = token
+        self._started_at = started_at
         svc = client.svc
         cfg = svc.settings.api
         self.cfg = cfg
@@ -222,6 +229,10 @@ class Api:
             Route("/v1/agent/jobs/{job_id}/heartbeat", safe(self.heartbeat), methods=["POST"]),
             Route("/v1/agent/jobs/{job_id}/complete", safe(self.complete), methods=["POST"]),
             Route("/v1/agent/jobs/{job_id}/fail", safe(self.fail), methods=["POST"]),
+            Route("/stats", safe(self.stats), methods=["GET"]),
+            Route("/stats.json", safe(self.stats_json), methods=["GET"]),
+            Route("/stats.js", safe(self.stats_js), methods=["GET"]),
+            Route("/stats-logo.png", safe(self.stats_logo), methods=["GET"]),
         ]
         static = Path(self.cfg.static_dir).expanduser() if self.cfg.static_dir else None
         if static is not None and static.is_dir():
@@ -241,6 +252,53 @@ class Api:
 
     async def placeholder(self, request: Request) -> Response:
         return HTMLResponse(PLACEHOLDER)
+
+    def _stats_collector(self) -> StatsCollector:
+        return StatsCollector(
+            self.client.svc,
+            clock=self.client.svc.clock,
+            started_at=self._started_at,
+            client=self.client,
+        )
+
+    async def stats(self, request: Request) -> Response:
+        """The read-only status page (ADR 0013). Loopback-only (the Host guard) and
+        unauthenticated like ``/v1/health``; counts and health only, never mail content."""
+        data = await self._stats_collector().collect()
+        html = render_stats(data)
+        # Inline styles for the page's look; one same-origin script (stats.js) for live in-place
+        # updates — nothing inline, nothing external, so it works offline. The guard only adds a
+        # CSP when the response lacks one, so this header stands.
+        csp = (
+            "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+            "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
+        )
+        return HTMLResponse(html, headers={"content-security-policy": csp})
+
+    async def stats_json(self, request: Request) -> Response:
+        """The same stats as the page, as JSON, for the page's in-place refresh (stats.js).
+        Loopback-only and unauthenticated like `/stats`; counts and health only."""
+        data = await self._stats_collector().collect()
+        return _json(data)
+
+    async def stats_js(self, request: Request) -> Response:
+        """The one small, same-origin script for the stats page's in-place refresh. Vendored with
+        the package, served here so the page's `script-src 'self'` allows exactly it and nothing
+        else. The page works fully without it; this only updates numbers so the tab never jumps."""
+        return Response(
+            STATS_JS,
+            media_type="application/javascript",
+            headers={"cache-control": "no-store"},
+        )
+
+    async def stats_logo(self, request: Request) -> Response:
+        """The Oaken Mail logo for the stats page, served same-origin from the packaged asset so
+        the page stays offline (no CDN) under `img-src 'self'`."""
+        return Response(
+            STATS_LOGO,
+            media_type="image/png",
+            headers={"cache-control": "max-age=86400"},
+        )
 
     async def list_operations(self, request: Request) -> Response:
         ops = await self.client.visible(caller_of(request))

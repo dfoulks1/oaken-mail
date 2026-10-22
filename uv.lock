@@ -1574,6 +1574,7 @@ dependencies = [
     { name = "aiosqlite" },
     { name = "httpx2" },
     { name = "imapclient" },
+    { name = "jinja2" },
     { name = "keyring" },
     { name = "mcp" },
     { name = "platformdirs" },
@@ -1611,7 +1612,6 @@ dev = [
     { name = "sqlite-vec" },
 ]
 docs = [
-    { name = "jinja2" },
     { name = "markdown-it-py" },
     { name = "mdit-py-plugins" },
     { name = "pygments" },
@@ -1623,6 +1623,7 @@ requires-dist = [
     { name = "aiosqlite", specifier = ">=0.22.1" },
     { name = "httpx2", specifier = ">=2.15.1" },
     { name = "imapclient", specifier = ">=4.1.0" },
+    { name = "jinja2", specifier = ">=3.1.6" },
     { name = "keyring", specifier = ">=25.7.0" },
     { name = "mcp", specifier = ">=1.0" },
     { name = "platformdirs", specifier = ">=4.13.5" },
@@ -1657,7 +1658,6 @@ dev = [
     { name = "sqlite-vec", specifier = ">=0.1.9" },
 ]
 docs = [
-    { name = "jinja2" },
     { name = "markdown-it-py" },
     { name = "mdit-py-plugins" },
     { name = "pygments" },

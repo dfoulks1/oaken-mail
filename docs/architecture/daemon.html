@@ -82,8 +82,9 @@
       <a class="nav-link" href="#what-a-request-passes-through"><span class="num">5</span>What a request passes through</a>
       <a class="nav-link" href="#who-is-calling"><span class="num">6</span>Who is calling</a>
       <a class="nav-link" href="#the-routes"><span class="num">7</span>The routes</a>
-      <a class="nav-link" href="#threat-model"><span class="num">8</span>Threat model</a>
-      <a class="nav-link" href="#not-built-yet"><span class="num">9</span>Not built yet</a>
+      <a class="nav-link" href="#the-status-page"><span class="num">8</span>The status page</a>
+      <a class="nav-link" href="#threat-model"><span class="num">9</span>Threat model</a>
+      <a class="nav-link" href="#not-built-yet"><span class="num">10</span>Not built yet</a>
     </nav></div>
   </div></div>
 </nav>
@@ -235,9 +236,22 @@ older than the ring, or from before core restarted, gets a <code>gap</code> even
 A quiet stream sends a <code>: heartbeat</code> comment.</li>
 <li><code>/v1/agent/jobs/...</code>: claim, heartbeat, complete and fail, for the swarm.</li>
 <li><code>/</code>: files from <code>[api] static_dir</code> when set, otherwise a placeholder page. The web UI will live here.</li>
+<li><code>GET /stats</code>: a read-only status page, HTML (see below). Like <code>/v1/health</code> it needs no token —
+it is loopback-only and shows counts and health, never mail.</li>
 </ul>
 </section>
-<section id="threat-model" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>Threat model</h2></div>
+<section id="the-status-page" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>The status page</h2></div>
+<p><code>GET /stats</code> is a browser-openable dashboard: version and uptime, account/message/index counts,
+queue depth, per-stage pipeline throughput and parked jobs, token usage and savings, per-account
+sync state, and plugin health. It is <strong>unauthenticated on purpose</strong> — it is reachable only from this
+machine (the Host guard still refuses a forged name), and it carries <strong>counts and health only</strong>: no
+message text, no addresses, no tokens, and not the audit log. Open <code>http://127.0.0.1:&lt;port&gt;/stats</code>
+(the port is in <code>runtime.json</code>; set <code>[api] port</code> to pin it). The page is self-contained — inline
+styling, no external assets, no scripts — so it works offline. See
+<a href="https://github.com/dfoulks1/oaken-mail/blob/main/docs/adr/0013-read-only-stats-page.md">ADR 0013</a>; a friendly <code>oaken.local</code> name and a
+networked, authenticated variant for AI agents are possible later and deliberately not built here.</p>
+</section>
+<section id="threat-model" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>Threat model</h2></div>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
 <thead>
 <tr>
@@ -331,7 +345,7 @@ A quiet stream sends a <code>: heartbeat</code> comment.</li>
 <p>Not covered: a process running as the same user can read the token file and do what the user can.
 The audit log records what it did.</p>
 </section>
-<section id="not-built-yet" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>Not built yet</h2></div>
+<section id="not-built-yet" class="doc-section"><div class="section-head"><span class="section-num">10</span><h2>Not built yet</h2></div>
 <ul>
 <li>The ring is in memory: a restart is a <code>gap</code> for every client.</li>
 <li>Per-agent rate limits beyond the lease and hourly quotas in <a href="swarm.html">the swarm</a>.</li>

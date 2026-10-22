@@ -86,6 +86,7 @@ class Core:
     # -- building -------------------------------------------------------------------------
     async def open(self) -> None:
         s, clock, bus = self.settings, self.clock, self.bus
+        self._started_at = clock.now()  # for the /stats page's uptime
         st = s.storage
         self.raw_db = await Database.open(
             _under_data(st.raw_db), read_pool_size=st.read_pool_size,
@@ -156,7 +157,11 @@ class Core:
         registry.attach_plugins(lambda: plugin_operations(self.host))
         self.registry = registry
         self.client = CoreClient(registry, self.services)
-        self.api = Api(self.client, token=load_or_create_token(self.token_path))
+        self.api = Api(
+            self.client,
+            token=load_or_create_token(self.token_path),
+            started_at=self._started_at,
+        )
         self.mcp: McpServer | None = None
         self.mcp_agent: McpServer | None = None
         if s.api.mcp:

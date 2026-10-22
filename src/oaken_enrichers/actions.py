@@ -18,6 +18,7 @@ from oaken_enrichers._common import LLMEnricher, bulk_reasons, digest, fit, labe
 
 MAX_ITEMS = 20
 MIN_QUOTE = 4
+MAX_QUOTE = 600  # the stored quote's limit; must match ActionAnswer/DeadlineAnswer.quote max_length
 
 
 class ActionAnswer(BaseModel):
@@ -89,13 +90,24 @@ def locate(quote: str, text: str) -> tuple[int, int] | None:
 
 def verbatim(quote: str, sent: str, full: str) -> tuple[str, int, int] | None:
     """The quote as it stands in the message and where: found in what the model was given, and
-    again in the whole cleaned text (a cut can make the two differ). None drops the item."""
+    again in the whole cleaned text (a cut can make the two differ). None drops the item.
+
+    Relocating the model's quote onto the full text can land on a longer span than the model
+    returned (the model re-flows whitespace; the full text may have much more between the same
+    words). A span past ``MAX_QUOTE`` is dropped rather than stored — storing it would exceed the
+    result model's own limit and fail validation, parking the whole enrich job on one bad quote.
+    """
     seen = locate(quote, sent)
     if seen is None:
         return None
     exact = sent[seen[0] : seen[1]]
     at = locate(exact, full)
-    return (full[at[0] : at[1]], at[0], at[1]) if at else None
+    if at is None:
+        return None
+    span = full[at[0] : at[1]]
+    if len(span) > MAX_QUOTE:
+        return None
+    return (span, at[0], at[1])
 
 
 class ActionsEnricher(LLMEnricher):

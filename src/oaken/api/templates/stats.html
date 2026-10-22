@@ -1,0 +1,316 @@
+{#- SPDX-License-Identifier: Apache-2.0 -#}
+{#- The read-only /stats page (ADR 0013). Context is oaken.api.stats.StatsCollector.collect():
+    counts and health only — never mail content. Offline: all styling is inline (no CDN), no
+    scripts (pure-CSS tabs), so it works with no network and under a strict CSP. -#}
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{#- Live updates come from the one same-origin script below (stats.js): it re-fetches the counts
+    and swaps them in place, so the open tab never jumps. The page is complete without it. -#}
+<title>Oaken Mail — status</title>
+<style>
+  /* Oaken Mail palette. Dark is the default; the toggle flips data-bs-theme on <html> and the
+     choice persists (stats.js, key "oaken-theme" — the same key the docs site uses). The accent
+     colours are the brand's: #1f4e79 (light) / #7fb2e5 (dark). */
+  :root {
+    --bg:#f7f9fb; --panel:#ffffff; --panel2:#eef2f7; --line:#d9e0e8; --fg:#1b2430;
+    --muted:#5b6673; --ok:#1a7f37; --warn:#9a6700; --bad:#b42318; --accent:#1f4e79;
+  }
+  [data-bs-theme="dark"] {
+    --bg:#15181d; --panel:#1d2127; --panel2:#232833; --line:#2c323d; --fg:#e6e9ef;
+    --muted:#9aa4b2; --ok:#3fb950; --warn:#d29922; --bad:#f85149; --accent:#7fb2e5;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  header { display:flex; justify-content:space-between; align-items:center; gap:1rem;
+           padding:.8rem 1.3rem; background:var(--panel); border-bottom:1px solid var(--line); }
+  .brand { display:flex; align-items:center; gap:.6rem; }
+  .brand .logo { height:2.1rem; width:auto; flex:none; }
+  .brand h1 { font-size:1.05rem; margin:0; font-weight:700; }
+  .brand .sub { color:var(--muted); font-weight:400; }
+  .right { display:flex; align-items:center; gap:1rem; }
+  .theme-toggle { background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+                  border-radius:6px; padding:.3rem .6rem; cursor:pointer; font:inherit;
+                  font-size:.82rem; display:inline-flex; align-items:center; gap:.4rem; }
+  .theme-toggle:hover { border-color:var(--accent); }
+  .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .muted { color:var(--muted); }
+  .badge { display:inline-block; padding:.08rem .5rem; border-radius:999px; font-size:.75rem;
+           border:1px solid var(--line); }
+  .badge.ok { color:var(--ok); border-color:var(--ok); }
+  .badge.warn { color:var(--warn); border-color:var(--warn); }
+  .badge.bad { color:var(--bad); border-color:var(--bad); }
+  main { max-width:68rem; margin:1.2rem auto; padding:0 1.2rem; }
+  /* pure-CSS tabs: radios drive which .pane shows — the toggle is the only script */
+  .tabs input { display:none; }
+  .tablabels { display:flex; flex-wrap:wrap; gap:.3rem; border-bottom:1px solid var(--line);
+               margin-bottom:1.1rem; }
+  .tablabels label { padding:.5rem .9rem; cursor:pointer; color:var(--muted);
+                     border:1px solid transparent; border-bottom:none; border-radius:6px 6px 0 0; }
+  .tablabels label:hover { color:var(--fg); }
+  .pane { display:none; }
+  #t-general:checked ~ .tablabels label[for=t-general],
+  #t-ingest:checked  ~ .tablabels label[for=t-ingest],
+  #t-ai:checked      ~ .tablabels label[for=t-ai],
+  #t-plugins:checked ~ .tablabels label[for=t-plugins],
+  #t-audit:checked   ~ .tablabels label[for=t-audit],
+  #t-ref:checked     ~ .tablabels label[for=t-ref] {
+    color:var(--fg); background:var(--panel); border-color:var(--line); }
+  #t-general:checked ~ #p-general,
+  #t-ingest:checked  ~ #p-ingest,
+  #t-ai:checked      ~ #p-ai,
+  #t-plugins:checked ~ #p-plugins,
+  #t-audit:checked   ~ #p-audit,
+  #t-ref:checked     ~ #p-ref { display:block; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+          margin-bottom:1.1rem; }
+  .card > h2 { font-size:.8rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
+               margin:0; padding:.7rem 1rem; border-bottom:1px solid var(--line); font-weight:600; }
+  .card > .body { padding:1rem; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(9rem,1fr)); gap:.8rem; }
+  .stat { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:.7rem .8rem; }
+  .stat .k { font-size:.72rem; text-transform:uppercase; color:var(--muted); }
+  .stat .v { font-size:1.5rem; font-weight:600; }
+  table { width:100%; border-collapse:collapse; }
+  th,td { text-align:left; padding:.4rem .7rem; border-bottom:1px solid var(--line); font-size:.86rem; }
+  th { color:var(--muted); font-weight:600; font-size:.74rem; text-transform:uppercase; }
+  code { background:var(--panel2); padding:.05rem .35rem; border-radius:4px; }
+  footer { max-width:68rem; margin:1.5rem auto 2.5rem; padding:0 1.2rem; color:var(--muted);
+           font-size:.8rem; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <img src="/stats-logo.png" alt="Oaken Mail" class="logo">
+    <h1>Oaken&nbsp;Mail <span class="sub">— status</span></h1>
+  </div>
+  <div class="right">
+    <span class="muted mono">
+      {{ core.version }}
+      {% if core.uptime_seconds is not none %}· up {{ (core.uptime_seconds // 60) | int }} min{% endif %}
+      · <span id="stats-updated">{{ generated_at }}</span>
+    </span>
+    <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle light and dark theme">
+      <span id="theme-label">Light</span>
+    </button>
+  </div>
+</header>
+
+<main>
+<div class="tabs">
+  <input type="radio" name="tab" id="t-general" checked>
+  <input type="radio" name="tab" id="t-ingest">
+  <input type="radio" name="tab" id="t-ai">
+  <input type="radio" name="tab" id="t-plugins">
+  <input type="radio" name="tab" id="t-audit">
+  <input type="radio" name="tab" id="t-ref">
+  <div class="tablabels">
+    <label for="t-general">General</label>
+    <label for="t-ingest">Ingest</label>
+    <label for="t-ai">AI &amp; Models</label>
+    <label for="t-plugins">Plugins</label>
+    <label for="t-audit">Audit Log</label>
+    <label for="t-ref">Reference</label>
+  </div>
+
+  {# ---- General ---- #}
+  <section class="pane" id="p-general">
+    <div class="card">
+      <h2>Headline health</h2>
+      <div class="body">
+        <div class="grid">
+          <div class="stat"><div class="k">Accounts</div><div class="v mono" data-stat="mail.accounts">{{ mail.accounts }}</div></div>
+          <div class="stat"><div class="k">Messages</div><div class="v mono" data-stat="mail.messages">{{ "{:,}".format(mail.messages) }}</div></div>
+          <div class="stat"><div class="k">Indexed</div><div class="v mono" data-stat="mail.indexed">{{ "{:,}".format(mail.indexed) }}</div>
+            <div class="muted">index {% if mail.index_stale %}<span class="badge bad">stale</span>{% else %}<span class="badge ok">fresh</span>{% endif %}</div></div>
+          <div class="stat"><div class="k">Queue depth</div><div class="v mono" data-stat="mail.queue_depth">{{ mail.queue_depth if mail.queue_depth is not none else "—" }}</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Connected accounts</h2>
+      <div class="body" style="padding:0">
+        <table>
+          <tr><th>Account</th><th>Provider</th><th>Sync</th></tr>
+          {% for a in accounts %}
+          <tr>
+            <td>{{ a.display_name }}<div class="muted mono" style="font-size:.75rem">{{ a.account_id }}</div></td>
+            <td>{{ a.provider }}</td>
+            <td>{% if a.paused %}<span class="badge warn">paused</span>
+                {%- elif a.failures %}<span class="badge bad">{{ a.failures }} failing</span>
+                {%- else %}<span class="badge ok">ok</span>{% endif %}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" class="muted">No accounts configured.</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+  </section>
+
+  {# ---- Ingest ---- #}
+  <section class="pane" id="p-ingest">
+    {% if pipeline %}
+    <div class="card">
+      <h2>Pipeline</h2>
+      <div class="body">
+        <p class="muted mono">
+          {{ "{:,}".format(pipeline.docs) }} docs · {{ "{:,}".format(pipeline.chunks) }} chunks ·
+          {{ "{:,}".format(pipeline.vectors) }} vectors · {{ pipeline.quarantined_files }} quarantined
+          {% if pipeline.llm_paused %}· <span class="badge warn">model paused</span>{% endif %}
+          {% if pipeline.backfill_paused %}· <span class="badge warn">backfill paused</span>{% endif %}
+          {% if pipeline.embeddings_stale %}· <span class="badge bad">embeddings stale</span>{% endif %}
+        </p>
+        <table>
+          <tr><th>Stage</th><th>Pending</th><th>Retrying</th><th>Running</th><th>Failed</th><th>Oldest</th><th>Per&nbsp;sec</th><th>ETA</th></tr>
+          {% for name, s in pipeline.stages.items() %}
+          <tr>
+            <td class="mono">{{ name }}</td>
+            <td>{{ s.pending }}</td><td>{{ s.retrying }}</td>
+            <td>{{ s.running }}</td>
+            <td>{% if s.failed %}<span class="badge bad">{{ s.failed }}</span>{% else %}0{% endif %}</td>
+            <td class="muted">{% if s.oldest_pending_seconds is not none %}{{ s.oldest_pending_seconds | int }}s{% else %}—{% endif %}</td>
+            <td>{{ "%.2f" | format(s.per_second) }}</td>
+            <td class="muted">{% if s.eta_seconds is not none %}{{ s.eta_seconds | int }}s{% else %}—{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+    {% if pipeline.parked %}
+    <div class="card">
+      <h2>Parked jobs</h2>
+      <div class="body" style="padding:0">
+        <table>
+          <tr><th>Job</th><th>Stage</th><th>Message</th><th>Attempts</th><th>Error</th></tr>
+          {% for j in pipeline.parked %}
+          <tr><td class="mono">{{ j.job_id }}</td><td>{{ j.stage }}</td>
+              <td class="mono muted">{{ j.message_id or "—" }}</td><td>{{ j.attempts }}</td>
+              <td class="bad">{{ j.error }}</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="card"><div class="body muted">The ingest pipeline is not running.</div></div>
+    {% endif %}
+  </section>
+
+  {# ---- AI & Models ---- #}
+  <section class="pane" id="p-ai">
+    <div class="card">
+      <h2>Model &amp; token usage</h2>
+      <div class="body" style="padding:0">
+        <table>
+          <tr><th>Workspace</th><th>Stage</th><th>Model</th><th>Calls</th><th>Cached</th><th>Tokens in</th><th>Tokens out</th><th>Saved</th></tr>
+          {% for u in usage %}
+          <tr><td>{{ u.workspace }}</td><td>{{ u.stage }}</td><td class="mono">{{ u.model_id }}</td>
+              <td>{{ "{:,}".format(u.calls) }}</td><td class="muted">{{ "{:,}".format(u.cached_calls) }}</td>
+              <td>{{ "{:,}".format(u.tokens_in) }}</td><td>{{ "{:,}".format(u.tokens_out) }}</td>
+              <td class="ok">{{ "{:,}".format(u.tokens_saved) }}</td></tr>
+          {% else %}
+          <tr><td colspan="8" class="muted">No model usage recorded yet.</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+    {% if pipeline %}
+    <div class="card">
+      <h2>Models</h2>
+      <div class="body">
+        <p class="muted">Embedder: <code>{{ pipeline.embedder_model or "—" }}</code>
+           · Vector model: <code>{{ pipeline.vector_model or "—" }}</code></p>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+
+  {# ---- Plugins ---- #}
+  <section class="pane" id="p-plugins">
+    <div class="card">
+      <h2>Plugins</h2>
+      <div class="body" style="padding:0">
+        <table>
+          <tr><th>Plugin</th><th>Kind</th><th>Version</th><th>Capabilities</th><th>Health</th></tr>
+          {% for p in plugins %}
+          <tr>
+            <td class="mono">{{ p.name }}</td><td>{{ p.kind }}</td><td class="mono">{{ p.version }}</td>
+            <td class="muted mono" style="font-size:.78rem">{{ p.capabilities | join(", ") or "—" }}</td>
+            <td>{% if p.healthy %}<span class="badge ok">healthy</span>
+                {%- elif p.started %}<span class="badge bad">{{ p.detail or "unhealthy" }}</span>
+                {%- else %}<span class="badge warn">{{ p.detail or "not started" }}</span>{% endif %}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="muted">No plugins installed.</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+  </section>
+
+  {# ---- Audit log ---- #}
+  <section class="pane" id="p-audit">
+    <div class="card">
+      <h2>Recent audit log</h2>
+      <div class="body" style="padding:0">
+        <table>
+          <tr><th>When</th><th>Actor</th><th>Operation</th><th>Count</th><th>Reason</th><th>State</th></tr>
+          {% for e in audit %}
+          <tr>
+            <td class="mono muted" style="font-size:.78rem">{{ e.ts }}</td>
+            <td class="mono">{{ e.actor }}</td>
+            <td class="mono">{{ e.op }}</td>
+            <td>{{ e.count }}</td>
+            <td class="muted">{{ e.reason }}</td>
+            <td>{% if e.undone_by %}<span class="badge muted">undone</span>{% else %}<span class="badge ok">applied</span>{% endif %}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="muted">No audit entries yet.</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+    <p class="muted" style="padding:0 .2rem">Ids and metadata only — the audit log never records message text.</p>
+  </section>
+
+  {# ---- Reference (the operation registry) ---- #}
+  <section class="pane" id="p-ref">
+    <div class="card">
+      <h2>Operations reference</h2>
+      <div class="body" style="padding:0">
+        <table>
+          <tr><th>Operation</th><th>Permission</th><th>MCP</th><th>Summary</th></tr>
+          {% for o in operations %}
+          <tr>
+            <td class="mono">{{ o.name }}</td>
+            <td>{% if o.permission == "mutate" %}<span class="badge warn">mutate</span>
+                {%- elif o.permission == "send" %}<span class="badge bad">send</span>
+                {%- else %}<span class="badge ok">read</span>{% endif %}</td>
+            <td>{% if not o.mcp_allowed %}<span class="badge muted">never</span>
+                {%- elif o.mcp_enabled %}<span class="badge ok">on</span>
+                {%- else %}<span class="badge">off</span>{% endif %}</td>
+            <td class="muted">{{ o.summary }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="muted">No operations.</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+    <p class="muted" style="padding:0 .2rem">Generated from the operation registry — what this core can do, and what MCP clients may call.</p>
+  </section>
+</div>
+</main>
+
+<footer>
+  Read-only. Served on loopback only, without a token — like <code>/v1/health</code>.
+  Counts and health only; no message content, addresses or tokens are shown.
+</footer>
+<script src="/stats.js"></script>
+</body>
+</html>

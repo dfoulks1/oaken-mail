@@ -84,6 +84,25 @@ async def test_an_empty_answer_is_a_valid_answer(rig: Rig) -> None:
     assert out["action_items"] == [] and out["dropped"] == 0
 
 
+async def test_a_quote_whose_verbatim_span_exceeds_the_limit_is_dropped_not_parked(
+    rig: Rig,
+) -> None:
+    # Regression: relocating the model's quote onto the full body can land on a span longer than
+    # the model returned (whitespace re-flow). A span past 600 chars must be dropped and counted,
+    # never stored — storing it blew ActionItem's own max_length=600 and parked the enrich job.
+    # A long whitespace run between two anchor words makes the matched span exceed 600 chars.
+    body = "Please" + ("\n" * 700) + "finish the report."
+    model_quote = "Please finish the report."  # collapses whitespace; matches the long span
+    out = await run(
+        rig,
+        {"action_items": [item("Finish", model_quote)], "deadlines": []},
+        body,
+    )
+    assert out["action_items"] == [], "an over-long verbatim span must be dropped"
+    assert out["dropped"] == 1
+    # the key property: enrich returned a valid result instead of raising (which would park it)
+
+
 async def test_bulk_mail_is_not_sent_to_the_model(rig: Rig) -> None:
     enricher = await rig.start(ActionsEnricher())
     out = (await enricher.enrich(message(BODY, list_id="<x.example.org>"))).data

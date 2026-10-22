@@ -123,6 +123,20 @@ Operations are not routed by hand. `GET /v1/operations` lists the registry with 
   A quiet stream sends a `: heartbeat` comment.
 - `/v1/agent/jobs/...`: claim, heartbeat, complete and fail, for the swarm.
 - `/`: files from `[api] static_dir` when set, otherwise a placeholder page. The web UI will live here.
+- `GET /stats`: a read-only status page, HTML (see below). Like `/v1/health` it needs no token —
+  it is loopback-only and shows counts and health, never mail.
+
+## The status page
+
+`GET /stats` is a browser-openable dashboard: version and uptime, account/message/index counts,
+queue depth, per-stage pipeline throughput and parked jobs, token usage and savings, per-account
+sync state, and plugin health. It is **unauthenticated on purpose** — it is reachable only from this
+machine (the Host guard still refuses a forged name), and it carries **counts and health only**: no
+message text, no addresses, no tokens, and not the audit log. Open `http://127.0.0.1:<port>/stats`
+(the port is in `runtime.json`; set `[api] port` to pin it). The page is self-contained — inline
+styling, no external assets, no scripts — so it works offline. See
+[ADR 0013](repo:docs/adr/0013-read-only-stats-page.md); a friendly `oaken.local` name and a
+networked, authenticated variant for AI agents are possible later and deliberately not built here.
 
 ## Threat model
 
