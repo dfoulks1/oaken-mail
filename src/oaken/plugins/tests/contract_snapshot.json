@@ -1,0 +1,302 @@
+{
+  "CAPABILITIES": {
+    "embedder": {},
+    "enricher": {},
+    "llm_backend": {},
+    "provider": {
+      "auth": "authenticate",
+      "flags.write": "set_flags",
+      "send": "send",
+      "sync.pull": "pull"
+    },
+    "vector_store": {}
+  },
+  "ENTRY_POINT_GROUPS": {
+    "embedder": "oaken.embedders",
+    "enricher": "oaken.enrichers",
+    "llm_backend": "oaken.llm_backends",
+    "provider": "oaken.providers",
+    "vector_store": "oaken.vector_stores"
+  },
+  "PLUGIN_API_VERSION": 1,
+  "PLUGIN_KINDS": [
+    "provider",
+    "embedder",
+    "llm_backend",
+    "enricher",
+    "vector_store"
+  ],
+  "REQUIRED_MEMBERS": {
+    "embedder": [
+      "dimensions",
+      "embed",
+      "model_id"
+    ],
+    "enricher": [
+      "enrich",
+      "needs_llm",
+      "version"
+    ],
+    "llm_backend": [
+      "context_window",
+      "generate",
+      "model_id"
+    ],
+    "provider": [],
+    "vector_store": [
+      "delete",
+      "query",
+      "stats",
+      "upsert"
+    ]
+  },
+  "bases": {
+    "BaseEmbedder": [
+      "api_version",
+      "ctx",
+      "dimensions",
+      "embed",
+      "health",
+      "kind",
+      "max_input_tokens",
+      "model_id",
+      "start",
+      "stop",
+      "version"
+    ],
+    "BaseEnricher": [
+      "api_version",
+      "ctx",
+      "enrich",
+      "health",
+      "kind",
+      "needs_llm",
+      "output_model",
+      "output_schema",
+      "start",
+      "stop",
+      "version"
+    ],
+    "BaseLLMBackend": [
+      "api_version",
+      "context_window",
+      "ctx",
+      "generate",
+      "health",
+      "kind",
+      "locality",
+      "model_id",
+      "start",
+      "stop",
+      "version"
+    ],
+    "BaseProvider": [
+      "api_version",
+      "authenticate",
+      "ctx",
+      "health",
+      "kind",
+      "pull",
+      "send",
+      "set_flags",
+      "start",
+      "stop",
+      "supports_folders",
+      "version"
+    ],
+    "BaseVectorStore": [
+      "api_version",
+      "ctx",
+      "delete",
+      "health",
+      "kind",
+      "query",
+      "start",
+      "stats",
+      "stop",
+      "upsert",
+      "version"
+    ]
+  },
+  "dataclasses": {
+    "EnrichAttachment": [
+      "filename",
+      "content_type",
+      "size",
+      "inline",
+      "quarantine"
+    ],
+    "EnrichInput": [
+      "message_id",
+      "account_id",
+      "subject",
+      "body",
+      "headers",
+      "raw_headers",
+      "attachments",
+      "date",
+      "is_reply",
+      "parent_summary"
+    ],
+    "EnrichOutput": [
+      "data"
+    ],
+    "FlagChange": [
+      "provider_id",
+      "add",
+      "remove"
+    ],
+    "Health": [
+      "ok",
+      "detail"
+    ],
+    "Hit": [
+      "message_id",
+      "chunk_id",
+      "score",
+      "model_id"
+    ],
+    "LLMRequest": [
+      "system",
+      "user",
+      "json_schema",
+      "max_output_tokens",
+      "temperature"
+    ],
+    "LLMResponse": [
+      "text",
+      "data",
+      "input_tokens",
+      "output_tokens",
+      "model_id"
+    ],
+    "PluginChange": [
+      "target",
+      "field",
+      "before",
+      "after"
+    ],
+    "PluginContext": [
+      "name",
+      "kind",
+      "settings",
+      "clock",
+      "log",
+      "config",
+      "bus",
+      "account_id",
+      "llm",
+      "_subscriptions"
+    ],
+    "PluginInfo": [
+      "name",
+      "version",
+      "kind",
+      "capabilities",
+      "api_version"
+    ],
+    "PluginOpContext": [
+      "plugin",
+      "client",
+      "actor",
+      "config",
+      "clock",
+      "log"
+    ],
+    "PluginOperation": [
+      "name",
+      "summary",
+      "permission",
+      "input",
+      "output",
+      "handler",
+      "preview",
+      "mcp"
+    ],
+    "PluginPreview": [
+      "summary",
+      "changes",
+      "total"
+    ],
+    "PullBatch": [
+      "messages",
+      "deleted_provider_ids",
+      "flag_changes",
+      "next_cursor"
+    ],
+    "RawMessage": [
+      "provider_id",
+      "raw_bytes",
+      "provider_labels",
+      "provider_flags",
+      "internal_date"
+    ],
+    "VectorItem": [
+      "message_id",
+      "chunk_id",
+      "vector",
+      "model_id",
+      "content_hash",
+      "account_id"
+    ],
+    "VectorStats": [
+      "count",
+      "model_id",
+      "dimensions"
+    ]
+  },
+  "protocols": {
+    "Embedder": [
+      "dimensions",
+      "embed",
+      "health",
+      "max_input_tokens",
+      "model_id",
+      "start",
+      "stop"
+    ],
+    "Enricher": [
+      "enrich",
+      "health",
+      "needs_llm",
+      "output_schema",
+      "start",
+      "stop",
+      "version"
+    ],
+    "LLMAccess": [
+      "generate_cached"
+    ],
+    "LLMBackend": [
+      "context_window",
+      "generate",
+      "health",
+      "model_id",
+      "start",
+      "stop"
+    ],
+    "Plugin": [
+      "health",
+      "start",
+      "stop"
+    ],
+    "Provider": [
+      "authenticate",
+      "health",
+      "pull",
+      "send",
+      "set_flags",
+      "start",
+      "stop"
+    ],
+    "VectorStore": [
+      "delete",
+      "health",
+      "query",
+      "start",
+      "stats",
+      "stop",
+      "upsert"
+    ]
+  }
+}

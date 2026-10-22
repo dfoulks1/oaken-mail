@@ -51,6 +51,7 @@ in the same change that builds a prompt.
 | 31 | [workspace-management](31-workspace-management.md) | List/get/check/set/remove workspaces (Oaken's confidentiality levels) from the UI and CLI; `[workspaces.*]` stays the one source of truth | 10, 13, 22, 23 |
 | 32 | [mcp-settings](32-mcp-settings.md) | Settings → MCP: the `[mcp]` section in a textarea (`allow_send`, `workspaces=[]`, enable/disable), operation list with presets, workspace scoping, live reload | 13, 18, 22, 23, 29, 31 |
 | 33 | [agent-enrichment](33-agent-enrichment.md) | Let an external model (LM Studio, 27B) enrich a message through `/mcp/agent`: claimable payload with text and instructions, a real result type, storage, cache and workspace rules | 03b, 05, 13, 18, 31, 32 |
+| 34 | [stabilize-core](34-stabilize-core.md) | Lock the public surface (snapshot tests + versioning ADR), enforce import boundaries (import-linter), turn `Core.open()` into dependency-ordered service units, let plugins declare+validate config, and add the missing extension hooks (job kinds, pipeline stages, scheduled tasks) with a conformance suite — so a second dev builds features without touching core | 02, 04, 13, 16, 23 |
 
 ## Not written yet (deliberately)
 

@@ -1,0 +1,149 @@
+{
+  "AttachmentQuarantined": [
+    "ts",
+    "event_id",
+    "account_id",
+    "message_id",
+    "count"
+  ],
+  "Event": [
+    "ts",
+    "event_id"
+  ],
+  "IndexRebuildProgress": [
+    "ts",
+    "event_id",
+    "account_id",
+    "done",
+    "total",
+    "indexed",
+    "failed",
+    "finished"
+  ],
+  "JobStateChanged": [
+    "ts",
+    "event_id",
+    "job_id",
+    "kind",
+    "status",
+    "account_id"
+  ],
+  "LargeMessageStored": [
+    "ts",
+    "event_id",
+    "account_id",
+    "message_id",
+    "size_bytes",
+    "oversize"
+  ],
+  "MessageEmbedded": [
+    "ts",
+    "event_id",
+    "account_id",
+    "message_id",
+    "model"
+  ],
+  "MessageEnriched": [
+    "ts",
+    "event_id",
+    "account_id",
+    "message_id",
+    "enricher"
+  ],
+  "MessageFiltered": [
+    "ts",
+    "event_id",
+    "account_id",
+    "message_id",
+    "disposition"
+  ],
+  "MessageIndexed": [
+    "ts",
+    "event_id",
+    "account_id",
+    "message_id"
+  ],
+  "MessageParsed": [
+    "ts",
+    "event_id",
+    "account_id",
+    "message_id"
+  ],
+  "MessageReadChanged": [
+    "ts",
+    "event_id",
+    "account_id",
+    "message_id",
+    "read",
+    "reason",
+    "audit_id",
+    "local_only",
+    "error"
+  ],
+  "MessageStarChanged": [
+    "ts",
+    "event_id",
+    "account_id",
+    "message_id",
+    "starred",
+    "reason",
+    "audit_id",
+    "local_only",
+    "error"
+  ],
+  "MessageStored": [
+    "ts",
+    "event_id",
+    "account_id",
+    "message_id",
+    "is_new",
+    "changed"
+  ],
+  "PluginEvent": [
+    "ts",
+    "event_id",
+    "plugin"
+  ],
+  "PluginHealthChanged": [
+    "ts",
+    "event_id",
+    "plugin",
+    "healthy",
+    "detail"
+  ],
+  "SyncFinished": [
+    "ts",
+    "event_id",
+    "account_id",
+    "new_messages",
+    "error",
+    "quiet",
+    "folder"
+  ],
+  "SyncPaused": [
+    "ts",
+    "event_id",
+    "account_id",
+    "reason",
+    "quiet"
+  ],
+  "SyncProgress": [
+    "ts",
+    "event_id",
+    "account_id",
+    "done",
+    "total"
+  ],
+  "SyncScheduleChanged": [
+    "ts",
+    "event_id",
+    "account_id",
+    "folder",
+    "change"
+  ],
+  "SyncStarted": [
+    "ts",
+    "event_id",
+    "account_id"
+  ]
+}
