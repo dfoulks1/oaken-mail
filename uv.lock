@@ -13,6 +13,7 @@ resolution-markers = [
 members = [
     "oaken",
     "oaken-cli",
+    "oaken-core",
     "oaken-webui",
 ]
 
@@ -1665,7 +1666,6 @@ docs = [
 
 [[package]]
 name = "oaken-cli"
-version = "0.1.0"
 source = { editable = "apps/cli" }
 dependencies = [
     { name = "oaken" },
@@ -1679,8 +1679,21 @@ requires-dist = [
 ]
 
 [[package]]
+name = "oaken-core"
+source = { editable = "apps/core" }
+dependencies = [
+    { name = "oaken", extra = ["vec"] },
+    { name = "oaken-cli" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "oaken", extras = ["vec"], editable = "." },
+    { name = "oaken-cli", editable = "apps/cli" },
+]
+
+[[package]]
 name = "oaken-webui"
-version = "0.1.0"
 source = { editable = "apps/webui" }
 dependencies = [
     { name = "httpx2" },

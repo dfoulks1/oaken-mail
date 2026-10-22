@@ -1,0 +1,37 @@
+[project]
+name = "oaken-core"
+dynamic = ["version"]  # one source of truth: src/oaken/__init__.py (the whole product shares it)
+description = "Oaken Core — the ingestion & enrichment pipeline, the CLI, and the MCP server, so an AI can work with your mail."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+# A bundle, not code: it pulls together the product (ADR 0014). `oaken` is the engine (pipeline,
+# API daemon, MCP server, first-party plugins); `oaken-cli` is the management surface and the stdio
+# MCP bridge; `oaken[vec]` adds the sqlite-vec native library for embeddings. The web UI is a
+# separate product (`oaken-webui`) and is deliberately NOT included.
+# The pins below are the one spot that restates the version (a dependency string can't be dynamic);
+# tests/test_version_lockstep.py asserts they match the shared version so they cannot drift.
+dependencies = [
+    "oaken[vec]==0.1.0",
+    "oaken-cli==0.1.0",
+]
+
+[project.urls]
+Homepage = "https://dfoulks1.github.io/oaken-mail/"
+Source = "https://github.com/dfoulks1/oaken-mail"
+
+[tool.uv.sources]
+oaken = { workspace = true }
+oaken-cli = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "regex"
+path = "../../src/oaken/__init__.py"
+pattern = '__version__ = "(?P<version>[^"]+)"'
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/oaken_core"]

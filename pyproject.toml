@@ -92,11 +92,12 @@ docs = [
 default-groups = ["dev", "docs"]
 
 [tool.uv.workspace]
-members = ["apps/cli", "apps/webui"]
+members = ["apps/cli", "apps/webui", "apps/core"]
 
 [tool.uv.sources]
 oaken-cli = { workspace = true }
 oaken-webui = { workspace = true }
+oaken-core = { workspace = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

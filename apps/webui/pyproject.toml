@@ -1,6 +1,6 @@
 [project]
 name = "oaken-webui"
-version = "0.1.0"
+dynamic = ["version"]  # one source of truth: src/oaken/__init__.py (shared across the product)
 description = "The Oaken Mail web UI server: a thin client that serves the browser UI and proxies to the core daemon's API."
 readme = "README.md"
 license = "Apache-2.0"
@@ -23,6 +23,12 @@ oaken-cli = { workspace = true }
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# Lockstep version from the one source of truth (ADR 0014); see oaken-cli for the rationale.
+[tool.hatch.version]
+source = "regex"
+path = "../../src/oaken/__init__.py"
+pattern = '__version__ = "(?P<version>[^"]+)"'
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/oaken_webui"]
