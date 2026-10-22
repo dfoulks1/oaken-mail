@@ -5,6 +5,7 @@ Order is settings → databases and migrations → plugin host → job runner an
 Stopping is the reverse, so nothing is closed while something that uses it still runs.
 """
 
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 import oaken
@@ -68,6 +69,17 @@ class Core:
         self._discover = discover
         self._open = False
         self._started: list[str] = []
+
+    def reconfigured(self, settings: Settings) -> "Core":
+        """A fresh, unopened core with the same clock, token files and plugin discovery, built
+        on ``settings``. The caller stops this one first: they share the same databases."""
+        return Core(
+            settings,
+            clock=self.clock,
+            token_path=self.token_path,
+            mcp_token_path=self.mcp_token_path,
+            discover=self._discover,
+        )
 
     # -- building -------------------------------------------------------------------------
     async def open(self) -> None:
@@ -184,26 +196,44 @@ class Core:
         return port
 
     async def stop(self) -> None:
-        """Stop accepting, let jobs finish or give their leases back, close the databases."""
+        """Stop accepting, let jobs finish or give their leases back, close the databases.
+
+        Safe to call on a half-built core: ``start`` calls it to unwind a failed startup, and
+        ``serve`` calls it in a ``finally`` even when ``open`` raised partway through. Only stages
+        recorded in ``self._started`` are unwound (each is appended after its resource is live, so
+        the backing attribute is guaranteed to exist), and each database is closed independently so
+        one failure cannot leak the others' file handles and locks.
+        """
         grace = self.settings.api.shutdown_grace_seconds
-        steps = {
-            "api": self.server.stop,
-            "mcp": self._stop_mcp,
-            "jobs": lambda: self._stop_jobs(grace),
-            "sync": self.sync.stop,
-            "host": self._stop_host,
-        }
+
+        def handler(name: str) -> Callable[[], Awaitable[None]]:
+            # Resolved lazily: only stages in self._started reach here, so the attributes they
+            # reference already exist. Building these eagerly would touch attributes that an
+            # interrupted open() never assigned (e.g. self.server), masking the real error.
+            return {
+                "api": self.server.stop,
+                "mcp": self._stop_mcp,
+                "jobs": lambda: self._stop_jobs(grace),
+                "sync": self.sync.stop,
+                "host": self._stop_host,
+            }[name]
+
         for name in reversed(self._started):
             try:
-                await steps[name]()
+                await handler(name)()
             except (OakenError, OSError, RuntimeError):
                 log.exception("stopping failed", step=name)
         self._started.clear()
         if self._open:
             self._open = False
-            await self.readstate.close()
-            await self.index.close()
-            await self.raw_db.close()
+            for closer in ("readstate", "index", "raw_db"):
+                target = getattr(self, closer, None)
+                if target is None:
+                    continue
+                try:
+                    await target.close()
+                except (OakenError, OSError, RuntimeError):
+                    log.exception("closing failed", store=closer)
 
     async def _stop_mcp(self) -> None:
         for door in (self.mcp_agent, self.mcp):

@@ -47,6 +47,38 @@ def token_of(home: Path) -> str:
     return (home / "config" / "api_token").read_text().strip()
 
 
+async def test_a_failure_during_open_surfaces_the_real_error_not_a_teardown_crash(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Regression: open() builds self.server on its last line. If open() raises earlier (e.g. the
+    # raw db is locked by another instance and migrate() fails), serve()'s finally calls stop().
+    # stop() must unwind a half-built core without touching attributes open() never assigned,
+    # so the original error is what propagates -- not AttributeError: 'Core' has no 'server'.
+    import oaken.daemon.core as core_mod
+    from oaken.core.errors import StorageError
+
+    async def boom(*_args: object, **_kwargs: object) -> list[int]:
+        raise StorageError("database is locked")
+
+    monkeypatch.setattr(core_mod, "migrate", boom)
+    runtime = paths.runtime_file()
+    core = Core(Settings())
+    with pytest.raises(StorageError, match="database is locked"):
+        await serve(core, RuntimeFile(runtime, SystemClock(), "t"), handle_signals=False)
+    # the half-built core never assigned a server, and stop() tolerated that
+    assert not hasattr(core, "server")
+    # a refused/failed start leaves nothing behind
+    assert not runtime.exists()
+
+
+async def test_stop_is_idempotent_and_safe_before_open(home: Path) -> None:
+    # stop() on a never-opened core must be a no-op, and calling it twice must not raise.
+    core = Core(Settings())
+    await core.stop()
+    await core.stop()
+    assert core._started == [] and core._open is False
+
+
 async def test_a_real_socket_serves_the_api_and_a_stop_leaves_nothing_behind(home: Path) -> None:
     runtime = paths.runtime_file()
     core = Core(Settings())
@@ -152,6 +184,60 @@ def test_sigterm_is_a_clean_shutdown_with_no_leaked_lease_or_runtime_file(home: 
         db.close()
     assert running == 0 and leased == 0
     assert "Traceback" not in out.decode()
+
+
+def _free_port() -> int:
+    import socket
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def _wait_for(check: object, what: str) -> None:
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        if check():  # type: ignore[operator]
+            return
+        time.sleep(0.05)
+    raise AssertionError(what)
+
+
+@posix
+def test_sighup_reloads_the_configuration_in_place_and_a_bad_file_changes_nothing(
+    home: Path,
+) -> None:
+    runtime = home / "run" / "runtime.json"
+    config = home / "config" / "config.toml"
+    config.parent.mkdir(parents=True, exist_ok=True)
+    first, second = _free_port(), _free_port()
+    config.write_text(f"[api]\nport = {first}\n")
+    env = child_env(home)
+    del env["OAKEN_API__PORT"]  # the environment outranks the file; this test edits the file
+    proc = subprocess.Popen(  # noqa: S603
+        [PYTHON, "-m", "oaken.daemon"], env=env, stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )  # fmt: skip
+    try:
+        assert wait_for_port(runtime, proc)["port"] == first
+        config.write_text(f"[api]\nport = {second}\n")
+        proc.send_signal(signal.SIGHUP)
+        _wait_for(lambda: (read_runtime(runtime) or {}).get("port") == second, "no new port")
+        info = read_runtime(runtime)
+        assert info is not None and info["pid"] == proc.pid  # same process, no restart
+        assert httpx2.get(f"http://127.0.0.1:{second}/v1/health").status_code == 200
+        # An invalid file is refused before anything is stopped.
+        config.write_text('[api]\nport = "not a port"\n')
+        proc.send_signal(signal.SIGHUP)
+        time.sleep(1.0)
+        assert proc.poll() is None
+        assert httpx2.get(f"http://127.0.0.1:{second}/v1/health").status_code == 200
+        proc.send_signal(signal.SIGTERM)
+        assert proc.wait(timeout=60) == 0
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+    assert not runtime.exists()
 
 
 @posix

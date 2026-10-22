@@ -55,7 +55,7 @@ getting started:
   oaken show MESSAGE_ID       read one message (adds --mark-read via 'oaken read')
 
 command groups:
-  daemon        start · stop · restart · status
+  daemon        start · stop · restart · reload · status
   mail          search · ask · show · thread · summarize · read · unread · undo · sync
   organize      sieve · schedule · reprocess · rebuild-index
   queue         jobs · pipeline · watch
@@ -169,6 +169,17 @@ def _register_daemon(
     restart = sub.add_parser("restart", help="Restart the core daemon.", parents=[g])
     restart.add_argument("--detach", action="store_true", help="Run in the background.")
     restart.set_defaults(func=_lazy("daemon_cmd", "cmd_restart"))
+
+    reload = sub.add_parser(
+        "reload",
+        help="Make the running core re-read config.toml, without a restart.",
+        parents=[g],
+        description=(
+            "Signals the running core (SIGHUP) to re-read its configuration and rebuild itself "
+            "in the same process. An invalid file changes nothing. The web UI follows by itself."
+        ),
+    )
+    reload.set_defaults(func=_lazy("daemon_cmd", "cmd_reload"))
 
 
 def _register_status(

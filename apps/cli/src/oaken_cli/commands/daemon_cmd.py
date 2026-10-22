@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""``oaken start | stop | status | restart`` handlers.
+"""``oaken start | stop | status | restart | reload`` handlers.
 
 ``status`` reports whether a live core is running, without starting anything. ``start``, ``stop``
 and ``restart`` defer to :mod:`oaken_cli.daemon`, which drives core's own daemon module.
@@ -73,6 +73,21 @@ def cmd_restart(args: argparse.Namespace) -> int:
     if not detach and getattr(args, "verbose", 0) == 0:
         _log_info()
     return _started(args, daemon.restart(detach=detach), "restarted")
+
+
+def cmd_reload(args: argparse.Namespace) -> int:
+    signalled = daemon.reload()
+
+    def text() -> None:
+        from oaken_cli.output import print_text
+
+        print_text(
+            "core is reloading its configuration (see its log for the outcome)"
+            if signalled
+            else "core is not running"
+        )
+
+    return emit(args, data={"reloading": signalled}, text=text)
 
 
 def _log_info() -> None:

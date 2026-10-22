@@ -86,3 +86,14 @@ def restart(*, detach: bool = False) -> dict[str, Any] | None:
     """Stop (if running) then start. Foreground restarts run in this process until stopped."""
     stop()
     return start(detach=detach)
+
+
+def reload() -> bool:
+    """Ask the running core to re-read its configuration in place. ``False`` if none is running."""
+    from oaken.core.errors import OakenError
+    from oaken.daemon import reload as reload_core
+
+    try:
+        return reload_core()
+    except OakenError as exc:
+        raise CliError(str(exc), ExitCode.ERROR) from None
