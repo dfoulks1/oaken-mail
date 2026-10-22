@@ -195,6 +195,20 @@
       "capabilities",
       "api_version"
     ],
+    "PluginJobContext": [
+      "plugin",
+      "kind",
+      "config",
+      "clock",
+      "log"
+    ],
+    "PluginJobHandler": [
+      "kind",
+      "payload_model",
+      "handler",
+      "concurrency",
+      "result_model"
+    ],
     "PluginOpContext": [
       "plugin",
       "client",

@@ -36,6 +36,7 @@ from oaken.ingest.schedule import SyncService
 from oaken.mail.filtering import FilterEngine, scripts_dir
 from oaken.plugins.accounts import AccountProviders
 from oaken.plugins.host import PluginHost
+from oaken.plugins.jobs import register_plugin_jobs
 from oaken.readstate import AuditLog, ReadState
 from oaken.readstate.service import providers_from_accounts
 
@@ -241,6 +242,7 @@ class Core:
                 log.exception("closing failed", store=closer)
 
     async def _start_jobs(self) -> None:
+        register_plugin_jobs(self.host, self.runner)  # host has started; healthy plugins known
         self.runner.start()
         self.scheduler.start()
 

@@ -30,6 +30,8 @@ _DATACLASSES = [
     "PluginChange",
     "PluginPreview",
     "PluginOperation",
+    "PluginJobContext",
+    "PluginJobHandler",
     "Health",
     "RawMessage",
     "FlagChange",

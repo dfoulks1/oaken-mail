@@ -15,6 +15,7 @@ from oaken.plugins.contracts import (
     PLUGIN_API_VERSION,
     REQUIRED_MEMBERS,
     PluginInfo,
+    PluginJobHandler,
     PluginKind,
     PluginOperation,
 )
@@ -75,6 +76,7 @@ def check_plugin(
             problems.append(f"{member}() is not implemented")
 
     problems.extend(check_operations(obj))
+    problems.extend(check_job_handlers(obj))
 
     ver = str(getattr(obj, "version", "") or "")
     info = PluginInfo(
@@ -144,4 +146,47 @@ def check_operations(obj: object) -> list[str]:
                 problems.append(f"{label}: {side} must be a pydantic model class")
         if not callable(op.handler):
             problems.append(f"{label}: handler must be an async function")
+    return problems
+
+
+def declared_job_handlers(obj: object) -> list[PluginJobHandler]:
+    """The job kinds ``obj.job_handlers()`` returns (none if it has no such method). Raises what
+    the method raises; ``check_job_handlers`` turns that into a problem."""
+    fn = getattr(obj, "job_handlers", None)
+    if not callable(fn):
+        return []
+    return list(fn())
+
+
+def check_job_handlers(obj: object) -> list[str]:
+    """Problems with the job kinds a plugin offers, in plain words."""
+    try:
+        handlers = declared_job_handlers(obj)
+    except Exception as exc:  # a plugin that cannot say what it offers is a broken plugin
+        return [f"job_handlers() failed: {type(exc).__name__}"]
+    problems: list[str] = []
+    seen: set[str] = set()
+    for jh in handlers:
+        if not isinstance(jh, PluginJobHandler):
+            problems.append("job_handlers() must return PluginJobHandler values")
+            continue
+        label = f"job kind {jh.kind!r}"
+        if not _OP_NAME.match(jh.kind):
+            problems.append(f"{label}: a kind is lower-case letters, digits and underscores")
+        if jh.kind in seen:
+            problems.append(f"{label} is defined twice")
+        seen.add(jh.kind)
+        if not (isinstance(jh.payload_model, type) and issubclass(jh.payload_model, BaseModel)):
+            problems.append(f"{label}: payload_model must be a pydantic model class")
+        if jh.result_model is not None and not (
+            isinstance(jh.result_model, type) and issubclass(jh.result_model, BaseModel)
+        ):
+            problems.append(f"{label}: result_model must be a pydantic model class")
+        if not callable(jh.handler):
+            problems.append(f"{label}: handler must be an async function")
+        bad_concurrency = jh.concurrency is not None and (
+            not isinstance(jh.concurrency, int) or jh.concurrency < 1
+        )
+        if bad_concurrency:
+            problems.append(f"{label}: concurrency must be a positive integer")
     return problems

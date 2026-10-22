@@ -33,13 +33,20 @@ from oaken.plugins.contracts import (
     LLMBackend,
     PluginContext,
     PluginInfo,
+    PluginJobContext,
+    PluginJobHandler,
     PluginKind,
     PluginOpContext,
     PluginOperation,
     Provider,
     VectorStore,
 )
-from oaken.plugins.validate import check_plugin, check_started, declared_operations
+from oaken.plugins.validate import (
+    check_plugin,
+    check_started,
+    declared_job_handlers,
+    declared_operations,
+)
 
 log = get_logger("oaken.plugins")
 
@@ -92,6 +99,14 @@ class OfferedOperation:
 
     plugin: str
     declaration: PluginOperation
+
+
+@dataclass(frozen=True)
+class OfferedJobHandler:
+    """A job kind a started, healthy plugin offers (core namespaces it ``plugin.<name>.<kind>``)."""
+
+    plugin: str
+    declaration: PluginJobHandler
 
 
 @dataclass(frozen=True)
@@ -345,6 +360,35 @@ class PluginHost:
                     plugin=plugin,
                     client=client,
                     actor=actor,
+                    config=dict(rec.ctx.config),
+                    clock=self.clock,
+                    log=rec.ctx.log,
+                )
+        raise NotFound(f"plugin {plugin!r} is not running")
+
+    def offered_job_handlers(self) -> list[OfferedJobHandler]:
+        """The job kinds the healthy plugins offer via ``job_handlers()``. A plugin that cannot
+        say what it offers is skipped (the problem was logged when it loaded)."""
+        out: list[OfferedJobHandler] = []
+        for rec in self._shared():
+            try:
+                decls = declared_job_handlers(rec.instance)
+            except Exception as exc:
+                log.error("plugin job_handlers failed", name=rec.name, error=type(exc).__name__)
+                continue
+            out.extend(
+                OfferedJobHandler(rec.name, d) for d in decls if isinstance(d, PluginJobHandler)
+            )
+        return out
+
+    def job_context(self, plugin: str, kind: str) -> PluginJobContext:
+        """The context for one run of ``plugin``'s job ``kind`` (the namespaced kind). No database
+        handle: the plugin's own ``config``, the clock and a logger, like an operation handler."""
+        for rec in self._shared():
+            if rec.name == plugin and rec.ctx is not None:
+                return PluginJobContext(
+                    plugin=plugin,
+                    kind=kind,
                     config=dict(rec.ctx.config),
                     clock=self.clock,
                     log=rec.ctx.log,

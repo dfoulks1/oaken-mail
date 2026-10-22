@@ -216,6 +216,51 @@ class PluginOperation:
     mcp: Literal["off", "never"] = "off"
 
 
+# -- Job kinds a plugin offers -----------------------------------------------------------------
+# A plugin may run its own background work by defining ``job_handlers()``. Core registers each on
+# the job runner as ``plugin.<name>.<kind>`` (namespaced so two plugins cannot collide), with the
+# same durable queue, retries, leases and per-kind concurrency as core's own kinds. The handler is
+# given a plugin-scoped context (no database handle) and its validated payload; it never touches
+# the queue, the stores or another plugin.
+
+
+@dataclass(frozen=True)
+class PluginJobContext:
+    """What a plugin's job handler receives besides its payload. Like ``PluginOpContext``: the
+    plugin's own ``config``, the clock and a logger, and the registered ``kind`` it is running —
+    no database handle, no queue, no job internals."""
+
+    plugin: str
+    kind: str  # the namespaced kind, e.g. "plugin.word-count.recount"
+    config: dict[str, Any]
+    clock: Clock
+    log: Any
+
+
+# ``handler(ctx, payload) -> result | None``. ``payload`` is an instance of the handler's
+# ``payload_model``; a returned value must match ``result_model`` when one is declared.
+PluginJobHandlerFn = Callable[["PluginJobContext", Any], Awaitable[Any]]
+
+
+@dataclass(frozen=True)
+class PluginJobHandler:
+    """One job kind a plugin offers.
+
+    ``kind`` is the plugin's local name (``recount``); core namespaces it to
+    ``plugin.<name>.<kind>``. ``payload_model`` and ``result_model`` are pydantic models: the
+    payload is validated before the handler runs, and a result (if ``result_model`` is set) is
+    validated and stored, exactly as for a core job kind. ``concurrency`` caps how many run at
+    once (``[jobs] kind_limits`` still wins). A plugin enqueues its kind with ``ctx`` helpers added
+    later; for now core and other plugins can enqueue it by its namespaced name.
+    """
+
+    kind: str
+    payload_model: type[BaseModel]
+    handler: PluginJobHandlerFn
+    concurrency: int | None = None
+    result_model: type[BaseModel] | None = None
+
+
 @runtime_checkable
 class Plugin(Protocol):
     """Lifecycle, shared by every kind. All three are optional for a plugin to define."""
