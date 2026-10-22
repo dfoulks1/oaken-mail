@@ -104,12 +104,26 @@ uvx --from oaken-core oaken --version    # installs the published bundle and run
 Check the project pages render (README, classifiers, keywords) on
 <https://pypi.org/project/oaken-core/> and the others.
 
+## 9. After publishing (bookkeeping)
+
+- Confirm all four projects are live and at the same version:
+  `oaken`, `oaken-cli`, `oaken-webui`, `oaken-core` on PyPI.
+- Make sure the `CHANGELOG.md` entry for this version carries the release date (it is the record
+  that the version is out), and that the GitHub Release (`gh release view v<version>`) points at
+  the tag.
+- Nothing else to flip: the version already lives only in `src/oaken/__init__.py`, and the docs
+  site redeploys from `main` on its own.
+
 ## Notes
 
 - **Dependency order matters** both on TestPyPI and PyPI: `oaken` must exist before `oaken-cli`,
-  `oaken-webui` and `oaken-core` can resolve.
+  `oaken-webui` and `oaken-core` can resolve. Upload `oaken` first and confirm it is live before
+  the rest, so no one can catch a half-published set.
+- **The first upload creates the project** on PyPI under the uploading account — that account owns
+  the four names. Use the account or organization that should own them long-term, and a
+  project-scoped token where possible.
 - **Credentials never live in the repo.** Use `UV_PUBLISH_TOKEN` or `~/.pypirc`; the token is the
-  releaser's, not the project's.
+  releaser's, not the project's. It is never committed, logged, or pasted into a transcript.
 - **Yanking, not deleting.** If a release is broken you can *yank* it on PyPI (hides it from new
   resolves) but you cannot reuse the version number. Bump to `0.1.1` and release again.
 - The docs site deploys from `main` via GitHub Pages (`.github/workflows/pages.yml`), independently
