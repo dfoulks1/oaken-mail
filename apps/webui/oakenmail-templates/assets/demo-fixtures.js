@@ -71,8 +71,13 @@
   };
 
   const FIX_ACCOUNTS = [
-    { account_id: "demo", display_name: "Alex Example", address: "alex@example.com", provider: "gmail" },
+    { account_id: "demo", display_name: "Alex Example", address: "alex@example.com", provider: "gmail", receive_only: true, capabilities: ["auth", "flags.write", "sync.pull"] },
   ];
+  // The demo's Sieve scripts (name + text), so the Sieve editor is usable with no daemon.
+  const FIX_SIEVE = {
+    "10-lists.sieve": 'require ["fileinto"];\n# File mailing-list mail by its List-Id.\nif header :contains "list-id" "dev.oaken" {\n  fileinto "dev@lists";\n}\n',
+    "20-newsletters.sieve": 'require ["fileinto"];\nif header :contains "from" "newsletter" {\n  fileinto "Newsletters";\n}\n',
+  };
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
@@ -112,6 +117,58 @@
       }
       case "list_accounts":
         return { request_id: "demo", status: "ok", output: { accounts: FIX_ACCOUNTS } };
+      case "get_account": {
+        const a = FIX_ACCOUNTS.find((x) => x.account_id === input.account_id) || FIX_ACCOUNTS[0];
+        return {
+          request_id: "demo", status: "ok",
+          output: {
+            account_id: a.account_id, provider: a.provider, display_name: a.display_name,
+            config: a.receive_only ? { receive_only: true } : {},
+            receive_only: !!a.receive_only, capabilities: a.capabilities || [],
+            problem: null, config_schema: null,
+          },
+        };
+      }
+      case "create_account":
+        return { request_id: "demo", status: "ok", output: { account_id: input.account_id || "new", provider: input.provider || "imap", display_name: input.display_name || "", config: input.config || {}, receive_only: !!(input.config && input.config.receive_only), capabilities: [], problem: null, config_schema: null } };
+      case "set_account_config":
+        return { request_id: "demo", status: "ok", output: { account: { account_id: input.account_id, provider: "gmail", display_name: "Alex Example", config: input.config || {}, receive_only: !!(input.config && input.config.receive_only), capabilities: [], problem: null }, restart_needed: true } };
+      case "remove_account":
+        return { request_id: "demo", status: "ok", output: { removed: true, schedules_removed: 1, restart_needed: true, mail_kept: true } };
+      case "check_account":
+        return { request_id: "demo", status: "ok", output: { ok: true, detail: "" } };
+      case "start_authorization":
+        return { request_id: "demo", status: "ok", output: { url: "https://consent.example.invalid/demo" } };
+      case "authorization_status":
+        return { request_id: "demo", status: "ok", output: { state: "done", detail: "" } };
+      case "list_plugins":
+        return { request_id: "demo", status: "ok", output: { plugins: [
+          { name: "gmail", kind: "provider", version: "1", capabilities: ["auth", "flags.write", "send", "sync.pull"], started: true, healthy: true, detail: "", operations: [] },
+        ] } };
+      case "sieve_list":
+        return { request_id: "demo", status: "ok", output: { enabled: true, directory: "~/.config/oaken/sieve", sha256: "demo", scripts: Object.keys(FIX_SIEVE).sort().map((n) => ({ name: n, sha256: "demo-" + n })), problems: [] } };
+      case "sieve_get":
+        return { request_id: "demo", status: "ok", output: { name: input.name, text: FIX_SIEVE[input.name] || "", sha256: "demo" } };
+      case "sieve_check": {
+        const ok = !/\bbogus\b/.test(input.script || "");
+        return { request_id: "demo", status: "ok", output: ok
+          ? { ok: true, error: null, line: null, requires: ["fileinto"], sha256: "demo" }
+          : { ok: false, error: "unknown command 'bogus'", line: 2, requires: [], sha256: null } };
+      }
+      case "sieve_test":
+        return { request_id: "demo", status: "ok", output: { check: { ok: true, requires: ["fileinto"], sha256: "demo" }, disposition: "filed", rule: (input.name || "script") + ":2", effects: [{ kind: "location", value: "dev@lists", rule: (input.name || "script") + ":2" }], errors: [], steps: 2 } };
+      case "sieve_save": {
+        const ok = !/\bbogus\b/.test(input.text || "");
+        if (ok && input.name) FIX_SIEVE[input.name] = input.text;
+        return { request_id: "demo", status: "ok", output: ok
+          ? { saved: true, check: { ok: true, requires: ["fileinto"], sha256: "demo" }, sha256: "demo" }
+          : { saved: false, check: { ok: false, error: "unknown command 'bogus'", line: 2 }, sha256: null } };
+      }
+      case "sieve_delete":
+        delete FIX_SIEVE[input.name];
+        return { request_id: "demo", status: "ok", output: { deleted: true } };
+      case "reprocess":
+        return { request_id: "demo", status: "ok", output: { job_id: "demo-job", stage: input.stage || "filter" } };
       case "list_labels": {
         // Folders (locations) come from the mailing-list "tags"; labels are the search tags.
         const locations = {}, labels = {};
