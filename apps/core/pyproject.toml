@@ -5,6 +5,18 @@ description = "Oaken Core — the ingestion & enrichment pipeline, the CLI, and 
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
+keywords = ["oaken", "email", "mail", "mua", "local-first", "ai", "mcp", "llm", "rag"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+    "Programming Language :: Python :: 3",
+    "Topic :: Communications :: Email",
+    "Topic :: Communications :: Email :: Email Clients (MUA)",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 # A bundle, not code: it pulls together the product (ADR 0014). `oaken` is the engine (pipeline,
 # API daemon, MCP server, first-party plugins); `oaken-cli` is the management surface and the stdio
 # MCP bridge; `oaken[vec]` adds the sqlite-vec native library for embeddings. The web UI is a

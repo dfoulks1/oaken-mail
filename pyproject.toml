@@ -6,6 +6,25 @@ readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.11"
+# MCP/LLM/RAG have no trove classifier, so they live in keywords (free-form, searchable); the
+# classifiers below are the real ones PyPI accepts.
+keywords = ["email", "mail", "mua", "local-first", "ai", "mcp", "llm", "rag", "imap", "gmail", "ollama"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Environment :: Console",
+    "Topic :: Communications :: Email",
+    "Topic :: Communications :: Email :: Email Clients (MUA)",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Indexing",
+    "Topic :: Text Processing :: Linguistic",
+]
 dependencies = [
     "aiosmtplib>=5.1.3",
     "aiosqlite>=0.22.1",
