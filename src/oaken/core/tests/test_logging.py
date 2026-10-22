@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import io
 import json
+from pathlib import Path
 
 import pytest
 
@@ -59,3 +60,38 @@ def test_logs_go_to_stderr_by_default(capsys: pytest.CaptureFixture[str]) -> Non
     get_logger().info("to-stderr")
     captured = capsys.readouterr()
     assert "to-stderr" in captured.err and captured.out == ""
+
+
+def test_a_log_file_gets_the_lines_and_stderr_still_does(tmp_path: Path) -> None:
+    path = tmp_path / "oaken.log"
+    out = io.StringIO()
+    configure_logging(LogSettings(format="json", file=str(path)), stream=out)
+    get_logger().info("hello", token="hunter2")  # noqa: S106
+    for text in (path.read_text(), out.getvalue()):
+        assert json.loads(text.strip())["event"] == "hello"
+        assert "hunter2" not in text
+    assert path.stat().st_mode & 0o077 == 0
+
+
+def test_a_log_file_rotates_by_size_and_keeps_the_configured_backups(tmp_path: Path) -> None:
+    path = tmp_path / "oaken.log"
+    configure_logging(
+        LogSettings(format="json", file=str(path), file_max_bytes=1024, file_backups=2),
+        stream=io.StringIO(),
+    )
+    for i in range(60):
+        get_logger().info("line", n=i, pad="x" * 100)
+    names = sorted(p.name for p in tmp_path.iterdir())
+    assert names == ["oaken.log", "oaken.log.1", "oaken.log.2"]
+    assert all(p.stat().st_size <= 1024 + 200 for p in tmp_path.iterdir())
+    newest = json.loads(path.read_text().strip().splitlines()[-1])
+    assert newest["n"] == 59
+
+
+def test_a_relative_log_file_sits_under_the_data_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OAKEN_HOME", str(tmp_path))
+    configure_logging(LogSettings(file="logs/oaken.log"), stream=io.StringIO())
+    get_logger().info("hello")
+    assert (tmp_path / "data" / "logs" / "oaken.log").exists()

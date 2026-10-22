@@ -76,13 +76,14 @@
       <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
     <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
       <a class="nav-link" href="#one-process"><span class="num">1</span>One process</a>
-      <a class="nav-link" href="#finding-it-the-runtime-file"><span class="num">2</span>Finding it: the runtime file</a>
-      <a class="nav-link" href="#the-token"><span class="num">3</span>The token</a>
-      <a class="nav-link" href="#what-a-request-passes-through"><span class="num">4</span>What a request passes through</a>
-      <a class="nav-link" href="#who-is-calling"><span class="num">5</span>Who is calling</a>
-      <a class="nav-link" href="#the-routes"><span class="num">6</span>The routes</a>
-      <a class="nav-link" href="#threat-model"><span class="num">7</span>Threat model</a>
-      <a class="nav-link" href="#not-built-yet"><span class="num">8</span>Not built yet</a>
+      <a class="nav-link" href="#logs"><span class="num">2</span>Logs</a>
+      <a class="nav-link" href="#finding-it-the-runtime-file"><span class="num">3</span>Finding it: the runtime file</a>
+      <a class="nav-link" href="#the-token"><span class="num">4</span>The token</a>
+      <a class="nav-link" href="#what-a-request-passes-through"><span class="num">5</span>What a request passes through</a>
+      <a class="nav-link" href="#who-is-calling"><span class="num">6</span>Who is calling</a>
+      <a class="nav-link" href="#the-routes"><span class="num">7</span>The routes</a>
+      <a class="nav-link" href="#threat-model"><span class="num">8</span>Threat model</a>
+      <a class="nav-link" href="#not-built-yet"><span class="num">9</span>Not built yet</a>
     </nav></div>
   </div></div>
 </nav>
@@ -117,7 +118,19 @@ terminal does not stop it) and as a detached process in its own group on Windows
 console for it, and it stops on <code>CTRL_BREAK</code>; <code>stop</code> sends that. Standard input and output go to the
 null device either way.</p>
 </section>
-<section id="finding-it-the-runtime-file" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Finding it: the runtime file</h2></div>
+<section id="logs" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Logs</h2></div>
+<p>Core logs structured lines to stderr. A detached core has no stderr (it goes to the null device),
+so set <code>[log] file</code> to keep its logs: lines are then written to that file <strong>as well as</strong> stderr.
+A relative path sits under the data directory; an absolute one is used as given. The file is
+created owner-only (<code>0600</code>) and appended to, and it rotates by size — at <code>[log] file_max_bytes</code> it
+is rolled to <code>oaken.log.1</code>, the previous <code>.1</code> to <code>.2</code>, and so on, keeping <code>[log] file_backups</code>
+copies. A file that cannot be written never costs the process its log or stops it: the write is
+dropped and stderr still gets the line. <code>[log] level</code> and <code>[log] format</code> (<code>console</code> or <code>json</code>)
+apply to both destinations, and a <code>reload</code> (SIGHUP) picks up a change to any of them at once.
+Secrets are redacted and long values truncated before a line is rendered, so mail content and
+tokens do not reach a log by accident.</p>
+</section>
+<section id="finding-it-the-runtime-file" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Finding it: the runtime file</h2></div>
 <p>While core runs, <code>runtime.json</code> in the runtime directory holds <code>pid</code>, <code>host</code>, <code>port</code>, <code>version</code> and
 <code>started_at</code>. It is created owner-only (<code>0600</code>), and it is the single-instance lock: it is created
 exclusively, with port 0 meaning &quot;starting&quot;, before anything is opened. If it already exists and its
@@ -127,14 +140,14 @@ removes it.</p>
 <p>The API port defaults to 0, a free port the kernel chooses, and the file is how clients find it.
 Set <code>[api] port</code> for a fixed one.</p>
 </section>
-<section id="the-token" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>The token</h2></div>
+<section id="the-token" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>The token</h2></div>
 <p>On first start core makes a random 256-bit token and stores it in <code>api_token</code> in the config
 directory, mode <code>0600</code>. Every request but one needs <code>Authorization: Bearer &lt;token&gt;</code>. The token is
 compared in constant time. <code>GET /v1/health</code> is open and answers <code>{&quot;status&quot;: &quot;ok&quot;}</code>, nothing more.</p>
 <p>Agents have tokens of their own (<code>oaken_agent_...</code>, made by <code>create_agent</code>) that open only
 <code>/v1/agent/</code>. See <a href="swarm.html">the swarm</a>.</p>
 </section>
-<section id="what-a-request-passes-through" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>What a request passes through</h2></div>
+<section id="what-a-request-passes-through" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>What a request passes through</h2></div>
 <p>A browser can send a request to <code>127.0.0.1:PORT</code> from any page the user has open, so being
 on loopback is not protection. Each request is checked in this order, by one guard that wraps every
 route:</p>
@@ -193,7 +206,7 @@ route:</p>
 <code>Cache-Control: no-store</code> on the API, and a strict <code>Content-Security-Policy</code> on static pages. Requests
 are never logged, because a URL can hold a search.</p>
 </section>
-<section id="who-is-calling" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Who is calling</h2></div>
+<section id="who-is-calling" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Who is calling</h2></div>
 <p>The registry has a caller class, which decides whether a person's <code>confirm</code> is accepted (see
 <a href="operations.html">operations</a>). Over HTTP:</p>
 <ul>
@@ -210,7 +223,7 @@ mode 0600) and limits, and the mount, not a header, sets its class
 takes agent tokens and offers only the job tools. A door is exactly its own path. See
 <a href="../mcp.html">Connect an AI client</a>.</p>
 </section>
-<section id="the-routes" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>The routes</h2></div>
+<section id="the-routes" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>The routes</h2></div>
 <p>Operations are not routed by hand. <code>GET /v1/operations</code> lists the registry with JSON Schemas and
 <code>POST /v1/operations/{name}</code> calls one through the same client the CLI uses in-process. The
 <a href="../reference/api.html">HTTP API reference</a> is generated from the OpenAPI document, which is served at
@@ -224,7 +237,7 @@ A quiet stream sends a <code>: heartbeat</code> comment.</li>
 <li><code>/</code>: files from <code>[api] static_dir</code> when set, otherwise a placeholder page. The web UI will live here.</li>
 </ul>
 </section>
-<section id="threat-model" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>Threat model</h2></div>
+<section id="threat-model" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>Threat model</h2></div>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
 <thead>
 <tr>
@@ -318,7 +331,7 @@ A quiet stream sends a <code>: heartbeat</code> comment.</li>
 <p>Not covered: a process running as the same user can read the token file and do what the user can.
 The audit log records what it did.</p>
 </section>
-<section id="not-built-yet" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>Not built yet</h2></div>
+<section id="not-built-yet" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>Not built yet</h2></div>
 <ul>
 <li>The ring is in memory: a restart is a <code>gap</code> for every client.</li>
 <li>Per-agent rate limits beyond the lease and hourly quotas in <a href="swarm.html">the swarm</a>.</li>

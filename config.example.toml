@@ -128,3 +128,7 @@ exclude_labels = []            # label names/ids to skip; Spam and Trash are alw
 # [log]
 # level = "INFO"               # DEBUG | INFO | WARNING | ERROR
 # format = "console"           # "console" or "json"
+# file = "oaken.log"           # also log to a file (relative: under the data directory); a
+#                              # detached core has no stderr, so set this to keep its logs
+# file_max_bytes = 10485760    # rotate at this size ...
+# file_backups = 5             # ... keeping oaken.log.1 to oaken.log.5

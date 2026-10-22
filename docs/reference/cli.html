@@ -122,6 +122,10 @@
 <td>Restart the core daemon.</td>
 </tr>
 <tr>
+<td><a href="#reload"><code>reload</code></a></td>
+<td>Make the running core re-read config.toml, without a restart.</td>
+</tr>
+<tr>
 <td><a href="#operation"><code>operation</code></a></td>
 <td>Call any registry operation by name (generic fallback).</td>
 </tr>
@@ -303,6 +307,9 @@
 <ul>
 <li><code>--detach</code> — Run in the background.</li>
 </ul>
+<h3 id="reload"><code>reload</code></h3>
+<p>Signals the running core (SIGHUP) to re-read its configuration and rebuild itself in the same process. An invalid file changes nothing. The web UI follows by itself.</p>
+<p>No arguments.</p>
 <h3 id="operation"><code>operation</code></h3>
 <p>Call a registry operation directly. The input is JSON on --json-input or stdin. This reaches every operation the daemon offers, including ones added after this CLI was released. 'oaken operation' with no name lists the operations.</p>
 <p>Arguments:</p>

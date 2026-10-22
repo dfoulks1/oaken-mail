@@ -22,7 +22,7 @@ import oaken
 from oaken.api.runtime import RuntimeFile, pid_alive, read_runtime
 from oaken.core import paths
 from oaken.core.errors import ConfigError, Conflict, Unavailable
-from oaken.core.logging import get_logger
+from oaken.core.logging import configure_logging, get_logger
 from oaken.core.settings import Settings
 from oaken.daemon.core import Core
 
@@ -87,6 +87,7 @@ async def _reload(core: Core, runtime: RuntimeFile, load: Callable[[], Settings]
     if settings == core.settings:
         log.info("reload: configuration unchanged")
         return core
+    configure_logging(settings.log)  # a changed level, format or file takes effect at once
     log.info("core reloading")
     await core.stop()
     try:
@@ -149,6 +150,7 @@ async def serve(
 def run(settings: Settings | None = None) -> int:
     """Foreground entry point. The exit code is 0 for a clean stop, 1 if core is already running."""
     core = Core(settings)
+    configure_logging(core.settings.log)
     try:
         asyncio.run(serve(core, load_settings=Settings.load if settings is None else None))
     except Conflict as exc:

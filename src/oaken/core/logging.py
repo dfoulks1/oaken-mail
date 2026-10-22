@@ -2,13 +2,17 @@
 """Structured logging to stderr. Secrets are redacted and long values truncated, so mail
 content cannot leak into logs by accident."""
 
+import os
 import re
 import sys
+import threading
+from pathlib import Path
 from typing import Any, TextIO
 
 import structlog
 from structlog.typing import EventDict, Processor, WrappedLogger
 
+from oaken.core import paths
 from oaken.core.settings import LogSettings
 
 REDACTED = "[REDACTED]"
@@ -36,7 +40,65 @@ def scrub(_logger: WrappedLogger, _method: str, event_dict: EventDict) -> EventD
     return {k: _clean(k, v) for k, v in event_dict.items()}
 
 
+class _LogFile:
+    """An append-only, owner-only (``0600``) log file that rotates by size, and still writes to
+    ``also`` (stderr). A failing file never costs the process its log: the error is dropped."""
+
+    def __init__(self, path: Path, max_bytes: int, backups: int, also: TextIO) -> None:
+        self.path, self.max_bytes, self.backups, self.also = path, max_bytes, backups, also
+        self._lock = threading.Lock()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self._fh = self._open()
+
+    def _open(self) -> TextIO:
+        fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        return os.fdopen(fd, "a", encoding="utf-8")
+
+    def _rotate(self) -> None:
+        self._fh.close()
+        for i in range(self.backups, 0, -1):
+            src = self.path if i == 1 else self.path.with_name(f"{self.path.name}.{i - 1}")
+            if src.exists():
+                src.replace(self.path.with_name(f"{self.path.name}.{i}"))
+        if not self.backups:
+            self.path.unlink(missing_ok=True)
+        self._fh = self._open()
+
+    def write(self, text: str) -> int:
+        try:
+            self.also.write(text)
+        except (OSError, ValueError):
+            pass
+        with self._lock:
+            try:
+                if self._fh.tell() + len(text) > self.max_bytes:
+                    self._rotate()
+                self._fh.write(text)
+                self._fh.flush()
+            except (OSError, ValueError):
+                pass
+        return len(text)
+
+    def flush(self) -> None:
+        try:
+            self.also.flush()
+        except (OSError, ValueError):
+            pass
+
+
+def _log_path(name: str) -> Path:
+    p = Path(name).expanduser()
+    return p if p.is_absolute() else paths.data_dir() / p
+
+
 def configure_logging(settings: LogSettings, stream: TextIO | None = None) -> None:
+    """Configure structlog. With ``settings.file`` set, lines go to that file as well as ``stream``
+    (stderr by default). Calling it again replaces the setup, so a reload can change any of it."""
+    out: TextIO = stream or sys.stderr
+    if settings.file:
+        out = _LogFile(  # type: ignore[assignment]
+            _log_path(settings.file), settings.file_max_bytes, settings.file_backups, out
+        )
     renderer: Processor = (
         structlog.processors.JSONRenderer()
         if settings.format == "json"
@@ -51,7 +113,7 @@ def configure_logging(settings: LogSettings, stream: TextIO | None = None) -> No
             renderer,
         ],
         wrapper_class=structlog.make_filtering_bound_logger(_LEVELS[settings.level]),
-        logger_factory=structlog.PrintLoggerFactory(file=stream or sys.stderr),
+        logger_factory=structlog.PrintLoggerFactory(file=out),
         cache_logger_on_first_use=False,
     )
 

@@ -375,6 +375,11 @@ class APISettings(_Section):
 class LogSettings(_Section):
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     format: Literal["console", "json"] = "console"
+    # A log file, in addition to stderr; relative paths sit under the data directory. Empty: stderr
+    # only (which a detached core discards).
+    file: str = ""
+    file_max_bytes: int = Field(default=10 * 1024 * 1024, ge=1024)
+    file_backups: int = Field(default=5, ge=0, le=100)  # rotated copies kept: oaken.log.1 ...
 
 
 class Settings(BaseSettings):

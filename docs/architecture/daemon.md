@@ -37,6 +37,19 @@ terminal does not stop it) and as a detached process in its own group on Windows
 console for it, and it stops on `CTRL_BREAK`; `stop` sends that. Standard input and output go to the
 null device either way.
 
+## Logs
+
+Core logs structured lines to stderr. A detached core has no stderr (it goes to the null device),
+so set `[log] file` to keep its logs: lines are then written to that file **as well as** stderr.
+A relative path sits under the data directory; an absolute one is used as given. The file is
+created owner-only (`0600`) and appended to, and it rotates by size — at `[log] file_max_bytes` it
+is rolled to `oaken.log.1`, the previous `.1` to `.2`, and so on, keeping `[log] file_backups`
+copies. A file that cannot be written never costs the process its log or stops it: the write is
+dropped and stderr still gets the line. `[log] level` and `[log] format` (`console` or `json`)
+apply to both destinations, and a `reload` (SIGHUP) picks up a change to any of them at once.
+Secrets are redacted and long values truncated before a line is rendered, so mail content and
+tokens do not reach a log by accident.
+
 ## Finding it: the runtime file
 
 While core runs, `runtime.json` in the runtime directory holds `pid`, `host`, `port`, `version` and
