@@ -37,6 +37,7 @@ dependencies = [
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.1",
     "selectolax>=1.0.1",
+    "sqlite-vec>=0.1.9",  # default vector store; a tool must not fail out of the box for lack of it
     "starlette>=1.9.0",
     "structlog>=26.1.0",
     "tokenizers>=0.23.3",
@@ -67,6 +68,9 @@ imap = "oaken_imap:ImapProvider"
 [project.entry-points."oaken.vector_stores"]
 sqlite-vec = "oaken_vec_sqlite:SqliteVecStore"
 
+# ``sqlite-vec`` is now a core dependency (above): the default vector store must work out of the
+# box. This extra is kept as a backward-compatible alias so ``oaken[vec]`` still resolves — the
+# ``oaken-core`` bundle and the version-lockstep test depend on it. It adds nothing beyond core.
 [project.optional-dependencies]
 vec = [
     "sqlite-vec>=0.1.9",

@@ -59,5 +59,7 @@ Vectors from two models cannot be compared. `begin_model` starts a new one besid
 
 ## Installing
 
-`pip install "oaken[vec]"`. Without the extra, the store reports a clear error naming it.
+Nothing to install: `sqlite-vec` ships as a core dependency, so the default vector store works out
+of the box. The `oaken[vec]` extra is kept as a backward-compatible alias and resolves to the same
+library. If `sqlite-vec` is somehow missing, the store reports a clear error naming it.
 The plugin is registered as `sqlite-vec` in the `oaken.vector_stores` group, like any third-party one.

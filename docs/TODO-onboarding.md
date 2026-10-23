@@ -56,8 +56,32 @@ Add these endpoints to the core webserver (webui):
 - Friendly web pages reduce need for external documentation during setup
 - Aligns with existing architecture (webui serves HTML, daemon coordinates)
 
+## Default vector store must work out of the box (DONE — verification deferred)
+The default `sqlite-vec` vector store was optional (behind the `oaken[vec]` extra), so a plain
+`uv tool install oaken-cli` started with the plugin failing: `sqlite-vec is not installed`. A tool's
+packaging philosophy must not get in the way of its use, so `sqlite-vec` is now a **core dependency**
+of `oaken`. The `vec` extra is kept as a backward-compatible alias (the `oaken-core` bundle and
+`tests/test_version_lockstep.py` still reference `oaken[vec]`), so nothing downstream breaks.
+
+Changed in this commit:
+- `pyproject.toml` — `sqlite-vec>=0.1.9` added to `[project].dependencies`; `vec` extra kept as an alias
+- `src/oaken_vec_sqlite/store.py` — error message is now install-method-aware (uv tool + pip) and
+  notes the lib normally ships with core
+- `docs/architecture/vectors.md` — "Installing" section updated (nothing to install)
+
+**Deferred (pick up when credit limits roll over):**
+- [ ] Run `uv sync` and regenerate `uv.lock`
+- [ ] `uv run pytest tests/test_version_lockstep.py` and the `oaken_vec_sqlite` tests
+- [ ] `uv run lint-imports` and `uv run ruff check`
+- [ ] Rebuild generated docs so `docs/architecture/vectors.html` and `docs/architecture/software-map.html`
+      (and `docs/softmap.toml`) reflect the new wording
+- [ ] Optional hardening: add a user-path install smoke test (install the published artifact the way
+      users do, start the daemon, assert the default vector store loads) so this class of regression
+      is caught before release
+
 ## Related files
 - `/home/dfoulks/local/oaken-mail/src/oaken/core/paths.py` — path resolution logic
 - `/home/dfoulks/local/oaken-mail/src/oaken/daemon/core.py` — daemon startup
 - `/home/dfoulks/local/oaken-mail/apps/webui/src/oaken_webui/` — web server
 - `/home/dfoulks/local/oaken-mail/config.example.toml` — example config to base defaults on
+- `/home/dfoulks/local/oaken-mail/src/oaken_vec_sqlite/store.py` — default vector store plugin

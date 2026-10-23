@@ -151,10 +151,12 @@ class SqliteVecStore(BaseVectorStore):
             ctx.config.get("path") or paths.data_dir() / ctx.settings.storage.index_db
         )
         try:
-            import sqlite_vec  # noqa: PLC0415 - optional dependency, loaded only when used
+            import sqlite_vec  # noqa: PLC0415 - imported here so a missing backend is a plugin error
         except ImportError as exc:
             raise PluginError(
-                "sqlite-vec is not installed; install it with: pip install 'oaken[vec]'"
+                "sqlite-vec is missing; it normally ships with Oaken. Reinstall the core package, "
+                "e.g. `uv tool install oaken-cli --with 'oaken[vec]'` (uv tool) or "
+                "`pip install 'oaken[vec]'` (pip)."
             ) from exc
         db = await Database.open(
             Path(path),
