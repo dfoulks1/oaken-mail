@@ -5,6 +5,7 @@ Nested keys use a double underscore in the environment: ``OAKEN_API__PORT=8123``
 are an error, in the file and in code. No secrets live here: tokens belong in the OS keyring.
 """
 
+import ipaddress
 import re
 from pathlib import Path
 from typing import Any, Literal
@@ -54,6 +55,9 @@ class AISettings(_Section):
     embed_model: str = "nomic-embed-text"
     llm_backend: str = "ollama"
     llm_model: str = "qwen2.5:3b"  # small on purpose; set a larger model for better analysis
+    # While a question a person is waiting on uses the model, background work (enrich) holds its
+    # next model call for at most this many seconds, then goes ahead. 0 means it never holds back.
+    background_yield_seconds: float = Field(default=120.0, ge=0)
     # Without this, a backend that talks to a non-loopback address refuses to start (prompt 10).
     allow_remote: bool = False
     # Longest model answer, in characters, that is accepted before it counts as invalid output.
@@ -280,7 +284,9 @@ class SearchSettings(_Section):
 
 
 class SyncSettings(_Section):
-    provider: str = "gmail"
+    # Rarely needed: each account names its own provider. Only code that asks for "the" provider
+    # without naming one reads this, and core knows no provider by name.
+    provider: str = ""
     # The schedule a new account starts with (every 15 minutes). After that the schedule lives in
     # the database and is edited there; changing this does not touch existing schedules.
     interval_seconds: int = Field(default=900, ge=1)
@@ -339,7 +345,34 @@ class UISettings(_Section):
 
 
 class APISettings(_Section):
-    host: Literal["127.0.0.1"] = "127.0.0.1"  # fixed: the API is never exposed off-host
+    # The address the API listens on. Anything but loopback needs ``allow_remote = true``: the
+    # console pages (/, /config, /jobs, /stats) stay for clients on this machine either way, and
+    # only the token-protected API is reachable from elsewhere. The token travels in clear text,
+    # so reach it through an SSH tunnel or a TLS proxy, not over an open network.
+    host: str = "127.0.0.1"
+    allow_remote: bool = False
+    # Names (``oaken.lan``) or addresses a client may put in the Host header besides loopback and
+    # ``host`` itself, for a reverse proxy or a DNS name. The port is added for you.
+    allowed_hosts: list[str] = Field(default_factory=list)
+
+    @field_validator("host")
+    @classmethod
+    def _host_is_an_address(cls, value: str) -> str:
+        try:
+            ipaddress.ip_address(value)
+        except ValueError:
+            raise ValueError("host must be an IP address such as 127.0.0.1 or 0.0.0.0") from None
+        return value
+
+    @model_validator(mode="after")
+    def _remote_is_deliberate(self) -> "APISettings":
+        if not ipaddress.ip_address(self.host).is_loopback and not self.allow_remote:
+            raise ValueError(
+                f"host {self.host} is not loopback: set allow_remote = true to accept that the "
+                "API (token-protected) is reachable from other machines"
+            )
+        return self
+
     port: int = Field(default=0, ge=0, le=65535)  # 0 = pick a free port
     # The MCP server (ADR 0004) mounts at ``/mcp`` on this listener when true. It has its own
     # token and its own limits, so a heavy MCP call cannot starve the general API.
@@ -451,6 +484,51 @@ class Settings(BaseSettings):
             raise ConfigError(_describe(exc, path)) from exc
         except (OSError, ValueError) as exc:  # unreadable or malformed TOML
             raise ConfigError(f"cannot read {path}: {exc}") from exc
+
+
+def _toml_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str):
+        return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    if isinstance(value, (list, tuple)):
+        return "[" + ", ".join(_toml_value(v) for v in value) + "]"
+    return str(value)
+
+
+def default_config_text() -> str:
+    """A ``config.toml`` with every setting at its default, commented out, built from the models
+    so it cannot drift from the code. Uncomment a line to change it."""
+    lines = [
+        "# Oaken Mail configuration. Every line below shows the default and is commented out:",
+        "# uncomment and edit what you want to change, then reload (or use the /config page).",
+        "# Unknown keys are an error. Secrets never go here; they live in the OS keyring.",
+        "",
+    ]
+    for name, field in Settings.model_fields.items():
+        default = field.get_default(call_default_factory=True)
+        if not isinstance(default, BaseModel):
+            continue  # free-form tables ([plugins.*], [workspaces.*]) are added by hand
+        lines.append(f"# [{name}]")
+        for key, value in default.model_dump().items():
+            if isinstance(value, dict):
+                continue
+            lines.append(f"# {key} = {_toml_value(value)}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def ensure_default_config() -> Path | None:
+    """Write the commented default ``config.toml`` if there is none. Returns its path when it
+    was written, ``None`` when a file was already there (it is never overwritten)."""
+    path = paths.config_dir() / CONFIG_FILE
+    try:
+        with path.open("x", encoding="utf-8") as fh:
+            fh.write(default_config_text())
+    except FileExistsError:
+        return None
+    path.chmod(0o600)
+    return path
 
 
 def _describe(exc: ValidationError, path: Path) -> str:

@@ -162,29 +162,45 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
 
 async def _sync(client: ApiClient, args: argparse.Namespace) -> int:
+    """One account, or (no ``--account``) every account on every provider: core queues a sync
+    job for each, and each job calls that provider's pull."""
     payload: dict[str, object] = {"account_id": args.account or ""}
     if args.folder:
         payload["folder"] = args.folder
     result = await client.call("sync_now", payload, confirm=True)
     out = result.output if isinstance(result.output, dict) else {}
-    job = str(out.get("job_id", ""))
-    final = await _wait_for_job(client, job, args.timeout) if args.wait and job else None
+    jobs: list[tuple[str, str, bool]] = [  # (account, job id, newly queued)
+        (str(j.get("account_id", "")), str(j.get("job_id", "")), bool(j.get("created", True)))
+        for j in out.get("jobs", [])
+    ]
+    if not jobs and out.get("job_id"):
+        jobs = [(args.account or "", str(out["job_id"]), bool(out.get("created", True)))]
+    finals: dict[str, str] = {}
+    if args.wait:
+        for _account, job_id, _created in jobs:
+            finals[job_id] = await _wait_for_job(client, job_id, args.timeout)
     data = {"request_id": result.request_id, "output": result.output}
-    if final is not None:
-        data["status"] = final
+    if finals:
+        data["status"] = finals
 
     def text() -> None:
         from oaken_cli.output import print_text
 
-        created = out.get("created", True)
-        print_text(
-            f"sync queued (job {job or '?'})" if created else f"joined running sync (job {job})"
-        )
-        if final is not None:
-            print_text(f"sync {final}")
+        for account, job_id, created in jobs:
+            who = f"{account}: " if not args.account else ""
+            what = (
+                f"sync queued (job {job_id})" if created else f"joined running sync (job {job_id})"
+            )
+            end = f" - {finals[job_id]}" if job_id in finals else ""
+            print_text(f"{who}{what}{end}")
+        for sk in out.get("skipped", []):
+            print_text(f"{sk.get('account_id')}: skipped ({sk.get('reason')})")
+        if not jobs:
+            print_text("no accounts to sync")
 
     code = emit(args, data=data, text=text)
-    return code if final in (None, "succeeded") else int(ExitCode.ERROR)
+    failed = any(f != "succeeded" for f in finals.values())
+    return int(ExitCode.ERROR) if failed else code
 
 
 TERMINAL = ("succeeded", "failed", "cancelled")

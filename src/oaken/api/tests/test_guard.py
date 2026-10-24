@@ -157,10 +157,12 @@ async def test_static_files_are_served_from_the_configured_folder(
 
 
 # -- binding ---------------------------------------------------------------------------------
-def test_a_non_loopback_bind_cannot_be_configured() -> None:
-    for host in ("0.0.0.0", "::", "192.168.1.5", "localhost"):  # noqa: S104
+def test_a_non_loopback_bind_needs_allow_remote_and_an_address() -> None:
+    for host in ("0.0.0.0", "::", "192.168.1.5"):  # noqa: S104
         with pytest.raises(ValidationError):
-            APISettings(host=host)  # type: ignore[arg-type]
+            APISettings(host=host)  # not loopback, and allow_remote was not set
+    with pytest.raises(ValidationError):
+        APISettings(host="localhost", allow_remote=True)  # an address, not a name
 
 
 def test_the_server_itself_refuses_a_non_loopback_host(rig: Rig) -> None:

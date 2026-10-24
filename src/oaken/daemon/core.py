@@ -111,7 +111,11 @@ class Core:
         # The durable "pause the model" switch: the runner consults it so paused stages are not
         # claimed, and the pause survives a restart.
         self.pipeline_control = PipelineControl(self.raw_db, clock, self.audit)
-        self.runner = JobRunner(self.queue, paused_kinds=self.pipeline_control.paused_kinds)
+        self.runner = JobRunner(
+            self.queue,
+            paused_kinds=self.pipeline_control.paused_kinds,
+            limit_overrides=self.pipeline_control.limits,
+        )
         self.scheduler = Scheduler(self.raw_db, self.queue, clock)
         kwargs = {} if self._discover is None else {"discover": self._discover}
         self.host = PluginHost(s, clock, bus, **kwargs)  # type: ignore[arg-type]
@@ -176,7 +180,9 @@ class Core:
                 )
                 self.mcp_agent = McpServer(agent_client, agents=self.agents)
                 self.api.mount(self.mcp_agent.surface, self.mcp_agent)
-        self.server = ApiServer(self.api, host=s.api.host, port=s.api.port)
+        self.server = ApiServer(
+            self.api, host=s.api.host, port=s.api.port, allow_remote=s.api.allow_remote
+        )
         self._port = 0
         self._lifecycle = Lifecycle(self._service_units(grace=s.api.shutdown_grace_seconds))
         self._open = True
@@ -264,7 +270,6 @@ class Core:
                 await door.stop()
 
     async def _stop_host(self) -> None:
-        await self.accounts.authorizations.close()
         await self.host.stop()
 
     async def _stop_jobs(self, grace: float) -> None:

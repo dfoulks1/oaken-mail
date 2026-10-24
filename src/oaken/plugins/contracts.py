@@ -214,6 +214,15 @@ class PluginOperation:
     handler: PluginOpHandler
     preview: PluginOpPreview | None = None
     mcp: Literal["off", "never"] = "off"
+    # True: the input has an ``account_id`` and core runs the handler on that account's own
+    # instance of the plugin (its host, its login), not on the shared one. An empty ``account_id``
+    # means the only account this plugin has. Offered even while the plugin is unhealthy or not
+    # set up, because that is when you need it (signing in).
+    per_account: bool = False
+    # True: one of the commands every plugin has (``enable``, ``check``, ...). Core runs it when the
+    # plugin has not written its own, and offers it whatever the plugin's state: a plugin that is
+    # disabled or unhealthy still needs ``enable`` and ``config``.
+    lifecycle: bool = False
 
 
 # -- Job kinds a plugin offers -----------------------------------------------------------------

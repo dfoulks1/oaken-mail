@@ -92,6 +92,8 @@ class MessagePayload(BaseModel):
 class ReprocessPayload(BaseModel):
     stage: Stage
     account_id: str | None = None
+    since: str | None = None  # embed and enrich only: mail dated on or after this day (YYYY-MM-DD)
+    limit: int | None = None  # embed and enrich only: just the newest N messages
 
 
 class StageJobResult(BaseModel):
@@ -602,20 +604,28 @@ class Pipeline:
 
     # -- reprocess --------------------------------------------------------------------------
     async def reprocess(
-        self, stage: Stage, account_id: AccountId | None = None, *, actor: Actor = SYSTEM
+        self,
+        stage: Stage,
+        account_id: AccountId | None = None,
+        *,
+        since: str | None = None,
+        limit: int | None = None,
+        actor: Actor = SYSTEM,
     ) -> Enqueued:
         """Queue the work to bring one stage up to date for old mail, at backfill priority.
         ``parse`` rebuilds the index, ``filter`` runs the Sieve scripts again, ``embed`` embeds
         whatever lacks a vector for the current model (swapping models without removing the old
-        vectors first), ``enrich`` runs whichever enrichers have no current result."""
+        vectors first), ``enrich`` runs whichever enrichers have no current result (so it only
+        does what is missing). ``since`` and ``limit`` narrow ``embed`` and ``enrich`` to recent
+        mail: the newest ``limit`` messages, dated on or after ``since``."""
         if stage not in STAGES:
             raise ValueError(f"unknown stage {stage!r}; one of {', '.join(STAGES)}")
         return await self.queue.enqueue(
             REPROCESS,
-            ReprocessPayload(stage=stage, account_id=account_id),
+            ReprocessPayload(stage=stage, account_id=account_id, since=since, limit=limit),
             priority=PRIORITY_BACKFILL,
             account_id=account_id,
-            dedupe_key=f"{REPROCESS}:{stage}:{account_id or '*'}",
+            dedupe_key=f"{REPROCESS}:{stage}:{account_id or '*'}:{since or ''}:{limit or ''}",
             actor=actor,
         )
 
@@ -631,10 +641,14 @@ class Pipeline:
             r = await self.filters.refilter(acct)
             return StageJobResult(done=r.filtered, skipped=r.failed)
         if p.stage == "embed":
-            return await self._reembed(acct)
-        return await self._reenrich(acct)
+            return await self._reembed(acct, p.since, p.limit)
+        return await self._reenrich(acct, p.since, p.limit)
 
-    async def _doc_ids(self, account_id: AccountId | None) -> list[str]:
+    async def _doc_ids(
+        self, account_id: AccountId | None, since: str | None = None, limit: int | None = None
+    ) -> list[str]:
+        if since or limit:  # recent mail only: the newest first, bounded
+            return await self.index.recent_doc_ids(account_id=account_id, since=since, limit=limit)
         out: list[str] = []
         after = ""
         while ids := await self.index.doc_ids(after=after, limit=PAGE, account_id=account_id):
@@ -642,7 +656,9 @@ class Pipeline:
             after = ids[-1]
         return out
 
-    async def _reembed(self, account_id: AccountId | None) -> StageJobResult:
+    async def _reembed(
+        self, account_id: AccountId | None, since: str | None = None, limit: int | None = None
+    ) -> StageJobResult:
         embedder = self.backends.embedder()
         if embedder is None or not self.vectors.available:
             raise PluginError("no embedder or vector store is available (will retry)")
@@ -656,7 +672,7 @@ class Pipeline:
         total = EmbedResult()
         for _ in range(3):  # a second pass catches mail that arrived during the first
             embedded = 0
-            for mid in await self._doc_ids(account_id):
+            for mid in await self._doc_ids(account_id, since, limit):
                 r = await self.embed_message(MessageId(mid), swapping=swapping)
                 embedded += r.embedded
                 total.embedded += r.embedded
@@ -673,9 +689,11 @@ class Pipeline:
             note=f"swapped from {old}" if swapping else "",
         )
 
-    async def _reenrich(self, account_id: AccountId | None) -> StageJobResult:
+    async def _reenrich(
+        self, account_id: AccountId | None, since: str | None = None, limit: int | None = None
+    ) -> StageJobResult:
         ran = cached = 0
-        for mid in await self._doc_ids(account_id):
+        for mid in await self._doc_ids(account_id, since, limit):
             r = await self.enrich_message(MessageId(mid))
             ran += r.ran
             cached += r.cached

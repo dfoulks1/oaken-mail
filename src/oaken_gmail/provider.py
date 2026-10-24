@@ -28,12 +28,21 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx2
+from pydantic import BaseModel
 
 from oaken.core.errors import NotFound, OakenError, PluginError, ProviderError
 from oaken.core.events import PluginEvent
 from oaken.core.logging import get_logger
-from oaken.plugins.base import BaseProvider
-from oaken.plugins.contracts import FlagChange, Health, PluginContext, PullBatch, RawMessage
+from oaken.plugins.base import BaseProvider, command
+from oaken.plugins.contracts import (
+    FlagChange,
+    Health,
+    PluginContext,
+    PluginOpContext,
+    PullBatch,
+    RawMessage,
+)
+from oaken.plugins.provider_auth import AccountIn
 from oaken_gmail.api import GmailApi
 from oaken_gmail.config import GmailConfig
 from oaken_gmail.oauth import authorize, load_client
@@ -160,9 +169,44 @@ def _decode(raw: str) -> bytes:
         raise ProviderError("gmail: a message came back with invalid base64") from None
 
 
+class LabelRow(BaseModel):
+    id: str
+    name: str
+    type: str = "user"
+
+
+class LabelsOut(BaseModel):
+    labels: list[LabelRow]
+
+
+class SendAsRow(BaseModel):
+    email: str
+    default: bool = False
+    verified: bool = True
+
+
+class SendAsOut(BaseModel):
+    addresses: list[SendAsRow]
+
+
 class GmailProvider(BaseProvider):
     version = "1"
     supports_folders = False
+    # A new Gmail account listens but does not send until the person turns sending on.
+    account_defaults = {"receive_only": True}
+    setup_help = (
+        "Gmail needs a Google OAuth client of your own (yours, not ours): create a Desktop-app "
+        "client in the Google Cloud console with the Gmail API enabled, publish the app to "
+        "Production (a Testing app drops its token after about a week), download its JSON and "
+        "point client_secret_file at it. Then run `oaken gmail auth` to sign in. Leave "
+        "include_labels empty to sync all mail; Spam and Trash never sync."
+    )
+    config_example = (
+        "[plugins.gmail]\n"
+        'client_secret_file = "/path/to/gmail_client_secret.json"\n'
+        'account = "default"\n'
+        "include_labels = []   # empty = all mail\n"
+    )
 
     def __init__(
         self,
@@ -429,6 +473,27 @@ class GmailProvider(BaseProvider):
             {"id": x["id"], "name": x["name"], "type": x.get("type", "user")}
             for x in data.get("labels", [])
         ]
+
+    @command(
+        "labels",
+        "List this account's Gmail labels (the names and ids include_labels and "
+        "exclude_labels accept).",
+        input=AccountIn,
+        output=LabelsOut,
+        per_account=True,
+    )
+    async def _cmd_labels(self, ctx: PluginOpContext, inp: AccountIn) -> LabelsOut:
+        return LabelsOut(labels=[LabelRow(**row) for row in await self.list_labels()])
+
+    @command(
+        "send_as",
+        "List the addresses this account may send as (its verified send-as aliases).",
+        input=AccountIn,
+        output=SendAsOut,
+        per_account=True,
+    )
+    async def _cmd_send_as(self, ctx: PluginOpContext, inp: AccountIn) -> SendAsOut:
+        return SendAsOut(addresses=[SendAsRow(**row) for row in await self.list_send_as()])
 
     async def create_label(self, name: str) -> str:
         data = await self.api.request(

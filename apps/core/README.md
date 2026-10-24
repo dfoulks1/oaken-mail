@@ -12,7 +12,7 @@ Installing this bundle gives you the whole non-UI product:
 - the local **API daemon** on `127.0.0.1` and the read-only `/stats` status page;
 - the **MCP server** (`/mcp`) — the AI-facing surface, so a stronger model can analyse and act on
   your mail through a narrow, audited, confirm-gated door while the mail stays on your machine;
-- the **`oaken` command line** to start, configure and drive it (`oaken start`, `oaken auth`,
+- the **`oaken` command line** to start, configure and drive it (`oaken start`, `oaken gmail auth`,
   `oaken sync`, `oaken search`, `oaken ask`, `oaken pipeline`, `oaken mcp`, …);
 - the first-party plugins: Gmail, IMAP, SMTP, Ollama, the enrichers, and the sqlite-vec store.
 

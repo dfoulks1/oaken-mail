@@ -23,16 +23,20 @@
 #   2. PUBLISH the app to Production. A Testing-mode app expires refresh tokens after ~7 days.
 #   3. Download the client JSON; point client_secret_file at it.
 #   4. Authorize (stores the refresh token in the keyring). Spam and Trash are never synced.
-[plugins.gmail]
-client_secret_file = "/path/to/gmail_client_secret.json"   # absolute path to the OAuth client JSON
-account = "default"            # names the keyring entry: oaken / gmail:<account>; one per account
-include_labels = []            # label names/ids to sync; empty = all mail
-exclude_labels = []            # label names/ids to skip; Spam and Trash are always excluded
+# Uncomment and fill in to use Gmail; until then the plugin shows as "not configured".
+# [plugins.gmail]
+# client_secret_file = "/path/to/gmail_client_secret.json"   # absolute path to the OAuth client JSON
+# account = "default"            # names the keyring entry: oaken / gmail:<account>; one per account
+# include_labels = []            # label names/ids to sync; empty = all mail
+# exclude_labels = []            # label names/ids to skip; Spam and Trash are always excluded
 # page_size = 100              # messages per full-sync batch (1–500)
 # concurrency = 4              # requests in flight at once (1–50)
 # timeout = 30.0               # seconds per request
 # max_retries = 8              # extra tries on 429 / rate-limit / 5xx
 # backoff = 1.0                # seconds, doubled each retry
+# (Add `enabled = false` to the table to keep the plugin off without removing its settings.)
+# capabilities = ["auth", "sync.pull"]   # only narrows what the plugin may do: no flag write-back,
+#                                        # never a send. Leave it out to allow everything.
 
 
 # --- IMAP provider (any server) -------------------------------------------------------
@@ -93,7 +97,7 @@ exclude_labels = []            # label names/ids to skip; Spam and Trash are alw
 
 # --- Sync schedule defaults (for a NEW account; live schedule is edited in the database) ---
 # [sync]
-# provider = "gmail"
+# provider = ""               # rarely needed: each account names its own provider
 # interval_seconds = 900       # every 15 minutes
 # timezone = "UTC"             # IANA name; matters for cron schedules and quiet hours
 # min_interval_seconds = 60    # floor enforced when a schedule is set (providers have quotas)
@@ -104,10 +108,16 @@ exclude_labels = []            # label names/ids to skip; Spam and Trash are alw
 
 
 # --- Local HTTP API (loopback only) ---------------------------------------------------
-# The CLI and the web UI server reach core here. Binds 127.0.0.1 only; the token is a file in the
-# config dir (mode 0600). The web UI is served by the separate `oaken-webui` app, not by core.
+# The CLI and the web UI server reach core here. Binds 127.0.0.1 unless you say otherwise; the
+# token is a file in the config dir (mode 0600). The web UI is served by the separate
+# `oaken-webui` app, not by core. The console pages (/, /config, /jobs, /stats) carry no token and
+# are only ever served to this machine, even on a remote bind.
 # [api]
-# port = 0                     # 0 = pick a free port; the runtime file records the chosen one
+# port = 0                     # 0 = pick a free port (a reload keeps it); set one to pin it
+# host = "127.0.0.1"           # an IP address. Anything but loopback needs allow_remote = true
+# allow_remote = false         # true: the token-protected API is reachable from other machines.
+#                              # The token travels in clear text: use an SSH tunnel or TLS proxy
+# allowed_hosts = []           # extra Host header names for a proxy or DNS name, e.g. ["oaken.lan"]
 # mcp = false                  # mount the MCP server at /mcp on this listener (its own token/limits)
 # dev_origin = ""              # one browser origin for UI dev CORS, e.g. "http://localhost:5173"
 # rate_limit_per_minute = 600

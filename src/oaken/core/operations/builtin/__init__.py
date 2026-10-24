@@ -4,6 +4,7 @@
 from oaken.core.operations.builtin import (
     accounts,
     agents,
+    config,
     enrichment,
     filtering,
     jobs,
@@ -30,6 +31,7 @@ def core_operations() -> tuple[AnyOperation, ...]:
         *enrichment.OPERATIONS,
         *filtering.OPERATIONS,
         *jobs.OPERATIONS,
+        *config.OPERATIONS,
     )
 
 

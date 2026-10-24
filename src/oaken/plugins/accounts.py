@@ -12,7 +12,6 @@ from oaken.core.errors import NotFound, OakenError, PluginError
 from oaken.core.ids import AccountId
 from oaken.core.logging import get_logger
 from oaken.core.rawstore import RawStore
-from oaken.plugins.authorize import Authorizations
 from oaken.plugins.contracts import Provider
 from oaken.plugins.host import PluginHost
 
@@ -25,7 +24,6 @@ class AccountProviders:
         self.raw = raw
         self._names: dict[str, str] = {}  # account id -> the host's instance name
         self._problems: dict[str, str] = {}  # account id -> why it has no provider
-        self.authorizations = Authorizations()  # interactive consent flows in progress
 
     async def start(self) -> dict[str, str]:
         """Start a provider for every account that has none yet (call again after adding an

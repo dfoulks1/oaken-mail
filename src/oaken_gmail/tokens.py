@@ -27,7 +27,7 @@ from oaken_gmail.config import TOKEN_URL
 
 log = get_logger("oaken.gmail")
 
-NOT_AUTHORIZED = "No refresh token is stored yet. Authorize the account with 'oaken auth gmail'."
+NOT_AUTHORIZED = "No refresh token is stored yet. Authorize the account with 'oaken gmail auth'."
 
 REAUTH_HELP = (
     "Google rejected the stored refresh token (invalid_grant), so Gmail needs to be authorized "

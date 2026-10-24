@@ -1,25 +1,22 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Operations that set up an account: create it, change its settings, store its credential, check
-that the credential works, and run an interactive consent (Gmail).
+"""Operations that set up an account: create it, change its settings, remove it.
 
 None is ever offered over MCP. Only non-secret settings go in an account's config (the store
-refuses keys that look like secrets). A credential goes straight from here to the provider, which
-keeps it in the OS keyring; it is never stored, logged, audited or returned. The audit row for a
-password change holds the account and provider only, not a hash of the input (a hash of a short
-password can be guessed).
+refuses keys that look like secrets). Signing in is not here: a provider owns its own credential,
+so it offers its own ``auth`` command (``oaken gmail auth``, ``oaken imap auth``), which core runs
+on the account's instance (``PluginOperation.per_account``).
 """
 
 from typing import Any
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field
 
-from oaken.core.errors import InvalidInput, NotFound
+from oaken.core.errors import InvalidInput
 from oaken.core.ids import AccountId
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import AnyOperation, operation
 from oaken.mail.sendpolicy import effective_capabilities, is_receive_only
 from oaken.plugins.base import inferred_capabilities
-from oaken.readstate.audit import new_audit_id
 
 
 class AccountDetail(BaseModel):
@@ -95,8 +92,8 @@ class CreateAccountInput(BaseModel):
 
 @operation(
     "create_account",
-    "Add an account. Its credential is stored separately with set_account_password or "
-    "start_authorization.",
+    "Add an account. Its credential is stored separately by the provider's own auth command "
+    "(for example gmail.auth).",
     permission="mutate",
     input=CreateAccountInput,
     output=AccountDetail,
@@ -140,110 +137,6 @@ async def set_account_config(ctx: OpContext, inp: SetConfigInput) -> SetConfigOu
     if inp.display_name is not None:
         await ctx.svc.raw.set_account_display_name(AccountId(inp.account_id), inp.display_name)
     return SetConfigOutput(account=await _detail(ctx, inp.account_id), restart_needed=True)
-
-
-class PasswordInput(BaseModel):
-    account_id: str
-    password: SecretStr = Field(min_length=1, max_length=1024)
-
-
-class PasswordOutput(BaseModel):
-    stored: bool
-
-
-@operation(
-    "set_account_password",
-    "Store an account's password in the OS keyring (SMTP and IMAP). It is never shown again.",
-    permission="mutate",
-    input=PasswordInput,
-    output=PasswordOutput,
-    mcp="never",
-    audit="service",
-)
-async def set_account_password(ctx: OpContext, inp: PasswordInput) -> PasswordOutput:
-    provider = ctx.svc.need_sync().accounts.get(inp.account_id)
-    setter = getattr(provider, "set_password", None)
-    if setter is None:
-        raise InvalidInput("this account's provider does not use a password")
-    await setter(inp.password.get_secret_value())
-    acct = await ctx.svc.raw.get_account(AccountId(inp.account_id))
-    async with ctx.svc.raw.db.transaction() as tx:
-        await ctx.svc.audit.record(
-            tx,
-            audit_id=new_audit_id(),
-            actor=ctx.caller.actor,
-            reason=f"{ctx.caller.client}_call",
-            op="account_password_set",
-            batch_id=ctx.caller.request_id,
-            before={},
-            after={"account_id": inp.account_id, "provider": acct.provider},
-        )
-    return PasswordOutput(stored=True)
-
-
-class CheckOutput(BaseModel):
-    ok: bool
-    detail: str = ""
-
-
-@operation(
-    "check_account",
-    "Check the account's credential: connect, require TLS and log in. Sends and reads nothing.",
-    permission="read",
-    input=AccountRef,
-    output=CheckOutput,
-    mcp="never",
-)
-async def check_account(ctx: OpContext, inp: AccountRef) -> CheckOutput:
-    from oaken.core.errors import OakenError
-
-    provider = ctx.svc.need_sync().accounts.get(inp.account_id)
-    try:
-        await provider.authenticate(provider.ctx)  # type: ignore[attr-defined]
-    except OakenError as exc:
-        return CheckOutput(ok=False, detail=exc.message)
-    return CheckOutput(ok=True)
-
-
-class AuthorizationStart(BaseModel):
-    url: str = Field(description="Open this in a browser; core waits for the redirect back.")
-
-
-@operation(
-    "start_authorization",
-    "Begin an interactive consent (Gmail). Returns the address to open; poll authorization_status.",
-    permission="mutate",
-    input=AccountRef,
-    output=AuthorizationStart,
-    mcp="never",
-)
-async def start_authorization(ctx: OpContext, inp: AccountRef) -> AuthorizationStart:
-    accounts = ctx.svc.need_sync().accounts
-    provider = accounts.get(inp.account_id, allow_unhealthy=True)  # a dead credential is why
-    if not callable(getattr(provider, "authorize", None)):
-        raise InvalidInput("this account's provider has no interactive authorization")
-    return AuthorizationStart(url=await accounts.authorizations.start(inp.account_id, provider))
-
-
-class AuthorizationStatus(BaseModel):
-    state: str = Field(description="none, pending, done or failed.")
-    detail: str = ""
-
-
-@operation(
-    "authorization_status",
-    "How an interactive authorization is going.",
-    permission="read",
-    input=AccountRef,
-    output=AuthorizationStatus,
-    mcp="never",
-)
-async def authorization_status(ctx: OpContext, inp: AccountRef) -> AuthorizationStatus:
-    await ctx.svc.raw.get_account(AccountId(inp.account_id))  # NotFound for a typo
-    state, detail = ctx.svc.need_sync().accounts.authorizations.status(inp.account_id)
-    if state == "none" and inp.account_id not in {a.id for a in await ctx.svc.raw.list_accounts()}:
-        raise NotFound(f"no such account: {inp.account_id}")
-    return AuthorizationStatus(state=state, detail=detail)
 
 
 class RemoveAccountOutput(BaseModel):
@@ -292,9 +185,5 @@ OPERATIONS: tuple[AnyOperation, ...] = (
     get_account,
     create_account,
     set_account_config,
-    set_account_password,
-    check_account,
     remove_account,
-    start_authorization,
-    authorization_status,
 )

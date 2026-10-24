@@ -4,9 +4,8 @@
     "list_messages", "search", "get_message", "get_thread", "get_raw", "message_presented",
     "mark_read", "mark_unread", "list_mailbox", "create_folder", "create_label",
     "move_to_folder", "set_labels", "sync_now",
-    "list_accounts", "get_account", "create_account", "set_account_config", "set_account_password",
-    "check_account", "remove_account", "start_authorization", "authorization_status",
-    "list_operations",
+    "list_accounts", "get_account", "create_account", "set_account_config", "remove_account",
+    "list_plugins", "list_operations",
     "sieve_list", "sieve_get", "sieve_check", "sieve_test", "sieve_save", "sieve_delete",
     "reprocess"
   ],
@@ -44,9 +43,10 @@
       "account.account_id", "account.display_name", "account.config", "account.receive_only",
       "account.capabilities", "restart_needed"
     ],
-    "check_account": ["ok", "detail"],
-    "start_authorization": ["url"],
-    "authorization_status": ["state", "detail"],
+    "list_plugins": [
+      "plugins[].name", "plugins[].kind", "plugins[].capabilities", "plugins[].operations",
+      "plugins[].setup_help", "plugins[].account_defaults"
+    ],
     "remove_account": ["removed", "schedules_removed", "restart_needed", "mail_kept"],
     "list_operations": ["operations[].name"],
     "sieve_list": [

@@ -41,6 +41,7 @@ dependencies = [
     "starlette>=1.9.0",
     "structlog>=26.1.0",
     "tokenizers>=0.23.3",
+    "tomlkit>=0.13.2",  # edits config.toml one table at a time, keeping the comments
     "tzdata>=2025.2; sys_platform == 'win32'",  # Windows has no system tz database
     "uvicorn>=0.54.0",
     "zstandard>=0.25.0",
@@ -153,7 +154,7 @@ notice-rgx = "SPDX-License-Identifier: Apache-2\\.0"
 min-file-size = 0
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**" = ["S101", "S105", "S106", "S311"]  # S105/6: fake tokens
+"**/tests/**" = ["S101", "S105", "S106", "S311", "ASYNC230", "ASYNC240"]  # S105/6: fake tokens; ASYNC: tests do sync fs assertions
 "tests/**" = ["S101"]
 "src/oaken/testing/contracts.py" = ["S101"]  # the suites are assertions
 "docs/spikes/**" = ["S311", "S608"]  # measurement scripts: seeded random data, fixed SQL

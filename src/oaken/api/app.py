@@ -30,6 +30,7 @@ from oaken.api.ratelimit import RateLimiter
 from oaken.api.ring import EventRing
 from oaken.api.runtime import same_secret
 from oaken.api.stats import STATS_JS, STATS_LOGO, StatsCollector, render_stats
+from oaken.api.welcome import CONFIG_JS, JOBS_JS, WELCOME_JS, render_welcome, welcome_context
 from oaken.core.agents import TOKEN_PREFIX, Agent
 from oaken.core.errors import Conflict, OakenError, PermissionDenied
 from oaken.core.ids import JobId
@@ -160,7 +161,12 @@ class Api:
         cfg = svc.settings.api
         self.cfg = cfg
         limiter = RateLimiter(cfg.rate_limit_per_minute, now=rate_now or time.monotonic)
-        self.policy = Policy(dev_origin=cfg.dev_origin, limiter=limiter, public_csp=PUBLIC_CSP)
+        self.policy = Policy(
+            dev_origin=cfg.dev_origin,
+            limiter=limiter,
+            public_csp=PUBLIC_CSP,
+            extra_hosts=[*cfg.allowed_hosts, cfg.host],
+        )
         agent_body = svc.settings.jobs.max_result_bytes + 64 * 1024
         self.policy.surfaces = [
             Surface("general", "/v1/", self._general, cfg.max_body_bytes, max_concurrent=64),
@@ -168,6 +174,7 @@ class Api:
         ]
         self.ring = EventRing(cfg.event_ring_size)
         self._detach: Callable[[], None] | None = None
+        self._port: int | None = None
         self.routes: list[BaseRoute] = self._routes()
         self.starlette = Starlette(
             routes=self.routes,
@@ -178,6 +185,7 @@ class Api:
     # -- lifecycle ---------------------------------------------------------------------------
     def bind(self, port: int) -> None:
         """Allow the Host and Origin values for the port core really listens on."""
+        self._port = port
         self.policy.bind(port)
 
     def start(self) -> None:
@@ -233,6 +241,24 @@ class Api:
             Route("/stats.json", safe(self.stats_json), methods=["GET"]),
             Route("/stats.js", safe(self.stats_js), methods=["GET"]),
             Route("/stats-logo.png", safe(self.stats_logo), methods=["GET"]),
+            Route("/config", safe(self.config_editor), methods=["GET"]),
+            Route("/getting_started", safe(self.getting_started), methods=["GET"]),
+            Route("/config.js", safe(self.config_js), methods=["GET"]),
+            Route("/welcome.js", safe(self.welcome_js), methods=["GET"]),
+            Route("/config/get", safe(self.config_get), methods=["GET"]),
+            Route("/config/test", safe(self.config_test), methods=["POST"]),
+            Route("/config/save", safe(self.config_save_route), methods=["POST"]),
+            Route("/config/reload", safe(self.config_reload_route), methods=["POST"]),
+            Route("/jobs", safe(self.jobs_page), methods=["GET"]),
+            Route("/jobs.js", safe(self.jobs_js), methods=["GET"]),
+            Route("/jobs/list", safe(self.jobs_list), methods=["GET"]),
+            Route("/jobs/pipeline", safe(self.jobs_pipeline), methods=["GET"]),
+            Route("/jobs/pause", safe(self.jobs_pause), methods=["POST"]),
+            Route("/jobs/resume", safe(self.jobs_resume), methods=["POST"]),
+            Route("/jobs/limit", safe(self.jobs_limit), methods=["POST"]),
+            Route("/jobs/retry-parked", safe(self.jobs_retry_parked), methods=["POST"]),
+            Route("/jobs/cancel", safe(self.jobs_cancel), methods=["POST"]),
+            Route("/jobs/retry", safe(self.jobs_retry), methods=["POST"]),
         ]
         static = Path(self.cfg.static_dir).expanduser() if self.cfg.static_dir else None
         if static is not None and static.is_dir():
@@ -251,7 +277,188 @@ class Api:
         return _json(models.Health().model_dump())
 
     async def placeholder(self, request: Request) -> Response:
-        return HTMLResponse(PLACEHOLDER)
+        """Core's home page (``/``). Renders the friendly ``welcome.html`` with the version, the
+        daemon's paths and port, and a short live status. If the template cannot be rendered (a
+        trimmed build, say) it falls back to the plain text placeholder so ``/`` always answers.
+        Loopback-only and unauthenticated like ``/stats``; version, paths and counts only."""
+        try:
+            status: dict[str, Any] = {}
+            try:
+                out = await self.client.call("status", {}, CallerContext.internal())
+                if out.output is not None:
+                    status = out.output.model_dump(mode="json")
+            except OakenError:
+                status = {}  # a status hiccup must not take the home page down
+            html = render_welcome(
+                welcome_context(version=self.client.svc.version, port=self._port, status=status)
+            )
+        except Exception:  # noqa: BLE001 - the home page must never 500; fall back to plain text
+            log.error("welcome render failed; serving placeholder")
+            return HTMLResponse(PLACEHOLDER)
+        csp = (
+            "default-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
+            "https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com "
+            "https://cdn.jsdelivr.net; img-src 'self' data:; "
+            "script-src 'self' https://cdn.jsdelivr.net; "
+            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
+        )
+        return HTMLResponse(html, headers={"content-security-policy": csp})
+
+    async def config_editor(self, request: Request) -> Response:
+        """The core-served config.toml editor (``/config``): a textarea with Test, Save and Reload,
+        backed by the ``config_*`` operations. Loopback-only like ``/stats``; the page holds no
+        token (the browser calls ``/v1/operations/{name}`` through the same origin)."""
+        from oaken.api.welcome import _env  # same templates dir, same autoescaped environment
+
+        html = _env.get_template("config.html").render(
+            version=self.client.svc.version,
+            active="config",
+            docs_url="https://dfoulks1.github.io/oaken-mail/",
+        )
+        csp = (
+            "default-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
+            "https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com "
+            "https://cdn.jsdelivr.net; img-src 'self' data:; script-src 'self'; "
+            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
+        )
+        return HTMLResponse(html, headers={"content-security-policy": csp})
+
+    # The config editor's data endpoints: loopback-only (the Host guard), token-free like
+    # /stats.json. Each delegates to the real config_* operation as the internal caller, so the
+    # operations stay the single source of truth and every save/reload still lands in the audit log.
+    async def _config_op(self, name: str, payload: dict[str, Any]) -> Response:
+        # confirm=True: these routes are driven by a person clicking a button on the loopback
+        # editor page, the same intent the CLI/UI expresses. Without it a mutate op (save, reload)
+        # returns a proposal and changes nothing.
+        out = await self.client.call(name, payload, CallerContext.internal(), confirm=True)
+        data = out.output.model_dump(mode="json") if out.output is not None else {}
+        return _json(data)
+
+    async def config_get(self, request: Request) -> Response:
+        return await self._config_op("config_get", {})
+
+    async def config_js(self, request: Request) -> Response:
+        """The config editor's one same-origin script, vendored with the package."""
+        return Response(
+            CONFIG_JS,
+            media_type="application/javascript",
+            headers={"cache-control": "no-store"},
+        )
+
+    async def welcome_js(self, request: Request) -> Response:
+        """The welcome page's one same-origin script (theme toggle), vendored with the package."""
+        return Response(
+            WELCOME_JS,
+            media_type="application/javascript",
+            headers={"cache-control": "no-store"},
+        )
+
+    async def config_test(self, request: Request) -> Response:
+        body = await read_json(request)
+        return await self._config_op("config_validate", {"text": body.get("text", "")})
+
+    async def config_save_route(self, request: Request) -> Response:
+        body = await read_json(request)
+        return await self._config_op("config_save", {"text": body.get("text", "")})
+
+    async def config_reload_route(self, request: Request) -> Response:
+        return await self._config_op("config_reload", {})
+
+    # -- the jobs & pipeline console (/jobs) --------------------------------------------------
+    # A core debugging surface: inspect the durable queue and control the ingest pipeline. Like
+    # /config it is loopback-only (the Host guard) and token-free; the mutating routes delegate to
+    # the real mutate operations with confirm=True, so every action still lands in the audit log.
+    async def jobs_page(self, request: Request) -> Response:
+        from oaken.api.welcome import _env
+
+        html = _env.get_template("jobs.html").render(
+            version=self.client.svc.version,
+            active="jobs",
+            docs_url="https://dfoulks1.github.io/oaken-mail/",
+        )
+        csp = (
+            "default-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
+            "https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com "
+            "https://cdn.jsdelivr.net; img-src 'self' data:; script-src 'self'; "
+            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
+        )
+        return HTMLResponse(html, headers={"content-security-policy": csp})
+
+    async def jobs_js(self, request: Request) -> Response:
+        return Response(
+            JOBS_JS, media_type="application/javascript", headers={"cache-control": "no-store"}
+        )
+
+    async def getting_started(self, request: Request) -> Response:
+        """A short, in-app walkthrough of the config.toml settings, served by core at
+        /getting_started. Loopback-only like the other core pages."""
+        from oaken.api.welcome import _env
+
+        host = self.client.svc.plugins
+        providers = (
+            [
+                {"name": name, "setup_help": text[0], "config_example": text[1]}
+                for kind, name, _version, _ops in host.catalog()
+                if kind == "provider"
+                for text in [host.declared_text(kind, name)]
+            ]
+            if host is not None
+            else []
+        )
+        html = _env.get_template("getting_started.html").render(
+            version=self.client.svc.version,
+            providers=providers,
+            active="",
+            docs_url="https://dfoulks1.github.io/oaken-mail/",
+        )
+        csp = (
+            "default-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
+            "https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com "
+            "https://cdn.jsdelivr.net; img-src 'self' data:; script-src 'self'; "
+            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
+        )
+        return HTMLResponse(html, headers={"content-security-policy": csp})
+
+    async def jobs_list(self, request: Request) -> Response:
+        status = request.query_params.get("status") or None
+        payload: dict[str, Any] = {"limit": 100}
+        if status:
+            payload["status"] = status
+        return await self._config_op("list_jobs", payload)
+
+    async def jobs_pipeline(self, request: Request) -> Response:
+        return await self._config_op("pipeline_status", {})
+
+    async def jobs_pause(self, request: Request) -> Response:
+        body = await read_json(request)
+        payload: dict[str, Any] = {"why": "paused from the jobs console"}
+        if body.get("stage"):
+            payload["stage"] = body["stage"]
+        return await self._config_op("pause_backfill", payload)
+
+    async def jobs_resume(self, request: Request) -> Response:
+        body = await read_json(request)
+        return await self._config_op(
+            "resume_backfill", {"stage": body["stage"]} if body.get("stage") else {}
+        )
+
+    async def jobs_limit(self, request: Request) -> Response:
+        body = await read_json(request)
+        return await self._config_op(
+            "set_pipeline_limits",
+            {"stage": body.get("stage"), "concurrency": body.get("concurrency")},
+        )
+
+    async def jobs_retry_parked(self, request: Request) -> Response:
+        return await self._config_op("retry_parked", {"all": True})
+
+    async def jobs_cancel(self, request: Request) -> Response:
+        body = await read_json(request)
+        return await self._config_op("cancel_job", {"job_id": body.get("job_id", "")})
+
+    async def jobs_retry(self, request: Request) -> Response:
+        body = await read_json(request)
+        return await self._config_op("retry_job", {"job_id": body.get("job_id", "")})
 
     def _stats_collector(self) -> StatsCollector:
         return StatsCollector(
@@ -265,13 +472,17 @@ class Api:
         """The read-only status page (ADR 0013). Loopback-only (the Host guard) and
         unauthenticated like ``/v1/health``; counts and health only, never mail content."""
         data = await self._stats_collector().collect()
+        data["active"] = "stats"
+        data["docs_url"] = "https://dfoulks1.github.io/oaken-mail/"
         html = render_stats(data)
-        # Inline styles for the page's look; one same-origin script (stats.js) for live in-place
-        # updates — nothing inline, nothing external, so it works offline. The guard only adds a
-        # CSP when the response lacks one, so this header stands.
+        # Bootstrap (CDN) for a look consistent with / and /config, plus the one same-origin
+        # script (stats.js) for live in-place updates. The guard only adds a CSP when the
+        # response lacks one, so this header stands.
         csp = (
-            "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-            "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
+            "default-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
+            "https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com "
+            "https://cdn.jsdelivr.net; img-src 'self' data:; script-src 'self'; "
+            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
         )
         return HTMLResponse(html, headers={"content-security-policy": csp})
 

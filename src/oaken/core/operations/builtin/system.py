@@ -2,16 +2,19 @@
 """Operations about the system itself: status, usage, accounts, plugins, the audit log, and which
 operations an MCP client may call."""
 
+import json
 from dataclasses import asdict
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from oaken.core.errors import Conflict, NotFound
+from oaken.core.errors import ConfigError, Conflict, NotFound
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.exposure import OP, PLUGIN, scope_of
 from oaken.core.operations.registry import AnyOperation, Change, Preview, operation
+from oaken.core.settings import Settings
+from oaken.ingest.pipeline_control import STAGES
 from oaken.plugins.host import ACCOUNT_SEP
 from oaken.readstate.service import READ_OPS
 
@@ -71,6 +74,15 @@ class StageOut(BaseModel):
     oldest_pending_seconds: float | None = None
     per_second: float = 0.0
     eta_seconds: float | None = None
+    paused: bool = False  # held back by a pause (this stage's, or the one for every model stage)
+    concurrency: int | None = None  # how many of its jobs may run at once, where one is set
+    current: list["RunningJobOut"] = Field(default_factory=list)  # the jobs running now
+
+
+class RunningJobOut(BaseModel):
+    job_id: str
+    message_id: str | None = None
+    started_at: str | None = None
 
 
 class ParkedOut(BaseModel):
@@ -107,8 +119,27 @@ class PipelineStatusOutput(BaseModel):
 async def pipeline_status(ctx: OpContext, inp: Empty) -> PipelineStatusOutput:
     s = await ctx.svc.need_pipeline().pipeline_status()
     out = PipelineStatusOutput.model_validate(asdict(s))
-    if ctx.svc.pipeline_control is not None:
-        out.llm_paused = (await ctx.svc.pipeline_control.state()).llm_paused
+    control = ctx.svc.pipeline_control
+    if control is not None:
+        out.llm_paused = (await control.state()).llm_paused
+        paused = await control.paused_stages()
+        limits = await control.limits()
+        for name, stage in out.stages.items():
+            stage.paused = name in paused
+            stage.concurrency = limits.get(STAGES.get(name, ""))
+    for name, stage in out.stages.items():
+        for job in await ctx.svc.queue.query(status="running", kind=f"ingest.{name}", limit=50):
+            try:
+                message_id = json.loads(job.payload_json).get("message_id")
+            except ValueError:
+                message_id = None
+            stage.current.append(
+                RunningJobOut(
+                    job_id=str(job.id),
+                    message_id=message_id,
+                    started_at=job.claimed_at.isoformat() if job.claimed_at else None,
+                )
+            )
     return out
 
 
@@ -202,12 +233,19 @@ class PluginInfoOut(BaseModel):
     name: str  # for one account's instance: <plugin>@<account>
     kind: str
     version: str
-    capabilities: list[str]
+    capabilities: list[str]  # what it may do now: its own, narrowed by `capabilities` in its table
     started: bool
     healthy: bool
     detail: str = ""
+    enabled: bool = True  # not switched off at runtime, and its table (or its default) allows it
+    enabled_default: bool = True  # whether it runs when its table says nothing about `enabled`
+    allowed_capabilities: list[str] | None = None  # the allow-list from its table, if it has one
+    declared_capabilities: list[str] = Field(default_factory=list)  # all it implements, unnarrowed
     operations: list[str] = Field(default_factory=list)  # the operations it offers
     config_schema: dict[str, Any] | None = None  # JSON Schema of its settings, if it declares one
+    setup_help: str = ""  # what to do first, in the plugin's own words
+    config_example: str = ""  # a config.toml snippet to start from
+    account_defaults: dict[str, Any] = Field(default_factory=dict)  # a new account's settings
 
 
 class PluginsInput(BaseModel):
@@ -224,8 +262,15 @@ def _plugin_rows(ctx: OpContext, name: str | None) -> list[PluginInfoOut]:
     for op in ctx.registry.all():
         if op.plugin:
             offered.setdefault(op.plugin, []).append(op.name)
+
+    def text(kind: str, plugin: str) -> tuple[str, str, dict[str, Any]]:
+        return host.declared_text(kind, plugin)  # type: ignore[arg-type]
+
     rows = [
         PluginInfoOut(
+            setup_help=text(s.kind, s.name.partition(ACCOUNT_SEP)[0])[0],
+            config_example=text(s.kind, s.name.partition(ACCOUNT_SEP)[0])[1],
+            account_defaults=text(s.kind, s.name.partition(ACCOUNT_SEP)[0])[2],
             name=s.name,
             kind=s.kind,
             version=s.version,
@@ -233,6 +278,10 @@ def _plugin_rows(ctx: OpContext, name: str | None) -> list[PluginInfoOut]:
             started=s.started,
             healthy=s.healthy,
             detail=s.detail,
+            enabled=s.enabled,
+            enabled_default=s.enabled_default,
+            allowed_capabilities=None if s.allowed is None else sorted(s.allowed),
+            declared_capabilities=sorted(s.declared),
             operations=offered.get(s.name.partition(ACCOUNT_SEP)[0], []),
             config_schema=host.config_schema(s.kind, s.name.partition(ACCOUNT_SEP)[0]),
         )
@@ -254,6 +303,64 @@ def _plugin_rows(ctx: OpContext, name: str | None) -> list[PluginInfoOut]:
 )
 async def list_plugins(ctx: OpContext, inp: PluginsInput) -> PluginsOutput:
     return PluginsOutput(plugins=_plugin_rows(ctx, inp.name))
+
+
+class PluginName(BaseModel):
+    name: str  # a plugin (``gmail``) or one account's instance of it (``gmail@work``)
+
+
+class PluginChange(BaseModel):
+    changed: list[str]  # the plugins and instances it applied to
+    plugins: list[PluginInfoOut]  # their state afterwards
+
+
+@operation(
+    "plugin_disable",
+    "Stop a plugin and keep it off until plugin_enable or a restart, without reloading core. "
+    "Put `enabled = false` in the plugin's [plugins] table to make it last.",
+    permission="mutate",
+    input=PluginName,
+    output=PluginChange,
+    mcp="never",
+    audit="service",
+)
+async def plugin_disable(ctx: OpContext, inp: PluginName) -> PluginChange:
+    changed = await ctx.svc.need_plugins().disable(inp.name)
+    return PluginChange(changed=changed, plugins=_plugin_rows(ctx, inp.name))
+
+
+@operation(
+    "plugin_enable",
+    "Start a plugin that plugin_disable stopped. A plugin whose table says `enabled = false` "
+    "stays off until that line is removed and the plugin is reloaded.",
+    permission="mutate",
+    input=PluginName,
+    output=PluginChange,
+    mcp="never",
+    audit="service",
+)
+async def plugin_enable(ctx: OpContext, inp: PluginName) -> PluginChange:
+    changed = await ctx.svc.need_plugins().enable(inp.name)
+    return PluginChange(changed=changed, plugins=_plugin_rows(ctx, inp.name))
+
+
+@operation(
+    "plugin_reload",
+    "Restart one plugin on the current config.toml (and pick up a plugin installed since boot) "
+    "without reloading core.",
+    permission="mutate",
+    input=PluginName,
+    output=PluginChange,
+    mcp="never",
+    audit="service",
+)
+async def plugin_reload(ctx: OpContext, inp: PluginName) -> PluginChange:
+    try:
+        settings = Settings.load()  # the file as it is now; a typo changes nothing
+    except ConfigError as exc:
+        raise Conflict(f"config.toml is not valid, plugin not reloaded: {exc}") from None
+    changed = await ctx.svc.need_plugins().reload(inp.name, settings)
+    return PluginChange(changed=changed, plugins=_plugin_rows(ctx, inp.name))
 
 
 @operation(
@@ -454,43 +561,91 @@ async def set_operation_exposure(ctx: OpContext, inp: ExposureInput) -> Exposure
     )
 
 
+PipelineStage = Literal["embed", "enrich"]
+
+
 class PauseBackfillInput(BaseModel):
     why: str = Field(default="", max_length=500, description="A note recorded with the pause.")
+    stage: PipelineStage | None = Field(
+        default=None, description="One stage; omit to pause every model-bound stage."
+    )
+
+
+class ResumeBackfillInput(BaseModel):
+    stage: PipelineStage | None = Field(
+        default=None, description="One stage; omit to resume every model-bound stage."
+    )
 
 
 class PipelineControlOutput(BaseModel):
-    llm_paused: bool
+    llm_paused: bool  # every model-bound stage is paused at once
     reason: str = ""
+    paused_stages: list[str] = Field(default_factory=list)  # each stage that is held back now
+
+
+async def _control_output(ctx: OpContext, state: Any) -> PipelineControlOutput:
+    paused = sorted(await ctx.svc.need_pipeline_control().paused_stages())
+    return PipelineControlOutput(
+        llm_paused=state.llm_paused, reason=state.reason, paused_stages=paused
+    )
 
 
 @operation(
     "pause_backfill",
-    "Pause the model-bound ingest stages (embed, enrich). Mail keeps landing and being filtered.",
+    "Pause the model-bound ingest stages (embed, enrich), or just one with stage. Mail keeps "
+    "landing and being filtered; a running job finishes. It survives a restart.",
     permission="mutate",
     input=PauseBackfillInput,
     output=PipelineControlOutput,
     mcp="never",
 )
 async def pause_backfill(ctx: OpContext, inp: PauseBackfillInput) -> PipelineControlOutput:
-    state = await ctx.svc.need_pipeline_control().set_llm_paused(
-        True, actor=ctx.caller.actor, reason=inp.why or "paused by the user"
+    state = await ctx.svc.need_pipeline_control().set_stage_paused(
+        inp.stage, True, actor=ctx.caller.actor, reason=inp.why or "paused by the user"
     )
-    return PipelineControlOutput(llm_paused=state.llm_paused, reason=state.reason)
+    return await _control_output(ctx, state)
 
 
 @operation(
     "resume_backfill",
-    "Resume the model-bound ingest stages after a pause.",
+    "Resume the model-bound ingest stages after a pause, or just one with stage.",
     permission="mutate",
-    input=Empty,
+    input=ResumeBackfillInput,
     output=PipelineControlOutput,
     mcp="never",
 )
-async def resume_backfill(ctx: OpContext, inp: Empty) -> PipelineControlOutput:
-    state = await ctx.svc.need_pipeline_control().set_llm_paused(
-        False, actor=ctx.caller.actor, reason="resumed by the user"
+async def resume_backfill(ctx: OpContext, inp: ResumeBackfillInput) -> PipelineControlOutput:
+    state = await ctx.svc.need_pipeline_control().set_stage_paused(
+        inp.stage, False, actor=ctx.caller.actor, reason="resumed by the user"
     )
-    return PipelineControlOutput(llm_paused=state.llm_paused, reason=state.reason)
+    return await _control_output(ctx, state)
+
+
+class PipelineLimitInput(BaseModel):
+    stage: PipelineStage
+    concurrency: int = Field(ge=1, le=64, description="How many of its jobs may run at once.")
+
+
+class PipelineLimitOutput(BaseModel):
+    stage: str
+    concurrency: int
+
+
+@operation(
+    "set_pipeline_limits",
+    "Change how many jobs of a stage run at once, now and after a restart. A running job is "
+    "never dropped: a lower number takes effect as running jobs finish.",
+    permission="mutate",
+    input=PipelineLimitInput,
+    output=PipelineLimitOutput,
+    mcp="never",
+)
+async def set_pipeline_limits(ctx: OpContext, inp: PipelineLimitInput) -> PipelineLimitOutput:
+    n = await ctx.svc.need_pipeline_control().set_limit(
+        inp.stage, inp.concurrency, actor=ctx.caller.actor
+    )
+    ctx.svc.queue.wake.set()  # a higher limit frees workers waiting on the old one
+    return PipelineLimitOutput(stage=inp.stage, concurrency=n)
 
 
 class RetryParkedInput(BaseModel):
@@ -534,12 +689,16 @@ OPERATIONS: tuple[AnyOperation, ...] = (
     status,
     pipeline_status,
     pause_backfill,
+    set_pipeline_limits,
     resume_backfill,
     retry_parked,
     usage_summary,
     list_accounts,
     list_plugins,
     plugin_health,
+    plugin_disable,
+    plugin_enable,
+    plugin_reload,
     list_audit,
     list_operations,
     set_operation_exposure,

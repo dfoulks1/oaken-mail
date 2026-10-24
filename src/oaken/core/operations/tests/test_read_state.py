@@ -36,14 +36,12 @@ def examples(a: MessageId, job_id: str = "none") -> dict[str, Any]:
         "get_enrichment": {"message_id": a}, "enrich_message": {"message_id": a},
         "sieve_check": {"script": 'keep;'}, "sieve_list": {},
         "sieve_test": {"script": "keep;", "message_id": a},
-        "get_account": {"account_id": "main"}, "check_account": {"account_id": "main"},
+        "get_account": {"account_id": "main"},
         "create_account": {"account_id": "extra", "provider": "fake", "display_name": "X"},
         "set_account_config": {"account_id": "main", "config": {}},
-        "set_account_password": {"account_id": "main", "password": "x"},
-        "start_authorization": {"account_id": "main"},
-        "authorization_status": {"account_id": "main"},
         "list_jobs": {}, "cancel_job": {"job_id": job_id}, "retry_job": {"job_id": job_id},
-        "pause_backfill": {}, "resume_backfill": {}, "retry_parked": {"all": True},
+        "pause_backfill": {}, "resume_backfill": {},
+        "set_pipeline_limits": {"stage": "enrich", "concurrency": 2}, "retry_parked": {"all": True},
         "list_mailbox": {}, "mailbox_counts": {}, "create_folder": {"path": "Lists/Dev"},
         "create_label": {"name": "x"},
         "move_to_folder": {"ids": [a], "path": "Work"},
@@ -51,6 +49,13 @@ def examples(a: MessageId, job_id: str = "none") -> dict[str, Any]:
         "remove_account": {"account_id": "no-such-account"},  # NotFound: do not remove a live one
         "sieve_get": {"name": "none.sieve"}, "sieve_save": {"name": "x.sieve", "text": "keep;"},
         "sieve_delete": {"name": "x.sieve"},
+        "config_get": {}, "config_validate": {"text": "[api]\nport = 8123\n"},
+        "config_save": {"text": "[api]\nport = 8123\n"},
+        "plugin_disable": {"name": "no-such-plugin"}, "plugin_enable": {"name": "no-such-plugin"},
+        "plugin_reload": {"name": "no-such-plugin"},
+        "get_plugin_config": {"plugin": "no-such-plugin"},
+        "check_plugin_config": {"plugin": "no-such-plugin", "config": {}},
+        "set_plugin_config": {"plugin": "no-such-plugin", "config": {}},
     }  # fmt: skip
 
 
@@ -58,6 +63,9 @@ MARKING = {"mark_read", "mark_unread", "undo", "message_presented"}
 # set_flagged changes star state (not read state) and writes \Flagged back: it is exercised on its
 # own, not in the loop that asserts nothing writes a flag.
 FLAGGING = {"set_flagged"}
+# config_reload signals the running process (SIGHUP) to rebuild core; it is not exercised in this
+# read-state loop, which would send the signal to the test runner. It touches no read state.
+SIGNALING = {"config_reload"}
 
 
 async def test_no_operation_that_does_not_mark_read_changes_read_state(ops: Ops) -> None:
@@ -72,7 +80,7 @@ async def test_no_operation_that_does_not_mark_read_changes_read_state(ops: Ops)
     job = await ops.svc.queue.enqueue("ingest.enrich", _P())
     table = examples(a, str(job.job_id))
     declared = {o.name for o in core_operations() if o.marks_read}
-    assert set(table) | MARKING | FLAGGING == {o.name for o in core_operations()}, (
+    assert set(table) | MARKING | FLAGGING | SIGNALING == {o.name for o in core_operations()}, (
         "add a case for the new one"
     )
     assert declared == MARKING | {"summarize_message"}
@@ -82,9 +90,11 @@ async def test_no_operation_that_does_not_mark_read_changes_read_state(ops: Ops)
         except NotImplementedYet:
             assert name in {"search", "ask"}
         except NotFound:
-            assert name in {"revoke_agent", "remove_account", "sieve_get"}
-        except InvalidInput:  # the fake provider has no password and no consent flow
-            assert name in {"set_account_password", "start_authorization"}
+            assert name in {
+                "revoke_agent", "remove_account", "sieve_get",
+                "plugin_disable", "plugin_enable", "plugin_reload",
+                "get_plugin_config", "check_plugin_config", "set_plugin_config",
+            }  # fmt: skip
         assert await ops.read_count() == 0, f"{name} changed read state"
         assert ops.rs.writes() == [], f"{name} wrote a flag to the server"
     assert ops.rs.writes() == [] and await ops.rs.marker(a) is None

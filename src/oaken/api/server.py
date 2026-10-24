@@ -8,6 +8,7 @@ is core's, not uvicorn's: the daemon decides what a SIGTERM means.
 
 import asyncio
 import contextlib
+import ipaddress
 import socket
 import sys
 from collections.abc import Generator
@@ -29,9 +30,16 @@ class _Server(uvicorn.Server):
 
 
 class ApiServer:
-    def __init__(self, api: Api, *, host: str = LOOPBACK, port: int = 0) -> None:
-        if host != LOOPBACK:
-            raise ConfigError(f"the API binds {LOOPBACK} only, not {host!r}")
+    def __init__(
+        self, api: Api, *, host: str = LOOPBACK, port: int = 0, allow_remote: bool = False
+    ) -> None:
+        try:
+            loopback = ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            raise ConfigError(f"the API binds an IP address, not {host!r}") from None
+        if not loopback and not allow_remote:
+            raise ConfigError(f"the API binds loopback only unless allow_remote is set: {host!r}")
+        self.remote = not loopback
         self.api, self.host, self.requested_port = api, host, port
         self.port = 0
         self._server: _Server | None = None
@@ -68,6 +76,12 @@ class ApiServer:
         for _ in range(500):
             if self._server.started:
                 log.info("api listening", host=self.host, port=self.port)
+                if self.remote:
+                    log.warning(
+                        "api is reachable from other machines; its token travels in clear text",
+                        host=self.host,
+                        hint="reach it through an SSH tunnel or a TLS proxy",
+                    )
                 return self.port
             if self._task.done():
                 break

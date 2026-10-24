@@ -65,8 +65,11 @@ def test_the_scorer_can_fail(expect: dict[str, Any], result: dict[str, Any]) -> 
 
 
 def test_a_fixture_with_no_matching_enricher_is_reported(
-    capsys: pytest.CaptureFixture[str],
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The runner needs a model; with none configured it must say so, not crash or hang."""
+    # Hermetic: not the developer's real config, and not a model that happens to be running here.
+    monkeypatch.setenv("OAKEN_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("OAKEN_AI__LLM_BACKEND", "no-such-backend")
     with pytest.raises(SystemExit):
         main(["enrich", "--enricher", "summary", "--fixtures", str(ROOT)])

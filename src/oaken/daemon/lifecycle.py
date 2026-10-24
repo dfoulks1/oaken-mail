@@ -23,7 +23,7 @@ from oaken.api.runtime import RuntimeFile, pid_alive, read_runtime
 from oaken.core import paths
 from oaken.core.errors import ConfigError, Conflict, Unavailable
 from oaken.core.logging import configure_logging, get_logger
-from oaken.core.settings import Settings
+from oaken.core.settings import Settings, ensure_default_config
 from oaken.daemon.core import Core
 
 log = get_logger("oaken.daemon")
@@ -72,6 +72,15 @@ async def _bring_up(core: Core, runtime: RuntimeFile) -> Core:
     return core
 
 
+def _same_but_port(fresh: Settings, running: Settings) -> bool:
+    """True when only the sticky port (see ``_reload``) differs from what is running."""
+    if fresh.api.port != 0:
+        return False
+    return fresh.model_copy(update={"api": running.api}) == running and (
+        fresh.api.model_copy(update={"port": running.api.port}) == running.api
+    )
+
+
 async def _reload(core: Core, runtime: RuntimeFile, load: Callable[[], Settings] | None) -> Core:
     """Re-read the configuration and rebuild core on it, in this process. The new settings are
     validated before anything is stopped, so a typo in ``config.toml`` changes nothing. If the
@@ -84,12 +93,18 @@ async def _reload(core: Core, runtime: RuntimeFile, load: Callable[[], Settings]
     except ConfigError as exc:
         log.error("reload refused; still running on the old configuration", error=str(exc))
         return core
-    if settings == core.settings:
+    if settings == core.settings or _same_but_port(settings, core.settings):
         log.info("reload: configuration unchanged")
         return core
     configure_logging(settings.log)  # a changed level, format or file takes effect at once
     log.info("core reloading")
+    bound = core.server.port
     await core.stop()
+    if settings.api.port == 0 and bound:
+        # No port was asked for: keep the one clients already know instead of picking a new one.
+        settings = settings.model_copy(
+            update={"api": settings.api.model_copy(update={"port": bound})}
+        )
     try:
         fresh = await _bring_up(core.reconfigured(settings), runtime)
     except Exception as exc:
@@ -147,10 +162,32 @@ async def serve(
             runtime.release()
 
 
+def _announce_home() -> None:
+    """Say where Oaken keeps its files, and warn when ``OAKEN_HOME`` did not choose it. An
+    explicit home is remembered, so a later start from a shell without the variable finds it."""
+    source, home = paths.home_source()
+    if source == "env":
+        if paths.remember_home():
+            log.info("home remembered", home=str(home))
+        return
+    where = f"the last known home {home}" if source == "remembered" else "the platform folders"
+    log.warning(
+        "OAKEN_HOME is not set",
+        using=where,
+        data=str(paths.data_dir()),
+        config=str(paths.config_dir()),
+        hint=f"add `export OAKEN_HOME={home or Path('~/.oaken')}` to your shell profile",
+    )
+
+
 def run(settings: Settings | None = None) -> int:
     """Foreground entry point. The exit code is 0 for a clean stop, 1 if core is already running."""
     core = Core(settings)
     configure_logging(core.settings.log)
+    _announce_home()
+    created = ensure_default_config()
+    if created is not None:
+        log.info("wrote a commented default configuration", path=str(created))
     try:
         asyncio.run(serve(core, load_settings=Settings.load if settings is None else None))
     except Conflict as exc:

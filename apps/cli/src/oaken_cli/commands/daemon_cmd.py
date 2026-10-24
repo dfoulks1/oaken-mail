@@ -46,7 +46,9 @@ def _started(args: argparse.Namespace, info: dict[str, Any] | None, verb: str) -
     def text() -> None:
         from oaken_cli.output import print_text
 
-        print_text(f"core {verb}: {data['url']} (pid {info['pid']})")
+        url = data["url"]
+        print_text(f"🌳 Oaken Mail {verb}: {url} (pid {info['pid']})")
+        print_text(f"   Open {url}/ to get started · config at {url}/config · stats at {url}/stats")
 
     return emit(args, data=data, text=text)
 

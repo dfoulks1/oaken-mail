@@ -24,8 +24,8 @@ classifiers = [
 # The pins below are the one spot that restates the version (a dependency string can't be dynamic);
 # tests/test_version_lockstep.py asserts they match the shared version so they cannot drift.
 dependencies = [
-    "oaken[vec]==0.1.0",
-    "oaken-cli==0.1.0",
+    "oaken[vec]==0.1.1",
+    "oaken-cli==0.1.1",
 ]
 
 [project.urls]

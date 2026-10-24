@@ -55,10 +55,12 @@ def test_unknown_key_in_code_is_an_error() -> None:
         Settings.model_validate({"api": {"nope": 1}})
 
 
-def test_api_host_cannot_leave_loopback() -> None:
+def test_api_host_cannot_leave_loopback_unless_allowed() -> None:
     write_config('[api]\nhost = "0.0.0.0"\n')
-    with pytest.raises(ConfigError, match=r"api\.host"):
+    with pytest.raises(ConfigError, match="allow_remote"):
         Settings.load()
+    write_config('[api]\nhost = "0.0.0.0"\nallow_remote = true\n')
+    assert Settings.load().api.host == "0.0.0.0"  # noqa: S104
 
 
 def test_bad_value_and_bad_toml_are_config_errors(tmp_path: Path) -> None:
@@ -91,3 +93,23 @@ def test_read_state_and_ui_defaults_and_limits() -> None:
     for bad in ({"read_state": {"audit_chunk": 0}}, {"ui": {"mark_read_delay_ms": -1}}):
         with pytest.raises(ValidationError):
             Settings.model_validate(bad)
+
+
+def test_the_default_config_is_valid_and_changes_nothing() -> None:
+    from oaken.core.settings import default_config_text
+
+    text = default_config_text()
+    assert "# [api]" in text and "# port = 0" in text
+    path = paths.config_dir() / "config.toml"
+    path.write_text(text, encoding="utf-8")
+    assert Settings.load() == Settings()  # all commented out: still the defaults
+
+
+def test_the_default_config_is_written_once_and_never_over_a_file() -> None:
+    from oaken.core.settings import ensure_default_config
+
+    first = ensure_default_config()
+    assert first is not None and first.read_text(encoding="utf-8").startswith("# Oaken Mail")
+    first.write_text("[api]\nport = 1234\n", encoding="utf-8")
+    assert ensure_default_config() is None
+    assert first.read_text(encoding="utf-8") == "[api]\nport = 1234\n"

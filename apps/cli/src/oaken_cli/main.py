@@ -49,7 +49,8 @@ getting started:
   oaken help COMMAND          help for one command (e.g. oaken help sync) — same as COMMAND --help
   oaken start                 run the core daemon (use --detach to background it)
   oaken admin account add     add a mail account (a wizard, or --provider/--id/--set)
-  oaken auth gmail            authorize an account (Gmail consent / SMTP / IMAP password)
+  oaken gmail auth            sign an account in (also imap, smtp: any plugin's functions are
+                              'oaken PLUGIN VERB'; 'oaken operation --describe NAME' lists flags)
   oaken sync --wait           pull mail now and wait for it to finish
   oaken search "quokkas"      search; oaken ask "when is the board meeting?" to ask
   oaken show MESSAGE_ID       read one message (adds --mark-read via 'oaken read')
@@ -60,7 +61,7 @@ command groups:
   organize      sieve · schedule · reprocess · rebuild-index
   queue         jobs · pipeline · watch
   accounts      admin · auth · accounts
-  system        status · usage · plugins · audit · operations
+  system        status · usage · plugins · config · audit · operations
   agents        agents · jobs (claim/heartbeat/complete/fail)
   tools         operation · mcp · completion · help
 
@@ -199,7 +200,10 @@ def _register_operation(
         description=(
             "Call a registry operation directly. The input is JSON on --json-input or stdin. "
             "This reaches every operation the daemon offers, including ones added after this CLI "
-            "was released. 'oaken operation' with no name lists the operations."
+            "was released. 'oaken operation' with no name lists the operations. The operation's "
+            "own fields can be given as flags built from its input schema (see --describe), e.g. "
+            "'oaken operation list_messages --limit 5'; 'oaken PLUGIN VERB' is a shorthand for "
+            "'oaken operation PLUGIN.VERB'."
         ),
     )
     op.add_argument("name", nargs="?", help="Operation name; omit to list operations.")
@@ -207,6 +211,14 @@ def _register_operation(
         "--json-input",
         metavar="JSON",
         help="The operation input as a JSON object. Use '-' or omit to read stdin when piped.",
+    )
+    op.add_argument("--no-browser", action="store_true", help="Print an address, never open it.")
+    op.add_argument(
+        "--timeout",
+        type=float,
+        default=300.0,
+        metavar="S",
+        help="When an operation waits on the person (a sign-in), give up after S seconds.",
     )
     op.add_argument(
         "--describe",
@@ -301,7 +313,11 @@ def _register_mail(
     undo.add_argument("audit_id", help="The audit id to undo (see 'oaken audit').")
     undo.set_defaults(func=_lazy("mail_cmd", "cmd_undo"))
 
-    sync = sub.add_parser("sync", help="Sync an account (or one folder) now.", parents=[g])
+    sync = sub.add_parser(
+        "sync",
+        help="Sync every account on every provider now (or one account, or one folder).",
+        parents=[g],
+    )
     sync.add_argument("--account", metavar="ID", help="Account to sync; default is all.")
     sync.add_argument("--folder", metavar="NAME", help="One folder; default is the whole account.")
     sync.add_argument("--wait", action="store_true", help="Wait until the sync job finishes.")
@@ -335,16 +351,24 @@ def _register_system(
         parents=[g],
         description=(
             "Default shows status. 'pause'/'resume' stop and restart the model-bound ingest "
-            "stages (embed, enrich) — mail keeps landing and being filtered while paused. "
-            "'parked' re-queues failed ingest jobs."
+            "stages (embed, enrich), or just one (oaken pipeline pause enrich) — mail keeps "
+            "landing and being filtered while paused. 'limits enrich 2' changes how many jobs a "
+            "stage runs at once, live. 'parked' re-queues failed ingest jobs."
         ),
     )
     pipeline.add_argument(
         "subcommand",
         nargs="?",
         default="status",
-        choices=["status", "pause", "resume", "parked"],
-        help="status (default), pause, resume, or parked.",
+        choices=["status", "pause", "resume", "limits", "parked"],
+        help="status (default), pause, resume, limits, or parked.",
+    )
+    pipeline.add_argument(
+        "words",
+        nargs="*",
+        metavar="STAGE",
+        help="With pause/resume: one stage (embed or enrich), or none for all. "
+        "With limits: a stage and a number.",
     )
     pipeline.add_argument("--why", default="", metavar="TEXT", help="A note recorded with a pause.")
     pipeline.add_argument(
@@ -365,10 +389,41 @@ def _register_system(
     usage.set_defaults(func=_lazy("system_cmd", "cmd_usage"))
 
     plugins = sub.add_parser(
-        "plugins", help="List plugins; --check runs the health probe now.", parents=[g]
+        "plugins",
+        help="List plugins. (To change one: oaken PLUGIN enable|disable|reload|check|config|set.)",
+        parents=[g],
+        description=(
+            "Default lists plugins; --check runs the health probe now. 'disable' stops a plugin "
+            "until 'enable' (or a restart; put `enabled = false` in [plugins.NAME] to make it "
+            "last). 'reload' restarts one plugin on the current config.toml."
+        ),
     )
+    plugins.add_argument(
+        "subcommand",
+        nargs="?",
+        default="list",
+        choices=["list", "enable", "disable", "reload"],
+        help="list (default), enable, disable or reload.",
+    )
+    plugins.add_argument("name", nargs="?", help="The plugin (gmail) or one account (gmail@work).")
     plugins.add_argument("--check", action="store_true", help="Run each plugin's health probe.")
     plugins.set_defaults(func=_lazy("system_cmd", "cmd_plugins"))
+
+    config = sub.add_parser(
+        "config",
+        help="Show, test, save or reload config.toml through core.",
+        parents=[g],
+        description=(
+            "'show' prints config.toml. 'test FILE' checks an edit without saving it, 'save FILE' "
+            "validates and saves it (the old file is kept as a timestamped .bak), 'reload' applies "
+            "the saved file to the running core. FILE may be - for standard input."
+        ),
+    )
+    config.add_argument(
+        "subcommand", nargs="?", default="show", choices=["show", "test", "save", "reload"]
+    )
+    config.add_argument("file", nargs="?", help="With test/save: the TOML to use, or - for stdin.")
+    config.set_defaults(func=_lazy("system_cmd", "cmd_config"))
 
     accounts = sub.add_parser(
         "accounts", help="The configured accounts (never credentials).", parents=[g]
@@ -394,6 +449,12 @@ def _register_system(
         "stage", choices=["parse", "filter", "embed", "enrich"], help="The stage to reprocess."
     )
     reprocess.add_argument("--account", metavar="ID", help="Restrict to one account.")
+    reprocess.add_argument(
+        "--since", metavar="YYYY-MM-DD", help="embed and enrich: mail dated on or after this day."
+    )
+    reprocess.add_argument(
+        "--limit", type=int, metavar="N", help="embed and enrich: just the newest N messages."
+    )
     reprocess.set_defaults(func=_lazy("system_cmd", "cmd_reprocess"))
 
     rebuild = sub.add_parser(
@@ -619,7 +680,7 @@ def _register_accounts(sub: argparse._SubParsersAction[argparse.ArgumentParser])
         help="Add an account (asks questions on a terminal).",
         description=(
             "Asks for the provider, an id, a name and the provider's own non-secret settings, then "
-            "stores them. The credential is stored afterwards with 'oaken auth'. Give "
+            "stores them. The credential is stored afterwards with 'oaken PROVIDER auth'. Give "
             "--provider, --id and --name (and --set) to skip the questions."
         ),
     )
@@ -642,7 +703,7 @@ def _register_accounts(sub: argparse._SubParsersAction[argparse.ArgumentParser])
         help="Change an account's non-secret settings, or its receive-only switch.",
         description=(
             "Merges --set KEY=VALUE into the account's config and/or flips the receive-only "
-            "switch. Credentials are never set here (use 'oaken auth')."
+            "switch. Credentials are never set here (use 'oaken PROVIDER auth')."
         ),
     )
     set_.add_argument("account_id")
@@ -672,28 +733,6 @@ def _register_accounts(sub: argparse._SubParsersAction[argparse.ArgumentParser])
     remove.add_argument("account_id")
     remove.set_defaults(func=_lazy("account_cmd", "cmd_remove"))
     admin.set_defaults(func=_lazy("account_cmd", "cmd_admin"))
-
-    auth = sub.add_parser(
-        "auth",
-        help="Store an account's credential (Gmail consent, SMTP or IMAP password).",
-        parents=[_globals(True)],
-        description=(
-            "gmail opens Google's consent and waits; smtp and imap read the password without "
-            "echo. Nothing is ever printed, taken as an argument, or written to disk: the "
-            "credential goes to the OS keyring."
-        ),
-    )
-    auth.add_argument("provider", choices=["gmail", "smtp", "imap"])
-    auth.add_argument("--account", metavar="ID", help="The account (default: the only one).")
-    auth.add_argument("--check", action="store_true", help="Check the stored credential only.")
-    auth.add_argument(
-        "--password-stdin", action="store_true", help="Read the password from one line of stdin."
-    )
-    auth.add_argument("--no-browser", action="store_true", help="Only print the Gmail address.")
-    auth.add_argument(
-        "--timeout", type=float, default=300.0, metavar="S", help="Gmail: give up after S seconds."
-    )
-    auth.set_defaults(func=_lazy("account_cmd", "cmd_auth"))
 
 
 def _register_schedule(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -785,7 +824,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     unexpected exception is allowed to propagate so it is visible in development.
     """
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = _parse(parser, list(sys.argv[1:] if argv is None else argv))
     _configure_logging(getattr(args, "verbose", 0))
     from oaken_cli.exits import CliError, ExitCode
 
@@ -809,6 +848,52 @@ def main(argv: Sequence[str] | None = None) -> int:
         return int(exc.code)
     except KeyboardInterrupt:
         return int(ExitCode.ERROR)
+
+
+def _parse(parser: argparse.ArgumentParser, argv: list[str]) -> argparse.Namespace:
+    """Parse ``argv``. Flags no verb declares are an error, except after ``operation NAME`` where
+    they are the operation's own fields (see ``schema_flags``). ``oaken PLUGIN VERB ...`` that
+    names no command is tried as ``operation PLUGIN.VERB ...``."""
+    commands = _command_names(parser)
+    original = list(argv)
+    first = _command_index(argv)
+    if first is not None and argv[first] not in commands and first + 1 < len(argv):
+        verb = argv[first + 1]
+        if not verb.startswith("-"):
+            argv = [*argv[:first], "operation", f"{argv[first]}.{verb.replace('-', '_')}"] + argv[
+                first + 2 :
+            ]
+    rewritten = first is not None and argv[first] == "operation" and argv != original
+    args, extra = parser.parse_known_args(argv)
+    if rewritten:
+        args.yes = True  # typing ``oaken PLUGIN VERB`` is the person asking for exactly this
+    if extra:
+        if getattr(args, "command", None) == "operation" and getattr(args, "name", None):
+            args.flags = extra
+        else:
+            parser.error(f"unrecognized arguments: {' '.join(extra)}")
+    return args
+
+
+def _command_index(argv: list[str]) -> int | None:
+    """Where the command word is: the first token that is neither a flag nor a flag's value."""
+    takes_value = {"--url", "--token-file"}
+    i = 0
+    while i < len(argv):
+        if argv[i] in takes_value:
+            i += 2
+        elif argv[i].startswith("-"):
+            i += 1
+        else:
+            return i
+    return None
+
+
+def _command_names(parser: argparse.ArgumentParser) -> set[str]:
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            return set(action.choices)
+    return set()
 
 
 def _configure_logging(verbose: int) -> None:
