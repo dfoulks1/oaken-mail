@@ -99,6 +99,10 @@ id = "getting-started"
 file = "getting-started.md"
 
 [[pages]]
+id = "settings"
+file = "settings.md"
+
+[[pages]]
 id = "keyring"
 file = "keyring.md"
 

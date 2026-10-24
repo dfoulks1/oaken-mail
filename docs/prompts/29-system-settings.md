@@ -1,5 +1,31 @@
 # 29 — System settings, storage, logs
 
+> **Status: operations and CLI built (0.1.1); the UI panes are not. Where this prompt and the code
+> differ, the code is right.**
+>
+> - **Built:** `get_settings`, `check_settings`, `set_settings` (sections `index`, `retrieval` (the
+>   `[search]` table), `read_state`, `ui`, `sync`, `ai`, `log`; the key list is one constant,
+>   `oaken.core.settings_edit`); `storage_info`; `vacuum` (a job, one at a time, refuses during an
+>   index rebuild or without room on the disk); `cache_stats` and `clear_cache` (derived answers
+>   only); `events_tail`; `list_audit` with `since` and a keyset `cursor`. CLI: `oaken settings`,
+>   `storage`, `vacuum`, `cache`, `events`, `audit --since/--cursor/--all`, and a health summary in
+>   `oaken status`. None is offered over MCP.
+> - **Deviations.** `get_settings` takes an optional section and returns a list (all sections, or
+>   one). `storage_info` is its own operation rather than a change to `status`. `set_settings` does
+>   not reload core (a reload is `config_reload`, or `--reload` on the CLI verb) and says whether a
+>   key needs a reload, a rebuild-index or a restart. The audit row is the registry's (an input
+>   hash); the keys changed are in the result.
+> - **Decided with Drew.** `events_tail` reads a **persisted JSON-lines log** (`events.jsonl`,
+>   `[log] events_file`, owner-only, rotated), written by a handler on the event bus, not an in-memory
+>   buffer. `[log] level` and `format` are editable. They were offered as restart-needed keys, which
+>   was wrong: a reload reconfigures logging, so they apply on `oaken reload` like the rest. **No
+>   listed key needs a restart**, so `restart_needed` is empty for real keys; the mechanism is tested
+>   with a stand-in key.
+> - **Environment overrides** (`OAKEN_AI__CHUNK_TOKENS`) are reported in `get_settings` and as a
+>   warning on save, never silently shadowed.
+> - **Not built:** the Settings panes (AI & Models, Schedule, Storage & Data, Logs) and
+>   `Oaken.form.fromSchema` rendering; `ui-contract.json` entries for the new operations.
+
 **Read first:** `docs/prompts/00-context.md`, `docs/prompts/21b-webui-client-foundation.md`.
 **Depends on:** 13, 21b, 22, 23.
 

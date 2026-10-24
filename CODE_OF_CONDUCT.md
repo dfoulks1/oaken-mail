@@ -53,8 +53,10 @@ offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to
-the community leaders responsible for enforcement at TODO(user): add a conduct contact
-address. All complaints will be reviewed and investigated promptly and fairly.
+the community leaders responsible for enforcement, privately: by
+[opening a private advisory](https://github.com/dfoulks1/oaken-mail/security/advisories/new)
+on this repository and marking it as a conduct report, or by contacting
+[@dfoulks1](https://github.com/dfoulks1) on GitHub. All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the reporter
 of any incident.

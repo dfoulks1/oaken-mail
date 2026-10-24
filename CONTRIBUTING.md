@@ -154,7 +154,7 @@ code yet.
 | 26 | sieve-management | Built | Read/test ops plus the write path (`sieve_save`/`sieve_delete`/`sieve_get`, compile-first, atomic owner-only, never over MCP — ADR 0009), the `oaken sieve get\|save\|delete` CLI verbs with `--suggest-name`, and the Sieve editor UI (`sieve.html`) |
 | 27 | contacts-people | **Open** | `contacts.html` is still a mockup |
 | 28 | compose-and-send | **Open** | There is no `send_message` operation yet. When it lands, the outbox is a `send` job on the job queue, and a sync also runs any send waiting out a retry delay |
-| 29 | system-settings | **Open** | |
+| 29 | system-settings | **Partly built** | Operations and CLI: `get/check/set_settings` (`oaken settings`), `storage_info` and `vacuum` (`oaken storage`, `oaken vacuum`), `cache_stats`/`clear_cache` (`oaken cache`), `events_tail` over a persisted event log (`oaken events`), and a paged `list_audit`. Not built: the Settings panes in the web UI |
 | 30 | pipeline-management | Built | Per-stage pause (`pause_backfill`/`resume_backfill` take a `stage`, stored in the database), live concurrency (`set_pipeline_limits`), `reprocess --since/--limit`, `pipeline_status` shows `paused`, `concurrency` and the running jobs, interactive model calls go ahead of background enrich, and the `/jobs` console and `oaken pipeline` drive it. The existing operation names were kept instead of the prompt's new ones; bulk `cancel_jobs`/`retry_jobs` by stage and the web UI's Pipeline pane are not built |
 | 31 | workspace-management | **Open** | |
 | 32 | mcp-settings | **Open** | |

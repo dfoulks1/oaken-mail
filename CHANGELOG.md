@@ -30,6 +30,18 @@ Makes a fresh install usable without reading the docs.
   `oaken plugins config` and `set` read and write one `[plugins.<name>]` table, keeping the
   comments and the rest of `config.toml` (new dependency: `tomlkit`).
 
+- `oaken settings` shows and changes core's own settings (`index`, `retrieval`, `read_state`,
+  `ui`, `sync`, `ai`, `log`) one table at a time, keeping your comments: `get`, `check` and `set`
+  (with `--unset` and `--reload`). It reports what a change needs (a reload, a rebuild-index), and
+  when an environment variable overrides a key. Operations: `get_settings`, `check_settings`,
+  `set_settings`.
+- `oaken storage` and `oaken vacuum` (`--wait` shows the sizes before and after). `vacuum` runs as a
+  job, one at a time, refuses during an index rebuild or without room on the disk.
+- `oaken cache` (stats) and `oaken cache clear [--task T]`: only derived model answers are touched.
+- `oaken events` reads a persisted event log (`events.jsonl`, `[log] events_file`, owner-only and
+  rotated); `--follow` keeps watching. `oaken audit` gains `--since`, `--cursor` and `--all`.
+- `oaken status` adds a health summary when core answers.
+
 ### Changed
 
 - `oaken start` and `oaken restart` run core in the background by default; `--fg` keeps it attached

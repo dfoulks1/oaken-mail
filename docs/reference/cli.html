@@ -39,6 +39,7 @@
       <a class="doc-link" href="../getting-started.html">Set up Oaken from scratch</a>
       <a class="doc-link" href="../keyring.html">Store credentials in your keyring</a>
       <a class="doc-link" href="../providers/gmail.html">Connect Gmail</a>
+      <a class="doc-link" href="../settings.html">Settings, storage and the event log</a>
       <a class="doc-link" href="../providers/smtp.html">Send through your own SMTP server</a>
       <a class="doc-link" href="../providers/imap.html">Connect any IMAP server</a>
       <div class="label">Concepts</div>
@@ -228,6 +229,26 @@
 <tr>
 <td><a href="#watch"><code>watch</code></a></td>
 <td>Stream core events as lines (or --json).</td>
+</tr>
+<tr>
+<td><a href="#settings"><code>settings</code></a></td>
+<td>Show, check or change core's own settings (index, retrieval, ai, sync, ...).</td>
+</tr>
+<tr>
+<td><a href="#storage"><code>storage</code></a></td>
+<td>Where the data is and how big it is.</td>
+</tr>
+<tr>
+<td><a href="#vacuum"><code>vacuum</code></a></td>
+<td>Give back the space deleted mail left in the databases.</td>
+</tr>
+<tr>
+<td><a href="#cache"><code>cache</code></a></td>
+<td>The enrichment cache: how it is doing, or clear it.</td>
+</tr>
+<tr>
+<td><a href="#events"><code>events</code></a></td>
+<td>Recent events from core's event log (--follow keeps watching).</td>
 </tr>
 <tr>
 <td><a href="#agents"><code>agents</code></a></td>
@@ -568,6 +589,9 @@
 <ul>
 <li><code>--limit</code> — How many rows (max 500).</li>
 <li><code>--op</code> — Only rows for this operation.</li>
+<li><code>--since</code> — Nothing older than this (ISO 8601).</li>
+<li><code>--cursor</code> — The next page: the cursor the last one gave.</li>
+<li><code>--all</code> — Page through every row, not just one.</li>
 </ul>
 <h3 id="operations"><code>operations</code></h3>
 <p>Every operation with its permission and MCP exposure.</p>
@@ -594,6 +618,47 @@
 <h3 id="watch"><code>watch</code></h3>
 <p>Stream core events as lines (or --json).</p>
 <p>No arguments.</p>
+<h3 id="settings"><code>settings</code></h3>
+<p>'settings' lists every section; 'settings SECTION' one. 'settings set SECTION KEY=VALUE ...' saves a change (--unset KEY goes back to the default) to config.toml, keeping its comments; 'settings check ...' tests it without saving. Saved settings reach core on 'oaken reload' (or add --reload); the answer says which need more. An environment variable that overrides a key is reported.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>[get|check|set] [SECTION] [KEY=VALUE ...]</code> — The action (default get), the section, then settings.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--unset</code> — Remove a setting: back to its default.</li>
+<li><code>--reload</code> — With set: reload core on the change.</li>
+</ul>
+<h3 id="storage"><code>storage</code></h3>
+<p>Where the data is and how big it is.</p>
+<p>No arguments.</p>
+<h3 id="vacuum"><code>vacuum</code></h3>
+<p>Rewrites raw.db and index.db. One at a time, and not while an index rebuild runs. It holds each database's write lock while it works (ingest waits, reads go on) and needs about the database's own size free on the disk.</p>
+<p>Options:</p>
+<ul>
+<li><code>--wait</code> — Wait for it, and show the sizes.</li>
+<li><code>--timeout</code> — Give up waiting after S seconds.</li>
+</ul>
+<h3 id="cache"><code>cache</code></h3>
+<p>'cache' (or 'cache stats') shows what it holds and how often it saved a model call. 'cache clear' deletes cached answers (--task TASK for one task): mail and the index are untouched, and cleared answers are recomputed on demand.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>action</code> —</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--task</code> — With clear: only this task's answers.</li>
+<li><code>--yes</code> — With clear: do not ask.</li>
+</ul>
+<h3 id="events"><code>events</code></h3>
+<p>What core published recently, including before it was last restarted: ids, states and numbers, never mail text. --follow prints the history and then the live stream.</p>
+<p>Options:</p>
+<ul>
+<li><code>--tail</code>, <code>-n</code> — How many (default 50, max 1000).</li>
+<li><code>--kind</code> — Only this kind of event.</li>
+<li><code>--since</code> — Nothing older than this (ISO 8601).</li>
+<li><code>--follow</code>, <code>-f</code> — Then keep watching.</li>
+</ul>
 <h3 id="agents"><code>agents</code></h3>
 <p>Agents lease jobs from the queue with a token of their own (the swarm page).</p>
 <h4 id="agents-create"><code>agents create</code></h4>
