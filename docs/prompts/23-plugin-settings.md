@@ -3,23 +3,27 @@
 > **Status: partly built (0.1.1). Where this prompt and the code differ, the code is right.**
 >
 > - **Built:** the `capabilities` allow-list (narrowing only; `auth` alone is refused; an unknown
->   name is an error), `enabled` and `enabled_default` on the base class (the table wins), runtime
->   `plugin_enable`/`plugin_disable`/`plugin_reload`, `check_plugin_config` (schema, capabilities,
->   then a throwaway instance's `health()`), `get_plugin_config`, `set_plugin_config`, and the shared
->   section writer `oaken.core.config_edit` (`tomlkit`: keeps comments and every other table; refuses
->   a key that looks like a secret). `list_plugins` reports `enabled`, `enabled_default` and
->   `allowed_capabilities`.
-> - **On the base class.** `enable`, `disable`, `reload`, `check`, `config` and `set` are declared by
->   every plugin base (`oaken.plugins.plugin_control`) and run by core, so a new plugin has
->   `oaken <plugin> enable` and the rest for free, and a plugin may override one. The core
->   operations (`plugin_enable`, `get_plugin_config`, ...) stay for the web UI.
+>   name is an error), `enabled` and `enabled_default` on the base class (the table wins), and
+>   plugin control under **core's** `oaken plugins`: `enable`, `disable`, `reload`, `config`,
+>   `check` (schema, capabilities, then a throwaway instance's `health()`) and `set`. The core
+>   operations are `plugin_enable`, `plugin_disable`, `plugin_reload`, `get_plugin_config`,
+>   `check_plugin_config` and `set_plugin_config`. The stats page has the enable switch and a Reload
+>   button. The section writer is `oaken.core.config_edit` (`tomlkit`): it keeps comments and every
+>   other table and refuses a key that looks like a secret. `list_plugins` reports `enabled`,
+>   `enabled_default`, `allowed_capabilities` and `declared_capabilities`.
+> - **A plugin does not control itself.** It provides functionality that extends core; it does not
+>   offer `enable`, `disable` or settings commands of its own (that would put a dead verb on every
+>   plugin in the CLI tree). Control is core's, under `oaken plugins`.
+> - **Editing from text.** `get_plugin_config` returns the plugin's own settings as TOML `text`
+>   (comments kept, `enabled` and `capabilities` left out); `check_plugin_config` and
+>   `set_plugin_config` accept that `text`, so a textarea keeps the person's comments, and `config`,
+>   `unset` and `replace` for everything else. Keys merge onto the saved ones unless `replace`.
 > - **Not built:** the Settings → Plugins page and its textarea, and the generic secret rows
->   (`set_plugin_secret`). A plugin that is not a provider has no secrets path yet; providers sign
->   in with their own `auth` command, which stores the credential in the keyring.
+>   (`set_plugin_secret`). Providers sign in with their own `auth` command, which stores the
+>   credential in the keyring.
 > - **Names:** the prompt's `get_plugin_settings`/`check_plugin_settings`/`set_plugin_settings`
 >   became `get_plugin_config`/`check_plugin_config`/`set_plugin_config`, matching `config_get` and
->   friends. `set_plugin_config` replaces the table and does not restart the plugin; call
->   `plugin_reload`.
+>   friends. `set_plugin_config` does not restart the plugin; call `plugin_reload`.
 
 **Read first:** `docs/prompts/00-context.md` and `docs/prompts/21b-webui-client-foundation.md`.
 **Depends on:** 04, 13, 16, 17, 21, 21b, 22.

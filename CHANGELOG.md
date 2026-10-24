@@ -23,15 +23,19 @@ Makes a fresh install usable without reading the docs.
 - `capabilities = [...]` in a plugin's table narrows what it may do (Gmail receive-only, for
   example), and a plugin can ship switched off with `enabled_default = False`. `list_plugins`
   reports both.
-- Every plugin built on a base class has `enable`, `disable`, `reload`, `check`, `config` and `set`
-  as commands (`oaken gmail disable`, `oaken imap set --config '{"port": 993}'`), run by core and
-  available to the CLI, the web UI and the API alike; a plugin can override any of them.
-- `check_plugin_config` tries a plugin's settings on a throwaway instance before they are saved;
-  `get_plugin_config` and `set_plugin_config` read and write one `[plugins.<name>]` table, keeping
-  the comments and the rest of `config.toml` (new dependency: `tomlkit`).
+- Plugin control is core's, under `oaken plugins`: `enable`, `disable`, `reload`, `config`, `check`
+  and `set` (`oaken plugins set imap port=993`). A plugin offers none of these itself. The stats
+  page's Plugins tab has an enable switch and a Reload button, and every one of these is audited.
+- `oaken plugins check` tries a plugin's settings on a throwaway instance before they are saved;
+  `oaken plugins config` and `set` read and write one `[plugins.<name>]` table, keeping the
+  comments and the rest of `config.toml` (new dependency: `tomlkit`).
 
 ### Changed
 
+- `oaken start` and `oaken restart` run core in the background by default; `--fg` keeps it attached
+  to the terminal (`--detach` is still accepted). `oaken stop` says what it is waiting for, gives
+  core `--grace` seconds (40 by default), then kills it and clears its runtime file; `--no-kill`
+  reports an error instead. `restart` takes the same flags.
 - A reload keeps the port core was already listening on when `[api] port` is `0`, so the stats page
   and other clients stay put.
 - A plugin that is installed but has no `[plugins.<name>]` settings (Gmail, IMAP, SMTP) is reported

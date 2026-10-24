@@ -88,39 +88,12 @@ def build(cfg: Config) -> Page:
         "|---|---|---|---|",
     ]
     catalog = _catalog()
-    every = next(
-        ([d for d in declared if d.lifecycle] for _k, _n, _v, declared in catalog if declared), []
-    )
     for kind, name, version, declared in catalog:
-        own = [d for d in declared if not d.lifecycle]
-        names = ", ".join(f"`{name}.{d.name}`" for d in own) or "none of its own"
+        names = ", ".join(f"`{name}.{d.name}`" for d in declared) or "none yet"
         lines.append(f"| `{name}` | {kind} | {version or '-'} | {names} |")
     lines.append("")
-    if every:
-        lines += [
-            "### Commands every plugin has",
-            "",
-            "A plugin built on a base class offers these with no code, as `<plugin>.<command>`"
-            " (`oaken <plugin> <command>`). Core runs them, they work whatever state the plugin is"
-            " in, and none is ever offered over MCP. A plugin may write its own to replace one.",
-            "",
-            "| Command | Permission | What it does |",
-            "|---|---|---|",
-        ]
-        lines += [f"| `{d.name}` | {d.permission} | {d.summary} |" for d in every]
-        lines.append("")
-        for d in every:
-            lines += [
-                f"#### `<plugin>.{d.name}`",
-                "",
-                f"- Input: {_fields(d.input.model_json_schema())}",
-                f"- Output: {_fields(d.output.model_json_schema())}",
-                "",
-            ]
     for kind, name, _version, declared in catalog:
         for d in declared:
-            if d.lifecycle:
-                continue
             lines += [
                 f"### `{name}.{d.name}`",
                 "",

@@ -61,7 +61,10 @@ outside the home instead.
 A plugin that is installed but has no `[plugins.<name>]` table (Gmail, IMAP, SMTP) is listed as
 "not configured", not as an error. To turn one off for good, set `enabled = false` in its table.
 Without restarting core: `oaken plugins disable gmail`, `oaken plugins enable gmail`, and
-`oaken plugins reload gmail` to pick up a change to its table.
+`oaken plugins reload gmail` to pick up a change to its table. `oaken plugins config gmail` shows
+its settings and `oaken plugins set gmail page_size=200` changes one (your comments in `config.toml`
+are kept; reload to apply). The stats page (`/stats`, Plugins tab) has an enable switch and a Reload
+button.
 
 ## 3. Get the local models
 
@@ -110,7 +113,7 @@ printed. Add `--check` to test one that is already stored.
 ## 6. Start the daemon and check it
 
 ```bash
-oaken start --detach
+oaken start                   # in the background; --fg keeps it attached to this terminal
 oaken status                  # prints the pid and the loopback port
 oaken plugins                 # your account's provider row should say healthy
 oaken admin account show <id> # a "problem:" line says why one is not
@@ -154,4 +157,4 @@ separate client that proxies to core and keeps the API token on the server side.
 | `no OS keyring is available` | The keyring is locked or not running. See [the keyring page](keyring.html). |
 | `client_secret_file is missing or is not a Google OAuth client JSON` | The file does not exist, or is a `web` client. It must be a Desktop-app client with an `installed` block. |
 | `core is already running` | A daemon is up. `oaken status` shows where; `oaken stop` ends it. |
-| `core_not_running` from a tool call | Start it with `oaken start --detach`. |
+| `core_not_running` from a tool call | Start it with `oaken start`. |

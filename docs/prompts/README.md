@@ -40,7 +40,7 @@ in the same change that builds a prompt.
 | 21 | [webui-server](21-webui-server.md) | `oaken-webui`: a thin client that serves the UI and proxies `/v1/*` to core (core stays headless) | 16, 17 |
 | 21b | [webui-client-foundation](21b-webui-client-foundation.md) | The UI function ⇄ operation map, the contract gaps, and the shared client JS (api seam, safe text renderer, sidebar/list/reader, capability gate, sync button) | 13, 16, 21 |
 | 22 | [api-parity](22-api-parity.md) | Expand the API for the UI; audit registry ⇄ CLI ⇄ UI; enforce 1:1 CLI/UI parity (one backend) | 13, 16, 17, 21 |
-| 23 | [plugin-settings](23-plugin-settings.md) | Plugins only: per-plugin TOML textarea load/test/save, enable/disable (`enabled` on the base class), write-only secret rows, the shared config-section writer and live settings reload | 04, 13, 21, 22 |
+| 23 | [plugin-settings](23-plugin-settings.md) | Plugins only: per-plugin TOML textarea load/test/save, enable/disable, a `capabilities` allow-list, write-only secret rows, the shared config-section writer and live settings reload. Control is core's (`oaken plugins`), not the plugin's | 04, 13, 21, 22 |
 | 24 | [accounts-onboarding](24-accounts-onboarding.md) | Add/auth/test/configure accounts; Gmail "listen but not send" (receive-only) | 11–12b, 23 |
 | 25 | [folders-labels-counts](25-folders-labels-counts.md) | Sidebar chrome: folders, labels and unread counts (new `mailbox_counts` op) | 07, 12, 22 |
 | 26 | [sieve-management](26-sieve-management.md) | Manage Sieve in the UI: list/check/test + a write path (`sieve_save`/`delete`, never over MCP) | 06c, 22 |
@@ -52,6 +52,8 @@ in the same change that builds a prompt.
 | 32 | [mcp-settings](32-mcp-settings.md) | Settings → MCP: the `[mcp]` section in a textarea (`allow_send`, `workspaces=[]`, enable/disable), operation list with presets, workspace scoping, live reload | 13, 18, 22, 23, 29, 31 |
 | 33 | [agent-enrichment](33-agent-enrichment.md) | Let an external model (LM Studio, 27B) enrich a message through `/mcp/agent`: claimable payload with text and instructions, a real result type, storage, cache and workspace rules | 03b, 05, 13, 18, 31, 32 |
 | 34 | [stabilize-core](34-stabilize-core.md) | Lock the public surface (snapshot tests + versioning ADR), enforce import boundaries (import-linter), turn `Core.open()` into dependency-ordered service units, let plugins declare+validate config, and add the missing extension hooks (job kinds, pipeline stages, scheduled tasks) with a conformance suite — so a second dev builds features without touching core | 02, 04, 13, 16, 23 |
+| 35 | [onboarding-0-1-1](35-onboarding-0-1-1.md) | The record of the 0.1.1 work: first-run defaults, core's console pages, plugin-first commands, plugin control under `oaken plugins` | 16, 17, 23, 34 |
+| 36 | [after-0-1-1](36-after-0-1-1.md) | What 0.1.1 left: label/folder write-back, workspace routing by Sieve rule, a datastore per account, send, Gmail sign-in, concurrent plugin start | 28, 31, 35 |
 
 ## Not written yet (deliberately)
 

@@ -29,13 +29,20 @@ python -m oaken.daemon      # the foreground process: Ctrl-C or SIGTERM stops it
 ```
 
 The same lifecycle is available to Python as `oaken.daemon.serve`, `detach`, `status`, `stop` and
-`restart`. The CLI's `oaken start [--detach]`, `stop`, `status` and `restart` are thin wrappers over
-them. `status` reads only the runtime file, so it works with no token and never starts anything.
+`restart`. The CLI's `oaken start`, `stop`, `status` and `restart` are thin wrappers over them.
+`status` reads only the runtime file, so it works with no token and never starts anything.
 
-`--detach` starts the same foreground process in a new session on Linux and macOS (closing the
-terminal does not stop it) and as a detached process in its own group on Windows. Windows has no
-console for it, and it stops on `CTRL_BREAK`; `stop` sends that. Standard input and output go to the
-null device either way.
+`oaken start` and `oaken restart` run core in the background by default, in a new session on Linux
+and macOS (closing the terminal does not stop it) and as a detached process in its own group on
+Windows. Windows has no console for it, and it stops on `CTRL_BREAK`; `stop` sends that. Standard
+input and output go to the null device either way. `--fg` keeps core attached to the terminal,
+logging to it (`--detach` is the old spelling of the default and is still accepted).
+
+`oaken stop` asks core to stop and gives it `--grace` seconds (40 by default: the 30-second job
+drain above and a margin) while it says what it is waiting for. If core is still running then, it is
+killed, and its runtime file is cleared so the next start is clean. A killed core loses nothing: its
+jobs are retried when their leases expire. `--no-kill` reports an error instead, and `--grace 0`
+kills it at once. `oaken restart` takes the same two flags.
 
 ## Logs
 

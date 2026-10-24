@@ -1,5 +1,12 @@
 # 21b — Web UI client foundation: function ⇄ API map and the JS it needs
 
+> **Superseded (0.1.1): `oaken auth`.** The sign-in rows in the function map below are history.
+> Sign-in is each provider's own command: `oaken gmail auth`, `oaken imap auth`, `oaken smtp auth`
+> (`--account-id`, `--check`). A password is never an argument: it is read without echo, or from
+> standard input with `--password-stdin`. The core operations `set_account_password`,
+> `check_account`, `start_authorization` and `authorization_status` are gone; the provider's
+> `<provider>.auth` and `<provider>.auth_status` replace them. See [35](35-onboarding-0-1-1.md).
+
 **Read first:** `docs/prompts/00-context.md`, `docs/adr/0007-webui-is-a-separate-client.md`,
 `docs/prompts/21-webui-server.md`. **Depends on:** 13, 16, 21. **Feeds:** 22–29.
 

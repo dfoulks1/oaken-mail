@@ -132,7 +132,10 @@ outside the home instead.</p>
 <p>A plugin that is installed but has no <code>[plugins.&lt;name&gt;]</code> table (Gmail, IMAP, SMTP) is listed as
 &quot;not configured&quot;, not as an error. To turn one off for good, set <code>enabled = false</code> in its table.
 Without restarting core: <code>oaken plugins disable gmail</code>, <code>oaken plugins enable gmail</code>, and
-<code>oaken plugins reload gmail</code> to pick up a change to its table.</p>
+<code>oaken plugins reload gmail</code> to pick up a change to its table. <code>oaken plugins config gmail</code> shows
+its settings and <code>oaken plugins set gmail page_size=200</code> changes one (your comments in <code>config.toml</code>
+are kept; reload to apply). The stats page (<code>/stats</code>, Plugins tab) has an enable switch and a Reload
+button.</p>
 </section>
 <section id="3-get-the-local-models" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>3. Get the local models</h2></div>
 <p>Oaken runs a local Ollama by default. It never pulls models itself, so
@@ -168,7 +171,7 @@ oaken<span class="w"> </span>imap<span class="w"> </span>auth<span class="w"> </
 printed. Add <code>--check</code> to test one that is already stored.</p>
 </section>
 <section id="6-start-the-daemon-and-check-it" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>6. Start the daemon and check it</h2></div>
-<div class="code"><pre class="highlight"><code class="language-bash">oaken<span class="w"> </span>start<span class="w"> </span>--detach
+<div class="code"><pre class="highlight"><code class="language-bash">oaken<span class="w"> </span>start<span class="w">                   </span><span class="c1"># in the background; --fg keeps it attached to this terminal</span>
 oaken<span class="w"> </span>status<span class="w">                  </span><span class="c1"># prints the pid and the loopback port</span>
 oaken<span class="w"> </span>plugins<span class="w">                 </span><span class="c1"># your account's provider row should say healthy</span>
 oaken<span class="w"> </span>admin<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span>&lt;id&gt;<span class="w"> </span><span class="c1"># a "problem:" line says why one is not</span>
@@ -219,7 +222,7 @@ separate client that proxies to core and keeps the API token on the server side.
 </tr>
 <tr>
 <td><code>core_not_running</code> from a tool call</td>
-<td>Start it with <code>oaken start --detach</code>.</td>
+<td>Start it with <code>oaken start</code>.</td>
 </tr>
 </tbody>
 </table></div>

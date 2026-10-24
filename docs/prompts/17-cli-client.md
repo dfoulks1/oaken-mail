@@ -1,5 +1,12 @@
 # 17 — CLI client
 
+> **Superseded (0.1.1): `oaken auth`.** The `oaken auth gmail|smtp|imap` rows below are history.
+> Sign-in is each provider's own command: `oaken gmail auth`, `oaken imap auth`, `oaken smtp auth`
+> (`--account-id`, `--check`). A password is never an argument: it is read without echo, or from
+> standard input with `--password-stdin`. The core operations `set_account_password`,
+> `check_account`, `start_authorization` and `authorization_status` are gone; the provider's
+> `<provider>.auth` and `<provider>.auth_status` replace them. See [35](35-onboarding-0-1-1.md).
+
 **Read first:** `docs/prompts/00-context.md`. **Depends on:** 16.
 
 ## Goal

@@ -155,26 +155,24 @@ lint test fails a module that builds a request any other way. The first-party en
 off with `[plugins.<name>] enabled = false`; `summary` and `actions` skip bulk mail unless you set
 `skip_bulk = false`.
 
-## The commands every plugin has
+## Who controls a plugin
 
-Build on `BaseProvider`, `BaseEmbedder` or another base class and your plugin offers six commands
-with no code: `enable`, `disable`, `reload`, `check`, `config` and `set`. A person runs them as
-`oaken <plugin> <command>` (`oaken gmail disable`, `oaken imap set --config '{"port": 993}'`), the
-web UI and the API reach them as the operations `<plugin>.<command>`, and none is ever offered over
-MCP. They work whatever state the plugin is in, because a plugin that is off or not set up is
-exactly when you need them.
+You write the functionality; core controls the plugin. A plugin does not offer `enable`, `disable`,
+`reload` or settings commands of its own, and should not (each would be a dead verb on every plugin
+in the CLI). A person turns a plugin on and off, restarts it and edits its settings through core:
 
 | Command | Does |
 |---|---|
-| `enable` / `disable` | Start or stop it (and its accounts, or one with `--account-id`) without restarting core. `enabled = false` in its table is the lasting form. |
-| `reload` | Restart it on the current `config.toml`, picking up a newly installed version. |
-| `config` | Show its `[plugins.<name>]` settings, their schema and an example. |
-| `set` | Change settings: merged onto the saved ones, `--unset KEY` removes one, `--replace` takes the whole table. Comments and every other table in the file are kept. A secret is refused. Run `reload` to apply. |
-| `check` | Try the saved settings (or `--config` ones) on a throwaway instance and report its health. Nothing is written and the running plugin is untouched. |
+| `oaken plugins` | List every plugin with its health. `--check` runs each health probe now. |
+| `oaken plugins disable NAME` / `enable NAME` | Stop or start it (and its accounts, or one account as `gmail@work`) without restarting core. `enabled = false` in its table is the lasting form. |
+| `oaken plugins reload NAME` | Restart it on the current `config.toml`, picking up a newly installed version. |
+| `oaken plugins config NAME` | Show its `[plugins.NAME]` settings, or the example it declares if it has none. |
+| `oaken plugins set NAME KEY=VALUE ...` | Change settings (`--unset KEY`, `--replace`, or `--file FILE` with TOML). Comments and every other table in `config.toml` are kept; a secret is refused. Run `reload` to apply. |
+| `oaken plugins check NAME [KEY=VALUE ...]` | Try the saved settings, or a change, on a throwaway instance and report its health. Nothing is written and the running plugin is untouched. |
 
-A plugin cannot stop or configure itself (it has no handle on the host or the file), so core runs
-them. Write a method with the same command name to run your own code instead. A plugin that does not
-build on a base class (a duck-typed enricher) offers only the commands it writes.
+The stats page (`/stats`, Plugins tab) has the same switch and a Reload button, and the web UI's
+settings page will call the same operations (`plugin_enable`, `plugin_disable`, `plugin_reload`,
+`get_plugin_config`, `check_plugin_config`, `set_plugin_config`).
 
 ## What a person can say about your plugin
 
@@ -183,7 +181,7 @@ Every plugin's `[plugins.<name>]` table takes two keys that belong to the host, 
 
 - `enabled = false` keeps the plugin off. A plugin that should be opt-in (it costs money, or reaches
   a network) sets `enabled_default = False` on its class, and then runs only when its table says
-  `enabled = true` (or someone runs `oaken plugins enable <name>` for that session). The table wins
+  `enabled = true` (or someone runs `oaken plugins enable NAME` for that session). The table wins
   over the default, and over `plugins enable`.
 - `capabilities = ["sync.pull", "auth"]` is an allow-list for a provider. It only narrows: a name
   your plugin does not implement does nothing, a name that does not exist is an error at start, and
@@ -191,8 +189,8 @@ Every plugin's `[plugins.<name>]` table takes two keys that belong to the host, 
   This is how a person makes Gmail receive-only at the plugin level.
 
 `list_plugins` reports `enabled`, `enabled_default` and `allowed_capabilities` for each plugin.
-To try settings before saving them, `check_plugin_config` validates them against your
-`config_model` and then starts a throwaway instance on them and asks its `health()`. It never
+To try settings before saving them, `oaken plugins check` (the operation `check_plugin_config`)
+validates them against your `config_model` and then starts a throwaway instance on them and asks its `health()`. It never
 touches the running plugin, so keep `start()` free of side effects beyond connecting. A secret is
 never accepted in these settings; it belongs in the keyring.
 

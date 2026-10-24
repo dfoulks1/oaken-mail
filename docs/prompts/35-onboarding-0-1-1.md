@@ -1,9 +1,11 @@
-# Onboarding Improvements TODO — oaken-core 0.1.1
+# 35 — Onboarding: make 0.1.1 usable out of the box
 
-Status: a batch of 0.1.1 onboarding work is built on branch `feat/0.1.1-onboarding`
-(uncommitted, awaiting QA). Version bumped to **0.1.1**. 299 tests pass, ruff clean.
+> **Status: built (0.1.1).** This began as the working TODO list for the `feat/0.1.1-onboarding`
+> branch and is kept as the record of what that work was and why. Where it and the code differ, the
+> code is right. The rule was **no new features: make 0.1 useful.** The follow-ups it left are in
+> [36 — after 0.1.1](36-after-0-1-1.md).
 
-## SHIPPED this session (on feat/0.1.1-onboarding, pending QA + commit)
+## What the first pass shipped
 
 ### Core web console (new pages, all loopback-only, token-free, Bootstrap + shared nav)
 - **`/` welcome page** — live: real version, `OAKEN_HOME`/config/data paths, bound port, and a
@@ -42,28 +44,33 @@ Status: a batch of 0.1.1 onboarding work is built on branch `feat/0.1.1-onboardi
   updated `test_read_state.py` + regenerated the operation schema snapshot for the 4 new ops;
   updated two `test_stats.py` tests for the Bootstrap/shared-nav reality.
 
-## 0.1.1 scope (decided with Drew: no new features, make 0.1 useful)
-Done: OAKEN_HOME warn-and-default plus a last-known-home pointer (`paths.remember_home`, kept
-outside the home because the databases live inside it); sticky port across reloads; unconfigured
-plugins report "not configured" not an error; commented default `config.toml` generated from
-`Settings`. A process cannot export a variable into the shell, so the warning prints the
-`export OAKEN_HOME=...` line to add to a profile.
+## What else landed in 0.1.1 (decided with Drew)
 
-Deferred (new features, not 0.1.x): per-plugin enable / disable / reload at runtime, and a generic
-plugin `run_function` (an `oaken operation` equivalent so the CLI can call functions a plugin
-exposes, e.g. a Gmail login the plugin owns end to end). Note plugin operations already exist as
-`<plugin>.<name>`; the gap is that they are collected only for plugins started at boot.
-Also deferred: a configurable bind host (remote mode); `[api] port` is already configurable.
+First run:
+- `OAKEN_HOME` warns and defaults, and core remembers the last home (`paths.remember_home`, kept
+  outside the home because the databases live inside it). A process cannot export a variable into
+  the shell, so the warning prints the `export OAKEN_HOME=...` line to add to a profile.
+- The port is sticky across reloads; `[api] host` is configurable (a non-loopback bind needs
+  `allow_remote`, and the console pages stay loopback-only even then).
+- A commented default `config.toml` is generated from `Settings` on first start, never over a file.
+- A plugin that is installed but has no settings reports "not configured", not an error.
 
-## STILL OPEN (0.1.1 onboarding, not yet done)
+Plugins own their functionality; core owns plugin control:
+- `oaken PLUGIN VERB` runs the operation `PLUGIN.VERB` with one flag per input field. Sign-in is
+  each provider's own `auth` command (`oaken gmail auth`, `imap auth`, `smtp auth`); `oaken auth`
+  and the core operations behind it are gone.
+- **Starting, stopping and configuring a plugin is core's**, under `oaken plugins`: `enable`,
+  `disable`, `reload`, `config`, `check`, `set`. A plugin does not offer these itself (it would
+  leave a verb on every plugin in the CLI tree). The same operations back the stats page's switch
+  and Reload button and, later, the web UI's settings page.
+- `capabilities = [...]` in a plugin's table narrows what it may do; `enabled_default = False` lets
+  a plugin ship switched off. Settings are edited one table at a time with `tomlkit`
+  (`oaken.core.config_edit`): comments and every other table are kept, secrets are refused.
+- Gmail-specific operations moved into the Gmail plugin; `oaken operations` names the provider.
 
-- **Startup error if `OAKEN_HOME` is not set** — block/ warn at daemon start, suggest `~/.oaken`.
-  (Design call still needed: hard-fail vs warn-and-default. Tests already set OAKEN_HOME, so a
-  hard error won't break them.) Touch: `src/oaken/core/paths.py`, `src/oaken/daemon/core.py`.
-- **Default `config.toml` on first run** — write a commented default into `config_dir()` if
-  missing. Prefer generating from the `Settings` models (descriptions as comments) over shipping
-  `config.example.toml` as package data. The `/config` editor now covers the *edit* story, so this
-  is lower priority than it was.
+The rest: `oaken sync` pulls every account on every provider; per-stage pipeline pause and live
+limits (prompt 30); `label`, `folder`, `star`, `mailbox` and `mcp expose` in the CLI; docs rewritten
+and the docs' commands run by `docs/tools/check_commands.py`.
 
 ## Future direction (noted by Drew)
 - `/getting_started` is **temporary scaffolding** — to be replaced by a leaner guide + a proper

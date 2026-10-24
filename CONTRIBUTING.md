@@ -148,7 +148,7 @@ code yet.
 | 21 | webui-server | Built | `oaken-webui` start, stop, restart and status |
 | 21b | webui-client-foundation | **In progress** | Server items D1–D4, the shared sidebar and the API seam are in. Check the prompt's C list before starting; another session is on it |
 | 22 | api-parity | Built | Paging, totals, sort, stars, thread tree, query operators |
-| 23 | plugin-settings | **Partly built** | In: the `capabilities` allow-list, `enabled` and a plugin's own `enabled_default`, runtime enable/disable/reload, the six commands every plugin has (`oaken <plugin> enable\|disable\|reload\|check\|config\|set`, declared on the base classes and run by core), `check_plugin_config` (schema plus a throwaway-instance health probe), `get_plugin_config` and `set_plugin_config`, and the comment-preserving section writer (`oaken.core.config_edit`, `tomlkit`). Not built: the Settings → Plugins page and the secrets rows |
+| 23 | plugin-settings | **Partly built** | In: the `capabilities` allow-list, `enabled` and a plugin's own `enabled_default`, and plugin control under core's `oaken plugins` (`enable`, `disable`, `reload`, `config`, `check`, `set`; `check` tries settings on a throwaway instance). The same operations back the stats page's switch and Reload button. `oaken.core.config_edit` (`tomlkit`) edits one table and keeps comments. A plugin does not offer these itself. Not built: the Settings → Plugins page and the secrets rows |
 | 24 | accounts-onboarding | Built | Account ops plus the receive-only ("listen but not send") interlock in `oaken.mail.sendpolicy` (one key, one reader; surfaced by `get_account`/`list_accounts`), the `oaken admin account set\|remove` CLI verbs, and the Settings → Accounts onboarding UI (`accounts.html`) |
 | 25 | folders-labels-counts | Built | Nested folders, labels, unread counts, stars |
 | 26 | sieve-management | Built | Read/test ops plus the write path (`sieve_save`/`sieve_delete`/`sieve_get`, compile-first, atomic owner-only, never over MCP — ADR 0009), the `oaken sieve get\|save\|delete` CLI verbs with `--suggest-name`, and the Sieve editor UI (`sieve.html`) |
@@ -160,6 +160,8 @@ code yet.
 | 32 | mcp-settings | **Open** | |
 | 33 | agent-enrichment | **Written** | Not built. The `/mcp/agent` door works but a claimed `ingest.enrich` job carries only ids and cannot store an answer |
 | 34 | stabilize-core | Built | Snapshot tests for operations, plugin contracts and events, import-linter boundaries, service units and plugin extension hooks (job kinds, pipeline stages, scheduled tasks) |
+| 35 | onboarding-0-1-1 | Built | The record of the 0.1.1 work: first-run defaults, core's console pages, plugin-first commands |
+| 36 | after-0-1-1 | **Open** | What 0.1.1 left: label/folder write-back, workspace routing by Sieve rule, a datastore per account, send, Gmail sign-in |
 
 Not written yet, on purpose: a legacy-database importer, packaging (systemd, launchd,
 installers), at-rest encryption, plugin sandboxing, and embedding-throughput tuning on CPU.

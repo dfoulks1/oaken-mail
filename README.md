@@ -48,7 +48,7 @@ You need Python 3.11 or newer and [Ollama](https://ollama.com) for the local mod
 pip install oaken-core                 # or from a checkout: git clone … && uv sync
 ollama pull nomic-embed-text && ollama pull qwen2.5:3b
 
-oaken start --detach                   # prints where the console is (/, /config, /stats)
+oaken start                            # in the background; prints where the console is (/, /config, /stats)
 oaken admin account add                # asks for the provider, an id and its settings
 oaken gmail auth                       # or: oaken imap auth (asks for the password, no echo)
 oaken sync --wait                      # pulls from every account on every provider

@@ -80,7 +80,7 @@
       <a class="nav-link" href="#be-accepting-in-what-you-return"><span class="num">3</span>Be accepting in what you return</a>
       <a class="nav-link" href="#an-embedder"><span class="num">4</span>An embedder</a>
       <a class="nav-link" href="#an-enricher-in-one-function"><span class="num">5</span>An enricher in one function</a>
-      <a class="nav-link" href="#the-commands-every-plugin-has"><span class="num">6</span>The commands every plugin has</a>
+      <a class="nav-link" href="#who-controls-a-plugin"><span class="num">6</span>Who controls a plugin</a>
       <a class="nav-link" href="#what-a-person-can-say-about-your-plugin"><span class="num">7</span>What a person can say about your plugin</a>
       <a class="nav-link" href="#registering-it"><span class="num">8</span>Registering it</a>
       <a class="nav-link" href="#what-the-host-does"><span class="num">9</span>What the host does</a>
@@ -269,13 +269,10 @@ lint test fails a module that builds a request any other way. The first-party en
 off with <code>[plugins.&lt;name&gt;] enabled = false</code>; <code>summary</code> and <code>actions</code> skip bulk mail unless you set
 <code>skip_bulk = false</code>.</p>
 </section>
-<section id="the-commands-every-plugin-has" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>The commands every plugin has</h2></div>
-<p>Build on <code>BaseProvider</code>, <code>BaseEmbedder</code> or another base class and your plugin offers six commands
-with no code: <code>enable</code>, <code>disable</code>, <code>reload</code>, <code>check</code>, <code>config</code> and <code>set</code>. A person runs them as
-<code>oaken &lt;plugin&gt; &lt;command&gt;</code> (<code>oaken gmail disable</code>, <code>oaken imap set --config '{&quot;port&quot;: 993}'</code>), the
-web UI and the API reach them as the operations <code>&lt;plugin&gt;.&lt;command&gt;</code>, and none is ever offered over
-MCP. They work whatever state the plugin is in, because a plugin that is off or not set up is
-exactly when you need them.</p>
+<section id="who-controls-a-plugin" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Who controls a plugin</h2></div>
+<p>You write the functionality; core controls the plugin. A plugin does not offer <code>enable</code>, <code>disable</code>,
+<code>reload</code> or settings commands of its own, and should not (each would be a dead verb on every plugin
+in the CLI). A person turns a plugin on and off, restarts it and edits its settings through core:</p>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
 <thead>
 <tr>
@@ -285,30 +282,34 @@ exactly when you need them.</p>
 </thead>
 <tbody>
 <tr>
-<td><code>enable</code> / <code>disable</code></td>
-<td>Start or stop it (and its accounts, or one with <code>--account-id</code>) without restarting core. <code>enabled = false</code> in its table is the lasting form.</td>
+<td><code>oaken plugins</code></td>
+<td>List every plugin with its health. <code>--check</code> runs each health probe now.</td>
 </tr>
 <tr>
-<td><code>reload</code></td>
+<td><code>oaken plugins disable NAME</code> / <code>enable NAME</code></td>
+<td>Stop or start it (and its accounts, or one account as <code>gmail@work</code>) without restarting core. <code>enabled = false</code> in its table is the lasting form.</td>
+</tr>
+<tr>
+<td><code>oaken plugins reload NAME</code></td>
 <td>Restart it on the current <code>config.toml</code>, picking up a newly installed version.</td>
 </tr>
 <tr>
-<td><code>config</code></td>
-<td>Show its <code>[plugins.&lt;name&gt;]</code> settings, their schema and an example.</td>
+<td><code>oaken plugins config NAME</code></td>
+<td>Show its <code>[plugins.NAME]</code> settings, or the example it declares if it has none.</td>
 </tr>
 <tr>
-<td><code>set</code></td>
-<td>Change settings: merged onto the saved ones, <code>--unset KEY</code> removes one, <code>--replace</code> takes the whole table. Comments and every other table in the file are kept. A secret is refused. Run <code>reload</code> to apply.</td>
+<td><code>oaken plugins set NAME KEY=VALUE ...</code></td>
+<td>Change settings (<code>--unset KEY</code>, <code>--replace</code>, or <code>--file FILE</code> with TOML). Comments and every other table in <code>config.toml</code> are kept; a secret is refused. Run <code>reload</code> to apply.</td>
 </tr>
 <tr>
-<td><code>check</code></td>
-<td>Try the saved settings (or <code>--config</code> ones) on a throwaway instance and report its health. Nothing is written and the running plugin is untouched.</td>
+<td><code>oaken plugins check NAME [KEY=VALUE ...]</code></td>
+<td>Try the saved settings, or a change, on a throwaway instance and report its health. Nothing is written and the running plugin is untouched.</td>
 </tr>
 </tbody>
 </table></div>
-<p>A plugin cannot stop or configure itself (it has no handle on the host or the file), so core runs
-them. Write a method with the same command name to run your own code instead. A plugin that does not
-build on a base class (a duck-typed enricher) offers only the commands it writes.</p>
+<p>The stats page (<code>/stats</code>, Plugins tab) has the same switch and a Reload button, and the web UI's
+settings page will call the same operations (<code>plugin_enable</code>, <code>plugin_disable</code>, <code>plugin_reload</code>,
+<code>get_plugin_config</code>, <code>check_plugin_config</code>, <code>set_plugin_config</code>).</p>
 </section>
 <section id="what-a-person-can-say-about-your-plugin" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>What a person can say about your plugin</h2></div>
 <p>Every plugin's <code>[plugins.&lt;name&gt;]</code> table takes two keys that belong to the host, not to you, so your
@@ -316,7 +317,7 @@ build on a base class (a duck-typed enricher) offers only the commands it writes
 <ul>
 <li><code>enabled = false</code> keeps the plugin off. A plugin that should be opt-in (it costs money, or reaches
 a network) sets <code>enabled_default = False</code> on its class, and then runs only when its table says
-<code>enabled = true</code> (or someone runs <code>oaken plugins enable &lt;name&gt;</code> for that session). The table wins
+<code>enabled = true</code> (or someone runs <code>oaken plugins enable NAME</code> for that session). The table wins
 over the default, and over <code>plugins enable</code>.</li>
 <li><code>capabilities = [&quot;sync.pull&quot;, &quot;auth&quot;]</code> is an allow-list for a provider. It only narrows: a name
 your plugin does not implement does nothing, a name that does not exist is an error at start, and
@@ -324,8 +325,8 @@ a list that leaves only <code>auth</code> is refused. <code>auth</code> left off
 This is how a person makes Gmail receive-only at the plugin level.</li>
 </ul>
 <p><code>list_plugins</code> reports <code>enabled</code>, <code>enabled_default</code> and <code>allowed_capabilities</code> for each plugin.
-To try settings before saving them, <code>check_plugin_config</code> validates them against your
-<code>config_model</code> and then starts a throwaway instance on them and asks its <code>health()</code>. It never
+To try settings before saving them, <code>oaken plugins check</code> (the operation <code>check_plugin_config</code>)
+validates them against your <code>config_model</code> and then starts a throwaway instance on them and asks its <code>health()</code>. It never
 touches the running plugin, so keep <code>start()</code> free of side effects beyond connecting. A secret is
 never accepted in these settings; it belongs in the keyring.</p>
 </section>

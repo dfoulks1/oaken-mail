@@ -111,15 +111,15 @@
 <tbody>
 <tr>
 <td><a href="#start"><code>start</code></a></td>
-<td>Start the core daemon (foreground; --detach for background).</td>
+<td>Start the core daemon (in the background; --fg to stay attached).</td>
 </tr>
 <tr>
 <td><a href="#stop"><code>stop</code></a></td>
-<td>Stop the core daemon.</td>
+<td>Stop the core daemon, killing it if it will not stop in time.</td>
 </tr>
 <tr>
 <td><a href="#restart"><code>restart</code></a></td>
-<td>Restart the core daemon.</td>
+<td>Restart the core daemon (in the background; --fg to stay attached).</td>
 </tr>
 <tr>
 <td><a href="#reload"><code>reload</code></a></td>
@@ -166,6 +166,26 @@
 <td>Sync every account on every provider now (or one account, or one folder).</td>
 </tr>
 <tr>
+<td><a href="#label"><code>label</code></a></td>
+<td>Label messages (tags for finding mail).</td>
+</tr>
+<tr>
+<td><a href="#folder"><code>folder</code></a></td>
+<td>File messages into folders under Inbox.</td>
+</tr>
+<tr>
+<td><a href="#star"><code>star</code></a></td>
+<td>Star messages (written back to the mailbox where it can be).</td>
+</tr>
+<tr>
+<td><a href="#unstar"><code>unstar</code></a></td>
+<td>Remove the star from messages.</td>
+</tr>
+<tr>
+<td><a href="#mailbox"><code>mailbox</code></a></td>
+<td>Look at a mailbox: the folder tree, counts, a listing, or why a message is filed.</td>
+</tr>
+<tr>
 <td><a href="#ask"><code>ask</code></a></td>
 <td>Answer a question from the mail, citing the messages.</td>
 </tr>
@@ -179,7 +199,7 @@
 </tr>
 <tr>
 <td><a href="#plugins"><code>plugins</code></a></td>
-<td>List plugins. (To change one: oaken PLUGIN enable</td>
+<td>List plugins, and control one: enable, disable, reload, config, check, set.</td>
 </tr>
 <tr>
 <td><a href="#config"><code>config</code></a></td>
@@ -293,19 +313,25 @@
 </section>
 <section id="command-details" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Command details</h2></div>
 <h3 id="start"><code>start</code></h3>
-<p>Start the core daemon (foreground; --detach for background).</p>
+<p>Start the core daemon (in the background; --fg to stay attached).</p>
 <p>Options:</p>
 <ul>
-<li><code>--detach</code> — Run in the background.</li>
+<li><code>--fg</code> — Run in the foreground, logging to this terminal (default: the background).</li>
 </ul>
 <h3 id="stop"><code>stop</code></h3>
-<p>Stop the core daemon.</p>
-<p>No arguments.</p>
-<h3 id="restart"><code>restart</code></h3>
-<p>Restart the core daemon.</p>
+<p>Asks core to stop, waits for it to finish what it is doing (up to --grace seconds), and kills it if it is still running. Core's work is a durable queue, so a killed core loses nothing: unfinished jobs are retried when it starts again.</p>
 <p>Options:</p>
 <ul>
-<li><code>--detach</code> — Run in the background.</li>
+<li><code>--grace</code> — How long core gets to finish what it is doing before it is killed (default 40; 0 kills it at once).</li>
+<li><code>--no-kill</code> — Report an error if core does not stop in time, instead of killing it.</li>
+</ul>
+<h3 id="restart"><code>restart</code></h3>
+<p>Restart the core daemon (in the background; --fg to stay attached).</p>
+<p>Options:</p>
+<ul>
+<li><code>--fg</code> — Run in the foreground, logging to this terminal (default: the background).</li>
+<li><code>--grace</code> — How long core gets to finish what it is doing before it is killed (default 40; 0 kills it at once).</li>
+<li><code>--no-kill</code> — Report an error if core does not stop in time, instead of killing it.</li>
 </ul>
 <h3 id="reload"><code>reload</code></h3>
 <p>Signals the running core (SIGHUP) to re-read its configuration and rebuild itself in the same process. An invalid file changes nothing. The web UI follows by itself.</p>
@@ -416,6 +442,71 @@
 <li><code>--wait</code> — Wait until the sync job finishes.</li>
 <li><code>--timeout</code> — Give up waiting after S seconds.</li>
 </ul>
+<h3 id="label"><code>label</code></h3>
+<p>Label messages (tags for finding mail).</p>
+<p>oaken label list | create NAME | add NAME ID... | remove NAME ID...</p>
+<p>Arguments:</p>
+<ul>
+<li><code>action</code> — oaken label list | create NAME | add NAME ID... | remove NAME ID...</li>
+<li><code>ARG</code> — A name or path, then message ids.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--yes</code> — Confirm a change to over 25 messages.</li>
+</ul>
+<h3 id="folder"><code>folder</code></h3>
+<p>File messages into folders under Inbox.</p>
+<p>oaken folder list | create PATH | add PATH ID... (or move) | remove ID... (back to the Inbox)</p>
+<p>Arguments:</p>
+<ul>
+<li><code>action</code> — oaken folder list | create PATH | add PATH ID... (or move) | remove ID... (back to the Inbox)</li>
+<li><code>ARG</code> — A name or path, then message ids.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--yes</code> — Confirm a change to over 25 messages.</li>
+</ul>
+<h3 id="star"><code>star</code></h3>
+<p>Star messages (written back to the mailbox where it can be).</p>
+<p>oaken star list | add ID... | remove ID...   (oaken unstar ID... is remove)</p>
+<p>Arguments:</p>
+<ul>
+<li><code>action</code> — oaken star list | add ID... | remove ID...   (oaken unstar ID... is remove)</li>
+<li><code>ARG</code> — A name or path, then message ids.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--yes</code> — Confirm a change to over 25 messages.</li>
+<li><code>--limit</code> — With list: most to show.</li>
+</ul>
+<h3 id="unstar"><code>unstar</code></h3>
+<p>Remove the star from messages.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>ID</code> — One or more message ids.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--yes</code> — Confirm a change to over 25 messages.</li>
+</ul>
+<h3 id="mailbox"><code>mailbox</code></h3>
+<p>tree (default): Inbox, folders, labels and Discarded with counts. counts: the sidebar's numbers. messages: list what is in a folder or under a label. rules ID: the labels and flags on a message and the Sieve rule behind each. --account limits counts and messages to one account.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>action</code> — tree (default), counts, messages or rules.</li>
+<li><code>id</code> — With rules: the message id.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--account</code> — Only this account.</li>
+<li><code>--folder</code> — With messages: only this folder.</li>
+<li><code>--label</code> — With messages: only this label.</li>
+<li><code>--disposition</code> — With messages: where to look (default: filed for --folder, any for --label, else inbox).</li>
+<li><code>--unread</code> — With messages: only unread.</li>
+<li><code>--starred</code> — With messages: only starred.</li>
+<li><code>--limit</code> — With messages: most to show.</li>
+<li><code>--offset</code> — Skip this many.</li>
+</ul>
 <h3 id="ask"><code>ask</code></h3>
 <p>Answer a question from the mail, citing the messages.</p>
 <p>Arguments:</p>
@@ -447,15 +538,19 @@
 <li><code>--workspace</code> — Only this workspace.</li>
 </ul>
 <h3 id="plugins"><code>plugins</code></h3>
-<p>Default lists plugins; --check runs the health probe now. 'disable' stops a plugin until 'enable' (or a restart; put <code>enabled = false</code> in [plugins.NAME] to make it last). 'reload' restarts one plugin on the current config.toml.</p>
+<p>Plugin control is core's, all here. Default lists plugins; --check runs the health probe now. 'disable' stops a plugin until 'enable' (or a restart; <code>enabled = false</code> in [plugins.NAME] makes it last). 'reload' restarts one on the current config.toml. 'config NAME' shows its settings. 'set NAME KEY=VALUE ...' changes them (--unset KEY, --replace, or --file FILE for TOML; comments in config.toml are kept, secrets are refused). 'check NAME [KEY=VALUE ...]' tries settings on a throwaway instance and writes nothing.</p>
 <p>Arguments:</p>
 <ul>
-<li><code>subcommand</code> — list (default), enable, disable or reload.</li>
+<li><code>subcommand</code> — list (default), enable, disable, reload, config, check or set.</li>
 <li><code>name</code> — The plugin (gmail) or one account (gmail@work).</li>
+<li><code>KEY=VALUE</code> — With set/check: settings.</li>
 </ul>
 <p>Options:</p>
 <ul>
 <li><code>--check</code> — Run each plugin's health probe.</li>
+<li><code>--unset</code> — With set/check: remove a setting.</li>
+<li><code>--replace</code> — With set/check: KEY=VALUE is the whole table.</li>
+<li><code>--file</code> — With set/check: the plugin's settings as TOML (- is stdin).</li>
 </ul>
 <h3 id="config"><code>config</code></h3>
 <p>'show' prints config.toml. 'test FILE' checks an edit without saving it, 'save FILE' validates and saves it (the old file is kept as a timestamped .bak), 'reload' applies the saved file to the running core. FILE may be - for standard input.</p>
@@ -594,12 +689,19 @@
 <li><code>--permanent</code> — Do not retry it.</li>
 </ul>
 <h3 id="mcp"><code>mcp</code></h3>
-<p>Reads MCP messages on stdin and forwards them to the MCP server inside the running core, writing its answers to stdout. It adds nothing: the tools, the confirmation step and the limits are core's. If core is not running, tool calls answer with a core_not_running error. It never starts core. Point a stdio-only client (Claude Desktop) at 'oaken mcp'.</p>
+<p>Reads MCP messages on stdin and forwards them to the MCP server inside the running core, writing its answers to stdout. It adds nothing: the tools, the confirmation step and the limits are core's. If core is not running, tool calls answer with a core_not_running error. It never starts core. Point a stdio-only client (Claude Desktop) at 'oaken mcp'. 'oaken mcp expose' lists which operations MCP clients may call; 'oaken mcp expose NAME on|off|default' (--plugin for a plugin's operations) changes it.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>action</code> — expose: choose which operations MCP clients may call (bare 'oaken mcp' is the bridge).</li>
+<li><code>NAME</code> — With expose: an operation name.</li>
+<li><code>state</code> — With expose NAME: on, off, or default (the operation's own).</li>
+</ul>
 <p>Options:</p>
 <ul>
 <li><code>--timeout</code> — Give up on a call after.</li>
 <li><code>--agent</code> — Speak to the swarm door as an agent (token from OAKEN_AGENT_TOKEN).</li>
 <li><code>--agent-token-file</code> — Read the agent token from a file.</li>
+<li><code>--plugin</code> — With expose: NAME is a plugin (all of its operations).</li>
 </ul>
 <h3 id="enrich"><code>enrich</code></h3>
 <p>Run or show the enrichers (summary, triage, actions, inspector) on a message.</p>

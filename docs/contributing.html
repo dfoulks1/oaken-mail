@@ -396,7 +396,7 @@ code yet.</p>
 <td>23</td>
 <td>plugin-settings</td>
 <td><strong>Partly built</strong></td>
-<td>In: the <code>capabilities</code> allow-list, <code>enabled</code> and a plugin's own <code>enabled_default</code>, runtime enable/disable/reload, the six commands every plugin has (<code>oaken &lt;plugin&gt; enable|disable|reload|check|config|set</code>, declared on the base classes and run by core), <code>check_plugin_config</code> (schema plus a throwaway-instance health probe), <code>get_plugin_config</code> and <code>set_plugin_config</code>, and the comment-preserving section writer (<code>oaken.core.config_edit</code>, <code>tomlkit</code>). Not built: the Settings → Plugins page and the secrets rows</td>
+<td>In: the <code>capabilities</code> allow-list, <code>enabled</code> and a plugin's own <code>enabled_default</code>, and plugin control under core's <code>oaken plugins</code> (<code>enable</code>, <code>disable</code>, <code>reload</code>, <code>config</code>, <code>check</code>, <code>set</code>; <code>check</code> tries settings on a throwaway instance). The same operations back the stats page's switch and Reload button. <code>oaken.core.config_edit</code> (<code>tomlkit</code>) edits one table and keeps comments. A plugin does not offer these itself. Not built: the Settings → Plugins page and the secrets rows</td>
 </tr>
 <tr>
 <td>24</td>
@@ -463,6 +463,18 @@ code yet.</p>
 <td>stabilize-core</td>
 <td>Built</td>
 <td>Snapshot tests for operations, plugin contracts and events, import-linter boundaries, service units and plugin extension hooks (job kinds, pipeline stages, scheduled tasks)</td>
+</tr>
+<tr>
+<td>35</td>
+<td>onboarding-0-1-1</td>
+<td>Built</td>
+<td>The record of the 0.1.1 work: first-run defaults, core's console pages, plugin-first commands</td>
+</tr>
+<tr>
+<td>36</td>
+<td>after-0-1-1</td>
+<td><strong>Open</strong></td>
+<td>What 0.1.1 left: label/folder write-back, workspace routing by Sieve rule, a datastore per account, send, Gmail sign-in</td>
 </tr>
 </tbody>
 </table></div>

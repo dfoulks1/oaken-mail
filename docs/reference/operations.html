@@ -118,7 +118,7 @@
 <td>read</td>
 <td>never</td>
 <td>no</td>
-<td>Test one plugin's settings before saving them: they are checked against the plugin's own schema and capabilities, then a throwaway instance is started on them and asked if it is healthy. The running plugin is not touched and nothing is written.</td>
+<td>Test one plugin's settings before saving them: they are checked against the plugin's own schema and capabilities, then a throwaway instance is started on them and asked if it is healthy. Give no change to test the saved settings. The running plugin is not touched and nothing is written.</td>
 </tr>
 <tr>
 <td><code>config_get</code></td>
@@ -517,7 +517,7 @@
 <td>mutate</td>
 <td>never</td>
 <td>no</td>
-<td>Save one plugin's settings as its [plugins.NAME] table, replacing that table and leaving the rest of config.toml, comments included, as it is. Validated first; the previous file is backed up. Does not restart the plugin: call plugin_reload to apply.</td>
+<td>Change one plugin's settings in its [plugins.NAME] table and leave the rest of config.toml, comments included, as it is. Keys are merged onto the saved ones (or replace them); text from an editor keeps the person's comments. Validated first; the previous file is backed up. Does not restart the plugin: call plugin_reload to apply.</td>
 </tr>
 <tr>
 <td><code>set_schedule</code></td>
@@ -621,9 +621,9 @@
 <li>Output: <code>job_id</code>, <code>status</code></li>
 </ul>
 <h3 id="check-plugin-config"><code>check_plugin_config</code></h3>
-<p>Test one plugin's settings before saving them: they are checked against the plugin's own schema and capabilities, then a throwaway instance is started on them and asked if it is healthy. The running plugin is not touched and nothing is written.</p>
+<p>Test one plugin's settings before saving them: they are checked against the plugin's own schema and capabilities, then a throwaway instance is started on them and asked if it is healthy. Give no change to test the saved settings. The running plugin is not touched and nothing is written.</p>
 <ul>
-<li>Input: <code>plugin</code>, <code>config</code>?, <code>kind</code>?</li>
+<li>Input: <code>plugin</code>, <code>text</code>?, <code>config</code>?, <code>unset</code>?, <code>replace</code>?, <code>kind</code>?</li>
 <li>Output: <code>ok</code>, <code>problems</code>?, <code>probes</code>?</li>
 </ul>
 <h3 id="config-get"><code>config_get</code></h3>
@@ -963,9 +963,9 @@
 <li>Output: <code>stage</code>, <code>concurrency</code></li>
 </ul>
 <h3 id="set-plugin-config"><code>set_plugin_config</code></h3>
-<p>Save one plugin's settings as its [plugins.NAME] table, replacing that table and leaving the rest of config.toml, comments included, as it is. Validated first; the previous file is backed up. Does not restart the plugin: call plugin_reload to apply.</p>
+<p>Change one plugin's settings in its [plugins.NAME] table and leave the rest of config.toml, comments included, as it is. Keys are merged onto the saved ones (or replace them); text from an editor keeps the person's comments. Validated first; the previous file is backed up. Does not restart the plugin: call plugin_reload to apply.</p>
 <ul>
-<li>Input: <code>plugin</code>, <code>config</code>?, <code>kind</code>?</li>
+<li>Input: <code>plugin</code>, <code>text</code>?, <code>config</code>?, <code>unset</code>?, <code>replace</code>?, <code>kind</code>?</li>
 <li>Output: <code>ok</code>, <code>path</code>, <code>backup</code>?, <code>error</code>?</li>
 </ul>
 <h3 id="set-schedule"><code>set_schedule</code></h3>
@@ -1058,43 +1058,43 @@
 <td><code>ollama</code></td>
 <td>embedder</td>
 <td>0.1.1</td>
-<td>none of its own</td>
+<td>none yet</td>
 </tr>
 <tr>
 <td><code>actions</code></td>
 <td>enricher</td>
 <td>1</td>
-<td>none of its own</td>
+<td>none yet</td>
 </tr>
 <tr>
 <td><code>inspector</code></td>
 <td>enricher</td>
 <td>1</td>
-<td>none of its own</td>
+<td>none yet</td>
 </tr>
 <tr>
 <td><code>summary</code></td>
 <td>enricher</td>
 <td>1</td>
-<td>none of its own</td>
+<td>none yet</td>
 </tr>
 <tr>
 <td><code>triage</code></td>
 <td>enricher</td>
 <td>1</td>
-<td>none of its own</td>
+<td>none yet</td>
 </tr>
 <tr>
 <td><code>ollama</code></td>
 <td>llm_backend</td>
 <td>0.1.1</td>
-<td>none of its own</td>
+<td>none yet</td>
 </tr>
 <tr>
 <td><code>ollama-remote</code></td>
 <td>llm_backend</td>
 <td>0.1.1</td>
-<td>none of its own</td>
+<td>none yet</td>
 </tr>
 <tr>
 <td><code>gmail</code></td>
@@ -1118,83 +1118,10 @@
 <td><code>sqlite-vec</code></td>
 <td>vector_store</td>
 <td>1</td>
-<td>none of its own</td>
+<td>none yet</td>
 </tr>
 </tbody>
 </table></div>
-<h3 id="commands-every-plugin-has">Commands every plugin has</h3>
-<p>A plugin built on a base class offers these with no code, as <code>&lt;plugin&gt;.&lt;command&gt;</code> (<code>oaken &lt;plugin&gt; &lt;command&gt;</code>). Core runs them, they work whatever state the plugin is in, and none is ever offered over MCP. A plugin may write its own to replace one.</p>
-<div class="table-responsive"><table class="table table-sm table-striped align-middle">
-<thead>
-<tr>
-<th>Command</th>
-<th>Permission</th>
-<th>What it does</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>check</code></td>
-<td>read</td>
-<td>Try the saved settings (or ones you give) on a throwaway instance.</td>
-</tr>
-<tr>
-<td><code>config</code></td>
-<td>read</td>
-<td>Show this plugin's settings, their schema and an example.</td>
-</tr>
-<tr>
-<td><code>disable</code></td>
-<td>mutate</td>
-<td>Stop this plugin and keep it off until <code>enable</code> or a restart.</td>
-</tr>
-<tr>
-<td><code>enable</code></td>
-<td>mutate</td>
-<td>Start this plugin (until the next restart if its table says it is off).</td>
-</tr>
-<tr>
-<td><code>reload</code></td>
-<td>mutate</td>
-<td>Restart this plugin on the current config.toml, without restarting core.</td>
-</tr>
-<tr>
-<td><code>set</code></td>
-<td>mutate</td>
-<td>Change this plugin's settings in config.toml (comments kept; no secrets).</td>
-</tr>
-</tbody>
-</table></div>
-<h4 id="plugincheck"><code>&lt;plugin&gt;.check</code></h4>
-<ul>
-<li>Input: <code>text</code>?, <code>config</code>?, <code>unset</code>?, <code>replace</code>?</li>
-<li>Output: <code>ok</code>, <code>problems</code>?, <code>probes</code>?</li>
-</ul>
-<h4 id="pluginconfig"><code>&lt;plugin&gt;.config</code></h4>
-<ul>
-<li>Input: none</li>
-<li>Output: <code>plugin</code>, <code>exists</code>, <code>config</code>, <code>text</code>?, <code>config_schema</code>?, <code>config_example</code>?</li>
-</ul>
-<h4 id="plugindisable"><code>&lt;plugin&gt;.disable</code></h4>
-<ul>
-<li>Input: <code>account_id</code>?</li>
-<li>Output: <code>changed</code>, <code>states</code></li>
-</ul>
-<h4 id="pluginenable"><code>&lt;plugin&gt;.enable</code></h4>
-<ul>
-<li>Input: <code>account_id</code>?</li>
-<li>Output: <code>changed</code>, <code>states</code></li>
-</ul>
-<h4 id="pluginreload"><code>&lt;plugin&gt;.reload</code></h4>
-<ul>
-<li>Input: <code>account_id</code>?</li>
-<li>Output: <code>changed</code>, <code>states</code></li>
-</ul>
-<h4 id="pluginset"><code>&lt;plugin&gt;.set</code></h4>
-<ul>
-<li>Input: <code>text</code>?, <code>config</code>?, <code>unset</code>?, <code>replace</code>?</li>
-<li>Output: <code>ok</code>, <code>path</code>, <code>backup</code>?, <code>error</code>?, <code>note</code>?</li>
-</ul>
 <h3 id="gmailauth"><code>gmail.auth</code></h3>
 <p>Sign in through the provider's consent page. Returns the address to open. Offered by the <code>gmail</code> provider plugin; permission <code>mutate</code>, MCP <code>off</code>.</p>
 <ul>

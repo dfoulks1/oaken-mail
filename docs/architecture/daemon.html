@@ -112,12 +112,18 @@ any worker (see <a href="jobs.html">jobs</a>).</p>
 <div class="code"><pre class="highlight"><code class="language-text">python -m oaken.daemon      # the foreground process: Ctrl-C or SIGTERM stops it cleanly
 </code></pre></div>
 <p>The same lifecycle is available to Python as <code>oaken.daemon.serve</code>, <code>detach</code>, <code>status</code>, <code>stop</code> and
-<code>restart</code>. The CLI's <code>oaken start [--detach]</code>, <code>stop</code>, <code>status</code> and <code>restart</code> are thin wrappers over
-them. <code>status</code> reads only the runtime file, so it works with no token and never starts anything.</p>
-<p><code>--detach</code> starts the same foreground process in a new session on Linux and macOS (closing the
-terminal does not stop it) and as a detached process in its own group on Windows. Windows has no
-console for it, and it stops on <code>CTRL_BREAK</code>; <code>stop</code> sends that. Standard input and output go to the
-null device either way.</p>
+<code>restart</code>. The CLI's <code>oaken start</code>, <code>stop</code>, <code>status</code> and <code>restart</code> are thin wrappers over them.
+<code>status</code> reads only the runtime file, so it works with no token and never starts anything.</p>
+<p><code>oaken start</code> and <code>oaken restart</code> run core in the background by default, in a new session on Linux
+and macOS (closing the terminal does not stop it) and as a detached process in its own group on
+Windows. Windows has no console for it, and it stops on <code>CTRL_BREAK</code>; <code>stop</code> sends that. Standard
+input and output go to the null device either way. <code>--fg</code> keeps core attached to the terminal,
+logging to it (<code>--detach</code> is the old spelling of the default and is still accepted).</p>
+<p><code>oaken stop</code> asks core to stop and gives it <code>--grace</code> seconds (40 by default: the 30-second job
+drain above and a margin) while it says what it is waiting for. If core is still running then, it is
+killed, and its runtime file is cleared so the next start is clean. A killed core loses nothing: its
+jobs are retried when their leases expire. <code>--no-kill</code> reports an error instead, and <code>--grace 0</code>
+kills it at once. <code>oaken restart</code> takes the same two flags.</p>
 </section>
 <section id="logs" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Logs</h2></div>
 <p>Core logs structured lines to stderr. A detached core has no stderr (it goes to the null device),
