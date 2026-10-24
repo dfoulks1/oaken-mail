@@ -28,6 +28,7 @@ async def _enqueue(ops: Ops, kind: str = "ingest.enrich") -> str:
 
 async def test_list_jobs_returns_the_newest_with_filters(ops: Ops) -> None:
     a = await _enqueue(ops, "ingest.parse")
+    ops.rig.clock.advance(seconds=1)  # the clock is frozen: without this the order is a coin flip
     b = await _enqueue(ops, "ingest.enrich")
     out = await ops.out("list_jobs", {})
     ids = [j.id for j in out.jobs]

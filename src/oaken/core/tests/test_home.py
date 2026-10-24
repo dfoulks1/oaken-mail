@@ -40,3 +40,15 @@ def test_a_remembered_home_that_is_gone_is_ignored(
 def test_the_default_is_never_remembered(oaken_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(paths.HOME_ENV)
     assert paths.remember_home() is False
+
+
+def test_every_test_runs_in_an_isolated_home_whatever_the_shell_had(tmp_path: Path) -> None:
+    """The root conftest gives each test its own home and state directory, so a test that saves a
+    config cannot reach the developer's real one (it once did)."""
+    import os
+
+    from oaken.core import paths
+
+    assert os.environ["OAKEN_HOME"] and os.environ["OAKEN_STATE_DIR"]
+    assert str(paths.config_dir()).startswith(os.environ["OAKEN_HOME"])
+    assert not str(paths.config_dir()).startswith(str(Path.home() / ".oaken"))

@@ -24,6 +24,9 @@ posix = pytest.mark.skipif(sys.platform == "win32", reason="POSIX signals and fi
 def env_for(home: Path) -> dict[str, str]:
     env = {k: v for k, v in os.environ.items() if not k.startswith("OAKEN_")}
     env.update(OAKEN_HOME=str(home), OAKEN_API__PORT="0", OAKEN_AI__EMBEDDER="")
+    # A daemon remembers its home in the state directory. Without this it would write the
+    # developer's real pointer (it did): keep the isolated one the root conftest set.
+    env["OAKEN_STATE_DIR"] = os.environ["OAKEN_STATE_DIR"]
     return env
 
 
@@ -45,9 +48,9 @@ def test_the_whole_cli_against_a_real_daemon(tmp_path: Path) -> None:
     assert refused.stderr.strip() == f"oaken: {CORE_DOWN_MESSAGE}"
 
     started = oaken(home, "start", "--detach", "--json")
-    assert started.returncode == 0, started.stderr
-    url = json.loads(started.stdout)["url"]
-    try:
+    try:  # a daemon that started late must still be stopped, so the assertion is inside
+        assert started.returncode == 0, started.stderr
+        url = json.loads(started.stdout)["url"]
         up = json.loads(oaken(home, "status", "--json").stdout)
         assert up["running"] is True and up["url"] == url and up["pid"] > 0
         assert "running at" in oaken(home, "status").stdout
