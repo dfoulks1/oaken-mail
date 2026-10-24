@@ -13,6 +13,7 @@ starts anything.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from oaken_cli.discovery import runtime_info
@@ -45,9 +46,9 @@ def status(*, url: str | None = None, token_file: str | None = None) -> dict[str
     return out
 
 
-def start(*, detach: bool = False) -> dict[str, Any] | None:
-    """Run core in the foreground until it is stopped, or with ``detach`` start it in the
-    background and return where it listens. Exit 1 if one is already running."""
+def start(*, detach: bool = True) -> dict[str, Any] | None:
+    """Start core in the background and return where it listens, or with ``detach=False`` run it in
+    this process until it is stopped. Exit 1 if one is already running."""
     from oaken.core.errors import Conflict, OakenError
 
     try:
@@ -71,20 +72,36 @@ def start(*, detach: bool = False) -> dict[str, Any] | None:
     return None
 
 
-def stop() -> bool:
-    """Ask the running core to stop and wait for it. ``False`` if none was running."""
+def stop(
+    *,
+    grace: float | None = None,
+    kill: bool = True,
+    say: Callable[[str], None] | None = None,
+) -> Any:
+    """Ask the running core to stop, give it ``grace`` seconds, and kill it if it is still there
+    (unless ``kill`` is False). Returns a ``StopResult``; ``running`` is False if none was."""
     from oaken.core.errors import OakenError
-    from oaken.daemon import stop as stop_core
+    from oaken.daemon import stop_gracefully
+    from oaken.daemon.lifecycle import DEFAULT_GRACE
 
     try:
-        return stop_core()
+        return stop_gracefully(
+            grace=DEFAULT_GRACE if grace is None else grace, kill=kill, notify=say
+        )
     except OakenError as exc:
         raise CliError(str(exc), ExitCode.ERROR) from None
 
 
-def restart(*, detach: bool = False) -> dict[str, Any] | None:
-    """Stop (if running) then start. Foreground restarts run in this process until stopped."""
-    stop()
+def restart(
+    *,
+    detach: bool = True,
+    grace: float | None = None,
+    kill: bool = True,
+    say: Callable[[str], None] | None = None,
+) -> dict[str, Any] | None:
+    """Stop (if running) then start. In the background by default; ``detach=False`` runs core in
+    this process until it is stopped."""
+    stop(grace=grace, kill=kill, say=say)
     return start(detach=detach)
 
 

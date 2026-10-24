@@ -123,11 +123,8 @@
         <!-- Step 1: provider + identity -->
         <div class="ok-wizard-step is-active" data-step="1">
           <label class="form-label small text-muted">Provider</label>
-          <select class="form-select mb-3" data-wiz-provider>
-            <option value="gmail">Google (Gmail API)</option>
-            <option value="imap">IMAP mailbox</option>
-            <option value="smtp">SMTP (send only)</option>
-          </select>
+          <select class="form-select mb-3" data-wiz-provider></select>
+          <div class="form-text mb-3" data-wiz-provider-help></div>
           <div class="row g-2">
             <div class="col-6">
               <label class="form-label small text-muted">Account id</label>
@@ -139,16 +136,16 @@
             </div>
           </div>
           <div class="form-check form-switch mt-3" data-wiz-ro-wrap>
-            <input class="form-check-input" type="checkbox" role="switch" data-wiz-receive-only checked>
+            <input class="form-check-input" type="checkbox" role="switch" data-wiz-receive-only>
             <label class="form-check-label small">Receive only (recommended until you turn sending on)</label>
           </div>
         </div>
         <!-- Step 2: credential -->
         <div class="ok-wizard-step" data-step="2">
-          <div data-wiz-cred-gmail hidden>
-            <p class="small text-muted">Open Google's consent page and approve access. The refresh
-              token goes straight to the OS keyring; this browser never sees it.</p>
-            <a class="btn btn-oaken btn-sm mb-2" data-wiz-consent-link target="_blank" rel="noopener">Open consent page</a>
+          <div data-wiz-cred-consent hidden>
+            <p class="small text-muted">Open the provider's sign-in page and approve access. The
+              credential goes straight to the OS keyring; this browser never sees it.</p>
+            <a class="btn btn-oaken btn-sm mb-2" data-wiz-consent-link target="_blank" rel="noopener">Open the sign-in page</a>
             <div class="small" data-wiz-consent-state></div>
           </div>
           <div data-wiz-cred-password hidden>
@@ -180,12 +177,11 @@
  * Accounts page wiring (prompt 24). A thin client over the account operations:
  *   list_accounts / get_account        the rows and the per-account detail
  *   create_account                     step 1 of the add wizard
- *   start_authorization / authorization_status   Gmail consent (step 2)
- *   set_account_password               IMAP/SMTP credential (step 2)
- *   check_account                      step 3, before relying on the account
  *   set_account_config                 the receive-only switch + display name
  *   remove_account                     drop an account (mail is kept)
  *   sync_now                           the per-row sync button
+ *   list_plugins                       the providers, and how each signs in (below)
+ *   <provider>.auth / .auth_status     each provider's own sign-in; core names no provider
  *
  * One key, one meaning: `receive_only` in the account's non-secret config is the whole
  * "listen but not send" interlock. The switch here writes that same key the CLI and prompt 28 read.
@@ -195,6 +191,51 @@
   const api = (window.Oaken && window.Oaken.api) || null;
   const $ = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+
+  // The providers installed, from list_plugins. How one signs in is read from the commands it
+  // offers: `<p>.auth_status` means a consent page to open, `<p>.auth` alone means a password.
+  let providers = {};
+  async function loadProviders() {
+    try {
+      const out = (await api("list_plugins", {})).output || {};
+      providers = {};
+      for (const p of out.plugins || []) {
+        if (p.kind !== "provider" || p.name.includes("@")) continue;
+        providers[p.name] = p;
+      }
+    } catch (err) { providers = {}; }
+    const sel = $("[data-wiz-provider]");
+    if (sel) {
+      sel.innerHTML = "";
+      for (const name of Object.keys(providers).sort()) {
+        const o = document.createElement("option");
+        o.value = name; o.textContent = name;
+        sel.appendChild(o);
+      }
+      providerChanged();
+    }
+  }
+  function credKind(provider) {
+    const ops = ((providers[provider] || {}).operations) || [];
+    if (ops.includes(provider + ".auth_status")) return "consent";
+    if (ops.includes(provider + ".auth")) return "password";
+    return "none";
+  }
+  function providerChanged() {
+    const sel = $("[data-wiz-provider]");
+    const p = providers[sel && sel.value] || {};
+    const help = $("[data-wiz-provider-help]");
+    if (help) help.textContent = p.setup_help || "";
+    // The "listen but not send" switch only means something for a provider that can do both.
+    const caps = p.capabilities || [];
+    const wrap = $("[data-wiz-ro-wrap]");
+    if (wrap) wrap.hidden = !(caps.includes("sync.pull") && caps.includes("send"));
+    const ro = $("[data-wiz-receive-only]");
+    if (ro) ro.checked = !!(p.account_defaults && p.account_defaults.receive_only);
+  }
+  document.addEventListener("change", function (ev) {
+    if (ev.target.matches("[data-wiz-provider]")) providerChanged();
+  });
 
   function setStatus(el, kind, msg) {
     if (!el) return;
@@ -214,6 +255,7 @@
     const tpl = $("#acctCardTpl").content.cloneNode(true);
     const card = $("[data-acct-card]", tpl);
     card.dataset.accountId = acct.account_id;
+    card.dataset.provider = acct.provider;
     $("[data-acct-name]", card).textContent = acct.display_name || acct.account_id;
     $("[data-acct-id]", card).textContent = acct.account_id;
     $("[data-acct-provider]", card).textContent = acct.provider;
@@ -224,7 +266,7 @@
     caps.innerHTML = (acct.capabilities || []).map((c) => '<span class="ok-tag">' + c + "</span>").join("") || '<span class="text-muted small">none yet</span>';
     $("[data-acct-display]", card).value = acct.display_name || "";
     $("[data-acct-receive-only]", card).checked = !!acct.receive_only;
-    if (acct.problem) $("[data-acct-action=reauth]", card).hidden = false;
+    if (acct.problem && credKind(acct.provider) === "consent") $("[data-acct-action=reauth]", card).hidden = false;
     return tpl;
   }
 
@@ -269,8 +311,8 @@
     const status = $("[data-acct-status]", card);
     setStatus(status, "", "Testing…");
     try {
-      const res = (await api("check_account", { account_id: card.dataset.accountId })).output || {};
-      if (res.ok) setStatus(status, "ok", "Login works.");
+      const res = (await api(card.dataset.provider + ".auth", { account_id: card.dataset.accountId, check: true }, { confirm: true })).output || {};
+      if (res.state === "done") setStatus(status, "ok", "Login works.");
       else setStatus(status, "err", res.detail || "The credential was refused.");
     } catch (err) {
       setStatus(status, "err", "Test failed: " + (err && err.message || err));
@@ -291,8 +333,8 @@
   async function reauth(card) {
     const status = $("[data-acct-status]", card);
     try {
-      const res = (await api("start_authorization", { account_id: card.dataset.accountId }, { confirm: true })).output || {};
-      if (res.url) { window.open(res.url, "_blank", "noopener"); setStatus(status, "warn", "Finish the consent in the new tab, then Test."); }
+      const res = (await api(card.dataset.provider + ".auth", { account_id: card.dataset.accountId }, { confirm: true })).output || {};
+      if (res.open_url) { window.open(res.open_url, "_blank", "noopener"); setStatus(status, "warn", "Finish signing in in the new tab, then Test."); }
     } catch (err) {
       setStatus(status, "err", "Could not start: " + (err && err.message || err));
     }
@@ -347,18 +389,20 @@
       if (!id) { setStatus(status, "err", "An account id is required."); return; }
       const config = {};
       // Receive-only only makes sense for a receiving provider; SMTP is send-only.
-      if (wiz.provider !== "smtp" && $("[data-wiz-receive-only]", modalEl).checked) config.receive_only = true;
+      const roWrap = $("[data-wiz-ro-wrap]", modalEl);
+      if (roWrap && !roWrap.hidden && $("[data-wiz-receive-only]", modalEl).checked) config.receive_only = true;
       setStatus(status, "", "Creating…");
       try {
         await api("create_account", { account_id: id, provider: wiz.provider, display_name: name, config: config }, { confirm: true });
         wiz.accountId = id;
         setStatus(status, "", "");
         // Prepare step 2 for the provider's credential kind.
-        $("[data-wiz-cred-gmail]", modalEl).hidden = wiz.provider !== "gmail";
-        $("[data-wiz-cred-password]", modalEl).hidden = wiz.provider === "gmail";
-        if (wiz.provider === "gmail") {
-          const res = (await api("start_authorization", { account_id: id }, { confirm: true })).output || {};
-          $("[data-wiz-consent-link]", modalEl).href = res.url || "#";
+        const kind = credKind(wiz.provider);
+        $("[data-wiz-cred-consent]", modalEl).hidden = kind !== "consent";
+        $("[data-wiz-cred-password]", modalEl).hidden = kind !== "password";
+        if (kind === "consent") {
+          const res = (await api(wiz.provider + ".auth", { account_id: id }, { confirm: true })).output || {};
+          $("[data-wiz-consent-link]", modalEl).href = res.open_url || "#";
           $("[data-wiz-consent-state]", modalEl).textContent = "Waiting for you to approve…";
         }
         showStep(2);
@@ -368,19 +412,23 @@
     } else if (wiz.step === 2) {
       setStatus(status, "", "Storing credential…");
       try {
-        if (wiz.provider === "gmail") {
-          const st = (await api("authorization_status", { account_id: wiz.accountId })).output || {};
-          if (st.state !== "done") { setStatus(status, "warn", "Consent is not finished yet (" + (st.state || "pending") + "). Approve in the other tab, then Next."); return; }
-        } else {
+        const kind = credKind(wiz.provider);
+        const check = $("[data-wiz-check]", modalEl);
+        let res = {};
+        if (kind === "consent") {
+          const st = (await api(wiz.provider + ".auth_status", { account_id: wiz.accountId })).output || {};
+          if (st.state !== "done") { setStatus(status, "warn", "Sign-in is not finished yet (" + (st.state || "pending") + "). Approve in the other tab, then Next."); return; }
+          res = (await api(wiz.provider + ".auth", { account_id: wiz.accountId, check: true }, { confirm: true })).output || {};
+        } else if (kind === "password") {
           const pw = $("[data-wiz-password]", modalEl).value;
           if (!pw) { setStatus(status, "err", "A password is required."); return; }
-          await api("set_account_password", { account_id: wiz.accountId, password: pw }, { confirm: true });
+          // One call stores it in the OS keyring and tries the login.
+          res = (await api(wiz.provider + ".auth", { account_id: wiz.accountId, password: pw }, { confirm: true })).output || {};
           $("[data-wiz-password]", modalEl).value = ""; // never kept in JS state beyond the request
+        } else {
+          res = { state: "done" };
         }
-        // Step 3: test it before we call the account usable.
-        const res = (await api("check_account", { account_id: wiz.accountId })).output || {};
-        const check = $("[data-wiz-check]", modalEl);
-        if (res.ok) setStatus(check, "ok", "The account works. It will sync on its schedule.");
+        if (res.state === "done") setStatus(check, "ok", "The account works. It will sync on its schedule.");
         else setStatus(check, "warn", "Created, but the credential was refused: " + (res.detail || "check it and re-authenticate from the account card."));
         setStatus(status, "", "");
         showStep(3);
@@ -409,7 +457,7 @@
     } catch (e) { /* leave controls visible if the probe is unavailable */ }
   }
 
-  load();
+  loadProviders().then(load);
   gateByCapabilities();
 })();
 </script>

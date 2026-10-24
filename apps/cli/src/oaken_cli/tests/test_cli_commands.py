@@ -288,3 +288,121 @@ async def test_pipeline_pause_resume_and_status(cli: Cli) -> None:
 async def test_pipeline_parked_retry_all(cli: Cli) -> None:
     out = await cli("pipeline", "parked", "--all", "--json")
     assert out.code == 0 and "retried" in json.loads(out.out)
+
+
+async def test_config_show_test_and_save(
+    cli: Cli, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OAKEN_HOME", str(tmp_path / "home"))  # never the real config.toml
+    good, bad = tmp_path / "good.toml", tmp_path / "bad.toml"
+    good.write_text("[api]\nport = 8123\n")
+    bad.write_text("[api]\nport = 'x'\n")
+    shown = await cli("config", "show", "--json")
+    assert shown.code == int(ExitCode.OK) and json.loads(shown.out)["exists"] is False
+    assert (await cli("config", "test", str(good))).code == int(ExitCode.OK)
+    refused = await cli("config", "test", str(bad))
+    assert refused.code == int(ExitCode.USAGE) and "invalid" in refused.out
+    assert (await cli("config", "save", str(bad))).code == int(ExitCode.USAGE)
+    saved = await cli("config", "save", str(good))
+    assert saved.code == int(ExitCode.OK), saved.err
+    assert "port = 8123" in json.loads((await cli("config", "show", "--json")).out)["text"]
+
+
+async def test_config_needs_a_file_for_test_and_save(cli: Cli) -> None:
+    for sub in ("test", "save"):
+        assert (await cli("config", sub)).code == int(ExitCode.USAGE)
+
+
+async def test_plugins_control_verbs_need_a_name_and_report_an_unknown_plugin(cli: Cli) -> None:
+    for sub in ("enable", "disable", "reload"):
+        assert (await cli("plugins", sub)).code == int(ExitCode.USAGE)
+        run = await cli("plugins", sub, "no-such-plugin")
+        assert run.code != int(ExitCode.OK)
+
+
+async def test_plugins_owns_enable_disable_and_a_plugin_has_no_such_verbs(cli: Cli) -> None:
+    off = await cli("plugins", "disable", "fake", "--json")
+    assert off.code == int(ExitCode.OK), off.err
+    assert json.loads(off.out)["changed"][0] == "fake"
+    on = await cli("plugins", "enable", "fake", "--json")
+    assert on.code == int(ExitCode.OK), on.err
+    # the plugin's own verbs are its functionality, not its control: no `oaken fake enable`
+    assert (await cli("fake", "enable")).code == int(ExitCode.ERROR)
+
+
+async def test_plugins_config_set_and_check_edit_one_plugins_settings(
+    cli: Cli, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OAKEN_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("OAKEN_STATE_DIR", str(tmp_path / "state"))
+    empty = await cli("plugins", "config", "fake")
+    assert empty.code == int(ExitCode.OK), empty.err
+    assert "no [plugins.fake] settings yet" in empty.out
+    saved = await cli("plugins", "set", "fake", "alpha=2", 'tags=["a", "b"]', "name=plain")
+    assert saved.code == int(ExitCode.OK), saved.err
+    assert "apply it with: oaken plugins reload fake" in saved.out
+    shown = json.loads((await cli("plugins", "config", "fake", "--json")).out)
+    assert shown["config"] == {"alpha": 2, "tags": ["a", "b"], "name": "plain"}  # typed values
+    await cli("plugins", "set", "fake", "--unset", "tags", "--unset", "name")
+    assert json.loads((await cli("plugins", "config", "fake", "--json")).out)["config"] == {
+        "alpha": 2
+    }
+    ok = await cli("plugins", "check", "fake")
+    assert ok.code == int(ExitCode.OK), ok.err
+    assert "settings look good" in ok.out
+    refused = await cli("plugins", "set", "fake", "token=abc")
+    assert refused.code == int(ExitCode.ERROR) and "keyring" in refused.err
+    toml = tmp_path / "fake.toml"
+    toml.write_text("# mine\nalpha = 9  # edited\n", encoding="utf-8")
+    assert (await cli("plugins", "set", "fake", "--file", str(toml))).code == int(ExitCode.OK)
+    assert "# edited" in (await cli("plugins", "config", "fake")).out
+
+
+async def test_plugins_set_and_config_need_a_name_and_something_to_do(cli: Cli) -> None:
+    usage = int(ExitCode.USAGE)
+    for argv in (
+        ("plugins", "set"),
+        ("plugins", "set", "fake"),
+        ("plugins", "config"),
+        ("plugins", "config", "fake", "a=1"),
+        ("plugins", "set", "fake", "novalue"),
+    ):
+        assert (await cli(*argv)).code == usage, argv
+    assert (await cli("plugins", "set", "no-such-plugin", "a=1")).code != int(ExitCode.OK)
+
+
+async def test_a_bare_sync_queues_a_pull_for_every_account(cli: Cli) -> None:
+    await cli.ops.add(1)
+    run = await cli("sync")
+    assert run.code == int(ExitCode.OK), run.err
+    assert "main: sync queued" in run.out
+    data = json.loads((await cli("sync", "--json")).out)["output"]
+    assert [j["account_id"] for j in data["jobs"]] == ["main"] and data["job_id"] == ""
+    one = json.loads((await cli("sync", "--account", "main", "--json")).out)["output"]
+    assert one["job_id"] and one["jobs"] == []
+
+
+async def test_pipeline_pause_one_stage_and_set_its_limit(cli: Cli) -> None:
+    paused = await cli("pipeline", "pause", "enrich", "--json")
+    assert paused.code == int(ExitCode.OK), paused.err
+    assert json.loads(paused.out)["paused_stages"] == ["enrich"]
+    status = json.loads((await cli("pipeline", "--json")).out)
+    assert (
+        status["stages"]["enrich"]["paused"] is True
+        and status["stages"]["embed"]["paused"] is False
+    )
+    assert "PAUSED" in (await cli("pipeline")).out
+    limit = await cli("pipeline", "limits", "enrich", "2")
+    assert limit.code == int(ExitCode.OK) and "enrich now runs 2 at a time" in limit.out
+    assert json.loads((await cli("pipeline", "--json")).out)["stages"]["enrich"]["concurrency"] == 2
+    resumed = await cli("pipeline", "resume", "enrich")
+    assert resumed.code == int(ExitCode.OK) and "resumed" in resumed.out
+    for bad in (("limits",), ("limits", "enrich"), ("limits", "enrich", "many")):
+        assert (await cli("pipeline", *bad)).code == int(ExitCode.USAGE)
+
+
+async def test_reprocess_can_be_limited_to_recent_mail(cli: Cli) -> None:
+    await cli.ops.add(3)
+    run = await cli("reprocess", "enrich", "--limit", "2", "--since", "2020-01-01", "--json")
+    assert run.code == int(ExitCode.OK), run.err
+    assert (await cli("reprocess", "enrich", "--since", "yesterday")).code != int(ExitCode.OK)

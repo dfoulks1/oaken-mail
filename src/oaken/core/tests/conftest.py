@@ -18,6 +18,7 @@ def oaken_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         monkeypatch.delenv(key)
     home = tmp_path / "home"
     monkeypatch.setenv("OAKEN_HOME", str(home))
+    monkeypatch.setenv("OAKEN_STATE_DIR", str(tmp_path / "state"))  # the last-known-home pointer
     return home
 
 

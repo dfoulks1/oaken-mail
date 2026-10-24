@@ -133,14 +133,14 @@ BM25 index with no raw bytes. It is **not** migrated. It is backed up and left a
 ## Rules for every prompt
 
 - **Docs are part of "done".** The project website is generated from `docs/` (see
-  prompt `01a-docs-site-scaffold.md`). If you add or change user-visible behavior, an
+  prompt `DOCS_01a-docs-site-scaffold.md`). If you add or change user-visible behavior, an
   operation, a plugin contract, a CLI command, or a policy, update the matching page and
   run `uv run --group docs python docs/tools/check_docs.py` (build + link check) before
   committing. A prompt is not finished while that check fails.
 - Work only in the repository root (your `oaken-mail` checkout). Touch only the files the prompt
   lists (new test files and docs for the thing you build are always allowed).
 - **Keep the CLI audit current.** If you build something an operator would run (inspect, rebuild,
-  repair, list, cancel, retry, export), add a row to the table in `17-cli-client.md` in the same
+  repair, list, cancel, retry, export), add a row to the table in `CLI_17-cli-client.md` in the same
   commit, with what was built and any question it raises. Do not decide the command; 17 does.
 - Keep the repo green at the end: `uv run ruff check`, `uv run mypy`, `uv run pytest`.
 - Commit when the prompt's acceptance criteria are met, with a message that

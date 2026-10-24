@@ -84,6 +84,16 @@ def _text(response: aiosmtplib.SMTPResponse) -> str:
 
 class SmtpProvider(BaseProvider):
     version = "1"
+    setup_help = (
+        "Send-only, so set it when you need it. TLS is required, and the password goes in the "
+        "keyring with `oaken smtp auth`. `from_address` is the one that matters."
+    )
+    config_example = (
+        "[plugins.smtp]\n"
+        'host = "smtp.example.com"\n'
+        'security = "starttls"  # or "tls"\n'
+        'from_address = "you@example.com"\n'
+    )
 
     def __init__(
         self,

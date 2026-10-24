@@ -148,6 +148,26 @@ class Database:
         async with self.transaction() as tx:
             await tx.executemany(sql, rows)
 
+    async def vacuum(self) -> None:
+        """Rewrite the file without the space deleted rows left, and shrink its WAL. SQLite cannot
+        do this inside a transaction, so it holds the write lock for the duration: reads go on
+        (WAL), writes wait. It needs about the file's own size free on the disk while it runs."""
+        async with self._write_lock:
+            try:
+                # Each statement's cursor is read to the end and closed: SQLite refuses to vacuum
+                # while any statement on the connection is still "in progress".
+                # In WAL mode the rewrite lands in the log, so a second checkpoint is what makes
+                # the file itself smaller.
+                for statement in (
+                    "PRAGMA wal_checkpoint(TRUNCATE)",
+                    "VACUUM",
+                    "PRAGMA wal_checkpoint(TRUNCATE)",
+                ):
+                    async with self._writer.execute(statement) as cursor:
+                        await cursor.fetchall()
+            except sqlite3.Error as exc:
+                raise StorageError(f"vacuum failed: {exc}") from exc
+
     # -- reads ------------------------------------------------------------------------------
     @asynccontextmanager
     async def _reader(self) -> AsyncIterator[aiosqlite.Connection]:

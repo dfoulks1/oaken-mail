@@ -1,19 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
-"""``oaken admin account list|show|add|set|remove`` and ``oaken auth gmail|smtp|imap``.
+"""``oaken admin account list|show|add|set|remove``.
 
 The account wizard asks the questions and sends the answers to core, which stores them, so nobody
 edits a file by hand. Only non-secret settings are asked for or stored in the account. A credential
-is handled by ``auth``: a password is read without echo (or from stdin for scripts), sent once to
-core over loopback, and kept by the provider in the OS keyring. The CLI never prints it, never
-takes it as an argument, and never writes it to disk. Gmail's consent is core's: the CLI shows the
-address, opens a browser if asked, and waits for core to report the result.
+is the provider's own ``auth`` command (``oaken gmail auth``, ``oaken imap auth``): a password is
+read without echo (or from stdin for scripts), sent once to core over loopback, and kept by the
+provider in the OS keyring. The CLI never prints it, never takes it as an argument, and never
+writes it to disk.
 """
 
 from __future__ import annotations
 
 import argparse
-import asyncio
-import getpass
 import json
 import sys
 from typing import Any
@@ -23,7 +21,6 @@ from oaken_cli.commands.runtime import emit, run
 from oaken_cli.exits import CliError, ExitCode
 
 SECRETISH = ("password", "passwd", "secret", "token", "credential", "api_key", "apikey")
-PROVIDERS = ("gmail", "smtp", "imap")
 
 
 # --- admin account --------------------------------------------------------------------------
@@ -151,17 +148,21 @@ async def _add(client: ApiClient, args: argparse.Namespace) -> int:
     schema = providers[provider].get("config_schema") or {}
     if interactive:
         config = _wizard(schema, config)
-    # Receive-only is the "listen but not send" switch (prompt 24). A new Gmail account defaults
-    # to receive-only until the user turns send on; other providers default to able-to-send.
+    # What a new account of this provider starts with is the provider's own word (its
+    # ``account_defaults``, from list_plugins): core and this client name no provider. Receive-only
+    # is the "listen but not send" switch; a provider that defaults to it asks first.
+    defaults = dict(providers[provider].get("account_defaults") or {})
     receive_only = getattr(args, "receive_only", None)
-    if receive_only is None and interactive and provider == "gmail":
-        receive_only = _ask("receive only (listen but not send)? [Y/n]", "y", True).lower() in (
-            "",
-            "y",
-            "yes",
-        )
-    elif receive_only is None and provider == "gmail":
-        receive_only = True  # the honest default for a non-interactive Gmail add
+    if receive_only is None and "receive_only" in defaults:
+        receive_only = bool(defaults.pop("receive_only"))
+        if interactive:
+            reply = _ask(
+                "receive only (listen but not send)? [Y/n]", "y" if receive_only else "n", True
+            )
+            receive_only = reply.lower() in ("y", "yes")
+    defaults.pop("receive_only", None)
+    for key, value in defaults.items():
+        config.setdefault(key, value)
     if receive_only:
         config["receive_only"] = True
     result = await client.call(
@@ -174,7 +175,9 @@ async def _add(client: ApiClient, args: argparse.Namespace) -> int:
         from oaken_cli.output import print_text
 
         print_text(f"account {account_id} added")
-        print_text(f'next: "oaken auth {provider} --account {account_id}" to store its credential')
+        print_text(
+            f'next: "oaken {provider} auth --account-id {account_id}" to store its credential'
+        )
 
     return emit(args, data=result.output, text=done)
 
@@ -223,127 +226,3 @@ def _wizard(schema: dict[str, Any], given: dict[str, Any]) -> dict[str, Any]:
         if answer:
             config[key] = _coerce(answer)
     return config
-
-
-# --- auth -----------------------------------------------------------------------------------
-
-
-def cmd_auth(args: argparse.Namespace) -> int:
-    password = _read_password(args) if _needs_password(args) else None
-    args.password_value = password
-    return run(lambda client: _auth(client, args), args)
-
-
-def _needs_password(args: argparse.Namespace) -> bool:
-    return args.provider in ("smtp", "imap") and not args.check
-
-
-def _read_password(args: argparse.Namespace) -> str:
-    """Without echo from a terminal, or one line from stdin; never from an argument."""
-    if args.password_stdin:
-        password = sys.stdin.readline().rstrip("\r\n")
-    elif sys.stdin.isatty():
-        password = getpass.getpass(f"{args.provider} password (not shown): ")
-    else:
-        raise CliError(
-            "no terminal to ask on; pipe the password with --password-stdin", ExitCode.USAGE
-        )
-    if not password:
-        raise CliError("no password given", ExitCode.USAGE)
-    return password
-
-
-async def _account_for(client: ApiClient, args: argparse.Namespace) -> str:
-    if args.account:
-        return str(args.account)
-    result = await client.call("list_accounts", {})
-    rows = result.output.get("accounts", []) if isinstance(result.output, dict) else []
-    mine = [a["account_id"] for a in rows if a.get("provider") == args.provider]
-    if len(mine) == 1:
-        return str(mine[0])
-    if not mine:
-        raise CliError(
-            f'no {args.provider} account; add one with "oaken admin account add"', ExitCode.USAGE
-        )
-    raise CliError(
-        f"several {args.provider} accounts ({', '.join(mine)}); use --account", ExitCode.USAGE
-    )
-
-
-async def _auth(client: ApiClient, args: argparse.Namespace) -> int:
-    account = await _account_for(client, args)
-    if args.check:
-        return await _check(client, args, account)
-    if args.provider == "gmail":
-        return await _consent(client, args, account)
-    await client.call(
-        "set_account_password",
-        {"account_id": account, "password": args.password_value},
-        confirm=True,
-    )
-    args.password_value = None
-    return await _check(client, args, account, stored=True)
-
-
-async def _check(
-    client: ApiClient, args: argparse.Namespace, account: str, *, stored: bool = False
-) -> int:
-    result = await client.call("check_account", {"account_id": account})
-    out = result.output if isinstance(result.output, dict) else {}
-
-    def text() -> None:
-        from oaken_cli.output import print_text
-
-        if stored:
-            print_text(f"password for {account} stored in the OS keyring")
-        print_text(
-            f"{account}: login works"
-            if out.get("ok")
-            else f"{account}: {out.get('detail', 'failed')}"
-        )
-
-    emit(args, data={"account_id": account, "stored": stored, **out}, text=text)
-    return int(ExitCode.OK if out.get("ok") else ExitCode.AUTH)
-
-
-async def _consent(client: ApiClient, args: argparse.Namespace, account: str) -> int:
-    started = await client.call("start_authorization", {"account_id": account}, confirm=True)
-    url = str((started.output or {}).get("url", "")) if isinstance(started.output, dict) else ""
-    if not args.json:
-        from oaken_cli.output import print_text
-
-        print_text(f"open this address to authorize {account}:\n{url}")
-        if not args.no_browser and sys.stdout.isatty():
-            import webbrowser
-
-            webbrowser.open(url)
-        print_text("waiting for Google to redirect back to this machine...")
-    state, detail = await _wait_authorized(client, account, args.timeout)
-
-    def text() -> None:
-        from oaken_cli.output import print_text
-
-        if state == "done":
-            print_text(f"{account} authorized; the refresh token is in the OS keyring")
-        else:
-            print_text(f"{account}: {detail or 'authorization did not finish'}")
-
-    emit(
-        args, data={"account_id": account, "state": state, "detail": detail, "url": url}, text=text
-    )
-    return int(ExitCode.OK if state == "done" else ExitCode.AUTH)
-
-
-async def _wait_authorized(client: ApiClient, account: str, timeout: float) -> tuple[str, str]:  # noqa: ASYNC109
-    async def poll() -> tuple[str, str]:
-        while True:
-            result = await client.call("authorization_status", {"account_id": account})
-            out = result.output if isinstance(result.output, dict) else {}
-            if out.get("state") in ("done", "failed"):
-                return str(out["state"]), str(out.get("detail", ""))
-            await asyncio.sleep(0.5)
-
-    try:
-        return await asyncio.wait_for(poll(), timeout)
-    except TimeoutError:
-        return "failed", f"timed out after {timeout:.0f}s; nothing was changed"

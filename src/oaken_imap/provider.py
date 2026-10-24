@@ -100,6 +100,18 @@ def _flag_changes(
 class ImapProvider(BaseProvider):
     version = "1"
     supports_folders = True
+    setup_help = (
+        "IMAP is any server. TLS is always on (there is no plaintext option, by design). Set the "
+        "host, the username and the account name here, then run `oaken imap auth` to store the "
+        "password in the keyring."
+    )
+    config_example = (
+        "[plugins.imap]\n"
+        'host = "imap.example.com"\n'
+        'security = "tls"       # or "starttls"\n'
+        'username = "you@example.com"\n'
+        'account = "default"\n'
+    )
 
     def __init__(
         self,

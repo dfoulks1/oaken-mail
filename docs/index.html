@@ -23,7 +23,7 @@
 <main id="content" tabindex="-1">
   <header class="cover">
     <div class="d-flex justify-content-between align-items-start">
-      <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span><span class="badge text-bg-secondary">Local-first</span><span class="badge text-bg-primary">Open source</span></div>
+      <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Beta</span><span class="badge text-bg-secondary">Local-first</span><span class="badge text-bg-primary">Open source</span></div>
       <button class="btn btn-sm btn-outline-secondary" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button>
     </div>
     <div class="masthead">
@@ -41,7 +41,7 @@
   </header>
 <h2 id="what-it-is-for">What it is for</h2>
 <ul>
-<li><strong>A local MCP server for sensitive mail.</strong> Core hosts an MCP server over your local mail store, so a more capable model can search, read and act on your mail through a narrow, audited interface without the mail being uploaded anywhere. Sending is never exposed.</li>
+<li><strong>A local MCP server for sensitive mail.</strong> Core hosts an MCP server over your local mail store, so a more capable model can search, read and act on your mail through a narrow, audited interface without the mail being uploaded anywhere. Sending is off unless you turn it on.</li>
 <li><strong>Your mail stays yours.</strong> Messages are stored on your disk. The original bytes are kept, so nothing is lost and everything derived from them can be rebuilt.</li>
 <li><strong>Ask your mailbox questions.</strong> Search combines keywords and meaning, and answers cite the messages they came from.</li>
 <li><strong>Cheap by design.</strong> Mail is cleaned once when it arrives (quoted replies, signatures and boilerplate removed), and every model result is cached, so asking a question sends only the few passages that matter.</li>
@@ -49,15 +49,16 @@
 <li><strong>Extensible.</strong> Mail providers, embedding models, language models and enrichers are plugins behind small, declared contracts.</li>
 </ul>
 <div class="callout">
-<p><strong>Where things stand.</strong> Oaken Mail is pre-alpha and being built in the open, documentation first. There is nothing to install yet. The pages below describe the design; they will grow as each piece is built.</p>
+<p><strong>Where things stand.</strong> Oaken Mail is in beta (0.1.x) and is built in the open. The engine, the CLI, the MCP server and the Gmail, IMAP and SMTP providers work; install it with <code>pip install oaken-core</code>. Sending mail, the contacts view and several settings screens are still to come. Start with <a href="getting-started.html">Set up Oaken from scratch</a>.</p>
 </div>
 <h2 id="the-documents">The documents</h2>
 
 <div class="row g-3">
   <div class="col-md-6"><a class="doc" href="mcp.html"><div class="s">Start</div><div class="t">Connect an AI client</div><p>Connect an AI client to Oaken Mail&#39;s local MCP server: setup, the tools it offers, the confirmation step, untrusted mail text and the privacy note.</p></a></div>
   <div class="col-md-6"><a class="doc" href="getting-started.html"><div class="s">Start</div><div class="t">Set up Oaken from scratch</div><p>A first-time setup of Oaken Mail: install with uv, write config.toml, pull the Ollama models, add an account, store its credential in the keyring, start the daemon, sync, and turn on the MCP server.</p></a></div>
-  <div class="col-md-6"><a class="doc" href="keyring.html"><div class="s">Start</div><div class="t">Store credentials in your keyring</div><p>How Oaken uses the OS keyring: the service and entry names, the oaken auth commands that store credentials, a quick check that the keyring works, how to inspect entries with Seahorse, and what the no-keyring error means.</p></a></div>
+  <div class="col-md-6"><a class="doc" href="keyring.html"><div class="s">Start</div><div class="t">Store credentials in your keyring</div><p>How Oaken uses the OS keyring: the service and entry names, the commands that store credentials (oaken gmail auth, oaken imap auth), a quick check that the keyring works, how to inspect entries with Seahorse, and what the no-keyring error means.</p></a></div>
   <div class="col-md-6"><a class="doc" href="providers/gmail.html"><div class="s">Start</div><div class="t">Connect Gmail</div><p>Create a Google Cloud OAuth client, publish it so tokens do not expire after 7 days, authorize, configure the Gmail plugin, and run a read-only first sync. Covers scopes, the token design and what to do when Google revokes a token.</p></a></div>
+  <div class="col-md-6"><a class="doc" href="settings.html"><div class="s">Start</div><div class="t">Settings, storage and the event log</div><p>oaken settings (get, check, set), storage and vacuum, the enrichment cache, the event log and paged audit log, and the health summary in oaken status.</p></a></div>
   <div class="col-md-6"><a class="doc" href="providers/smtp.html"><div class="s">Start</div><div class="t">Send through your own SMTP server</div><p>Configure the SMTP send plugin: host, port, STARTTLS or TLS, the keyring password, what happens to Bcc, how failures are reported, and a first live check.</p></a></div>
   <div class="col-md-6"><a class="doc" href="providers/imap.html"><div class="s">Start</div><div class="t">Connect any IMAP server</div><p>Configure the IMAP provider: host, port, STARTTLS or TLS, the keyring password, which folders are synced, how changes are found, what is written back, and a first live check.</p></a></div>
   <div class="col-md-6"><a class="doc" href="architecture/overview.html"><div class="s">Concepts</div><div class="t">Architecture overview</div><p>The core process, thin clients, plugins and the two databases.</p></a></div>
@@ -90,7 +91,7 @@
 </div>
 
 
-  <footer>Oaken Mail 0.1.0 · Apache-2.0</footer>
+  <footer>Oaken Mail 0.1.1 · Apache-2.0</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

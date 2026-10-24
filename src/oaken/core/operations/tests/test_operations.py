@@ -3,7 +3,7 @@
 
 import pytest
 
-from oaken.core.errors import ConfigError, NotFound, Unavailable
+from oaken.core.errors import ConfigError, InvalidInput, NotFound, Unavailable
 from oaken.core.operations import CallerContext
 from oaken.core.operations.tests.conftest import CLI, Ops, agent
 
@@ -107,6 +107,20 @@ async def test_sync_now_queues_one_sync_and_a_second_request_joins_it(ops: Ops) 
     assert (
         "call:sync_now" in await ops.audit_ops()
     )  # the registry audits what has no audit of its own
+
+
+async def test_sync_now_with_no_account_queues_a_pull_for_every_account(ops: Ops) -> None:
+    ops.rig.provider.add_message(b"Subject: x\r\n\r\nbody\r\n")
+    # An account whose plugin is not installed cannot pull: said, not silently dropped.
+    await ops.svc.raw.create_account("lost", "no-such-plugin", "Lost", {})
+    every = await ops.out("sync_now", {})
+    assert [j.account_id for j in every.jobs] == ["main"] and every.jobs[0].created is True
+    assert [s.account_id for s in every.skipped] == ["lost"] and every.skipped[0].reason
+    assert every.job_id == "" and every.created is True
+    again = await ops.out("sync_now", {})
+    assert again.jobs[0].created is False and again.jobs[0].job_id == every.jobs[0].job_id
+    with pytest.raises(InvalidInput):
+        await ops.call("sync_now", {"folder": "INBOX"})  # a folder belongs to one account
 
 
 async def test_an_agent_can_ask_for_a_sync_only_through_a_proposal(ops: Ops) -> None:

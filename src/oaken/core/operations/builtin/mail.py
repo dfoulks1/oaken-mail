@@ -12,7 +12,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from oaken.ai.summarize import MAX_BODY_CHARS, SUMMARY
-from oaken.core.errors import Conflict, NotFound, OakenError
+from oaken.core.errors import Conflict, InvalidInput, NotFound, OakenError
 from oaken.core.ids import AccountId, MessageId
 from oaken.core.operations.builtin.common import (
     mark_preview,
@@ -24,6 +24,7 @@ from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import AnyOperation, Change, Preview, operation
 from oaken.core.untrusted import UntrustedText
 from oaken.index import RebuildPayload, enqueue_rebuild
+from oaken.plugins.base import inferred_capabilities
 from oaken.readstate import AuditEntry, ReadResult
 from oaken.readstate.service import READ_OPS
 
@@ -319,8 +320,8 @@ Stage = Literal["parse", "filter", "embed", "enrich"]
 
 
 class SyncNowInput(BaseModel):
-    account_id: str
-    folder: str = ""  # "" is the whole account
+    account_id: str = ""  # "" is every account on every provider
+    folder: str = ""  # "" is the whole account; a folder needs an account
 
 
 class QueuedOutput(BaseModel):
@@ -328,31 +329,81 @@ class QueuedOutput(BaseModel):
     created: bool  # False: that work was already queued or running, and this call joined it
 
 
+class QueuedSync(BaseModel):
+    account_id: str
+    job_id: str
+    created: bool
+
+
+class SkippedSync(BaseModel):
+    account_id: str
+    reason: str
+
+
+class SyncNowOutput(QueuedOutput):
+    """``job_id`` and ``created`` are the one account's job. For every account they are empty and
+    false, and ``jobs`` lists what was queued, ``skipped`` what could not be (and why)."""
+
+    jobs: list[QueuedSync] = Field(default_factory=list)
+    skipped: list[SkippedSync] = Field(default_factory=list)
+
+
 async def _preview_sync(ctx: OpContext, inp: SyncNowInput) -> Preview:
+    if not inp.account_id:
+        return Preview(summary="Sync every account now (joins any sync already running)")
     where = f"{inp.account_id}/{inp.folder}" if inp.folder else inp.account_id
     return Preview(summary=f"Sync {where} now (joins a sync that is already running)")
 
 
 @operation(
     "sync_now",
-    "Sync an account (or one folder) now. Joins a sync already queued or running.",
+    "Sync an account (or one folder) now, or every account on every provider when none is "
+    "named. Each is a job that calls the provider's pull; it joins a sync already queued or "
+    "running.",
     permission="mutate",
     input=SyncNowInput,
-    output=QueuedOutput,
+    output=SyncNowOutput,
     mcp="on",
     preview=_preview_sync,
     streaming=True,  # the work is a job; its events say how it went
 )
-async def sync_now(ctx: OpContext, inp: SyncNowInput) -> QueuedOutput:
-    queued = await ctx.svc.need_sync().request(
-        inp.account_id, inp.folder, actor=ctx.caller.actor, reason=f"{ctx.caller.client}_sync_now"
+async def sync_now(ctx: OpContext, inp: SyncNowInput) -> SyncNowOutput:
+    sync = ctx.svc.need_sync()
+    reason = f"{ctx.caller.client}_sync_now"
+    if inp.account_id:
+        one = await sync.request(inp.account_id, inp.folder, actor=ctx.caller.actor, reason=reason)
+        return SyncNowOutput(job_id=one.job_id, created=one.created)
+    if inp.folder:
+        raise InvalidInput("a folder belongs to one account: name it with account_id")
+    jobs: list[QueuedSync] = []
+    skipped: list[SkippedSync] = []
+    for account in await ctx.svc.raw.list_accounts():
+        try:
+            provider = sync.accounts.get(account.id)  # started and healthy
+        except OakenError as exc:
+            skipped.append(SkippedSync(account_id=account.id, reason=exc.message))
+            continue
+        if "sync.pull" not in inferred_capabilities(provider, "provider"):
+            skipped.append(SkippedSync(account_id=account.id, reason="it does not receive mail"))
+            continue
+        queued = await sync.request(account.id, "", actor=ctx.caller.actor, reason=reason)
+        jobs.append(QueuedSync(account_id=account.id, job_id=queued.job_id, created=queued.created))
+    return SyncNowOutput(
+        job_id="", created=any(j.created for j in jobs), jobs=jobs, skipped=skipped
     )
-    return QueuedOutput(job_id=queued.job_id, created=queued.created)
 
 
 class ReprocessInput(BaseModel):
     stage: Stage
     account_id: str | None = None
+    since: str | None = Field(
+        default=None,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="embed and enrich only: mail dated on or after this day (YYYY-MM-DD).",
+    )
+    limit: int | None = Field(
+        default=None, ge=1, description="embed and enrich only: just the newest N messages."
+    )
 
 
 @operation(
@@ -368,6 +419,8 @@ async def reprocess(ctx: OpContext, inp: ReprocessInput) -> QueuedOutput:
     queued = await ctx.svc.need_pipeline().reprocess(
         inp.stage,
         AccountId(inp.account_id) if inp.account_id else None,
+        since=inp.since,
+        limit=inp.limit,
         actor=ctx.caller.actor,
     )
     return QueuedOutput(job_id=queued.job_id, created=queued.created)

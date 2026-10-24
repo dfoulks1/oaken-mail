@@ -14,7 +14,9 @@ from typing import Any, TypeVar
 from pydantic import ValidationError
 
 from oaken.ai.cache import CacheEntry, LLMCache
+from oaken.ai.caller import CALLER
 from oaken.ai.fresh import FRESH
+from oaken.ai.priority import ModelGate
 from oaken.ai.prompts import PromptBuilder, SafeOutput, describe_errors
 from oaken.ai.workspaces import Workspaces, check_backend
 from oaken.core.errors import AIBackendError, OakenError
@@ -48,6 +50,7 @@ class LLMService:
         self.workspaces = workspaces
         self.backend_for = backend_for
         self.settings = settings
+        self.gate = ModelGate()  # interactive calls go ahead of background ones (prompt 30)
 
     async def generate_cached(
         self,
@@ -109,6 +112,13 @@ class LLMService:
         )
 
     async def _call(self, backend: LLMBackend, request: LLMRequest) -> LLMResponse:
+        if CALLER.get() == "internal":  # background work: let a waiting question go first
+            await self.gate.background_turn(self.settings.ai.background_yield_seconds)
+            return await self._generate(backend, request)
+        async with self.gate.interactive():
+            return await self._generate(backend, request)
+
+    async def _generate(self, backend: LLMBackend, request: LLMRequest) -> LLMResponse:
         try:
             return to_llm_response(await backend.generate(request), type(backend).__name__)
         except OakenError:

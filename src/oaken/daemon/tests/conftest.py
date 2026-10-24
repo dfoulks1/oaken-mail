@@ -16,12 +16,14 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     for name in list(os.environ):
         if name.startswith("OAKEN_") and name != "OAKEN_HOME":
             monkeypatch.delenv(name)
+    monkeypatch.setenv("OAKEN_STATE_DIR", str(tmp_path / "state"))  # the last-known-home pointer
     yield root
 
 
 def child_env(home: Path) -> dict[str, str]:
     env = {k: v for k, v in os.environ.items() if not k.startswith("OAKEN_")}
     env["OAKEN_HOME"] = str(home)
+    env["OAKEN_STATE_DIR"] = str(home.parent / "state")
     env["OAKEN_API__PORT"] = "0"
     env["OAKEN_AI__EMBEDDER"] = ""
     env["PYTHONUNBUFFERED"] = "1"

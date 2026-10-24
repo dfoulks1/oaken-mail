@@ -241,6 +241,32 @@ def test_sighup_reloads_the_configuration_in_place_and_a_bad_file_changes_nothin
 
 
 @posix
+def test_a_reload_keeps_the_port_when_none_was_configured(home: Path) -> None:
+    runtime = home / "run" / "runtime.json"
+    config = home / "config" / "config.toml"
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text("[ui]\nmark_read_delay_ms = 2000\n")
+    proc = subprocess.Popen(  # noqa: S603
+        [PYTHON, "-m", "oaken.daemon"], env=child_env(home), stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )  # fmt: skip
+    try:
+        port = wait_for_port(runtime, proc)["port"]
+        config.write_text("[ui]\nmark_read_delay_ms = 3000\n")  # a real change, no port asked for
+        proc.send_signal(signal.SIGHUP)
+        time.sleep(2.0)
+        assert proc.poll() is None
+        info = read_runtime(runtime)
+        assert info is not None and info["port"] == port
+        assert httpx2.get(f"http://127.0.0.1:{port}/v1/health").status_code == 200
+        proc.send_signal(signal.SIGTERM)
+        assert proc.wait(timeout=60) == 0
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+
+
+@posix
 def test_sigint_also_stops_it_cleanly(home: Path) -> None:
     runtime = home / "run" / "runtime.json"
     proc = subprocess.Popen(  # noqa: S603

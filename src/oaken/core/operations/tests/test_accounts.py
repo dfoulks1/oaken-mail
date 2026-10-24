@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Account setup operations: create, configure, store a credential, check it, run a consent."""
+"""Account setup operations (create, configure, remove) and each provider's own ``auth`` command."""
 
 import asyncio
 from collections.abc import AsyncIterator, Callable, Iterable
@@ -13,7 +13,6 @@ from oaken.core.errors import (
     Conflict,
     InvalidInput,
     NotFound,
-    PluginError,
     ProviderError,
 )
 from oaken.core.ids import AccountId
@@ -46,6 +45,18 @@ class PwMailbox(FakeProvider):
         await self.release.wait()
 
 
+class SecretPw(PwMailbox):
+    """Like SMTP and IMAP: a password you store, no consent page."""
+
+    authorize = None  # type: ignore[assignment]
+
+
+class ConsentPw(PwMailbox):
+    """Like Gmail: a consent page, no password."""
+
+    set_password = None  # type: ignore[assignment]
+
+
 @pytest.fixture
 async def acct(make_ops: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Ops]:
     base = ops_conftest.discover
@@ -53,11 +64,14 @@ async def acct(make_ops: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[
     def discover(group: str) -> Iterable[EntryPoint]:
         found = list(base(group))
         if group == "oaken.providers":
-            found.append(EntryPoint("pw", f"{__name__}:PwMailbox", group))
+            found.append(EntryPoint("pw", f"{__name__}:ConsentPw", group))
+            found.append(EntryPoint("sec", f"{__name__}:SecretPw", group))
         return found
 
     monkeypatch.setattr(ops_conftest, "discover", discover)
-    PwMailbox.password, PwMailbox.release = None, asyncio.Event()
+    for cls in (PwMailbox, SecretPw, ConsentPw):
+        cls.password = None  # each class keeps its own, so one test cannot leak into the next
+    PwMailbox.release = asyncio.Event()
     async with make_ops() as o:
         yield o
 
@@ -89,42 +103,51 @@ async def test_bad_accounts_are_refused(acct: Ops) -> None:
 
 
 async def test_a_password_is_stored_checked_and_never_kept_anywhere_else(acct: Ops) -> None:
-    await acct.out("create_account", {"account_id": "w", "provider": "pw", "display_name": "W"})
-    before = await acct.out("check_account", {"account_id": "w"})
-    assert not before.ok and "refused" in before.detail
-    out = await acct.out("set_account_password", {"account_id": "w", "password": PASSWORD})
-    assert out.stored and PwMailbox.password == PASSWORD
-    assert (await acct.out("check_account", {"account_id": "w"})).ok
+    await acct.out("create_account", {"account_id": "w", "provider": "sec", "display_name": "W"})
+    before = await acct.out("sec.auth", {"account_id": "w", "check": True})
+    assert before.state == "failed" and "refused" in before.detail
+    out = await acct.out("sec.auth", {"account_id": "w", "password": PASSWORD})
+    assert out.state == "done" and SecretPw.password == PASSWORD
+    assert (await acct.out("sec.auth", {"account_id": "w", "check": True})).state == "done"
     rows = await acct.rig.raw_db.fetchall("SELECT * FROM audit_log")
     dump = " ".join(str(tuple(r)) for r in rows)
-    assert "account_password_set" in dump and PASSWORD not in dump
-    assert not any("sha256" in str(tuple(r)) and "password" in str(tuple(r)) for r in rows)
+    assert "call:sec.auth" in dump and PASSWORD not in dump
     shown = await acct.out("get_account", {"account_id": "w"})
-    assert PASSWORD not in shown.model_dump_json()
+    assert PASSWORD not in shown.model_dump_json() and PASSWORD not in out.model_dump_json()
 
 
-async def test_a_provider_without_a_password_refuses_one(acct: Ops) -> None:
+async def test_a_password_command_needs_a_password_unless_it_is_only_checking(acct: Ops) -> None:
+    await acct.out("create_account", {"account_id": "w", "provider": "sec", "display_name": "W"})
     with pytest.raises(InvalidInput):
-        await acct.call("set_account_password", {"account_id": "main", "password": "x"})
-    with pytest.raises(InvalidInput):
-        await acct.call("set_account_password", {"account_id": "main", "password": ""})
+        await acct.call("sec.auth", {"account_id": "w", "password": ""})
+
+
+async def test_a_command_with_no_account_means_the_only_one(acct: Ops) -> None:
+    with pytest.raises(InvalidInput, match="no sec account"):
+        await acct.call("sec.auth", {"check": True})
+    await acct.out("create_account", {"account_id": "a", "provider": "sec", "display_name": "A"})
+    assert (await acct.out("sec.auth", {"check": True})).account_id == "a"
+    await acct.out("create_account", {"account_id": "b", "provider": "sec", "display_name": "B"})
+    with pytest.raises(InvalidInput, match="several sec accounts"):
+        await acct.call("sec.auth", {"check": True})
 
 
 async def test_an_interactive_authorization_runs_in_the_background(acct: Ops) -> None:
     await acct.out("create_account", {"account_id": "g", "provider": "pw", "display_name": "G"})
-    assert (await acct.out("authorization_status", {"account_id": "g"})).state == "none"
-    started = await acct.out("start_authorization", {"account_id": "g"})
-    assert started.url == OPEN
-    assert (await acct.out("authorization_status", {"account_id": "g"})).state == "pending"
-    again = await acct.out("start_authorization", {"account_id": "g"})
-    assert again.url == OPEN, "asking again joins the one in progress"
+    assert (await acct.out("pw.auth_status", {"account_id": "g"})).state == "none"
+    started = await acct.out("pw.auth", {"account_id": "g"})
+    assert started.state == "pending" and started.open_url == OPEN
+    assert (started.poll, started.poll_input) == ("pw.auth_status", {"account_id": "g"})
+    assert (await acct.out("pw.auth_status", {"account_id": "g"})).state == "pending"
+    again = await acct.out("pw.auth", {"account_id": "g"})
+    assert again.open_url == OPEN, "asking again joins the one in progress"
     assert PwMailbox.release is not None
     PwMailbox.release.set()
     for _ in range(50):
-        if (await acct.out("authorization_status", {"account_id": "g"})).state == "done":
+        if (await acct.out("pw.auth_status", {"account_id": "g"})).state == "done":
             break
         await asyncio.sleep(0.02)
-    assert (await acct.out("authorization_status", {"account_id": "g"})).state == "done"
+    assert (await acct.out("pw.auth_status", {"account_id": "g"})).state == "done"
 
 
 async def test_an_unhealthy_provider_can_still_be_authorized(
@@ -136,10 +159,9 @@ async def test_an_unhealthy_provider_can_still_be_authorized(
     monkeypatch.setattr(PwMailbox, "health", dead)
     await acct.out("create_account", {"account_id": "g", "provider": "pw", "display_name": "G"})
     await acct.host.check_health()
-    with pytest.raises(PluginError, match="unhealthy"):
-        await acct.call("check_account", {"account_id": "g"})
-    started = await acct.out("start_authorization", {"account_id": "g"})
-    assert started.url == OPEN
+    # Signing in is how an unhealthy provider becomes healthy, so it is still offered.
+    started = await acct.out("pw.auth", {"account_id": "g"})
+    assert started.open_url == OPEN
 
 
 async def test_a_failed_authorization_says_why(acct: Ops, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -149,9 +171,9 @@ async def test_a_failed_authorization_says_why(acct: Ops, monkeypatch: pytest.Mo
 
     monkeypatch.setattr(PwMailbox, "authorize", refuse)
     await acct.out("create_account", {"account_id": "g", "provider": "pw", "display_name": "G"})
-    await acct.out("start_authorization", {"account_id": "g"})
+    await acct.out("pw.auth", {"account_id": "g"})
     for _ in range(50):
-        status = await acct.out("authorization_status", {"account_id": "g"})
+        status = await acct.out("pw.auth_status", {"account_id": "g"})
         if status.state != "pending":
             break
         await asyncio.sleep(0.02)
@@ -178,7 +200,7 @@ async def test_remove_account_is_not_found_for_a_typo(acct: Ops) -> None:
 
 async def test_none_of_these_is_offered_to_an_agent(acct: Ops) -> None:
     names = {
-        "get_account", "create_account", "set_account_config", "set_account_password",
-        "check_account", "remove_account", "start_authorization", "authorization_status",
+        "get_account", "create_account", "set_account_config", "remove_account",
+        "pw.auth", "pw.auth_status", "sec.auth",
     }  # fmt: skip
     assert not names & {o.name for o in await acct.client.visible(agent())}

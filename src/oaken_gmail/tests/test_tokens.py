@@ -112,7 +112,7 @@ async def test_no_stored_token_says_to_authorize_not_that_google_rejected_one(ri
     with pytest.raises(AuthRequired, match="not authorized yet"):
         await ping(rig)
     health = await rig.provider.health()
-    assert not health.ok and "oaken auth gmail" in health.detail
+    assert not health.ok and "oaken gmail auth" in health.detail
     assert "invalid_grant" not in health.detail
     assert rig.google.token_calls == 0
 

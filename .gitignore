@@ -239,3 +239,6 @@ site/
 
 # A real config.toml holds local settings and must never be committed (use config.example.toml).
 config.toml
+
+# Another AI assistant's working files; not part of this project
+.kiro/

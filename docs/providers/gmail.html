@@ -39,6 +39,7 @@
       <a class="doc-link" href="../getting-started.html">Set up Oaken from scratch</a>
       <a class="doc-link" href="../keyring.html">Store credentials in your keyring</a>
       <a class="doc-link current" href="gmail.html" aria-current="page">Connect Gmail</a>
+      <a class="doc-link" href="../settings.html">Settings, storage and the event log</a>
       <a class="doc-link" href="smtp.html">Send through your own SMTP server</a>
       <a class="doc-link" href="imap.html">Connect any IMAP server</a>
       <div class="label">Concepts</div>
@@ -140,9 +141,11 @@ assessment, are only needed to give a client to other people, because <code>gmai
 </code></pre></div>
 <p>Authorizing opens Google's consent page in your browser, with a PKCE challenge and a redirect to a
 random free port on <code>127.0.0.1</code>. Oaken listens there once, checks the <code>state</code>, exchanges the code,
-confirms Google granted <code>gmail.modify</code>, and stores the refresh token in the keyring. The CLI
-command for this arrives with the CLI work (see the audit table in prompt 17); until then the
-plugin's <code>authorize()</code> method is the entry point.</p>
+confirms Google granted <code>gmail.modify</code>, and stores the refresh token in the keyring. Run it with
+<code>oaken gmail auth</code> (add <code>--account-id &lt;id&gt;</code> when there is more than one Gmail account, <code>--check</code> to
+test a stored token without opening a browser, <code>--no-browser</code> to print the address instead). It
+is the plugin's own command, so core carries no Gmail code. <code>oaken gmail labels</code> lists the account's
+labels (the names <code>include_labels</code> accepts) and <code>oaken gmail send-as</code> its send-as addresses.</p>
 <p>Without a keyring service (Secret Service on Linux, Keychain on macOS, Credential Locker on
 Windows) Oaken stops with a clear message. It never falls back to a file.</p>
 </section>
@@ -232,7 +235,7 @@ Push notifications (Pub/Sub) are not used: Oaken polls on the scheduler. Threadi
 core from headers, not taken from Gmail. Drafts, permanent delete and the IMAP provider are
 separate work.</p>
 </section>
-  <footer>Oaken Mail 0.1.0 · Apache-2.0</footer>
+  <footer>Oaken Mail 0.1.1 · Apache-2.0</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

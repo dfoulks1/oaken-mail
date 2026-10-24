@@ -13,7 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from oaken.core.errors import OakenError, PluginError
+from oaken.core.errors import InvalidInput, OakenError, PluginError
 from oaken.core.logging import get_logger
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import (
@@ -38,9 +38,44 @@ def adapt(host: PluginHost, offered: OfferedOperation) -> AnyOperation:
             plugin, ctx.caller.client, ctx.caller.actor.label or ctx.caller.actor.kind
         )
 
+    async def resolve(ctx: OpContext, inp: BaseModel) -> tuple[Any, BaseModel]:
+        """The handler to call and the input to call it with. A ``per_account`` command runs on
+        the instance serving that account, with ``account_id`` filled in (an empty one means the
+        only account this plugin has)."""
+        if not d.per_account:
+            return d.handler, inp
+        account = str(getattr(inp, "account_id", "") or "")
+        if not account:
+            mine = [a.id for a in await ctx.svc.raw.list_accounts() if a.provider == plugin]
+            if len(mine) != 1:
+                raise InvalidInput(
+                    f"no {plugin} account; add one with `oaken admin account add`"
+                    if not mine
+                    else f"several {plugin} accounts ({', '.join(map(str, mine))}); name one"
+                    " with --account-id"
+                )
+            account = str(mine[0])
+            inp = inp.model_copy(update={"account_id": account})
+        instance = host.account_instance(plugin, account)
+        bound = getattr(instance, getattr(d.handler, "__name__", ""), None)
+        if not callable(bound):
+            raise PluginError(f"{plugin}.{d.name} is not available on account {account!r}")
+        return bound, inp
+
     async def handler(ctx: OpContext, inp: BaseModel) -> BaseModel:
         try:
-            result = await asyncio.wait_for(d.handler(pctx(ctx), inp), timeout)
+            fn, inp = await resolve(ctx, inp)
+            context = (
+                host.account_context(
+                    plugin,
+                    str(getattr(inp, "account_id", "")),
+                    ctx.caller.client,
+                    ctx.caller.actor.label or ctx.caller.actor.kind,
+                )
+                if d.per_account
+                else pctx(ctx)
+            )
+            result = await asyncio.wait_for(fn(context, inp), timeout)
             return d.output.model_validate(result)
         except OakenError:
             raise

@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from oaken.api import Api
 from oaken.core.agents import AgentRegistry
 from oaken.core.errors import OakenError
+from oaken.core.eventlog import EventLog
 from oaken.core.operations.tests.conftest import Ops, build_ops
 from oaken.core.settings import APISettings, SwarmSettings
 
@@ -75,6 +76,8 @@ async def build_rig(tmp: Path, **api_settings: Any) -> AsyncIterator[Rig]:
         ops.rig.queue.register_result("enrich", Result)
         agents = AgentRegistry(ops.rig.raw_db, ops.rig.clock, SWARM, ops.rig.bus)
         svc.agents = agents
+        svc.eventlog = EventLog(tmp / "events.jsonl", max_bytes=1_000_000, backups=1)
+        svc.eventlog.attach(ops.rig.bus)  # so events_tail has a log to read, as a real core does
         api = Api(ops.client, token=TOKEN)
         api.bind(PORT)
         api.start()

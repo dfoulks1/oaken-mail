@@ -5,6 +5,60 @@ All notable changes to Oaken are recorded here. The format follows
 [Semantic Versioning](https://semver.org/). All four distributions (`oaken`, `oaken-cli`,
 `oaken-webui`, `oaken-core`) release in lockstep at one version (ADR 0014).
 
+## [0.1.1] — Unreleased
+
+Makes a fresh install usable without reading the docs.
+
+### Added
+
+- A live welcome page at `/`, a config editor at `/config`, a jobs and pipeline console at `/jobs`,
+  an in-app getting-started page and a shared nav, all on loopback. The `/stats` page now uses the
+  same Bootstrap look. Four new operations back the editor: `config_get`, `config_validate`,
+  `config_save` and `config_reload`.
+- `oaken start` prints where the console is.
+- A commented default `config.toml` is written on first start (never over an existing file).
+- Core remembers the last `OAKEN_HOME` it ran under. If the variable is unset it uses that home
+  and logs a warning with the line to add to your shell profile.
+
+- `capabilities = [...]` in a plugin's table narrows what it may do (Gmail receive-only, for
+  example), and a plugin can ship switched off with `enabled_default = False`. `list_plugins`
+  reports both.
+- Plugin control is core's, under `oaken plugins`: `enable`, `disable`, `reload`, `config`, `check`
+  and `set` (`oaken plugins set imap port=993`). A plugin offers none of these itself. The stats
+  page's Plugins tab has an enable switch and a Reload button, and every one of these is audited.
+- `oaken plugins check` tries a plugin's settings on a throwaway instance before they are saved;
+  `oaken plugins config` and `set` read and write one `[plugins.<name>]` table, keeping the
+  comments and the rest of `config.toml` (new dependency: `tomlkit`).
+
+- `oaken settings` shows and changes core's own settings (`index`, `retrieval`, `read_state`,
+  `ui`, `sync`, `ai`, `log`) one table at a time, keeping your comments: `get`, `check` and `set`
+  (with `--unset` and `--reload`). It reports what a change needs (a reload, a rebuild-index), and
+  when an environment variable overrides a key. Operations: `get_settings`, `check_settings`,
+  `set_settings`.
+- `oaken storage` and `oaken vacuum` (`--wait` shows the sizes before and after). `vacuum` runs as a
+  job, one at a time, refuses during an index rebuild or without room on the disk.
+- `oaken cache` (stats) and `oaken cache clear [--task T]`: only derived model answers are touched.
+- `oaken events` reads a persisted event log (`events.jsonl`, `[log] events_file`, owner-only and
+  rotated); `--follow` keeps watching. `oaken audit` gains `--since`, `--cursor` and `--all`.
+- `oaken status` adds a health summary when core answers.
+
+### Changed
+
+- `oaken start` and `oaken restart` run core in the background by default; `--fg` keeps it attached
+  to the terminal (`--detach` is still accepted). `oaken stop` says what it is waiting for, gives
+  core `--grace` seconds (40 by default), then kills it and clears its runtime file; `--no-kill`
+  reports an error instead. `restart` takes the same flags.
+- A reload keeps the port core was already listening on when `[api] port` is `0`, so the stats page
+  and other clients stay put.
+- A plugin that is installed but has no `[plugins.<name>]` settings (Gmail, IMAP, SMTP) is reported
+  as "not configured" instead of logging an error.
+- `sqlite-vec` is a core dependency, so the default vector store works after a plain install.
+
+### Fixed
+
+- `test_a_fixture_with_no_matching_enricher_is_reported` read the developer's real config and a
+  running Ollama; it is now hermetic.
+
 ## [0.1.0] — 2026-10-22
 
 **First public beta.** `0.y.z` means the surfaces may still change; see

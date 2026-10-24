@@ -675,6 +675,7 @@ class JobRunner:
         workers: int | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         paused_kinds: Callable[[], Awaitable[Collection[str]]] | None = None,
+        limit_overrides: Callable[[], Awaitable[dict[str, int]]] | None = None,
     ) -> None:
         self.queue = queue
         self.workers = workers or queue.settings.workers
@@ -682,6 +683,7 @@ class JobRunner:
         # Optional: kinds the runner must not claim right now (e.g. the model-bound ingest stages
         # while the person has paused the model). Consulted once per claim cycle.
         self._paused_kinds = paused_kinds
+        self._limit_overrides = limit_overrides  # chosen at run time; they outrank config
         self._registry: dict[str, _Registration] = {}
         self._running: dict[JobId, _Running] = {}
         self._tasks: list[asyncio.Task[None]] = []
@@ -761,7 +763,10 @@ class JobRunner:
         while not self._stopping:
             self.queue.wake.clear()
             kinds = await self._claimable_kinds()
-            job = await self.queue.claim(name, kinds, self._limits()) if kinds else None
+            limits = self._limits()
+            if self._limit_overrides is not None and kinds:
+                limits = {**limits, **await self._limit_overrides()}
+            job = await self.queue.claim(name, kinds, limits) if kinds else None
             if job is None:
                 if idle_exit:
                     return

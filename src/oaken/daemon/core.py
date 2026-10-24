@@ -19,9 +19,11 @@ from oaken.core.attrs import AttrStore
 from oaken.core.clock import Clock, SystemClock
 from oaken.core.db import Database, migrate
 from oaken.core.errors import OakenError
+from oaken.core.eventlog import EventLog, event_log_path
 from oaken.core.events import EventBus
 from oaken.core.jobs import JobQueue, JobRunner
 from oaken.core.logging import get_logger
+from oaken.core.maintenance import register_maintenance_jobs
 from oaken.core.operations import CoreClient, Services
 from oaken.core.operations.builtin import agent_registry, core_registry
 from oaken.core.operations.plugin_ops import plugin_operations
@@ -111,7 +113,11 @@ class Core:
         # The durable "pause the model" switch: the runner consults it so paused stages are not
         # claimed, and the pause survives a restart.
         self.pipeline_control = PipelineControl(self.raw_db, clock, self.audit)
-        self.runner = JobRunner(self.queue, paused_kinds=self.pipeline_control.paused_kinds)
+        self.runner = JobRunner(
+            self.queue,
+            paused_kinds=self.pipeline_control.paused_kinds,
+            limit_overrides=self.pipeline_control.limits,
+        )
         self.scheduler = Scheduler(self.raw_db, self.queue, clock)
         kwargs = {} if self._discover is None else {"discover": self._discover}
         self.host = PluginHost(s, clock, bus, **kwargs)  # type: ignore[arg-type]
@@ -145,13 +151,21 @@ class Core:
             after_providers=[self.readstate.resume_pending],
         )  # fmt: skip
         self.sync.register(self.runner)
+        register_maintenance_jobs(self.runner, self.raw_db, self.index.db)
         self.agents = AgentRegistry(self.raw_db, clock, s.swarm, bus)
+        self.eventlog: EventLog | None = None
+        if s.log.events_file:  # a record of events that survives a restart (``oaken events``)
+            self.eventlog = EventLog(
+                event_log_path(s.log.events_file),
+                max_bytes=s.log.events_max_bytes,
+                backups=s.log.events_backups,
+            )
         self.services = Services(
             raw=self.raw, index=self.index, attrs=self.attrs, queue=self.queue, audit=self.audit,
             settings=s, clock=clock, bus=bus, readstate=self.readstate, pipeline=self.pipeline,
             indexer=self.indexer, usage=self.usage, sync=self.sync, plugins=self.host,
             llm=self.llm, agents=self.agents, pipeline_control=self.pipeline_control,
-            version=oaken.__version__,
+            eventlog=self.eventlog, version=oaken.__version__,
         )  # fmt: skip
         registry = core_registry()
         registry.attach_plugins(lambda: plugin_operations(self.host))
@@ -176,7 +190,9 @@ class Core:
                 )
                 self.mcp_agent = McpServer(agent_client, agents=self.agents)
                 self.api.mount(self.mcp_agent.surface, self.mcp_agent)
-        self.server = ApiServer(self.api, host=s.api.host, port=s.api.port)
+        self.server = ApiServer(
+            self.api, host=s.api.host, port=s.api.port, allow_remote=s.api.allow_remote
+        )
         self._port = 0
         self._lifecycle = Lifecycle(self._service_units(grace=s.api.shutdown_grace_seconds))
         self._open = True
@@ -189,7 +205,10 @@ class Core:
         async def start_api() -> None:
             self._port = await self.server.start()
 
-        units = [
+        units: list[ServiceUnit] = []
+        if self.eventlog is not None:  # first, so the plugins' start-up is in the record
+            units.append(unit("events", self._start_eventlog, self._stop_eventlog))
+        units += [
             unit("host", self.host.start, self._stop_host),
             unit("sync", self.sync.start, self.sync.stop),
             unit("jobs", self._start_jobs, lambda: self._stop_jobs(grace)),
@@ -198,6 +217,17 @@ class Core:
             units.append(unit("mcp", self._start_mcp, self._stop_mcp))
         units.append(unit("api", start_api, self.server.stop))
         return units
+
+    async def _start_eventlog(self) -> None:
+        if self.eventlog is not None:
+            self._detach_eventlog = self.eventlog.attach(self.bus)
+
+    async def _stop_eventlog(self) -> None:
+        detach = getattr(self, "_detach_eventlog", None)
+        if detach is not None:
+            detach()
+        if self.eventlog is not None:
+            self.eventlog.close()
 
     # -- running --------------------------------------------------------------------------
     async def start(self) -> int:
@@ -264,7 +294,6 @@ class Core:
                 await door.stop()
 
     async def _stop_host(self) -> None:
-        await self.accounts.authorizations.close()
         await self.host.stop()
 
     async def _stop_jobs(self, grace: float) -> None:

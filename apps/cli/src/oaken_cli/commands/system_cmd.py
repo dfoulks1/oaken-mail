@@ -27,21 +27,37 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
 
 async def _pipeline_dispatch(client: ApiClient, args: argparse.Namespace) -> int:
     sub = getattr(args, "subcommand", "status")
+    words = list(getattr(args, "words", []) or [])
     if sub == "pause":
-        result = await client.call("pause_backfill", {"why": args.why}, confirm=True)
+        payload: dict[str, object] = {"why": args.why}
+        if words:
+            payload["stage"] = words[0]
+        result = await client.call("pause_backfill", payload, confirm=True)
         return _emit_pause(args, result)
     if sub == "resume":
-        result = await client.call("resume_backfill", {}, confirm=True)
+        result = await client.call(
+            "resume_backfill", {"stage": words[0]} if words else {}, confirm=True
+        )
         return _emit_pause(args, result)
+    if sub == "limits":
+        if len(words) != 2 or not words[1].isdigit():
+            raise CliError("pipeline limits needs a stage and a number: embed 2", ExitCode.USAGE)
+        result = await client.call(
+            "set_pipeline_limits", {"stage": words[0], "concurrency": int(words[1])}, confirm=True
+        )
+        out = result.output if isinstance(result.output, dict) else {}
+        return emit(
+            args,
+            data=result.output,
+            text=lambda: _say(f"{out.get('stage')} now runs {out.get('concurrency')} at a time"),
+        )
     if sub == "parked":
-        payload: dict[str, object] = {}
+        payload = {}
         if args.retry:
             payload["job_id"] = args.retry
         elif args.all:
             payload["all"] = True
         else:
-            from oaken_cli.exits import CliError
-
             raise CliError("give --retry JOB_ID or --all", ExitCode.USAGE)
         result = await client.call("retry_parked", payload, confirm=True)
         out = result.output if isinstance(result.output, dict) else {}
@@ -62,9 +78,12 @@ def _emit_pause(args: argparse.Namespace, result: CallResult) -> int:
     def text() -> None:
         from oaken_cli.output import print_text
 
+        stages = out.get("paused_stages") or []
         if out.get("llm_paused"):
             reason = out.get("reason") or ""
             print_text(f"model stages paused{f' ({reason})' if reason else ''}")
+        elif stages:
+            print_text(f"paused: {', '.join(stages)}")
         else:
             print_text("model stages resumed")
 
@@ -82,6 +101,8 @@ async def _pipeline(client: ApiClient, args: argparse.Namespace) -> int:
             "running": s.get("running", 0),
             "failed": s.get("failed", 0),
             "per_second": round(float(s.get("per_second", 0.0)), 2),
+            "state": "PAUSED" if s.get("paused") else "",
+            "limit": s.get("concurrency") if s.get("concurrency") else "",
         }
         for name, s in stages.items()
     ]
@@ -89,13 +110,20 @@ async def _pipeline(client: ApiClient, args: argparse.Namespace) -> int:
     def text() -> None:
         from oaken_cli.output import print_table, print_text
 
-        print_table(rows, ["stage", "pending", "running", "failed", "per_second"], title="pipeline")
+        print_table(
+            rows,
+            ["stage", "pending", "running", "failed", "per_second", "state", "limit"],
+            title="pipeline",
+        )
         print_text(
             f"docs {out.get('docs', 0)}, chunks {out.get('chunks', 0)}, "
             f"vectors {out.get('vectors', 0)}"
             + (", backfill paused" if out.get("backfill_paused") else "")
             + (", model stages PAUSED" if out.get("llm_paused") else "")
         )
+        for name, s in stages.items():
+            for job in s.get("current", []) or []:
+                print_text(f"running {job.get('job_id')}: {name} {job.get('message_id') or ''}")
         for p in out.get("parked", []) or []:
             print_text(f"parked {p.get('job_id')}: {p.get('stage')} — {p.get('error')}")
 
@@ -206,6 +234,23 @@ def cmd_plugins(args: argparse.Namespace) -> int:
 
 
 async def _plugins(client: ApiClient, args: argparse.Namespace) -> int:
+    sub = getattr(args, "subcommand", "list")
+    if sub in ("config", "check", "set"):
+        from oaken_cli.commands.plugin_cmd import settings
+
+        return await settings(client, args)
+    if sub != "list":
+        if not args.name:
+            raise CliError(f"plugins {sub} needs a plugin name", ExitCode.USAGE)
+        changed = await client.call(f"plugin_{sub}", {"name": args.name}, confirm=True)
+
+        def said() -> None:
+            from oaken_cli.output import print_text
+
+            names = changed.output.get("changed", []) if isinstance(changed.output, dict) else []
+            print_text(f"{sub}: {', '.join(names)}")
+
+        return emit(args, data=changed.output, text=said)
     op = "plugin_health" if args.check else "list_plugins"
     result = await client.call(op, {})
     out = result.output if isinstance(result.output, dict) else {}
@@ -263,8 +308,19 @@ async def _audit(client: ApiClient, args: argparse.Namespace) -> int:
     payload: dict[str, object] = {"limit": args.limit}
     if args.op:
         payload["op"] = args.op
+    if args.since:
+        payload["since"] = args.since
+    if args.cursor:
+        payload["cursor"] = args.cursor
     result = await client.call("list_audit", payload)
     out = result.output if isinstance(result.output, dict) else {}
+    entries = list(out.get("entries", []) if isinstance(out, dict) else [])
+    next_cursor = out.get("next_cursor") if isinstance(out, dict) else None
+    while args.all and next_cursor:  # every page, one after the other
+        page = await client.call("list_audit", {**payload, "cursor": next_cursor})
+        more = page.output if isinstance(page.output, dict) else {}
+        entries += more.get("entries", [])
+        next_cursor = more.get("next_cursor")
     rows = [
         {
             "audit_id": e.get("audit_id", ""),
@@ -273,8 +329,9 @@ async def _audit(client: ApiClient, args: argparse.Namespace) -> int:
             "count": e.get("count", 0),
             "undoable": e.get("undoable", False),
         }
-        for e in (out.get("entries", []) if isinstance(out, dict) else [])
+        for e in entries
     ]
+    data = {"entries": entries, "next_cursor": next_cursor} if args.all else result.output
 
     def text() -> None:
         from oaken_cli.output import print_table, print_text
@@ -283,8 +340,15 @@ async def _audit(client: ApiClient, args: argparse.Namespace) -> int:
             print_text("no audit entries")
             return
         print_table(rows, ["audit_id", "op", "actor", "count", "undoable"], title="audit")
+        if next_cursor:
+            more = " ".join(f"--{k} {v}" for k, v in (("op", args.op), ("since", args.since)) if v)
+            print_text(
+                f"more: oaken audit {more} --limit {args.limit} --cursor {next_cursor}".replace(
+                    "  ", " "
+                )
+            )
 
-    return emit(args, data=result.output, text=text)
+    return emit(args, data=data, text=text)
 
 
 def cmd_operations(args: argparse.Namespace) -> int:
@@ -297,6 +361,7 @@ async def _operations(client: ApiClient, args: argparse.Namespace) -> int:
     rows = [
         {
             "name": o.get("name", ""),
+            "provider": o.get("plugin") or "core",
             "permission": o.get("permission", ""),
             "mcp": o.get("mcp_enabled", False),
             "summary": o.get("summary", ""),
@@ -307,7 +372,7 @@ async def _operations(client: ApiClient, args: argparse.Namespace) -> int:
     def text() -> None:
         from oaken_cli.output import print_table
 
-        print_table(rows, ["name", "permission", "mcp", "summary"], title="operations")
+        print_table(rows, ["name", "provider", "permission", "mcp", "summary"], title="operations")
 
     return emit(args, data=result.output, text=text)
 
@@ -323,6 +388,10 @@ async def _reprocess(client: ApiClient, args: argparse.Namespace) -> int:
     payload: dict[str, object] = {"stage": args.stage}
     if args.account:
         payload["account_id"] = args.account
+    if args.since:
+        payload["since"] = args.since
+    if args.limit:
+        payload["limit"] = args.limit
     result = await client.call("reprocess", payload, confirm=True)
     return _render_queued(args, result, f"reprocess {args.stage}")
 
@@ -406,3 +475,68 @@ def _render_queued(args: argparse.Namespace, result: CallResult, what: str) -> i
         print_text(f"{what} queued (job {job})" if created else f"{what} joined (job {job})")
 
     return emit(args, data=data, text=text)
+
+
+# --- config.toml through core ---------------------------------------------------------------
+
+
+def cmd_config(args: argparse.Namespace) -> int:
+    return run(lambda client: _config(client, args), args)
+
+
+def _read_candidate(args: argparse.Namespace) -> str:
+    import sys
+
+    if not args.file:
+        raise CliError(f"config {args.subcommand} needs FILE (or - for stdin)", ExitCode.USAGE)
+    if args.file == "-":
+        return sys.stdin.read()
+    try:
+        with open(args.file, encoding="utf-8") as fh:
+            return fh.read()
+    except OSError as exc:
+        raise CliError(f"cannot read {args.file}: {exc}", ExitCode.USAGE) from exc
+
+
+async def _config(client: ApiClient, args: argparse.Namespace) -> int:
+    from oaken_cli.output import print_text
+
+    sub = args.subcommand
+    if sub == "show":
+        result = await client.call("config_get", {})
+        out = result.output if isinstance(result.output, dict) else {}
+        return emit(args, data=result.output, text=lambda: print_text(str(out.get("text", ""))))
+    if sub == "reload":
+        result = await client.call("config_reload", {}, confirm=True)
+        out = result.output if isinstance(result.output, dict) else {}
+        code = emit(
+            args,
+            data=result.output,
+            text=lambda: print_text(
+                "reload requested" if out.get("ok") else f"not reloaded: {out.get('error', '')}"
+            ),
+        )
+        return code if out.get("ok") else int(ExitCode.USAGE)
+    text = _read_candidate(args)
+    if sub == "test":
+        result = await client.call("config_validate", {"text": text})
+    else:
+        result = await client.call("config_save", {"text": text}, confirm=True)
+    out = result.output if isinstance(result.output, dict) else {}
+
+    def said() -> None:
+        if out.get("ok"):
+            print_text("saved" if sub == "save" else "valid")
+            if out.get("backup"):
+                print_text(f"previous file kept as {out['backup']}")
+        else:
+            print_text(f"invalid: {out.get('error', '')}")
+
+    code = emit(args, data=result.output, text=said)
+    return code if out.get("ok") else int(ExitCode.USAGE)
+
+
+def _say(line: str) -> None:
+    from oaken_cli.output import print_text
+
+    print_text(line)

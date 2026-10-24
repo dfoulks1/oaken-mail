@@ -32,13 +32,14 @@
   <div class="offcanvas-body"><div class="sidebar-inner">
     <div class="top"><a class="brand" href="index.html"><img src="assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
       <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
-    <div class="what">From a fresh checkout to a synced mailbox and a connected AI client</div>
+    <div class="what">From install to a synced mailbox and a connected AI client</div>
     <div class="docnav"><a class="home-link" href="index.html">&#8962; Home</a>
       <div class="label">Start</div>
       <a class="doc-link" href="mcp.html">Connect an AI client</a>
       <a class="doc-link current" href="getting-started.html" aria-current="page">Set up Oaken from scratch</a>
       <a class="doc-link" href="keyring.html">Store credentials in your keyring</a>
       <a class="doc-link" href="providers/gmail.html">Connect Gmail</a>
+      <a class="doc-link" href="settings.html">Settings, storage and the event log</a>
       <a class="doc-link" href="providers/smtp.html">Send through your own SMTP server</a>
       <a class="doc-link" href="providers/imap.html">Connect any IMAP server</a>
       <div class="label">Concepts</div>
@@ -90,21 +91,24 @@
 </nav>
 <main id="content" tabindex="-1">
   <header class="cover">
-    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Pre-alpha</span></div>
+    <div class="d-flex flex-wrap gap-2 mb-3"><span class="badge text-bg-warning">Beta</span></div>
     <h1 class="display-6">Set up Oaken from scratch</h1>
     <p class="lead">This walks through a first setup on one machine: install, the config file, the local model, one mail account, the daemon, a first sync, and, if you want it, the MCP server. Each step says how to check that it worked.</p>
   </header>
-<p>Oaken is pre-alpha and is run from a source checkout. Everything below stays on your machine.</p>
+<p>Oaken is in beta. Everything below stays on your machine.</p>
 
 <section id="1-install" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>1. Install</h2></div>
 <p>You need Python 3.11 or newer and uv.</p>
-<div class="code"><pre class="highlight"><code class="language-bash">git<span class="w"> </span>clone<span class="w"> </span>https://github.com/dfoulks1/oaken-mail
-<span class="nb">cd</span><span class="w"> </span>oaken-mail
-uv<span class="w"> </span>sync
-uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>--help
+<div class="code"><pre class="highlight"><code class="language-bash">pip<span class="w"> </span>install<span class="w"> </span>oaken-core<span class="w">        </span><span class="c1"># into a virtual environment you keep for it</span>
+oaken<span class="w"> </span>--help
 </code></pre></div>
-<p>There is no global install yet, so run commands as <code>uv run oaken ...</code> from the checkout, or
-activate the virtual environment (<code>source .venv/bin/activate</code>) to type <code>oaken</code> alone.</p>
+<p>To work on Oaken itself, use a checkout instead: <code>git clone https://github.com/dfoulks1/oaken-mail</code>,
+<code>uv sync</code>, then run commands as <code>oaken ...</code> (or activate <code>.venv</code> to type <code>oaken</code> alone).
+The commands below are written as <code>oaken ...</code>. To check the install:</p>
+<!-- check -->
+<div class="code"><pre class="highlight"><code class="language-bash">oaken<span class="w"> </span>--version
+oaken<span class="w"> </span><span class="nb">help</span><span class="w"> </span>sync
+</code></pre></div>
 </section>
 <section id="2-write-configtoml" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>2. Write <code>config.toml</code></h2></div>
 <p>The file lives outside the repository, in your per-user config directory
@@ -112,12 +116,27 @@ activate the virtual environment (<code>source .venv/bin/activate</code>) to typ
 <div class="code"><pre class="highlight"><code class="language-bash">mkdir<span class="w"> </span>-p<span class="w"> </span>~/.config/oaken
 cp<span class="w"> </span>config.example.toml<span class="w"> </span>~/.config/oaken/config.toml
 </code></pre></div>
-<p>Every section has defaults, so you only keep what you change. Set <code>OAKEN_HOME=/some/dir</code> to put
-everything under one directory instead. <strong>Never put a password or token in this file</strong>; step 5
-stores them in your keyring. See <a href="keyring.html">Store credentials in your keyring</a> if you have not
-used one before.</p>
-<p>The template's <code>[plugins.gmail]</code> table is live, not commented out. If you do not use Gmail, delete
-it, or Oaken will report the Gmail provider as unhealthy for want of a client file.</p>
+<p>Every section has defaults, so you only keep what you change. <strong>Never put a password or token in
+this file</strong>; step 5 stores them in your keyring. See <a href="keyring.html">Store credentials in your keyring</a>
+if you have not used one before.</p>
+<p>You do not have to copy anything: the first time core starts it writes a <code>config.toml</code> with every
+setting shown at its default, commented out. Edit it in the console at <code>/config</code> (it tests a change
+before saving and keeps a <code>.bak</code>), or with <code>oaken config show</code>, <code>oaken config test FILE</code> and
+<code>oaken config save FILE</code>, then apply it with <code>oaken config reload</code>.</p>
+<h3 id="where-oaken-keeps-its-files">Where Oaken keeps its files</h3>
+<p>Set <code>OAKEN_HOME=/some/dir</code> to put everything (config, data, the runtime file) under one directory,
+and put the line in your shell profile so every shell agrees. If it is unset, core warns, then uses
+the last home it ran under, or the platform folders if there is none, and tells you the line to
+add. Core cannot export a variable into your shell; it remembers the home in a small pointer file
+outside the home instead.</p>
+<h3 id="plugins-that-are-not-set-up">Plugins that are not set up</h3>
+<p>A plugin that is installed but has no <code>[plugins.&lt;name&gt;]</code> table (Gmail, IMAP, SMTP) is listed as
+&quot;not configured&quot;, not as an error. To turn one off for good, set <code>enabled = false</code> in its table.
+Without restarting core: <code>oaken plugins disable gmail</code>, <code>oaken plugins enable gmail</code>, and
+<code>oaken plugins reload gmail</code> to pick up a change to its table. <code>oaken plugins config gmail</code> shows
+its settings and <code>oaken plugins set gmail page_size=200</code> changes one (your comments in <code>config.toml</code>
+are kept; reload to apply). The stats page (<code>/stats</code>, Plugins tab) has an enable switch and a Reload
+button.</p>
 </section>
 <section id="3-get-the-local-models" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>3. Get the local models</h2></div>
 <p>Oaken runs a local Ollama by default. It never pulls models itself, so
@@ -138,31 +157,32 @@ ollama<span class="w"> </span>pull<span class="w"> </span>qwen2.5:3b<span class=
 </ul>
 <p>Then register the account. On a terminal this asks for the provider, an id, a display name and the
 provider's non-secret settings:</p>
-<div class="code"><pre class="highlight"><code class="language-bash">uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>admin<span class="w"> </span>account<span class="w"> </span>add
-uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>admin<span class="w"> </span>account<span class="w"> </span>list
+<div class="code"><pre class="highlight"><code class="language-bash">oaken<span class="w"> </span>admin<span class="w"> </span>account<span class="w"> </span>add
+oaken<span class="w"> </span>admin<span class="w"> </span>account<span class="w"> </span>list
 </code></pre></div>
 <p>The account id (letters, digits, <code>-</code> and <code>_</code>) names the provider instance, <code>gmail@&lt;id&gt;</code>, and its
 keyring entry.</p>
 </section>
 <section id="5-store-the-credential" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>5. Store the credential</h2></div>
-<div class="code"><pre class="highlight"><code class="language-bash">uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>auth<span class="w"> </span>gmail<span class="w"> </span>--account<span class="w"> </span>&lt;id&gt;<span class="w">     </span><span class="c1"># opens Google's consent page</span>
-uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>auth<span class="w"> </span>imap<span class="w"> </span>--account<span class="w"> </span>&lt;id&gt;<span class="w">      </span><span class="c1"># or: asks for the password, no echo</span>
+<div class="code"><pre class="highlight"><code class="language-bash">oaken<span class="w"> </span>gmail<span class="w"> </span>auth<span class="w"> </span>--account-id<span class="w"> </span>&lt;id&gt;<span class="w">     </span><span class="c1"># opens Google's consent page and waits</span>
+oaken<span class="w"> </span>imap<span class="w"> </span>auth<span class="w"> </span>--account-id<span class="w"> </span>&lt;id&gt;<span class="w">      </span><span class="c1"># or: asks for the password, no echo</span>
 </code></pre></div>
-<p>The credential goes to the OS keyring and is never printed. Add <code>--check</code> to test one that is
-already stored.</p>
+<p>Each provider owns its own sign-in, so the command starts with the provider's name
+(<code>oaken smtp auth</code> works the same way). The credential goes to the OS keyring and is never
+printed. Add <code>--check</code> to test one that is already stored.</p>
 </section>
 <section id="6-start-the-daemon-and-check-it" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>6. Start the daemon and check it</h2></div>
-<div class="code"><pre class="highlight"><code class="language-bash">uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>start<span class="w"> </span>--detach
-uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>status<span class="w">                  </span><span class="c1"># prints the pid and the loopback port</span>
-uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>plugins<span class="w">                 </span><span class="c1"># your account's provider row should say healthy</span>
-uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>admin<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span>&lt;id&gt;<span class="w"> </span><span class="c1"># a "problem:" line says why one is not</span>
+<div class="code"><pre class="highlight"><code class="language-bash">oaken<span class="w"> </span>start<span class="w">                   </span><span class="c1"># in the background; --fg keeps it attached to this terminal</span>
+oaken<span class="w"> </span>status<span class="w">                  </span><span class="c1"># prints the pid and the loopback port</span>
+oaken<span class="w"> </span>plugins<span class="w">                 </span><span class="c1"># your account's provider row should say healthy</span>
+oaken<span class="w"> </span>admin<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span>&lt;id&gt;<span class="w"> </span><span class="c1"># a "problem:" line says why one is not</span>
 </code></pre></div>
 <p>Core serves a small API on loopback only. Its token is the file <code>api_token</code> in the config
 directory. <a href="architecture/daemon.html">The daemon and the local API</a> explains the rest.</p>
 </section>
 <section id="7-sync-and-look" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>7. Sync and look</h2></div>
-<div class="code"><pre class="highlight"><code class="language-bash">uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>sync<span class="w"> </span>--account<span class="w"> </span>&lt;id&gt;<span class="w"> </span>--wait
-uv<span class="w"> </span>run<span class="w"> </span>oaken<span class="w"> </span>search<span class="w"> </span><span class="s2">"invoice"</span>
+<div class="code"><pre class="highlight"><code class="language-bash">oaken<span class="w"> </span>sync<span class="w"> </span>--wait<span class="w">                    </span><span class="c1"># every account on every provider; or add --account &lt;id&gt;</span>
+oaken<span class="w"> </span>search<span class="w"> </span><span class="s2">"invoice"</span>
 </code></pre></div>
 <p>The first sync of a large mailbox takes a while by design. Mail is stored under your user data
 directory (<code>~/.local/share/oaken/</code> on Linux). A schedule then keeps the account current; see
@@ -203,12 +223,12 @@ separate client that proxies to core and keeps the API token on the server side.
 </tr>
 <tr>
 <td><code>core_not_running</code> from a tool call</td>
-<td>Start it with <code>oaken start --detach</code>.</td>
+<td>Start it with <code>oaken start</code>.</td>
 </tr>
 </tbody>
 </table></div>
 </section>
-  <footer>Oaken Mail 0.1.0 · Apache-2.0</footer>
+  <footer>Oaken Mail 0.1.1 · Apache-2.0</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

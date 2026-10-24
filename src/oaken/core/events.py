@@ -13,12 +13,14 @@ Two kinds of listener, with different promises:
 """
 
 import asyncio
+import dataclasses
+import json
 from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from types import TracebackType
-from typing import Self
+from typing import Any, Self
 
 from oaken.core.ids import AccountId, JobId, MessageId, uuid7
 from oaken.core.logging import get_logger
@@ -207,6 +209,17 @@ class PluginEvent(Event):
     with ``ctx.publish(...)``. ``plugin`` names the sender (the host fills it in)."""
 
     plugin: str = ""
+
+
+def event_data(event: Event) -> dict[str, Any]:
+    """The event as plain JSON data: its fields, timestamps in ISO 8601. Events hold ids and
+    numbers, never mail text; this is how both the SSE stream and the event log write one."""
+    out: dict[str, Any] = {}
+    for f in dataclasses.fields(event):
+        value = getattr(event, f.name)
+        out[f.name] = value.isoformat() if isinstance(value, datetime) else value
+    data: dict[str, Any] = json.loads(json.dumps(out, default=str))
+    return data
 
 
 Handler = Callable[[Event], Awaitable[None]]

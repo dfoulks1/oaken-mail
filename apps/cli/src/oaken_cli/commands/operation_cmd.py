@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from typing import Any
 
 from oaken_cli.client import ApiClient, CallResult
 from oaken_cli.commands.runtime import emit, run
@@ -96,9 +97,77 @@ async def _describe(client: ApiClient, args: argparse.Namespace) -> int:
 
 
 async def _call(client: ApiClient, args: argparse.Namespace) -> int:
+    from oaken_cli.schema_flags import missing_required, parse_flags, secret_fields
+
     payload = _read_input(args)
+    rest = list(getattr(args, "flags", None) or [])
+    op = next((o for o in await client.list_ops() if o.name == args.name), None)
+    if op is None and rest:
+        raise CliError(f"no such operation: {args.name}", ExitCode.USAGE)
+    if op is not None:
+        schema = dict(op.input_schema or {})
+        prog = f"oaken operation {args.name}"
+        payload.update(parse_flags(schema, rest, prog=prog, enforce_required=False))
+        if missing := missing_required(schema, payload):
+            raise CliError(f"{args.name} needs {', '.join(missing)}", ExitCode.USAGE)
+        for name in secret_fields(schema):
+            if not payload.get(name) and not payload.get("check"):
+                payload[name] = _ask_secret(args.name, name)
     result = await client.call(args.name, payload, confirm=bool(args.yes))
+    if isinstance(result.output, dict) and "state" in result.output and result.proposal is None:
+        return await _stateful(client, args, result)
     return render_result(args, result)
+
+
+def _ask_secret(operation: str, field: str) -> str:
+    """A secret field, without echo, from a terminal. Never from an argument."""
+    import getpass
+
+    if not sys.stdin.isatty():
+        raise CliError(
+            f"no terminal to ask for {field} on; pipe it with --{field.replace('_', '-')}-stdin",
+            ExitCode.USAGE,
+        )
+    value = getpass.getpass(f"{operation} {field} (not shown): ")
+    if not value:
+        raise CliError(f"no {field} given", ExitCode.USAGE)
+    return value
+
+
+async def _stateful(client: ApiClient, args: argparse.Namespace, result: CallResult) -> int:
+    """An output that says ``state`` (done, failed or pending) follows a small convention: it may
+    carry an ``open_url`` to show, and a ``poll`` operation to call until it is done or failed.
+    The client acts on that without knowing which plugin or provider it is."""
+    import asyncio
+    import time
+
+    from oaken_cli.output import print_text
+
+    out: dict[str, Any] = dict(result.output) if isinstance(result.output, dict) else {}
+    quiet = bool(getattr(args, "json", False))
+    if out.get("open_url") and not quiet:
+        print_text(f"open this address:\n{out['open_url']}")
+        if not getattr(args, "no_browser", False) and sys.stdout.isatty():
+            import webbrowser
+
+            webbrowser.open(str(out["open_url"]))
+    if out.get("state") == "pending" and out.get("poll"):
+        if not quiet:
+            print_text(str(out.get("detail") or "waiting..."))
+        deadline = time.monotonic() + float(getattr(args, "timeout", 300.0))
+        while time.monotonic() < deadline and out.get("state") == "pending":
+            await asyncio.sleep(1.0)
+            polled = await client.call(str(out["poll"]), dict(out.get("poll_input") or {}))
+            if isinstance(polled.output, dict):
+                out = {**out, **polled.output}
+        if out.get("state") == "pending":
+            out = {**out, "state": "failed", "detail": "gave up waiting"}
+
+    def text() -> None:
+        print_text(str(out.get("detail") or out.get("state")))
+
+    emit(args, data={"request_id": result.request_id, "output": out}, text=text)
+    return int(ExitCode.OK if out.get("state") == "done" else ExitCode.AUTH)
 
 
 def _read_input(args: argparse.Namespace) -> dict[str, object]:

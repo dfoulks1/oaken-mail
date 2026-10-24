@@ -39,6 +39,7 @@
       <a class="doc-link" href="../getting-started.html">Set up Oaken from scratch</a>
       <a class="doc-link" href="../keyring.html">Store credentials in your keyring</a>
       <a class="doc-link" href="../providers/gmail.html">Connect Gmail</a>
+      <a class="doc-link" href="../settings.html">Settings, storage and the event log</a>
       <a class="doc-link" href="../providers/smtp.html">Send through your own SMTP server</a>
       <a class="doc-link" href="../providers/imap.html">Connect any IMAP server</a>
       <div class="label">Concepts</div>
@@ -176,7 +177,7 @@ tokens. See <a href="../mcp.html">Connect an AI client</a>.</p>
 <td>POST</td>
 <td><code>/v1/operations/{name}</code></td>
 <td>API token</td>
-<td>Call one operation. 65 exist.</td>
+<td>Call one operation. 80 exist.</td>
 </tr>
 </tbody>
 </table></div>
@@ -205,10 +206,10 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/ask</code></td>
 </tr>
 <tr>
-<td><code>authorization_status</code></td>
+<td><code>cache_stats</code></td>
 <td>read</td>
 <td>never</td>
-<td><code>POST /v1/operations/authorization_status</code></td>
+<td><code>POST /v1/operations/cache_stats</code></td>
 </tr>
 <tr>
 <td><code>cancel_job</code></td>
@@ -217,10 +218,46 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/cancel_job</code></td>
 </tr>
 <tr>
-<td><code>check_account</code></td>
+<td><code>check_plugin_config</code></td>
 <td>read</td>
 <td>never</td>
-<td><code>POST /v1/operations/check_account</code></td>
+<td><code>POST /v1/operations/check_plugin_config</code></td>
+</tr>
+<tr>
+<td><code>check_settings</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/check_settings</code></td>
+</tr>
+<tr>
+<td><code>clear_cache</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/clear_cache</code></td>
+</tr>
+<tr>
+<td><code>config_get</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/config_get</code></td>
+</tr>
+<tr>
+<td><code>config_reload</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/config_reload</code></td>
+</tr>
+<tr>
+<td><code>config_save</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/config_save</code></td>
+</tr>
+<tr>
+<td><code>config_validate</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/config_validate</code></td>
 </tr>
 <tr>
 <td><code>create_account</code></td>
@@ -253,6 +290,12 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/enrich_message</code></td>
 </tr>
 <tr>
+<td><code>events_tail</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/events_tail</code></td>
+</tr>
+<tr>
 <td><code>get_account</code></td>
 <td>read</td>
 <td>never</td>
@@ -277,10 +320,22 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/get_message_rules</code></td>
 </tr>
 <tr>
+<td><code>get_plugin_config</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/get_plugin_config</code></td>
+</tr>
+<tr>
 <td><code>get_raw</code></td>
 <td>read</td>
 <td>never</td>
 <td><code>POST /v1/operations/get_raw</code></td>
+</tr>
+<tr>
+<td><code>get_settings</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/get_settings</code></td>
 </tr>
 <tr>
 <td><code>get_thread</code></td>
@@ -403,10 +458,28 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/pipeline_status</code></td>
 </tr>
 <tr>
+<td><code>plugin_disable</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/plugin_disable</code></td>
+</tr>
+<tr>
+<td><code>plugin_enable</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/plugin_enable</code></td>
+</tr>
+<tr>
 <td><code>plugin_health</code></td>
 <td>read</td>
 <td>on by default</td>
 <td><code>POST /v1/operations/plugin_health</code></td>
+</tr>
+<tr>
+<td><code>plugin_reload</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/plugin_reload</code></td>
 </tr>
 <tr>
 <td><code>rebuild_index</code></td>
@@ -487,12 +560,6 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/set_account_config</code></td>
 </tr>
 <tr>
-<td><code>set_account_password</code></td>
-<td>mutate</td>
-<td>never</td>
-<td><code>POST /v1/operations/set_account_password</code></td>
-</tr>
-<tr>
 <td><code>set_flagged</code></td>
 <td>mutate</td>
 <td>off until turned on</td>
@@ -511,10 +578,28 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/set_operation_exposure</code></td>
 </tr>
 <tr>
+<td><code>set_pipeline_limits</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/set_pipeline_limits</code></td>
+</tr>
+<tr>
+<td><code>set_plugin_config</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/set_plugin_config</code></td>
+</tr>
+<tr>
 <td><code>set_schedule</code></td>
 <td>mutate</td>
 <td>never</td>
 <td><code>POST /v1/operations/set_schedule</code></td>
+</tr>
+<tr>
+<td><code>set_settings</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/set_settings</code></td>
 </tr>
 <tr>
 <td><code>sieve_check</code></td>
@@ -553,16 +638,16 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/sieve_test</code></td>
 </tr>
 <tr>
-<td><code>start_authorization</code></td>
-<td>mutate</td>
-<td>never</td>
-<td><code>POST /v1/operations/start_authorization</code></td>
-</tr>
-<tr>
 <td><code>status</code></td>
 <td>read</td>
 <td>on by default</td>
 <td><code>POST /v1/operations/status</code></td>
+</tr>
+<tr>
+<td><code>storage_info</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/storage_info</code></td>
 </tr>
 <tr>
 <td><code>summarize_message</code></td>
@@ -587,6 +672,12 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td>read</td>
 <td>on by default</td>
 <td><code>POST /v1/operations/usage_summary</code></td>
+</tr>
+<tr>
+<td><code>vacuum</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/vacuum</code></td>
 </tr>
 </tbody>
 </table></div>
@@ -736,7 +827,7 @@ resume from the in-memory ring. If that id is older than the ring, or from befor
 <li>Response: <code>status</code></li>
 </ul>
 </section>
-  <footer>Oaken Mail 0.1.0 · Apache-2.0</footer>
+  <footer>Oaken Mail 0.1.1 · Apache-2.0</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

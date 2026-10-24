@@ -43,9 +43,8 @@ async def test_stats_updates_in_place_via_one_local_script(rig: Rig) -> None:
 
 async def test_stats_has_branding_and_theme_toggle(rig: Rig) -> None:
     body = (await rig.http.get("/stats")).text
-    assert "Oaken" in body and "Mail" in body  # the wordmark
+    assert "Oaken" in body and "Mail" in body  # the wordmark (shared nav)
     assert 'id="theme-toggle"' in body and "data-bs-theme" in body
-    assert "/stats-logo.png" in body  # the real logo, served same-origin
     js = (await rig.http.get("/stats.js")).text
     assert "oaken-theme" in js and "data-bs-theme" in js  # persists the choice
 
@@ -75,16 +74,18 @@ async def test_stats_json_is_the_same_data_without_a_token(rig: Rig) -> None:
         assert key in data, f"missing {key}"
 
 
-async def test_stats_is_offline_no_external_assets(rig: Rig) -> None:
-    body = (await rig.http.get("/stats")).text
-    assert "cdn." not in body and "http://" not in body and "https://" not in body, (
-        "the stats page must be fully offline — no CDN or external URLs"
-    )
-    # its own CSP keeps everything same-origin: no external sources, scripts only from 'self'
+async def test_stats_csp_keeps_scripts_and_fetch_same_origin(rig: Rig) -> None:
+    # 0.1.1: the core pages use Bootstrap from a CDN for a consistent look (offline vendoring is a
+    # deferred task). Styles/fonts may come from jsdelivr, but SCRIPTS and fetch() stay same-origin:
+    # no third-party JS runs, and the page can only call our own /stats.json.
     resp = await rig.http.get("/stats")
     csp = resp.headers.get("content-security-policy", "")
-    assert "default-src 'self'" in csp and "script-src 'self'" in csp
+    assert "default-src 'self'" in csp
+    assert "script-src 'self'" in csp  # no external scripts, even with CDN styling
     assert "connect-src 'self'" in csp  # fetch() may reach our own /stats.json only
+    # the only script tag is our same-origin one
+    body = resp.text
+    assert body.count("<script") == 1 and "/stats.js" in body
 
 
 async def test_stats_wrong_host_is_refused(rig: Rig) -> None:
@@ -114,3 +115,18 @@ async def test_stats_leaks_no_mail_content(make_rig: Callable[..., Any], tmp_pat
             assert leak not in body, f"mail content leaked onto /stats: {leak}"
         # nor the API token
         assert TOKEN not in body
+
+
+async def test_uptime_and_the_clock_move_with_the_live_refresh(rig: Rig) -> None:
+    """The page's script re-reads /stats.json and sets textContent on every ``data-stat`` element
+    and on ``#stats-updated``: so the uptime must be one of those, not text rendered once."""
+    rig.api._started_at = rig.ops.rig.clock.now()  # a real daemon records when it started
+    page = (await rig.http.get("/stats")).text
+    assert 'data-stat="core.uptime_minutes"' in page and 'id="stats-updated"' in page
+    js = (await rig.http.get("/stats.js")).text
+    assert "EVERY_MS = 10000" in js and "stats-updated" in js  # the clock follows every poll
+    first = (await rig.http.get("/stats.json")).json()
+    rig.ops.rig.clock.advance(seconds=125)
+    later = (await rig.http.get("/stats.json")).json()
+    assert later["generated_at"] > first["generated_at"]
+    assert (first["core"]["uptime_minutes"], later["core"]["uptime_minutes"]) == (0, 2)

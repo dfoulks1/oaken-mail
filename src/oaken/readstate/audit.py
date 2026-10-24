@@ -108,6 +108,41 @@ class AuditLog:
         rows = await self.db.fetchall(f"{sql} ORDER BY ts DESC, id DESC LIMIT ?", (*args, limit))
         return [AuditEntry.from_row(r) for r in rows]
 
+    async def page(
+        self,
+        limit: int = 50,
+        *,
+        op: str | None = None,
+        since: datetime | None = None,
+        cursor: str | None = None,
+    ) -> tuple[list[AuditEntry], str | None]:
+        """Rows newest first, from ``cursor`` on (the one a previous page returned), not older than
+        ``since``, of one ``op``. Returns the rows and the cursor of the next page, or ``None`` when
+        this was the last. A cursor is ``<ts>|<id>``: it names the last row seen, so a row written
+        while someone pages through never shifts what comes next."""
+        where: list[str] = []
+        args: list[Any] = []
+        if op:
+            where.append("op = ?")
+            args.append(op)
+        if since is not None:
+            where.append("ts >= ?")
+            args.append(fmt_ts(since))
+        if cursor:
+            ts, _, row_id = cursor.partition("|")
+            if not ts or not row_id:
+                raise ValueError("that is not a cursor from this log")
+            where.append("(ts < ? OR (ts = ? AND id < ?))")
+            args += [ts, ts, row_id]
+        clause = f" WHERE {' AND '.join(where)}" if where else ""
+        rows = await self.db.fetchall(
+            f"SELECT * FROM audit_log{clause} ORDER BY ts DESC, id DESC LIMIT ?",  # noqa: S608
+            (*args, limit + 1),
+        )
+        entries = [AuditEntry.from_row(r) for r in rows[:limit]]
+        more = len(rows) > limit
+        return entries, (f"{rows[limit - 1]['ts']}|{rows[limit - 1]['id']}" if more else None)
+
     async def mark_undone(self, audit_ids: Sequence[str], by: str) -> None:
         async with self.db.transaction() as tx:
             await tx.executemany(

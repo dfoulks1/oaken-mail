@@ -277,39 +277,79 @@
     "permission": "read",
     "streaming": false
   },
-  "authorization_status": {
+  "cache_stats": {
     "input_schema": {
-      "properties": {
-        "account_id": {
-          "title": "Account Id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "account_id"
-      ],
-      "title": "AccountRef",
+      "properties": {},
+      "title": "Empty",
       "type": "object"
     },
     "marks_read": false,
     "mcp": "never",
     "output_schema": {
       "properties": {
-        "detail": {
-          "default": "",
-          "title": "Detail",
-          "type": "string"
+        "by_task": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "By Task",
+          "type": "object"
         },
-        "state": {
-          "description": "none, pending, done or failed.",
-          "title": "State",
-          "type": "string"
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "entries": {
+          "title": "Entries",
+          "type": "integer"
+        },
+        "hit_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hit Rate"
+        },
+        "hits": {
+          "title": "Hits",
+          "type": "integer"
+        },
+        "misses": {
+          "title": "Misses",
+          "type": "integer"
+        },
+        "oldest": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Oldest"
+        },
+        "prompt_versions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Prompt Versions",
+          "type": "array"
         }
       },
       "required": [
-        "state"
+        "entries",
+        "bytes",
+        "hits",
+        "misses"
       ],
-      "title": "AuthorizationStatus",
+      "title": "CacheStats",
       "type": "object"
     },
     "permission": "read",
@@ -352,28 +392,433 @@
     "permission": "mutate",
     "streaming": false
   },
-  "check_account": {
+  "check_plugin_config": {
     "input_schema": {
+      "description": "A change to one plugin's settings, as ``check`` tries it and ``set`` saves it. With nothing\nbut ``plugin`` it is no change at all: the saved settings.",
       "properties": {
-        "account_id": {
-          "title": "Account Id",
+        "config": {
+          "additionalProperties": true,
+          "title": "Config",
+          "type": "object"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        },
+        "plugin": {
+          "title": "Plugin",
           "type": "string"
+        },
+        "replace": {
+          "default": false,
+          "title": "Replace",
+          "type": "boolean"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        },
+        "unset": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unset",
+          "type": "array"
         }
       },
       "required": [
-        "account_id"
+        "plugin"
       ],
-      "title": "AccountRef",
+      "title": "PluginConfigCandidate",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "ProbeResult": {
+          "properties": {
+            "detail": {
+              "default": "",
+              "title": "Detail",
+              "type": "string"
+            },
+            "kind": {
+              "title": "Kind",
+              "type": "string"
+            },
+            "ok": {
+              "title": "Ok",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "ok"
+          ],
+          "title": "ProbeResult",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "probes": {
+          "items": {
+            "$ref": "#/$defs/ProbeResult"
+          },
+          "title": "Probes",
+          "type": "array"
+        },
+        "problems": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Problems",
+          "type": "array"
+        }
+      },
+      "required": [
+        "ok"
+      ],
+      "title": "PluginConfigCheck",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
+  "check_settings": {
+    "input_schema": {
+      "properties": {
+        "section": {
+          "title": "Section",
+          "type": "string"
+        },
+        "unset": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unset",
+          "type": "array"
+        },
+        "values": {
+          "additionalProperties": true,
+          "title": "Values",
+          "type": "object"
+        }
+      },
+      "required": [
+        "section"
+      ],
+      "title": "SettingsChange",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "FieldError": {
+          "properties": {
+            "key": {
+              "title": "Key",
+              "type": "string"
+            },
+            "message": {
+              "title": "Message",
+              "type": "string"
+            }
+          },
+          "required": [
+            "key",
+            "message"
+          ],
+          "title": "FieldError",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "changed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Changed",
+          "type": "array"
+        },
+        "env_overridden": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Env Overridden",
+          "type": "array"
+        },
+        "errors": {
+          "items": {
+            "$ref": "#/$defs/FieldError"
+          },
+          "title": "Errors",
+          "type": "array"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "reindex_needed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reindex Needed",
+          "type": "array"
+        },
+        "reload_needed": {
+          "default": false,
+          "title": "Reload Needed",
+          "type": "boolean"
+        },
+        "restart_needed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Restart Needed",
+          "type": "array"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "ok"
+      ],
+      "title": "SettingsCheck",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
+  "clear_cache": {
+    "input_schema": {
+      "properties": {
+        "task": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task"
+        }
+      },
+      "title": "ClearCacheInput",
       "type": "object"
     },
     "marks_read": false,
     "mcp": "never",
     "output_schema": {
       "properties": {
-        "detail": {
-          "default": "",
-          "title": "Detail",
+        "deleted": {
+          "title": "Deleted",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "deleted"
+      ],
+      "title": "ClearCacheOutput",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "config_get": {
+    "input_schema": {
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "description": "The raw ``config.toml`` text. Non-secret: tokens live in the OS keyring, never here.",
+      "properties": {
+        "exists": {
+          "title": "Exists",
+          "type": "boolean"
+        },
+        "path": {
+          "title": "Path",
           "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "text",
+        "exists"
+      ],
+      "title": "ConfigText",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
+  "config_reload": {
+    "input_schema": {
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "requested": {
+          "title": "Requested",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ok",
+        "requested"
+      ],
+      "title": "ReloadResult",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "config_save": {
+    "input_schema": {
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "ConfigCandidate",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "backup": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Backup"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ok",
+        "path"
+      ],
+      "title": "SaveResult",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "config_validate": {
+    "input_schema": {
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "ConfigCandidate",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
         },
         "ok": {
           "title": "Ok",
@@ -383,7 +828,7 @@
       "required": [
         "ok"
       ],
-      "title": "CheckOutput",
+      "title": "ValidationResult",
       "type": "object"
     },
     "permission": "read",
@@ -813,6 +1258,96 @@
       "type": "object"
     },
     "permission": "mutate",
+    "streaming": false
+  },
+  "events_tail": {
+    "input_schema": {
+      "properties": {
+        "kinds": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kinds"
+        },
+        "limit": {
+          "default": 100,
+          "maximum": 1000,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "since": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Since"
+        }
+      },
+      "title": "EventsInput",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "EventRow": {
+          "properties": {
+            "data": {
+              "additionalProperties": true,
+              "title": "Data",
+              "type": "object"
+            },
+            "kind": {
+              "title": "Kind",
+              "type": "string"
+            },
+            "ts": {
+              "format": "date-time",
+              "title": "Ts",
+              "type": "string"
+            }
+          },
+          "required": [
+            "ts",
+            "kind",
+            "data"
+          ],
+          "title": "EventRow",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "events": {
+          "items": {
+            "$ref": "#/$defs/EventRow"
+          },
+          "title": "Events",
+          "type": "array"
+        }
+      },
+      "required": [
+        "events"
+      ],
+      "title": "EventsOutput",
+      "type": "object"
+    },
+    "permission": "read",
     "streaming": false
   },
   "get_account": {
@@ -1314,6 +1849,72 @@
     "permission": "read",
     "streaming": false
   },
+  "get_plugin_config": {
+    "input_schema": {
+      "properties": {
+        "plugin": {
+          "title": "Plugin",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plugin"
+      ],
+      "title": "PluginName",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "config": {
+          "additionalProperties": true,
+          "title": "Config",
+          "type": "object"
+        },
+        "config_example": {
+          "default": "",
+          "title": "Config Example",
+          "type": "string"
+        },
+        "config_schema": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Config Schema"
+        },
+        "exists": {
+          "title": "Exists",
+          "type": "boolean"
+        },
+        "plugin": {
+          "title": "Plugin",
+          "type": "string"
+        },
+        "text": {
+          "default": "",
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plugin",
+        "exists",
+        "config"
+      ],
+      "title": "PluginConfig",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
   "get_raw": {
     "input_schema": {
       "properties": {
@@ -1378,6 +1979,152 @@
         "headers"
       ],
       "title": "GetRawOutput",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
+  "get_settings": {
+    "input_schema": {
+      "properties": {
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        }
+      },
+      "title": "GetSettingsInput",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "SectionOut": {
+          "properties": {
+            "section": {
+              "title": "Section",
+              "type": "string"
+            },
+            "settings": {
+              "items": {
+                "$ref": "#/$defs/SettingInfo"
+              },
+              "title": "Settings",
+              "type": "array"
+            },
+            "summary": {
+              "title": "Summary",
+              "type": "string"
+            },
+            "table": {
+              "title": "Table",
+              "type": "string"
+            }
+          },
+          "required": [
+            "section",
+            "table",
+            "summary",
+            "settings"
+          ],
+          "title": "SectionOut",
+          "type": "object"
+        },
+        "SettingInfo": {
+          "properties": {
+            "default": {
+              "title": "Default"
+            },
+            "description": {
+              "default": "",
+              "title": "Description",
+              "type": "string"
+            },
+            "editable": {
+              "title": "Editable",
+              "type": "boolean"
+            },
+            "effect": {
+              "enum": [
+                "reload",
+                "reindex",
+                "restart"
+              ],
+              "title": "Effect",
+              "type": "string"
+            },
+            "env_var": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Env Var"
+            },
+            "json_schema": {
+              "additionalProperties": true,
+              "title": "Json Schema",
+              "type": "object"
+            },
+            "key": {
+              "title": "Key",
+              "type": "string"
+            },
+            "note": {
+              "default": "",
+              "title": "Note",
+              "type": "string"
+            },
+            "source": {
+              "enum": [
+                "default",
+                "file",
+                "env"
+              ],
+              "title": "Source",
+              "type": "string"
+            },
+            "value": {
+              "title": "Value"
+            }
+          },
+          "required": [
+            "key",
+            "value",
+            "default",
+            "source",
+            "editable",
+            "effect"
+          ],
+          "title": "SettingInfo",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/SectionOut"
+          },
+          "title": "Sections",
+          "type": "array"
+        }
+      },
+      "required": [
+        "sections"
+      ],
+      "title": "GetSettingsOutput",
       "type": "object"
     },
     "permission": "read",
@@ -1803,6 +2550,18 @@
   "list_audit": {
     "input_schema": {
       "properties": {
+        "cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cursor"
+        },
         "limit": {
           "default": 50,
           "maximum": 500,
@@ -1821,6 +2580,19 @@
           ],
           "default": null,
           "title": "Op"
+        },
+        "since": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Since"
         }
       },
       "title": "AuditInput",
@@ -1904,6 +2676,18 @@
           },
           "title": "Entries",
           "type": "array"
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Next Cursor"
         }
       },
       "required": [
@@ -2746,12 +3530,37 @@
       "$defs": {
         "PluginInfoOut": {
           "properties": {
+            "account_defaults": {
+              "additionalProperties": true,
+              "title": "Account Defaults",
+              "type": "object"
+            },
+            "allowed_capabilities": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Allowed Capabilities"
+            },
             "capabilities": {
               "items": {
                 "type": "string"
               },
               "title": "Capabilities",
               "type": "array"
+            },
+            "config_example": {
+              "default": "",
+              "title": "Config Example",
+              "type": "string"
             },
             "config_schema": {
               "anyOf": [
@@ -2766,10 +3575,27 @@
               "default": null,
               "title": "Config Schema"
             },
+            "declared_capabilities": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Declared Capabilities",
+              "type": "array"
+            },
             "detail": {
               "default": "",
               "title": "Detail",
               "type": "string"
+            },
+            "enabled": {
+              "default": true,
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "enabled_default": {
+              "default": true,
+              "title": "Enabled Default",
+              "type": "boolean"
             },
             "healthy": {
               "title": "Healthy",
@@ -2789,6 +3615,11 @@
               },
               "title": "Operations",
               "type": "array"
+            },
+            "setup_help": {
+              "default": "",
+              "title": "Setup Help",
+              "type": "string"
             },
             "started": {
               "title": "Started",
@@ -3421,6 +4252,23 @@
   "pause_backfill": {
     "input_schema": {
       "properties": {
+        "stage": {
+          "anyOf": [
+            {
+              "enum": [
+                "embed",
+                "enrich"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "One stage; omit to pause every model-bound stage.",
+          "title": "Stage"
+        },
         "why": {
           "default": "",
           "description": "A note recorded with the pause.",
@@ -3439,6 +4287,13 @@
         "llm_paused": {
           "title": "Llm Paused",
           "type": "boolean"
+        },
+        "paused_stages": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Paused Stages",
+          "type": "array"
         },
         "reason": {
           "default": "",
@@ -3670,8 +4525,64 @@
           "title": "ParkedOut",
           "type": "object"
         },
+        "RunningJobOut": {
+          "properties": {
+            "job_id": {
+              "title": "Job Id",
+              "type": "string"
+            },
+            "message_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Message Id"
+            },
+            "started_at": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Started At"
+            }
+          },
+          "required": [
+            "job_id"
+          ],
+          "title": "RunningJobOut",
+          "type": "object"
+        },
         "StageOut": {
           "properties": {
+            "concurrency": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Concurrency"
+            },
+            "current": {
+              "items": {
+                "$ref": "#/$defs/RunningJobOut"
+              },
+              "title": "Current",
+              "type": "array"
+            },
             "eta_seconds": {
               "anyOf": [
                 {
@@ -3700,6 +4611,11 @@
               ],
               "default": null,
               "title": "Oldest Pending Seconds"
+            },
+            "paused": {
+              "default": false,
+              "title": "Paused",
+              "type": "boolean"
             },
             "pending": {
               "default": 0,
@@ -3815,6 +4731,322 @@
     "permission": "read",
     "streaming": false
   },
+  "plugin_disable": {
+    "input_schema": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "PluginName",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "PluginInfoOut": {
+          "properties": {
+            "account_defaults": {
+              "additionalProperties": true,
+              "title": "Account Defaults",
+              "type": "object"
+            },
+            "allowed_capabilities": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Allowed Capabilities"
+            },
+            "capabilities": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Capabilities",
+              "type": "array"
+            },
+            "config_example": {
+              "default": "",
+              "title": "Config Example",
+              "type": "string"
+            },
+            "config_schema": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Config Schema"
+            },
+            "declared_capabilities": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Declared Capabilities",
+              "type": "array"
+            },
+            "detail": {
+              "default": "",
+              "title": "Detail",
+              "type": "string"
+            },
+            "enabled": {
+              "default": true,
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "enabled_default": {
+              "default": true,
+              "title": "Enabled Default",
+              "type": "boolean"
+            },
+            "healthy": {
+              "title": "Healthy",
+              "type": "boolean"
+            },
+            "kind": {
+              "title": "Kind",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "operations": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Operations",
+              "type": "array"
+            },
+            "setup_help": {
+              "default": "",
+              "title": "Setup Help",
+              "type": "string"
+            },
+            "started": {
+              "title": "Started",
+              "type": "boolean"
+            },
+            "version": {
+              "title": "Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "kind",
+            "version",
+            "capabilities",
+            "started",
+            "healthy"
+          ],
+          "title": "PluginInfoOut",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "changed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Changed",
+          "type": "array"
+        },
+        "plugins": {
+          "items": {
+            "$ref": "#/$defs/PluginInfoOut"
+          },
+          "title": "Plugins",
+          "type": "array"
+        }
+      },
+      "required": [
+        "changed",
+        "plugins"
+      ],
+      "title": "PluginChange",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "plugin_enable": {
+    "input_schema": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "PluginName",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "PluginInfoOut": {
+          "properties": {
+            "account_defaults": {
+              "additionalProperties": true,
+              "title": "Account Defaults",
+              "type": "object"
+            },
+            "allowed_capabilities": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Allowed Capabilities"
+            },
+            "capabilities": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Capabilities",
+              "type": "array"
+            },
+            "config_example": {
+              "default": "",
+              "title": "Config Example",
+              "type": "string"
+            },
+            "config_schema": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Config Schema"
+            },
+            "declared_capabilities": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Declared Capabilities",
+              "type": "array"
+            },
+            "detail": {
+              "default": "",
+              "title": "Detail",
+              "type": "string"
+            },
+            "enabled": {
+              "default": true,
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "enabled_default": {
+              "default": true,
+              "title": "Enabled Default",
+              "type": "boolean"
+            },
+            "healthy": {
+              "title": "Healthy",
+              "type": "boolean"
+            },
+            "kind": {
+              "title": "Kind",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "operations": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Operations",
+              "type": "array"
+            },
+            "setup_help": {
+              "default": "",
+              "title": "Setup Help",
+              "type": "string"
+            },
+            "started": {
+              "title": "Started",
+              "type": "boolean"
+            },
+            "version": {
+              "title": "Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "kind",
+            "version",
+            "capabilities",
+            "started",
+            "healthy"
+          ],
+          "title": "PluginInfoOut",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "changed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Changed",
+          "type": "array"
+        },
+        "plugins": {
+          "items": {
+            "$ref": "#/$defs/PluginInfoOut"
+          },
+          "title": "Plugins",
+          "type": "array"
+        }
+      },
+      "required": [
+        "changed",
+        "plugins"
+      ],
+      "title": "PluginChange",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
   "plugin_health": {
     "input_schema": {
       "properties": {
@@ -3840,12 +5072,37 @@
       "$defs": {
         "PluginInfoOut": {
           "properties": {
+            "account_defaults": {
+              "additionalProperties": true,
+              "title": "Account Defaults",
+              "type": "object"
+            },
+            "allowed_capabilities": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Allowed Capabilities"
+            },
             "capabilities": {
               "items": {
                 "type": "string"
               },
               "title": "Capabilities",
               "type": "array"
+            },
+            "config_example": {
+              "default": "",
+              "title": "Config Example",
+              "type": "string"
             },
             "config_schema": {
               "anyOf": [
@@ -3860,10 +5117,27 @@
               "default": null,
               "title": "Config Schema"
             },
+            "declared_capabilities": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Declared Capabilities",
+              "type": "array"
+            },
             "detail": {
               "default": "",
               "title": "Detail",
               "type": "string"
+            },
+            "enabled": {
+              "default": true,
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "enabled_default": {
+              "default": true,
+              "title": "Enabled Default",
+              "type": "boolean"
             },
             "healthy": {
               "title": "Healthy",
@@ -3883,6 +5157,11 @@
               },
               "title": "Operations",
               "type": "array"
+            },
+            "setup_help": {
+              "default": "",
+              "title": "Setup Help",
+              "type": "string"
             },
             "started": {
               "title": "Started",
@@ -3921,6 +5200,164 @@
       "type": "object"
     },
     "permission": "read",
+    "streaming": false
+  },
+  "plugin_reload": {
+    "input_schema": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "PluginName",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "PluginInfoOut": {
+          "properties": {
+            "account_defaults": {
+              "additionalProperties": true,
+              "title": "Account Defaults",
+              "type": "object"
+            },
+            "allowed_capabilities": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Allowed Capabilities"
+            },
+            "capabilities": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Capabilities",
+              "type": "array"
+            },
+            "config_example": {
+              "default": "",
+              "title": "Config Example",
+              "type": "string"
+            },
+            "config_schema": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Config Schema"
+            },
+            "declared_capabilities": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Declared Capabilities",
+              "type": "array"
+            },
+            "detail": {
+              "default": "",
+              "title": "Detail",
+              "type": "string"
+            },
+            "enabled": {
+              "default": true,
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "enabled_default": {
+              "default": true,
+              "title": "Enabled Default",
+              "type": "boolean"
+            },
+            "healthy": {
+              "title": "Healthy",
+              "type": "boolean"
+            },
+            "kind": {
+              "title": "Kind",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "operations": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Operations",
+              "type": "array"
+            },
+            "setup_help": {
+              "default": "",
+              "title": "Setup Help",
+              "type": "string"
+            },
+            "started": {
+              "title": "Started",
+              "type": "boolean"
+            },
+            "version": {
+              "title": "Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "kind",
+            "version",
+            "capabilities",
+            "started",
+            "healthy"
+          ],
+          "title": "PluginInfoOut",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "changed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Changed",
+          "type": "array"
+        },
+        "plugins": {
+          "items": {
+            "$ref": "#/$defs/PluginInfoOut"
+          },
+          "title": "Plugins",
+          "type": "array"
+        }
+      },
+      "required": [
+        "changed",
+        "plugins"
+      ],
+      "title": "PluginChange",
+      "type": "object"
+    },
+    "permission": "mutate",
     "streaming": false
   },
   "rebuild_index": {
@@ -4072,6 +5509,34 @@
           "default": null,
           "title": "Account Id"
         },
+        "limit": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "embed and enrich only: just the newest N messages.",
+          "title": "Limit"
+        },
+        "since": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "embed and enrich only: mail dated on or after this day (YYYY-MM-DD).",
+          "title": "Since"
+        },
         "stage": {
           "enum": [
             "parse",
@@ -4114,8 +5579,26 @@
   },
   "resume_backfill": {
     "input_schema": {
-      "properties": {},
-      "title": "Empty",
+      "properties": {
+        "stage": {
+          "anyOf": [
+            {
+              "enum": [
+                "embed",
+                "enrich"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "One stage; omit to resume every model-bound stage.",
+          "title": "Stage"
+        }
+      },
+      "title": "ResumeBackfillInput",
       "type": "object"
     },
     "marks_read": false,
@@ -4125,6 +5608,13 @@
         "llm_paused": {
           "title": "Llm Paused",
           "type": "boolean"
+        },
+        "paused_stages": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Paused Stages",
+          "type": "array"
         },
         "reason": {
           "default": "",
@@ -5489,47 +6979,6 @@
     "permission": "mutate",
     "streaming": false
   },
-  "set_account_password": {
-    "input_schema": {
-      "properties": {
-        "account_id": {
-          "title": "Account Id",
-          "type": "string"
-        },
-        "password": {
-          "format": "password",
-          "maxLength": 1024,
-          "minLength": 1,
-          "title": "Password",
-          "type": "string",
-          "writeOnly": true
-        }
-      },
-      "required": [
-        "account_id",
-        "password"
-      ],
-      "title": "PasswordInput",
-      "type": "object"
-    },
-    "marks_read": false,
-    "mcp": "never",
-    "output_schema": {
-      "properties": {
-        "stored": {
-          "title": "Stored",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "stored"
-      ],
-      "title": "PasswordOutput",
-      "type": "object"
-    },
-    "permission": "mutate",
-    "streaming": false
-  },
   "set_flagged": {
     "input_schema": {
       "properties": {
@@ -5830,6 +7279,158 @@
     "permission": "mutate",
     "streaming": false
   },
+  "set_pipeline_limits": {
+    "input_schema": {
+      "properties": {
+        "concurrency": {
+          "description": "How many of its jobs may run at once.",
+          "maximum": 64,
+          "minimum": 1,
+          "title": "Concurrency",
+          "type": "integer"
+        },
+        "stage": {
+          "enum": [
+            "embed",
+            "enrich"
+          ],
+          "title": "Stage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stage",
+        "concurrency"
+      ],
+      "title": "PipelineLimitInput",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "concurrency": {
+          "title": "Concurrency",
+          "type": "integer"
+        },
+        "stage": {
+          "title": "Stage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stage",
+        "concurrency"
+      ],
+      "title": "PipelineLimitOutput",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "set_plugin_config": {
+    "input_schema": {
+      "description": "A change to one plugin's settings, as ``check`` tries it and ``set`` saves it. With nothing\nbut ``plugin`` it is no change at all: the saved settings.",
+      "properties": {
+        "config": {
+          "additionalProperties": true,
+          "title": "Config",
+          "type": "object"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        },
+        "plugin": {
+          "title": "Plugin",
+          "type": "string"
+        },
+        "replace": {
+          "default": false,
+          "title": "Replace",
+          "type": "boolean"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        },
+        "unset": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unset",
+          "type": "array"
+        }
+      },
+      "required": [
+        "plugin"
+      ],
+      "title": "PluginConfigCandidate",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "backup": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Backup"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ok",
+        "path"
+      ],
+      "title": "SaveResult",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
   "set_schedule": {
     "input_schema": {
       "properties": {
@@ -6024,6 +7625,146 @@
         "schedule"
       ],
       "title": "ScheduleOutput",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "set_settings": {
+    "input_schema": {
+      "properties": {
+        "section": {
+          "title": "Section",
+          "type": "string"
+        },
+        "unset": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unset",
+          "type": "array"
+        },
+        "values": {
+          "additionalProperties": true,
+          "title": "Values",
+          "type": "object"
+        }
+      },
+      "required": [
+        "section"
+      ],
+      "title": "SettingsChange",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "FieldError": {
+          "properties": {
+            "key": {
+              "title": "Key",
+              "type": "string"
+            },
+            "message": {
+              "title": "Message",
+              "type": "string"
+            }
+          },
+          "required": [
+            "key",
+            "message"
+          ],
+          "title": "FieldError",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "backup": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Backup"
+        },
+        "changed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Changed",
+          "type": "array"
+        },
+        "env_overridden": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Env Overridden",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "errors": {
+          "items": {
+            "$ref": "#/$defs/FieldError"
+          },
+          "title": "Errors",
+          "type": "array"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "path": {
+          "default": "",
+          "title": "Path",
+          "type": "string"
+        },
+        "reindex_needed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reindex Needed",
+          "type": "array"
+        },
+        "reload_needed": {
+          "default": false,
+          "title": "Reload Needed",
+          "type": "boolean"
+        },
+        "restart_needed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Restart Needed",
+          "type": "array"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "ok"
+      ],
+      "title": "SettingsSaved",
       "type": "object"
     },
     "permission": "mutate",
@@ -6581,39 +8322,6 @@
     "permission": "read",
     "streaming": false
   },
-  "start_authorization": {
-    "input_schema": {
-      "properties": {
-        "account_id": {
-          "title": "Account Id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "account_id"
-      ],
-      "title": "AccountRef",
-      "type": "object"
-    },
-    "marks_read": false,
-    "mcp": "never",
-    "output_schema": {
-      "properties": {
-        "url": {
-          "description": "Open this in a browser; core waits for the redirect back.",
-          "title": "Url",
-          "type": "string"
-        }
-      },
-      "required": [
-        "url"
-      ],
-      "title": "AuthorizationStart",
-      "type": "object"
-    },
-    "permission": "mutate",
-    "streaming": false
-  },
   "status": {
     "input_schema": {
       "properties": {},
@@ -6713,6 +8421,77 @@
         "index_stale"
       ],
       "title": "StatusOutput",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
+  "storage_info": {
+    "input_schema": {
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "data_dir": {
+          "title": "Data Dir",
+          "type": "string"
+        },
+        "index_db": {
+          "title": "Index Db",
+          "type": "string"
+        },
+        "index_db_bytes": {
+          "title": "Index Db Bytes",
+          "type": "integer"
+        },
+        "quarantine_bytes": {
+          "default": 0,
+          "title": "Quarantine Bytes",
+          "type": "integer"
+        },
+        "quarantine_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quarantine Dir"
+        },
+        "quarantined_files": {
+          "default": 0,
+          "title": "Quarantined Files",
+          "type": "integer"
+        },
+        "raw_db": {
+          "title": "Raw Db",
+          "type": "string"
+        },
+        "raw_db_bytes": {
+          "title": "Raw Db Bytes",
+          "type": "integer"
+        },
+        "wal_bytes": {
+          "title": "Wal Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "data_dir",
+        "raw_db",
+        "raw_db_bytes",
+        "index_db",
+        "index_db_bytes",
+        "wal_bytes"
+      ],
+      "title": "StorageInfo",
       "type": "object"
     },
     "permission": "read",
@@ -6822,6 +8601,7 @@
     "input_schema": {
       "properties": {
         "account_id": {
+          "default": "",
           "title": "Account Id",
           "type": "string"
         },
@@ -6831,15 +8611,56 @@
           "type": "string"
         }
       },
-      "required": [
-        "account_id"
-      ],
       "title": "SyncNowInput",
       "type": "object"
     },
     "marks_read": false,
     "mcp": "on",
     "output_schema": {
+      "$defs": {
+        "QueuedSync": {
+          "properties": {
+            "account_id": {
+              "title": "Account Id",
+              "type": "string"
+            },
+            "created": {
+              "title": "Created",
+              "type": "boolean"
+            },
+            "job_id": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "account_id",
+            "job_id",
+            "created"
+          ],
+          "title": "QueuedSync",
+          "type": "object"
+        },
+        "SkippedSync": {
+          "properties": {
+            "account_id": {
+              "title": "Account Id",
+              "type": "string"
+            },
+            "reason": {
+              "title": "Reason",
+              "type": "string"
+            }
+          },
+          "required": [
+            "account_id",
+            "reason"
+          ],
+          "title": "SkippedSync",
+          "type": "object"
+        }
+      },
+      "description": "``job_id`` and ``created`` are the one account's job. For every account they are empty and\nfalse, and ``jobs`` lists what was queued, ``skipped`` what could not be (and why).",
       "properties": {
         "created": {
           "title": "Created",
@@ -6848,13 +8669,27 @@
         "job_id": {
           "title": "Job Id",
           "type": "string"
+        },
+        "jobs": {
+          "items": {
+            "$ref": "#/$defs/QueuedSync"
+          },
+          "title": "Jobs",
+          "type": "array"
+        },
+        "skipped": {
+          "items": {
+            "$ref": "#/$defs/SkippedSync"
+          },
+          "title": "Skipped",
+          "type": "array"
         }
       },
       "required": [
         "job_id",
         "created"
       ],
-      "title": "QueuedOutput",
+      "title": "SyncNowOutput",
       "type": "object"
     },
     "permission": "mutate",
@@ -7053,5 +8888,34 @@
     },
     "permission": "read",
     "streaming": false
+  },
+  "vacuum": {
+    "input_schema": {
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "created": {
+          "title": "Created",
+          "type": "boolean"
+        },
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "created"
+      ],
+      "title": "QueuedOutput",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": true
   }
 }

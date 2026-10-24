@@ -19,6 +19,10 @@ def cmd_status(args: argparse.Namespace) -> int:
     info = daemon.status(
         url=getattr(args, "url", None), token_file=getattr(args, "token_file", None)
     )
+    if info.get("running") and not info.get("starting"):
+        summary = _summary(args)
+        if summary is not None:
+            info = {**info, "summary": summary}
 
     def text() -> None:
         from oaken_cli.output import print_text
@@ -31,11 +35,55 @@ def cmd_status(args: argparse.Namespace) -> int:
             version = f" {info['version']}" if info.get("version") else ""
             pid = f", pid {info['pid']}" if info.get("pid") else ""
             print_text(f"core{version} is running at {info.get('url', '')}{pid}")
+            for line in _summary_lines(info.get("summary")):
+                print_text(line)
 
     emit(args, data=info, text=text)
     # Exit 0 whether up or down: ``status`` answers a question, it does not fail because core is
     # down. (``--json`` scripts read the ``running`` field.)
     return int(ExitCode.OK)
+
+
+def _summary(args: argparse.Namespace) -> dict[str, Any] | None:
+    """Core's own health summary (the ``status`` operation), or ``None`` if it cannot be had: a
+    status question never fails because the summary was out of reach."""
+    from oaken_cli.commands.runtime import run
+
+    box: list[dict[str, Any]] = []
+
+    async def fetch(client: Any) -> int:
+        result = await client.call("status", {})
+        if isinstance(result.output, dict):
+            box.append(dict(result.output))
+        return int(ExitCode.OK)
+
+    try:
+        run(fetch, args)
+    except Exception:  # noqa: BLE001 - any failure here just means no summary
+        return None
+    return box[0] if box else None
+
+
+def _summary_lines(summary: Any) -> list[str]:
+    if not isinstance(summary, dict):
+        return []
+    plural = "" if summary["accounts"] == 1 else "s"
+    parts = [
+        f"{summary['accounts']} account{plural}",
+        f"{summary['messages']:,} messages ({summary['indexed']:,} indexed)",
+    ]
+    if summary.get("queue_depth") is not None:
+        parts.append(f"queue {summary['queue_depth']}")
+    if summary.get("plugins_total") is not None:
+        parts.append(f"plugins {summary['plugins_healthy']}/{summary['plugins_total']} healthy")
+    lines = ["  " + " · ".join(parts)]
+    if summary.get("index_stale"):
+        lines.append("  the search index is out of date: run `oaken rebuild-index`")
+    if summary.get("schedules_paused"):
+        lines.append(f"  {summary['schedules_paused']} sync schedule(s) paused")
+    if summary.get("schedules_failing"):
+        lines.append(f"  {summary['schedules_failing']} sync schedule(s) failing: `oaken schedule`")
+    return lines
 
 
 def _started(args: argparse.Namespace, info: dict[str, Any] | None, verb: str) -> int:
@@ -46,33 +94,53 @@ def _started(args: argparse.Namespace, info: dict[str, Any] | None, verb: str) -
     def text() -> None:
         from oaken_cli.output import print_text
 
-        print_text(f"core {verb}: {data['url']} (pid {info['pid']})")
+        url = data["url"]
+        print_text(f"🌳 Oaken Mail {verb}: {url} (pid {info['pid']})")
+        print_text(f"   Open {url}/ to get started · config at {url}/config · stats at {url}/stats")
 
     return emit(args, data=data, text=text)
 
 
 def cmd_start(args: argparse.Namespace) -> int:
-    if not getattr(args, "detach", False) and getattr(args, "verbose", 0) == 0:
+    fg = _foreground(args)
+    if fg and getattr(args, "verbose", 0) == 0:
         _log_info()  # a foreground daemon should say what it is doing
-    return _started(args, daemon.start(detach=getattr(args, "detach", False)), "started")
+    return _started(args, daemon.start(detach=not fg), "started")
+
+
+def _say(message: str) -> None:
+    """Progress goes to stderr, so ``--json`` on stdout stays one clean document."""
+    import sys
+
+    print(message, file=sys.stderr, flush=True)
 
 
 def cmd_stop(args: argparse.Namespace) -> int:
-    stopped = daemon.stop()
+    result = daemon.stop(grace=args.grace, kill=not args.no_kill, say=_say)
 
     def text() -> None:
         from oaken_cli.output import print_text
 
-        print_text("core stopped" if stopped else "core is not running")
+        if not result.running:
+            print_text("core is not running")
+        elif result.killed:
+            print_text("core did not stop in time and was killed (unfinished jobs will be retried)")
+        else:
+            print_text("core stopped")
 
-    return emit(args, data={"stopped": stopped}, text=text)
+    return emit(args, data={"stopped": result.running, "killed": result.killed}, text=text)
+
+
+def _foreground(args: argparse.Namespace) -> bool:
+    return bool(getattr(args, "fg", False))
 
 
 def cmd_restart(args: argparse.Namespace) -> int:
-    detach = getattr(args, "detach", False)
-    if not detach and getattr(args, "verbose", 0) == 0:
+    fg = _foreground(args)
+    if fg and getattr(args, "verbose", 0) == 0:
         _log_info()
-    return _started(args, daemon.restart(detach=detach), "restarted")
+    info = daemon.restart(detach=not fg, grace=args.grace, kill=not args.no_kill, say=_say)
+    return _started(args, info, "restarted")
 
 
 def cmd_reload(args: argparse.Namespace) -> int:

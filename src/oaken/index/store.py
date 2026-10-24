@@ -519,6 +519,22 @@ class IndexStore:
         )
         return [r["message_id"] for r in rows]
 
+    async def recent_doc_ids(
+        self,
+        *,
+        account_id: AccountId | None = None,
+        since: str | None = None,
+        limit: int | None = None,
+    ) -> list[str]:
+        """The newest messages first: dated on or after ``since`` (``YYYY-MM-DD``), at most
+        ``limit`` of them. For reprocessing just recent mail."""
+        rows = await self.db.fetchall(
+            "SELECT message_id FROM docs WHERE (? IS NULL OR account_id = ?)"
+            " AND (? IS NULL OR date_utc >= ?) ORDER BY date_utc DESC, message_id LIMIT ?",
+            (account_id, account_id, since, since, limit if limit else -1),
+        )
+        return [r["message_id"] for r in rows]
+
     async def get_doc(self, message_id: MessageId) -> sqlite3.Row | None:
         """The indexed fields enrichment needs: account, subject, sender, cleaned text and hash."""
         return await self.db.fetchone(

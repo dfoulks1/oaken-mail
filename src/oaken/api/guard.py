@@ -17,8 +17,9 @@ never a header, so a token for one surface is worthless on another.
 """
 
 import asyncio
+import ipaddress
 import json
-from collections.abc import Awaitable, Callable, MutableMapping
+from collections.abc import Awaitable, Callable, Collection, MutableMapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -58,8 +59,16 @@ class Surface:
 class Policy:
     """What the guard enforces. ``bind`` is called once the real port is known."""
 
-    def __init__(self, *, dev_origin: str = "", limiter: RateLimiter, public_csp: str) -> None:
+    def __init__(
+        self,
+        *,
+        dev_origin: str = "",
+        limiter: RateLimiter,
+        public_csp: str,
+        extra_hosts: Collection[str] = (),
+    ) -> None:
         self.dev_origin = dev_origin
+        self.extra_hosts = tuple(h.lower() for h in extra_hosts)
         self.limiter = limiter
         self.public_csp = public_csp
         self.hosts: set[str] = set()
@@ -67,7 +76,11 @@ class Policy:
         self.surfaces: list[Surface] = []
 
     def bind(self, port: int) -> None:
-        names = (f"127.0.0.1:{port}", f"localhost:{port}")
+        names = (
+            f"127.0.0.1:{port}",
+            f"localhost:{port}",
+            *(f"{h}:{port}" for h in self.extra_hosts),
+        )
         self.hosts = set(names)
         self.origins = {f"http://{n}" for n in names} | (
             {self.dev_origin} if self.dev_origin else set()
@@ -90,6 +103,17 @@ async def _send_json(
     ]
     await send({"type": "http.response.start", "status": status, "headers": headers})
     await send({"type": "http.response.body", "body": payload})
+
+
+def _is_local(scope: Scope) -> bool:
+    """True if the TCP peer is on this machine. No peer (Unix socket, test rig) counts as local."""
+    client = scope.get("client")
+    if not client:
+        return True
+    try:
+        return ipaddress.ip_address(client[0]).is_loopback
+    except ValueError:
+        return False
 
 
 def bearer(headers: Headers) -> str | None:
@@ -160,6 +184,11 @@ class Guard:
         surface = p.surface_for(path)
         principal: Any = None
         is_public = path == PUBLIC_HEALTH or (surface is None and not path.startswith("/v1/"))
+        if is_public and path != PUBLIC_HEALTH and not _is_local(scope):
+            # The console pages carry no token: they are for this machine only, however the
+            # listener is bound. A remote client gets the token-protected API and nothing else.
+            await _send_json(send, 403, "local_only", "this page is only served to this machine")
+            return
         if not is_public:
             if surface is None:
                 surface = p.surface_for("/v1/")  # an unknown /v1 path is still a 401 first

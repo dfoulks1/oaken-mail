@@ -254,6 +254,10 @@ def _resolver(args: argparse.Namespace) -> tuple[Callable[[], Endpoint], str]:
 
 
 def cmd_mcp(args: argparse.Namespace) -> int:
+    if getattr(args, "action", None) == "expose":
+        return _expose(args)
+    if getattr(args, "target", None) or getattr(args, "state", None):
+        raise CliError("usage: oaken mcp expose [NAME [on|off|default]]", ExitCode.USAGE)
     resolve, path = _resolver(args)
     bridge = Bridge(resolve, path, timeout=float(args.timeout))
     try:
@@ -261,3 +265,56 @@ def cmd_mcp(args: argparse.Namespace) -> int:
     except (BrokenPipeError, KeyboardInterrupt):
         pass
     return int(ExitCode.OK)
+
+
+# --- oaken mcp expose ----------------------------------------------------------------------
+STATES: dict[str, bool | None] = {"on": True, "off": False, "default": None}
+
+
+def _expose(args: argparse.Namespace) -> int:
+    """List what MCP clients may call, or change it for one operation (or one plugin's)."""
+    from oaken_cli.commands.runtime import emit, run
+
+    if args.state and not args.target:
+        raise CliError("usage: oaken mcp expose NAME on|off|default", ExitCode.USAGE)
+
+    async def body(client: Any) -> int:
+        from oaken_cli.output import print_table, print_text
+
+        if not args.target:
+            listed = await client.call("list_operations", {})
+            ops = listed.output.get("operations", []) if isinstance(listed.output, dict) else []
+
+            def table() -> None:
+                print_table(
+                    [
+                        {
+                            "operation": o["name"],
+                            "provider": o.get("plugin") or "core",
+                            "permission": o["permission"],
+                            "mcp": "on" if o["mcp_enabled"] else "off",
+                            "can be on": "yes" if o["mcp_allowed"] else "never",
+                        }
+                        for o in ops
+                    ],
+                    ["operation", "provider", "permission", "mcp", "can be on"],
+                )
+
+            return emit(args, data=listed.output, text=table)
+        if args.state is None:
+            raise CliError("usage: oaken mcp expose NAME on|off|default", ExitCode.USAGE)
+        payload = {
+            "scope": "plugin" if args.plugin else "operation",
+            "name": args.target,
+            "mcp": STATES[args.state],
+        }
+        done = await client.call("set_operation_exposure", payload, confirm=True)
+        out = done.output if isinstance(done.output, dict) else {}
+
+        def said() -> None:
+            names = ", ".join(o["name"] for o in out.get("operations", [])) or args.target
+            print_text(f"mcp {args.state}: {names}")
+
+        return emit(args, data=done.output, text=said)
+
+    return run(body, args)

@@ -15,6 +15,7 @@ import subprocess  # noqa: S404 (starts our own interpreter, never a shell)
 import sys
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +24,7 @@ from oaken.api.runtime import RuntimeFile, pid_alive, read_runtime
 from oaken.core import paths
 from oaken.core.errors import ConfigError, Conflict, Unavailable
 from oaken.core.logging import configure_logging, get_logger
-from oaken.core.settings import Settings
+from oaken.core.settings import Settings, ensure_default_config
 from oaken.daemon.core import Core
 
 log = get_logger("oaken.daemon")
@@ -72,6 +73,15 @@ async def _bring_up(core: Core, runtime: RuntimeFile) -> Core:
     return core
 
 
+def _same_but_port(fresh: Settings, running: Settings) -> bool:
+    """True when only the sticky port (see ``_reload``) differs from what is running."""
+    if fresh.api.port != 0:
+        return False
+    return fresh.model_copy(update={"api": running.api}) == running and (
+        fresh.api.model_copy(update={"port": running.api.port}) == running.api
+    )
+
+
 async def _reload(core: Core, runtime: RuntimeFile, load: Callable[[], Settings] | None) -> Core:
     """Re-read the configuration and rebuild core on it, in this process. The new settings are
     validated before anything is stopped, so a typo in ``config.toml`` changes nothing. If the
@@ -84,12 +94,18 @@ async def _reload(core: Core, runtime: RuntimeFile, load: Callable[[], Settings]
     except ConfigError as exc:
         log.error("reload refused; still running on the old configuration", error=str(exc))
         return core
-    if settings == core.settings:
+    if settings == core.settings or _same_but_port(settings, core.settings):
         log.info("reload: configuration unchanged")
         return core
     configure_logging(settings.log)  # a changed level, format or file takes effect at once
     log.info("core reloading")
+    bound = core.server.port
     await core.stop()
+    if settings.api.port == 0 and bound:
+        # No port was asked for: keep the one clients already know instead of picking a new one.
+        settings = settings.model_copy(
+            update={"api": settings.api.model_copy(update={"port": bound})}
+        )
     try:
         fresh = await _bring_up(core.reconfigured(settings), runtime)
     except Exception as exc:
@@ -147,10 +163,32 @@ async def serve(
             runtime.release()
 
 
+def _announce_home() -> None:
+    """Say where Oaken keeps its files, and warn when ``OAKEN_HOME`` did not choose it. An
+    explicit home is remembered, so a later start from a shell without the variable finds it."""
+    source, home = paths.home_source()
+    if source == "env":
+        if paths.remember_home():
+            log.info("home remembered", home=str(home))
+        return
+    where = f"the last known home {home}" if source == "remembered" else "the platform folders"
+    log.warning(
+        "OAKEN_HOME is not set",
+        using=where,
+        data=str(paths.data_dir()),
+        config=str(paths.config_dir()),
+        hint=f"add `export OAKEN_HOME={home or Path('~/.oaken')}` to your shell profile",
+    )
+
+
 def run(settings: Settings | None = None) -> int:
     """Foreground entry point. The exit code is 0 for a clean stop, 1 if core is already running."""
     core = Core(settings)
     configure_logging(core.settings.log)
+    _announce_home()
+    created = ensure_default_config()
+    if created is not None:
+        log.info("wrote a commented default configuration", path=str(created))
     try:
         asyncio.run(serve(core, load_settings=Settings.load if settings is None else None))
     except Conflict as exc:
@@ -171,25 +209,76 @@ def status(runtime: Path | None = None) -> dict[str, Any] | None:
     return data
 
 
-def stop(runtime: Path | None = None, *, timeout: float = 40.0) -> bool:
-    """Ask the running core to stop and wait for it. ``False`` if none was running."""
+# How long ``stop`` waits for core to finish: core's own shutdown grace (30 seconds for running jobs
+# to drain, ``[api] shutdown_grace_seconds``) and a margin for it to close its stores.
+DEFAULT_GRACE = 40.0
+KILL_WAIT = 5.0  # after a kill, how long to wait for the process to be gone
+
+
+@dataclass(frozen=True)
+class StopResult:
+    running: bool  # core was running when it was asked to stop
+    killed: bool = False  # it did not stop in time and was killed
+    pid: int = 0
+
+
+def stop_gracefully(
+    runtime: Path | None = None,
+    *,
+    grace: float = DEFAULT_GRACE,
+    kill: bool = True,
+    notify: Callable[[str], None] | None = None,
+) -> StopResult:
+    """Ask the running core to stop, give it ``grace`` seconds to finish what it is doing, and if it
+    is still running then, kill it (``kill=False`` reports an error instead). Core's work is a
+    durable queue with leases, so a killed core loses nothing: unfinished jobs are retried.
+    ``notify`` hears each step in plain words. A killed core cannot remove its runtime file, so
+    that is cleaned up here and the next ``start`` finds a clear field."""
+    say = notify or (lambda _msg: None)
     found = status(runtime)
     if found is None:
-        return False
+        return StopResult(False)
     pid = int(found["pid"])
     try:
         sig = signal.CTRL_BREAK_EVENT if sys.platform == "win32" else signal.SIGTERM  # type: ignore[attr-defined,unused-ignore]
         os.kill(pid, sig)
     except ProcessLookupError:
-        return False
+        return StopResult(False)
     except PermissionError as exc:
         raise Unavailable(f"not allowed to stop core (pid {pid}): {exc}") from exc
-    deadline = time.monotonic() + timeout
+    say(f"stopping core (pid {pid}); waiting up to {grace:.0f}s for it to finish what it is doing")
+    deadline = time.monotonic() + grace
     while pid_alive(pid):
         if time.monotonic() > deadline:
-            raise Unavailable(f"core (pid {pid}) did not stop within {timeout:.0f}s")
+            break
         time.sleep(0.05)
-    return True
+    else:
+        return StopResult(True, pid=pid)
+    if not kill:
+        raise Unavailable(
+            f"core (pid {pid}) did not stop within {grace:.0f}s; "
+            "run `oaken stop` without --no-kill to kill it"
+        )
+    say(f"core did not stop within {grace:.0f}s; killing it (pid {pid})")
+    try:
+        os.kill(pid, getattr(signal, "SIGKILL", signal.SIGTERM))  # Windows has no SIGKILL
+    except ProcessLookupError:
+        return StopResult(True, killed=True, pid=pid)
+    except PermissionError as exc:
+        raise Unavailable(f"not allowed to kill core (pid {pid}): {exc}") from exc
+    gone = time.monotonic() + KILL_WAIT
+    while pid_alive(pid):
+        if time.monotonic() > gone:
+            raise Unavailable(f"core (pid {pid}) is still running after a kill")
+        time.sleep(0.05)
+    (runtime or paths.runtime_file()).unlink(missing_ok=True)
+    return StopResult(True, killed=True, pid=pid)
+
+
+def stop(runtime: Path | None = None, *, timeout: float = DEFAULT_GRACE) -> bool:
+    """Ask the running core to stop and wait for it, never killing it. ``False`` if none was
+    running. (``stop_gracefully`` is the one that escalates.)"""
+    return stop_gracefully(runtime, grace=timeout, kill=False).running
 
 
 def reload(runtime: Path | None = None) -> bool:
@@ -243,6 +332,9 @@ def detach(*, timeout: float = 30.0, runtime: Path | None = None) -> dict[str, A
     raise Unavailable(f"core did not start listening within {timeout:.0f}s")
 
 
-def restart(*, timeout: float = 40.0, runtime: Path | None = None) -> dict[str, Any]:
-    stop(runtime, timeout=timeout)
+def restart(
+    *, timeout: float = DEFAULT_GRACE, kill: bool = True, runtime: Path | None = None
+) -> dict[str, Any]:
+    """Stop core (killing it if it will not stop in time) and start it again in the background."""
+    stop_gracefully(runtime, grace=timeout, kill=kill)
     return detach(runtime=runtime)

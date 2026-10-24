@@ -61,9 +61,11 @@ account = "default"          # names the keyring entry: oaken / gmail:default
 
 Authorizing opens Google's consent page in your browser, with a PKCE challenge and a redirect to a
 random free port on `127.0.0.1`. Oaken listens there once, checks the `state`, exchanges the code,
-confirms Google granted `gmail.modify`, and stores the refresh token in the keyring. The CLI
-command for this arrives with the CLI work (see the audit table in prompt 17); until then the
-plugin's `authorize()` method is the entry point.
+confirms Google granted `gmail.modify`, and stores the refresh token in the keyring. Run it with
+`oaken gmail auth` (add `--account-id <id>` when there is more than one Gmail account, `--check` to
+test a stored token without opening a browser, `--no-browser` to print the address instead). It
+is the plugin's own command, so core carries no Gmail code. `oaken gmail labels` lists the account's
+labels (the names `include_labels` accepts) and `oaken gmail send-as` its send-as addresses.
 
 Without a keyring service (Secret Service on Linux, Keychain on macOS, Credential Locker on
 Windows) Oaken stops with a clear message. It never falls back to a file.

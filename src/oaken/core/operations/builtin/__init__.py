@@ -4,14 +4,17 @@
 from oaken.core.operations.builtin import (
     accounts,
     agents,
+    config,
     enrichment,
     filtering,
     jobs,
     mail,
     mailbox,
+    maintenance,
     messages,
     savings,
     schedules,
+    settings_ops,
     system,
 )
 from oaken.core.operations.registry import AnyOperation, OperationRegistry
@@ -30,6 +33,9 @@ def core_operations() -> tuple[AnyOperation, ...]:
         *enrichment.OPERATIONS,
         *filtering.OPERATIONS,
         *jobs.OPERATIONS,
+        *config.OPERATIONS,
+        *settings_ops.OPERATIONS,
+        *maintenance.OPERATIONS,
     )
 
 

@@ -13,20 +13,8 @@ import dataclasses
 import json
 from collections import deque
 from collections.abc import AsyncIterator, Callable
-from datetime import datetime
-from typing import Any
 
-from oaken.core.events import Event, EventBus
-
-
-def event_data(event: Event) -> dict[str, Any]:
-    """The event as plain JSON data: its fields, timestamps in ISO 8601."""
-    out: dict[str, Any] = {}
-    for f in dataclasses.fields(event):
-        value = getattr(event, f.name)
-        out[f.name] = value.isoformat() if isinstance(value, datetime) else value
-    data: dict[str, Any] = json.loads(json.dumps(out, default=str))
-    return data
+from oaken.core.events import Event, EventBus, event_data
 
 
 @dataclasses.dataclass(frozen=True)

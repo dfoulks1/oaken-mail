@@ -87,3 +87,68 @@ async def test_pipeline_control_is_never_offered_to_an_agent(ops: Ops) -> None:
     ):
         with pytest.raises(NotExposed):
             await ops.call(name, payload, agent())
+
+
+# -- prompt 30: one stage at a time, live limits, recent-only reprocess ------------------------
+
+
+async def test_one_stage_can_be_paused_alone_and_the_status_says_so(ops: Ops) -> None:
+    out = await ops.out("pause_backfill", {"stage": "enrich", "why": "gpu is busy"})
+    assert out.llm_paused is False and out.paused_stages == ["enrich"]
+    status = await ops.out("pipeline_status", {})
+    assert status.stages["enrich"].paused is True and status.stages["embed"].paused is False
+    control = ops.svc.pipeline_control
+    assert control is not None and await control.paused_kinds() == {"ingest.enrich"}
+    again = await ops.out("resume_backfill", {"stage": "enrich"})
+    assert again.paused_stages == []
+    with pytest.raises(Exception, match="stage"):
+        await ops.call("pause_backfill", {"stage": "parse"})
+
+
+async def test_resuming_one_stage_while_everything_is_paused_keeps_the_other_paused(
+    ops: Ops,
+) -> None:
+    await ops.out("pause_backfill", {})
+    out = await ops.out("resume_backfill", {"stage": "embed"})
+    assert out.llm_paused is False and out.paused_stages == ["enrich"]
+    out = await ops.out("resume_backfill", {})
+    assert out.paused_stages == []
+
+
+async def test_a_stage_pause_survives_a_restart(ops: Ops) -> None:
+    from oaken.ingest.pipeline_control import PipelineControl
+
+    await ops.out("pause_backfill", {"stage": "embed"})
+    reopened = PipelineControl(ops.svc.raw.db, ops.svc.clock, ops.svc.audit)  # a new process
+    assert await reopened.paused_kinds() == {"ingest.embed"}
+    assert any("pipeline.pause" in op for op in await ops.audit_ops())
+
+
+async def test_concurrency_is_set_stored_audited_and_bounded(ops: Ops) -> None:
+    out = await ops.out("set_pipeline_limits", {"stage": "enrich", "concurrency": 2})
+    assert (out.stage, out.concurrency) == ("enrich", 2)
+    control = ops.svc.pipeline_control
+    assert control is not None and await control.limits() == {"ingest.enrich": 2}
+    assert (await ops.out("pipeline_status", {})).stages["enrich"].concurrency == 2
+    assert "pipeline.limit" in await ops.audit_ops()
+    for bad in (0, 65):
+        with pytest.raises(Exception, match="concurrency"):
+            await ops.call("set_pipeline_limits", {"stage": "enrich", "concurrency": bad})
+
+
+async def test_no_pipeline_management_is_offered_to_an_agent(ops: Ops) -> None:
+    names = {"pause_backfill", "resume_backfill", "set_pipeline_limits", "retry_parked"}
+    assert not names & {o.name for o in await ops.client.visible(agent())}
+
+
+async def test_reprocess_can_be_limited_to_recent_mail(ops: Ops) -> None:
+    ids = await ops.add(4)
+    newest = await ops.rig.index.recent_doc_ids(limit=2)
+    assert len(newest) == 2 and set(newest) <= {str(i) for i in ids}
+    assert await ops.rig.index.recent_doc_ids(since="2999-01-01") == []
+    assert len(await ops.rig.index.recent_doc_ids()) == 4
+    queued = await ops.out("reprocess", {"stage": "enrich", "limit": 2, "since": "2020-01-01"})
+    other = await ops.out("reprocess", {"stage": "enrich"})
+    assert queued.job_id != other.job_id, "a limited run is not the same work as a full one"
+    with pytest.raises(Exception, match="since"):
+        await ops.call("reprocess", {"stage": "enrich", "since": "last tuesday"})

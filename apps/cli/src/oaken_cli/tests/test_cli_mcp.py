@@ -203,8 +203,8 @@ def test_the_bridge_lists_and_calls_tools_through_to_a_real_core(tmp_path: Path)
         env={**env_for(home), "OAKEN_API__MCP": "true"},
         capture_output=True, text=True, timeout=90, check=False,
     )  # fmt: skip
-    assert started.returncode == 0, started.stderr
-    try:
+    try:  # a daemon that started late must still be stopped, so the assertion is inside
+        assert started.returncode == 0, started.stderr
         answers, stderr, code = run_bridge(
             home, [INIT, LIST, call("status", 3), call("mark_read", 4, ids=["nope"])]
         )

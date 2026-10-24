@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The account wizard and ``oaken auth``, on both transports, with a provider that has a stored
-password and a consent flow (registered under the names gmail, smtp and imap)."""
+"""The account wizard and each provider's own ``auth`` command (``oaken gmail auth``,
+``oaken smtp auth``), on both transports. The fakes are registered under the names gmail, smtp and
+imap: Gmail has a consent flow, SMTP and IMAP a stored password, as the real providers do."""
 
 from __future__ import annotations
 
@@ -21,6 +22,19 @@ from oaken_cli.exits import ExitCode
 from oaken_cli.tests.conftest import Cli
 
 
+class SecretMailbox(PwMailbox):
+    """Like SMTP and IMAP: a password you store, no consent page."""
+
+    authorize = None  # type: ignore[assignment]
+
+
+class ConsentMailbox(PwMailbox):
+    """Like Gmail: a consent page, no password, and a new account listens but does not send."""
+
+    set_password = None  # type: ignore[assignment]
+    account_defaults = {"receive_only": True}
+
+
 @pytest.fixture(params=["inprocess", "http"])
 async def acli(
     request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -31,13 +45,19 @@ async def acli(
         found = list(base(group))
         if group == "oaken.providers":
             found += [
-                EntryPoint(n, f"{PwMailbox.__module__}:PwMailbox", group)
-                for n in ("gmail", "smtp", "imap")
+                EntryPoint(n, f"{__name__}:{cls}", group)
+                for n, cls in (
+                    ("gmail", "ConsentMailbox"),
+                    ("smtp", "SecretMailbox"),
+                    ("imap", "SecretMailbox"),
+                )
             ]
         return found
 
     monkeypatch.setattr(ops_conftest, "discover", discover)
-    PwMailbox.password, PwMailbox.release = None, asyncio.Event()
+    for cls in (PwMailbox, SecretMailbox, ConsentMailbox):
+        cls.password = None  # each class keeps its own, so one test cannot leak into the next
+    PwMailbox.release = asyncio.Event()
     async with build_rig(tmp_path) as rig:
         yield Cli(rig.ops, request.param, rig.api)
 
@@ -59,7 +79,7 @@ async def test_add_list_and_show_without_questions(
     assert added.code == 0, added.err
     assert json.loads(added.out)["config"] == {"host": "imap.example.com", "port": 993}
     text = await acli("admin", "account", "add", "--provider", "smtp", "--id", "out", "--name", "O")
-    assert "oaken auth smtp --account out" in text.out
+    assert "oaken smtp auth --account-id out" in text.out
     listed = await acli("admin", "account", "list", "--json")
     assert {"work", "out"} <= {a["account_id"] for a in json.loads(listed.out)["accounts"]}
     shown = await acli("admin", "account", "show", "work")
@@ -100,15 +120,15 @@ async def test_a_password_is_read_from_stdin_stored_and_checked(
 ) -> None:
     stdin(monkeypatch)
     await acli("admin", "account", "add", "--provider", "smtp", "--id", "out", "--name", "O")
-    before = await acli("auth", "smtp", "--check")
+    before = await acli("smtp", "auth", "--check")
     assert before.code == int(ExitCode.AUTH) and "refused" in before.out
     stdin(monkeypatch, PASSWORD + "\n")
-    run = await acli("auth", "smtp", "--password-stdin")
+    run = await acli("smtp", "auth", "--password-stdin")
     assert run.code == 0, run.err
     assert "stored in the OS keyring" in run.out and "login works" in run.out
     assert PASSWORD not in run.out + run.err, "the password is never printed"
-    assert PwMailbox.password == PASSWORD
-    assert (await acli("auth", "smtp", "--check")).code == 0
+    assert SecretMailbox.password == PASSWORD
+    assert (await acli("smtp", "auth", "--check")).code == 0
 
 
 async def test_a_wrong_password_is_stored_but_reported_as_exit_4(
@@ -117,7 +137,7 @@ async def test_a_wrong_password_is_stored_but_reported_as_exit_4(
     stdin(monkeypatch)
     await acli("admin", "account", "add", "--provider", "imap", "--id", "i", "--name", "I")
     stdin(monkeypatch, "wrong\n")
-    run = await acli("auth", "imap", "--password-stdin")
+    run = await acli("imap", "auth", "--password-stdin")
     assert run.code == int(ExitCode.AUTH) and "refused" in run.out
 
 
@@ -125,15 +145,15 @@ async def test_auth_needs_a_terminal_or_stdin_and_the_right_account(
     acli: Cli, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     stdin(monkeypatch, "x\n")
-    none = await acli("auth", "smtp", "--password-stdin")
+    none = await acli("smtp", "auth", "--password-stdin")
     assert none.code == int(ExitCode.USAGE) and "oaken admin account add" in none.err
     await acli("admin", "account", "add", "--provider", "smtp", "--id", "a", "--name", "A")
     await acli("admin", "account", "add", "--provider", "smtp", "--id", "b", "--name", "B")
     stdin(monkeypatch, "x\n")
-    many = await acli("auth", "smtp", "--password-stdin")
+    many = await acli("smtp", "auth", "--password-stdin")
     assert many.code == int(ExitCode.USAGE) and "--account" in many.err
     stdin(monkeypatch)
-    no_input = await acli("auth", "smtp", "--account", "a")
+    no_input = await acli("smtp", "auth", "--account-id", "a")
     assert no_input.code == int(ExitCode.USAGE) and "--password-stdin" in no_input.err
 
 
@@ -144,9 +164,9 @@ async def test_gmail_consent_prints_the_address_and_waits_for_core(
     await acli("admin", "account", "add", "--provider", "gmail", "--id", "g", "--name", "G")
     assert PwMailbox.release is not None
     PwMailbox.release.set()  # the person has already clicked "allow"
-    run = await acli("auth", "gmail", "--no-browser", "--timeout", "20")
+    run = await acli("gmail", "auth", "--no-browser", "--timeout", "20")
     assert run.code == 0, run.err
-    assert "consent.example.invalid" in run.out and "refresh token is in the OS keyring" in run.out
+    assert "consent.example.invalid" in run.out and "stored in the OS keyring" in run.out
 
 
 async def test_gmail_consent_failure_is_exit_4(acli: Cli, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -159,7 +179,7 @@ async def test_gmail_consent_failure_is_exit_4(acli: Cli, monkeypatch: pytest.Mo
     monkeypatch.setattr(PwMailbox, "authorize", refuse)
     stdin(monkeypatch)
     await acli("admin", "account", "add", "--provider", "gmail", "--id", "g", "--name", "G")
-    run = await acli("auth", "gmail", "--no-browser", "--timeout", "20")
+    run = await acli("gmail", "auth", "--no-browser", "--timeout", "20")
     assert run.code == int(ExitCode.AUTH) and "access_denied" in run.out
 
 

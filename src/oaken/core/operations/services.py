@@ -14,6 +14,7 @@ from oaken.core.agents import AgentRegistry
 from oaken.core.attrs import AttrStore
 from oaken.core.clock import Clock
 from oaken.core.errors import Unavailable
+from oaken.core.eventlog import EventLog
 from oaken.core.events import EventBus
 from oaken.core.jobs import JobQueue
 from oaken.core.mailbox import MailboxStore
@@ -57,6 +58,7 @@ class Services:
     retrieval: Retrieval | None = None  # built from the pipeline when not given
     agents: AgentRegistry | None = None
     mailbox: MailboxStore | None = None  # built on first use from raw, attrs and the indexer
+    eventlog: EventLog | None = None  # None when ``[log] events_file`` is empty
     version: str = ""
 
     def need_readstate(self) -> ReadState:
@@ -85,6 +87,11 @@ class Services:
 
     def need_plugins(self) -> PluginHost:
         return need(self.plugins, "the plugin host")
+
+    def need_eventlog(self) -> EventLog:
+        if self.eventlog is None:
+            raise Unavailable("the event log is off: set [log] events_file to turn it on")
+        return self.eventlog
 
     def need_agents(self) -> AgentRegistry:
         return need(self.agents, "the agent registry")

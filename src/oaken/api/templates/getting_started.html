@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Getting Started · OakenMail</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    main { max-width: 52rem; }
+    main h2 { margin-top: 2rem; font-size: 1.15rem; font-weight: 700; }
+    main h2 .sec { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--oaken-acorn); font-size: .9rem; }
+    [data-bs-theme="dark"] main h2 .sec { color: var(--oaken-acorn-2); }
+    main pre { background: rgba(127,127,127,.12); border-radius: .4rem; padding: .8rem 1rem; overflow:auto; }
+    main code { font-size: .85em; }
+    .check { border-left: 3px solid var(--oaken-oak); padding-left: .8rem; color: var(--bs-secondary-color); }
+  </style>
+</head>
+<body>
+{% include "_nav.html" with context %}
+
+<main class="container py-4">
+  <h1 class="h3 mb-1">Getting started</h1>
+  <p class="text-secondary">Welcome. This walks the <code>config.toml</code> settings, top to bottom.
+  You only set what you change (every section has defaults), so skip what you don't need. Edit it
+  all in the browser on the <a href="/config">Config</a> page, then hit Reload. Secrets never go in
+  this file (passwords and tokens live in your OS keyring).</p>
+
+  <p class="text-secondary">One rule worth saying once: nothing leaves your machine unless you turn
+  it on. The sections below are in the order most people set them.</p>
+
+  <h2>Mail providers</h2>
+  <p>Each mail provider says how to set itself up, below, in its own words and with a
+  <code>config.toml</code> snippet to start from. Use the ones you need. The password or sign-in
+  for each goes through the provider's own command (<code>oaken PROVIDER auth</code>) and lands in
+  your OS keyring, never in this file.</p>
+  {% for p in providers %}
+  <h3 class="h6 mt-4"><span class="sec">[plugins.{{ p.name }}]</span></h3>
+  {% if p.setup_help %}<p>{{ p.setup_help }}</p>{% endif %}
+  {% if p.config_example %}<pre>{{ p.config_example }}</pre>{% endif %}
+  {% else %}
+  <p class="text-secondary">No mail provider is installed.</p>
+  {% endfor %}
+  <p class="check">Check: the account shows up on the <a href="/stats">Stats</a> page under
+  Connected accounts.</p>
+
+  <h2>Local AI <span class="sec">[plugins.ollama]</span> <span class="sec">and [ai]</span></h2>
+  <p>Oaken runs a local Ollama by default, so analysis stays on the machine. Pull the models first
+  (<code>ollama pull nomic-embed-text</code> and your chat model), then name them in
+  <code>[ai]</code>. The default chat model is small on purpose; set a bigger one for better
+  analysis if your machine can carry it. <code>[plugins.ollama]</code> only tunes the connection,
+  and <code>allow_remote</code> stays false unless you really mean to reach off-machine.</p>
+  <pre>[ai]
+embed_model = "nomic-embed-text"
+llm_model = "qwen2.5:3b"   # bump this for better analysis
+allow_remote = false</pre>
+  <p class="check">Check: the <a href="/jobs">Jobs</a> page shows the embed and enrich stages
+  moving, not stuck.</p>
+
+  <h2>Sync schedule <span class="sec">[sync]</span></h2>
+  <p>How often a new account pulls. The default is every 15 minutes. Mind your provider's quota
+  (that is what <code>min_interval_seconds</code> guards). Set <code>timezone</code> to your own if
+  you use quiet hours or cron schedules.</p>
+  <pre>[sync]
+interval_seconds = 900     # every 15 minutes
+timezone = "UTC"
+max_concurrent = 2</pre>
+
+  <h2>Local API <span class="sec">[api]</span></h2>
+  <p>How the CLI and the web UI reach core. It binds loopback only. Leave <code>port = 0</code> and
+  it picks a free one. Turn <code>mcp = true</code> on to let a model talk to your mail over MCP on
+  the same listener (its own token).</p>
+  <pre>[api]
+port = 0        # 0 = pick a free port
+mcp = false     # true mounts the MCP server at /mcp</pre>
+
+  <h2>External agents <span class="sec">[swarm]</span></h2>
+  <p>Off by default, and the one switch to think twice about. Handing a job to an external agent
+  sends that job's mail text to it (and to its provider, if it is hosted). So you opt in one job
+  kind at a time: it stays off until both <code>enabled = true</code> and
+  <code>allowed_kinds</code> is non-empty.</p>
+  <pre>[swarm]
+enabled = false
+allowed_kinds = []   # e.g. ["ingest.enrich"]</pre>
+
+  <h2>Read state <span class="sec">[read_state]</span> <span class="sec">and [ui]</span></h2>
+  <p>Whether opening or summarizing a message marks it read. Leave <code>auto_mark</code> on for
+  normal behavior; turn it off and only explicit mark read/unread counts.</p>
+  <pre>[read_state]
+auto_mark = true
+
+[ui]
+mark_read_delay_ms = 2000   # how long a message stays open before it counts as read</pre>
+
+  <h2>Logging <span class="sec">[log]</span></h2>
+  <p>Start at <code>INFO</code>. If you run the daemon detached it has no terminal, so set a
+  <code>file</code> to keep its logs. Drop to <code>DEBUG</code> when something is wrong and you
+  want to see the why.</p>
+  <pre>[log]
+level = "INFO"      # DEBUG when debugging
+format = "console"  # or "json"
+file = "oaken.log"</pre>
+
+  <hr class="my-4">
+  <p class="text-secondary">That is the whole file. Edit it on <a href="/config">Config</a>, Test,
+  Save, Reload. The full guide (install, keyring, the daemon) lives in the
+  <a href="{{ docs_url }}" target="_blank" rel="noopener">docs ↗</a>.</p>
+</main>
+
+<script src="/welcome.js"></script>
+</body>
+</html>

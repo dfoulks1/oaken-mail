@@ -135,15 +135,20 @@
         return { request_id: "demo", status: "ok", output: { account: { account_id: input.account_id, provider: "gmail", display_name: "Alex Example", config: input.config || {}, receive_only: !!(input.config && input.config.receive_only), capabilities: [], problem: null }, restart_needed: true } };
       case "remove_account":
         return { request_id: "demo", status: "ok", output: { removed: true, schedules_removed: 1, restart_needed: true, mail_kept: true } };
-      case "check_account":
-        return { request_id: "demo", status: "ok", output: { ok: true, detail: "" } };
-      case "start_authorization":
-        return { request_id: "demo", status: "ok", output: { url: "https://consent.example.invalid/demo" } };
-      case "authorization_status":
-        return { request_id: "demo", status: "ok", output: { state: "done", detail: "" } };
+      case "gmail.auth":
+        return { request_id: "demo", status: "ok", output: input.check
+          ? { account_id: input.account_id || "demo", state: "done", detail: "the stored credential works", open_url: "", poll: "", poll_input: {} }
+          : { account_id: input.account_id || "demo", state: "pending", detail: "open the address and approve", open_url: "https://consent.example.invalid/demo", poll: "gmail.auth_status", poll_input: { account_id: input.account_id || "demo" } } };
+      case "gmail.auth_status":
+        return { request_id: "demo", status: "ok", output: { account_id: input.account_id || "demo", state: "done", detail: "signed in; the credential is stored in the OS keyring" } };
+      case "imap.auth":
+      case "smtp.auth":
+        return { request_id: "demo", status: "ok", output: { account_id: input.account_id || "demo", state: "done", detail: input.check ? "login works" : "password stored in the OS keyring; login works", open_url: "", poll: "", poll_input: {} } };
       case "list_plugins":
         return { request_id: "demo", status: "ok", output: { plugins: [
-          { name: "gmail", kind: "provider", version: "1", capabilities: ["auth", "flags.write", "send", "sync.pull"], started: true, healthy: true, detail: "", operations: [] },
+          { name: "gmail", kind: "provider", version: "1", capabilities: ["auth", "flags.write", "send", "sync.pull"], started: true, healthy: true, detail: "", operations: ["gmail.auth", "gmail.auth_status", "gmail.labels", "gmail.send_as"], setup_help: "Gmail needs a Google OAuth client of your own.", config_example: "", account_defaults: { receive_only: true } },
+          { name: "imap", kind: "provider", version: "1", capabilities: ["auth", "flags.write", "sync.pull"], started: true, healthy: true, detail: "", operations: ["imap.auth"], setup_help: "", config_example: "", account_defaults: {} },
+          { name: "smtp", kind: "provider", version: "1", capabilities: ["auth", "send"], started: true, healthy: true, detail: "", operations: ["smtp.auth"], setup_help: "", config_example: "", account_defaults: {} },
         ] } };
       case "sieve_list":
         return { request_id: "demo", status: "ok", output: { enabled: true, directory: "~/.config/oaken/sieve", sha256: "demo", scripts: Object.keys(FIX_SIEVE).sort().map((n) => ({ name: n, sha256: "demo-" + n })), problems: [] } };
