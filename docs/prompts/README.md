@@ -54,6 +54,7 @@ in the same change that builds a prompt.
 | 34 | [stabilize-core](34-stabilize-core.md) | Lock the public surface (snapshot tests + versioning ADR), enforce import boundaries (import-linter), turn `Core.open()` into dependency-ordered service units, let plugins declare+validate config, and add the missing extension hooks (job kinds, pipeline stages, scheduled tasks) with a conformance suite — so a second dev builds features without touching core | 02, 04, 13, 16, 23 |
 | 35 | [onboarding-0-1-1](35-onboarding-0-1-1.md) | The record of the 0.1.1 work: first-run defaults, core's console pages, plugin-first commands, plugin control under `oaken plugins` | 16, 17, 23, 34 |
 | 36 | [after-0-1-1](36-after-0-1-1.md) | What 0.1.1 left: label/folder write-back, workspace routing by Sieve rule, a datastore per account, send, Gmail sign-in, concurrent plugin start | 28, 31, 35 |
+| 37 | [gmail-sign-in](37-gmail-sign-in.md) | Gmail sign-in as the standard consent flow: permissions that follow capabilities, `oaken gmail doctor`, a clearer consent experience, and a private copy of the client JSON. Written, not built | 11, 23, 24, 35 |
 
 ## Plugin track (unnumbered)
 

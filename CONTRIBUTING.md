@@ -162,6 +162,7 @@ code yet.
 | 34 | stabilize-core | Built | Snapshot tests for operations, plugin contracts and events, import-linter boundaries, service units and plugin extension hooks (job kinds, pipeline stages, scheduled tasks) |
 | 35 | onboarding-0-1-1 | Built | The record of the 0.1.1 work: first-run defaults, core's console pages, plugin-first commands |
 | 36 | after-0-1-1 | **Open** | What 0.1.1 left: label/folder write-back, workspace routing by Sieve rule, a datastore per account, send, Gmail sign-in |
+| 37 | gmail-sign-in | **Written** | The plan only; nothing built. Least-privilege permissions that follow capabilities, `oaken gmail doctor`, a clearer consent flow, and a private copy of the client JSON |
 
 Not written yet, on purpose: a legacy-database importer, packaging (systemd, launchd,
 installers), at-rest encryption, plugin sandboxing, and embedding-throughput tuning on CPU.
