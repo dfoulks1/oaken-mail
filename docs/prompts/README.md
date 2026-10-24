@@ -55,6 +55,15 @@ in the same change that builds a prompt.
 | 35 | [onboarding-0-1-1](35-onboarding-0-1-1.md) | The record of the 0.1.1 work: first-run defaults, core's console pages, plugin-first commands, plugin control under `oaken plugins` | 16, 17, 23, 34 |
 | 36 | [after-0-1-1](36-after-0-1-1.md) | What 0.1.1 left: label/folder write-back, workspace routing by Sieve rule, a datastore per account, send, Gmail sign-in, concurrent plugin start | 28, 31, 35 |
 
+## Plugin track (unnumbered)
+
+Prompts prefixed `PLUGIN_` build a plugin and must not change core beyond the touch points they
+list. They are not part of the numbered sequence and carry their own dependencies.
+
+| Prompt | Delivers | Depends on |
+|---|---|---|
+| [PLUGIN_openai-compat-lmstudio](PLUGIN_openai-compat-lmstudio.md) | `oaken_openai_compat`: LLM backend and embedder over any OpenAI-compatible server, with LM Studio as the preset; plus a docs page for using Oaken from ollmcp / LM Studio as MCP clients | 04, 08, 10, 31 |
+
 ## Not written yet (deliberately)
 
 - **Legacy-DB importer** (only if wanted), **packaging**
