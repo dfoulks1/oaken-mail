@@ -8,7 +8,6 @@ from oaken.core.errors import NotFound
 from oaken.plugins.base import BaseEmbedder
 from oaken.plugins.base import command as _command
 from oaken.plugins.contracts import PluginOperation
-from oaken.plugins.plugin_control import COMMANDS
 from oaken.plugins.tests.conftest import Installer
 from oaken.plugins.tests.test_host import EMBEDDER, make_host
 from oaken.plugins.validate import check_plugin
@@ -173,14 +172,11 @@ class Commands(BaseEmbedder):
 def test_commands_become_operations_without_writing_operations() -> None:
     plugin = Commands()
     ops = {o.name: o for o in plugin.operations()}
-    assert set(ops) == {"login", "whoami"} | COMMANDS  # the six every plugin has, and its own
+    assert set(ops) == {"login", "whoami"}
     assert ops["login"].permission == "mutate" and ops["login"].mcp == "off"
     assert ops["login"].preview is not None and ops["whoami"].preview is None
     assert check_plugin("embedder", "p", plugin)[1] == []
 
 
 async def test_a_plugin_with_no_commands_offers_nothing() -> None:
-    assert {
-        o.name for o in BaseEmbedder().operations()
-    } == COMMANDS  # only the six every plugin has
-    assert all(o.lifecycle and o.mcp == "never" for o in BaseEmbedder().operations())
+    assert BaseEmbedder().operations() == []

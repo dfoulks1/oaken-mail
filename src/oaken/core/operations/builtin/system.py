@@ -322,7 +322,6 @@ class PluginChange(BaseModel):
     input=PluginName,
     output=PluginChange,
     mcp="never",
-    audit="service",
 )
 async def plugin_disable(ctx: OpContext, inp: PluginName) -> PluginChange:
     changed = await ctx.svc.need_plugins().disable(inp.name)
@@ -337,7 +336,6 @@ async def plugin_disable(ctx: OpContext, inp: PluginName) -> PluginChange:
     input=PluginName,
     output=PluginChange,
     mcp="never",
-    audit="service",
 )
 async def plugin_enable(ctx: OpContext, inp: PluginName) -> PluginChange:
     changed = await ctx.svc.need_plugins().enable(inp.name)
@@ -352,7 +350,6 @@ async def plugin_enable(ctx: OpContext, inp: PluginName) -> PluginChange:
     input=PluginName,
     output=PluginChange,
     mcp="never",
-    audit="service",
 )
 async def plugin_reload(ctx: OpContext, inp: PluginName) -> PluginChange:
     try:

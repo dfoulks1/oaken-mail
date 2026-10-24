@@ -78,6 +78,7 @@ class StatsCollector:
             "version": self._svc.version,
             "started_at": started.isoformat() if started is not None else None,
             "uptime_seconds": uptime,
+            "uptime_minutes": int(uptime // 60) if uptime is not None else None,
         }
 
     async def _mail(self) -> dict[str, Any]:
@@ -140,6 +141,7 @@ class StatsCollector:
                 "started": s.started,
                 "healthy": s.healthy,
                 "detail": s.detail,
+                "enabled": s.enabled,
                 "capabilities": sorted(s.capabilities),
             }
             for s in self._svc.plugins.statuses()

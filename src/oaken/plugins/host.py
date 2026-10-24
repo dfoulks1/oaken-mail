@@ -639,9 +639,9 @@ class PluginHost:
         (it was already reported as a problem when the plugin loaded)."""
         out: list[OfferedOperation] = []
         for rec in sorted(self._records.values(), key=lambda r: (r.kind, r.name)):
-            if rec.account_id is not None or rec.instance is None:
+            if rec.account_id is not None or rec.instance is None or rec.disabled:
                 continue
-            healthy = rec.started and rec.healthy and not rec.disabled
+            healthy = rec.started and rec.healthy
             try:
                 decls = declared_operations(rec.instance)
             except Exception as exc:
@@ -650,8 +650,7 @@ class PluginHost:
             out.extend(
                 OfferedOperation(rec.name, d)
                 for d in decls
-                if isinstance(d, PluginOperation)
-                and (healthy or (d.per_account and not rec.disabled) or d.lifecycle)
+                if isinstance(d, PluginOperation) and (healthy or d.per_account)
             )
         return out
 

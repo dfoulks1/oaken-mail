@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from oaken.core.errors import InvalidInput, NotFound, NotImplementedYet, PermissionDenied
+from oaken.core.errors import InvalidInput, NotFound, PermissionDenied
 from oaken.core.ids import MessageId
 from oaken.core.operations.builtin import core_operations
 from oaken.core.operations.tests.conftest import CLI, UI, Ops, agent
@@ -87,8 +87,6 @@ async def test_no_operation_that_does_not_mark_read_changes_read_state(ops: Ops)
     for name, payload in table.items():
         try:
             await ops.call(name, payload, CLI)
-        except NotImplementedYet:
-            assert name in {"search", "ask"}
         except NotFound:
             assert name in {
                 "revoke_agent", "remove_account", "sieve_get",

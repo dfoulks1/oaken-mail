@@ -47,7 +47,7 @@ EPILOG = """\
 getting started:
   oaken help                  show this overview (also: oaken --help)
   oaken help COMMAND          help for one command (e.g. oaken help sync) — same as COMMAND --help
-  oaken start                 run the core daemon (use --detach to background it)
+  oaken start                 run the core daemon in the background (--fg to stay attached)
   oaken admin account add     add a mail account (a wizard, or --provider/--id/--set)
   oaken gmail auth            sign an account in (also imap, smtp: any plugin's functions are
                               'oaken PLUGIN VERB'; 'oaken operation --describe NAME' lists flags)
@@ -58,7 +58,7 @@ getting started:
 command groups:
   daemon        start · stop · restart · reload · status
   mail          search · ask · show · thread · summarize · read · unread · undo · sync
-  organize      sieve · schedule · reprocess · rebuild-index
+  organize      mailbox · label · folder · star · sieve · schedule · reprocess · rebuild-index
   queue         jobs · pipeline · watch
   accounts      admin · auth · accounts
   system        status · usage · plugins · config · audit · operations
@@ -99,6 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
     _register_operation(sub, g)
     _register_status(sub, g)
     _register_mail(sub, g)
+    _register_organize(sub, g)
     _register_system(sub, g)
     _register_swarm(sub, g)
     _register_mcp(sub, g)
@@ -158,17 +159,60 @@ def _globals(on_subcommand: bool) -> argparse.ArgumentParser:
 def _register_daemon(
     sub: argparse._SubParsersAction[argparse.ArgumentParser], g: argparse.ArgumentParser
 ) -> None:
+    def where(p: argparse.ArgumentParser) -> None:
+        """The background is the default; ``--fg`` stays attached. ``--detach`` is the old spelling
+        of the default and still accepted, so scripts written for it keep working."""
+        group = p.add_mutually_exclusive_group()
+        group.add_argument(
+            "--fg",
+            action="store_true",
+            help="Run in the foreground, logging to this terminal (default: the background).",
+        )
+        group.add_argument("--detach", action="store_true", help=argparse.SUPPRESS)
+
+    def patience(p: argparse.ArgumentParser) -> None:
+        p.add_argument(
+            "--grace",
+            type=float,
+            default=None,
+            metavar="SECONDS",
+            help="How long core gets to finish what it is doing before it is killed (default 40; "
+            "0 kills it at once).",
+        )
+        p.add_argument(
+            "--no-kill",
+            action="store_true",
+            help="Report an error if core does not stop in time, instead of killing it.",
+        )
+
     start = sub.add_parser(
-        "start", help="Start the core daemon (foreground; --detach for background).", parents=[g]
+        "start",
+        help="Start the core daemon (in the background; --fg to stay attached).",
+        parents=[g],
     )
-    start.add_argument("--detach", action="store_true", help="Run in the background.")
+    where(start)
     start.set_defaults(func=_lazy("daemon_cmd", "cmd_start"))
 
-    stop = sub.add_parser("stop", help="Stop the core daemon.", parents=[g])
+    stop = sub.add_parser(
+        "stop",
+        help="Stop the core daemon, killing it if it will not stop in time.",
+        parents=[g],
+        description=(
+            "Asks core to stop, waits for it to finish what it is doing (up to --grace seconds), "
+            "and kills it if it is still running. Core's work is a durable queue, so a killed core "
+            "loses nothing: unfinished jobs are retried when it starts again."
+        ),
+    )
+    patience(stop)
     stop.set_defaults(func=_lazy("daemon_cmd", "cmd_stop"))
 
-    restart = sub.add_parser("restart", help="Restart the core daemon.", parents=[g])
-    restart.add_argument("--detach", action="store_true", help="Run in the background.")
+    restart = sub.add_parser(
+        "restart",
+        help="Restart the core daemon (in the background; --fg to stay attached).",
+        parents=[g],
+    )
+    where(restart)
+    patience(restart)
     restart.set_defaults(func=_lazy("daemon_cmd", "cmd_restart"))
 
     reload = sub.add_parser(
@@ -327,6 +371,74 @@ def _register_mail(
     sync.set_defaults(func=_lazy("mail_cmd", "cmd_sync"))
 
 
+def _register_organize(
+    sub: argparse._SubParsersAction[argparse.ArgumentParser], g: argparse.ArgumentParser
+) -> None:
+    """How mail is organized. Labels, folders and stars share one grammar; a mailbox is read."""
+    kinds = {
+        "label": (
+            "Label messages (tags for finding mail).",
+            "oaken label list | create NAME | add NAME ID... | remove NAME ID...",
+        ),
+        "folder": (
+            "File messages into folders under Inbox.",
+            "oaken folder list | create PATH | add PATH ID... (or move) | remove ID... "
+            "(back to the Inbox)",
+        ),
+        "star": (
+            "Star messages (written back to the mailbox where it can be).",
+            "oaken star list | add ID... | remove ID...   (oaken unstar ID... is remove)",
+        ),
+    }
+    for noun, (helptext, usage) in kinds.items():
+        p = sub.add_parser(noun, help=helptext, parents=[g], description=f"{helptext}\n\n{usage}")
+        p.add_argument("action", choices=["list", "create", "add", "remove", "move"], help=usage)
+        p.add_argument("rest", nargs="*", metavar="ARG", help="A name or path, then message ids.")
+        p.add_argument("--yes", action="store_true", help="Confirm a change to over 25 messages.")
+        if noun == "star":
+            p.add_argument("--limit", type=int, metavar="N", help="With list: most to show.")
+        p.set_defaults(func=_lazy("organize_cmd", "cmd_mark"), noun=noun)
+
+    unstar = sub.add_parser("unstar", help="Remove the star from messages.", parents=[g])
+    unstar.add_argument("ids", nargs="+", metavar="ID", help="One or more message ids.")
+    unstar.add_argument("--yes", action="store_true", help="Confirm a change to over 25 messages.")
+    unstar.set_defaults(func=_lazy("organize_cmd", "cmd_unstar"))
+
+    mailbox = sub.add_parser(
+        "mailbox",
+        help="Look at a mailbox: the folder tree, counts, a listing, or why a message is filed.",
+        parents=[g],
+        description=(
+            "tree (default): Inbox, folders, labels and Discarded with counts. counts: the "
+            "sidebar's numbers. messages: list what is in a folder or under a label. rules ID: "
+            "the labels and flags on a message and the Sieve rule behind each. --account limits "
+            "counts and messages to one account."
+        ),
+    )
+    mailbox.add_argument(
+        "action",
+        nargs="?",
+        default="tree",
+        choices=["tree", "counts", "messages", "rules"],
+        help="tree (default), counts, messages or rules.",
+    )
+    mailbox.add_argument("id", nargs="?", help="With rules: the message id.")
+    mailbox.add_argument("--account", metavar="ID", help="Only this account.")
+    mailbox.add_argument("--folder", metavar="PATH", help="With messages: only this folder.")
+    mailbox.add_argument("--label", metavar="NAME", help="With messages: only this label.")
+    mailbox.add_argument(
+        "--disposition",
+        choices=["inbox", "filed", "discarded", "any"],
+        help="With messages: where to look (default: filed for --folder, any for --label, "
+        "else inbox).",
+    )
+    mailbox.add_argument("--unread", action="store_true", help="With messages: only unread.")
+    mailbox.add_argument("--starred", action="store_true", help="With messages: only starred.")
+    mailbox.add_argument("--limit", type=int, metavar="N", help="With messages: most to show.")
+    mailbox.add_argument("--offset", type=int, default=0, metavar="N", help="Skip this many.")
+    mailbox.set_defaults(func=_lazy("organize_cmd", "cmd_mailbox"))
+
+
 def _register_system(
     sub: argparse._SubParsersAction[argparse.ArgumentParser], g: argparse.ArgumentParser
 ) -> None:
@@ -390,23 +502,37 @@ def _register_system(
 
     plugins = sub.add_parser(
         "plugins",
-        help="List plugins. (To change one: oaken PLUGIN enable|disable|reload|check|config|set.)",
+        help="List plugins, and control one: enable, disable, reload, config, check, set.",
         parents=[g],
         description=(
-            "Default lists plugins; --check runs the health probe now. 'disable' stops a plugin "
-            "until 'enable' (or a restart; put `enabled = false` in [plugins.NAME] to make it "
-            "last). 'reload' restarts one plugin on the current config.toml."
+            "Plugin control is core's, all here. Default lists plugins; --check runs the health "
+            "probe now. 'disable' stops a plugin until 'enable' (or a restart; "
+            "`enabled = false` in [plugins.NAME] makes it last). 'reload' restarts one on the "
+            "current config.toml. 'config NAME' shows its settings. 'set NAME KEY=VALUE ...' "
+            "changes them (--unset KEY, --replace, or --file FILE for TOML; comments in "
+            "config.toml are kept, secrets are refused). 'check NAME [KEY=VALUE ...]' tries "
+            "settings on a throwaway instance and writes nothing."
         ),
     )
     plugins.add_argument(
         "subcommand",
         nargs="?",
         default="list",
-        choices=["list", "enable", "disable", "reload"],
-        help="list (default), enable, disable or reload.",
+        choices=["list", "enable", "disable", "reload", "config", "check", "set"],
+        help="list (default), enable, disable, reload, config, check or set.",
     )
     plugins.add_argument("name", nargs="?", help="The plugin (gmail) or one account (gmail@work).")
+    plugins.add_argument("pairs", nargs="*", metavar="KEY=VALUE", help="With set/check: settings.")
     plugins.add_argument("--check", action="store_true", help="Run each plugin's health probe.")
+    plugins.add_argument(
+        "--unset", action="append", metavar="KEY", help="With set/check: remove a setting."
+    )
+    plugins.add_argument(
+        "--replace", action="store_true", help="With set/check: KEY=VALUE is the whole table."
+    )
+    plugins.add_argument(
+        "--file", metavar="FILE", help="With set/check: the plugin's settings as TOML (- is stdin)."
+    )
     plugins.set_defaults(func=_lazy("system_cmd", "cmd_plugins"))
 
     config = sub.add_parser(
@@ -482,7 +608,9 @@ def _register_mcp(
             "core, writing its answers to stdout. It adds nothing: the tools, the confirmation "
             "step and the limits are core's. If core is not running, tool calls answer with a "
             "core_not_running error. It never starts core. Point a stdio-only client (Claude "
-            "Desktop) at 'oaken mcp'."
+            "Desktop) at 'oaken mcp'. 'oaken mcp expose' lists which operations MCP clients may "
+            "call; 'oaken mcp expose NAME on|off|default' (--plugin for a plugin's operations) "
+            "changes it."
         ),
     )
     mcp.add_argument(
@@ -494,6 +622,25 @@ def _register_mcp(
         help="Speak to the swarm door as an agent (token from OAKEN_AGENT_TOKEN).",
     )
     mcp.add_argument("--agent-token-file", metavar="PATH", help="Read the agent token from a file.")
+    mcp.add_argument(
+        "action",
+        nargs="?",
+        choices=["expose"],
+        help="expose: choose which operations MCP clients may call (bare 'oaken mcp' is the "
+        "bridge).",
+    )
+    mcp.add_argument("target", nargs="?", metavar="NAME", help="With expose: an operation name.")
+    mcp.add_argument(
+        "state",
+        nargs="?",
+        choices=["on", "off", "default"],
+        help="With expose NAME: on, off, or default (the operation's own).",
+    )
+    mcp.add_argument(
+        "--plugin",
+        action="store_true",
+        help="With expose: NAME is a plugin (all of its operations).",
+    )
     mcp.set_defaults(func=_lazy("mcp_cmd", "cmd_mcp"))
 
 

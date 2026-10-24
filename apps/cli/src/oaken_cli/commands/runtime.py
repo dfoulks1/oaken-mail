@@ -89,8 +89,8 @@ def run_agent(body: Callable[[Any], Awaitable[int]], args: argparse.Namespace) -
 def make_client(args: argparse.Namespace) -> ApiClient:
     """Build the :class:`ApiClient` for this invocation.
 
-    With a factory installed, defer to it. Otherwise discover the daemon and build the HTTP client
-    (a stub until prompt 16). Discovery raises :class:`CoreUnavailable` (exit 3) when core is down.
+    With a factory installed, defer to it. Otherwise discover the daemon and build the HTTP client.
+    Discovery raises :class:`CoreUnavailable` (exit 3) when core is down.
     """
     if _factory is not None:
         return _factory(args)

@@ -316,6 +316,7 @@
   },
   "check_plugin_config": {
     "input_schema": {
+      "description": "A change to one plugin's settings, as ``check`` tries it and ``set`` saves it. With nothing\nbut ``plugin`` it is no change at all: the saved settings.",
       "properties": {
         "config": {
           "additionalProperties": true,
@@ -337,6 +338,30 @@
         "plugin": {
           "title": "Plugin",
           "type": "string"
+        },
+        "replace": {
+          "default": false,
+          "title": "Replace",
+          "type": "boolean"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        },
+        "unset": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unset",
+          "type": "array"
         }
       },
       "required": [
@@ -6806,6 +6831,7 @@
   },
   "set_plugin_config": {
     "input_schema": {
+      "description": "A change to one plugin's settings, as ``check`` tries it and ``set`` saves it. With nothing\nbut ``plugin`` it is no change at all: the saved settings.",
       "properties": {
         "config": {
           "additionalProperties": true,
@@ -6827,6 +6853,30 @@
         "plugin": {
           "title": "Plugin",
           "type": "string"
+        },
+        "replace": {
+          "default": false,
+          "title": "Replace",
+          "type": "boolean"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        },
+        "unset": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unset",
+          "type": "array"
         }
       },
       "required": [

@@ -2,7 +2,6 @@
 """A provider's ``auth`` command: what it offers, and that a password never leaves its input."""
 
 from oaken.core.operations.gate import hash_input
-from oaken.plugins.contracts import PluginOperation
 from oaken.plugins.provider_auth import PasswordAuthIn
 from oaken.testing.fakes import FakeProvider
 
@@ -24,16 +23,11 @@ class Consent(FakeProvider):
     async def authorize(self, show_url: object) -> None: ...
 
 
-def _own(plugin: FakeProvider) -> list[PluginOperation]:
-    """What the plugin offers beyond the six commands every plugin has."""
-    return [o for o in plugin.operations() if not o.lifecycle]
-
-
 def test_a_provider_offers_auth_by_what_it_implements() -> None:
-    assert {o.name for o in _own(FakeProvider())} == set()
-    assert {o.name for o in _own(Secret())} == {"auth"}
-    assert {o.name for o in _own(Consent())} == {"auth", "auth_status"}
-    assert all(o.per_account for o in _own(Secret()) + _own(Consent()))
+    assert {o.name for o in FakeProvider().operations()} == set()
+    assert {o.name for o in Secret().operations()} == {"auth"}
+    assert {o.name for o in Consent().operations()} == {"auth", "auth_status"}
+    assert all(o.per_account for o in Secret().operations() + Consent().operations())
 
 
 def test_the_fields_the_accounts_page_reads_from_a_sign_in_exist() -> None:

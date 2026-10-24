@@ -54,27 +54,45 @@ def _started(args: argparse.Namespace, info: dict[str, Any] | None, verb: str) -
 
 
 def cmd_start(args: argparse.Namespace) -> int:
-    if not getattr(args, "detach", False) and getattr(args, "verbose", 0) == 0:
+    fg = _foreground(args)
+    if fg and getattr(args, "verbose", 0) == 0:
         _log_info()  # a foreground daemon should say what it is doing
-    return _started(args, daemon.start(detach=getattr(args, "detach", False)), "started")
+    return _started(args, daemon.start(detach=not fg), "started")
+
+
+def _say(message: str) -> None:
+    """Progress goes to stderr, so ``--json`` on stdout stays one clean document."""
+    import sys
+
+    print(message, file=sys.stderr, flush=True)
 
 
 def cmd_stop(args: argparse.Namespace) -> int:
-    stopped = daemon.stop()
+    result = daemon.stop(grace=args.grace, kill=not args.no_kill, say=_say)
 
     def text() -> None:
         from oaken_cli.output import print_text
 
-        print_text("core stopped" if stopped else "core is not running")
+        if not result.running:
+            print_text("core is not running")
+        elif result.killed:
+            print_text("core did not stop in time and was killed (unfinished jobs will be retried)")
+        else:
+            print_text("core stopped")
 
-    return emit(args, data={"stopped": stopped}, text=text)
+    return emit(args, data={"stopped": result.running, "killed": result.killed}, text=text)
+
+
+def _foreground(args: argparse.Namespace) -> bool:
+    return bool(getattr(args, "fg", False))
 
 
 def cmd_restart(args: argparse.Namespace) -> int:
-    detach = getattr(args, "detach", False)
-    if not detach and getattr(args, "verbose", 0) == 0:
+    fg = _foreground(args)
+    if fg and getattr(args, "verbose", 0) == 0:
         _log_info()
-    return _started(args, daemon.restart(detach=detach), "restarted")
+    info = daemon.restart(detach=not fg, grace=args.grace, kill=not args.no_kill, say=_say)
+    return _started(args, info, "restarted")
 
 
 def cmd_reload(args: argparse.Namespace) -> int:

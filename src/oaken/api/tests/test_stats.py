@@ -115,3 +115,18 @@ async def test_stats_leaks_no_mail_content(make_rig: Callable[..., Any], tmp_pat
             assert leak not in body, f"mail content leaked onto /stats: {leak}"
         # nor the API token
         assert TOKEN not in body
+
+
+async def test_uptime_and_the_clock_move_with_the_live_refresh(rig: Rig) -> None:
+    """The page's script re-reads /stats.json and sets textContent on every ``data-stat`` element
+    and on ``#stats-updated``: so the uptime must be one of those, not text rendered once."""
+    rig.api._started_at = rig.ops.rig.clock.now()  # a real daemon records when it started
+    page = (await rig.http.get("/stats")).text
+    assert 'data-stat="core.uptime_minutes"' in page and 'id="stats-updated"' in page
+    js = (await rig.http.get("/stats.js")).text
+    assert "EVERY_MS = 10000" in js and "stats-updated" in js  # the clock follows every poll
+    first = (await rig.http.get("/stats.json")).json()
+    rig.ops.rig.clock.advance(seconds=125)
+    later = (await rig.http.get("/stats.json")).json()
+    assert later["generated_at"] > first["generated_at"]
+    assert (first["core"]["uptime_minutes"], later["core"]["uptime_minutes"]) == (0, 2)

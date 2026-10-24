@@ -235,6 +235,10 @@ def cmd_plugins(args: argparse.Namespace) -> int:
 
 async def _plugins(client: ApiClient, args: argparse.Namespace) -> int:
     sub = getattr(args, "subcommand", "list")
+    if sub in ("config", "check", "set"):
+        from oaken_cli.commands.plugin_cmd import settings
+
+        return await settings(client, args)
     if sub != "list":
         if not args.name:
             raise CliError(f"plugins {sub} needs a plugin name", ExitCode.USAGE)

@@ -204,3 +204,14 @@ async def test_an_unknown_plugin_is_not_found(home: Path) -> None:
         await cfg.check_plugin_config.handler(
             ctx, cfg.PluginConfigCandidate(plugin="nope", config={})
         )
+
+
+async def test_two_saves_in_the_same_second_keep_both_backups(home: Path) -> None:
+    ctx = _ctx()  # a clock that never moves, so every save has the same stamp
+    for port in (1, 2, 3):
+        await cfg.config_save.handler(ctx, cfg.ConfigCandidate(text=f"[api]\nport = {port}\n"))
+    backups = sorted((home / "config").glob("config.toml.bak.*"))
+    assert [b.read_text(encoding="utf-8") for b in backups] == [
+        "[api]\nport = 1\n",
+        "[api]\nport = 2\n",
+    ]  # the first save had nothing to back up; the next two kept what they replaced

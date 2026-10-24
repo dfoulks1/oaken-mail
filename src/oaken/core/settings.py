@@ -381,8 +381,8 @@ class APISettings(_Section):
     mcp_max_concurrent: int = Field(default=8, ge=1, le=256)
     # Bytes of one tool result (a larger one is refused with ``result_too_large``).
     mcp_max_result_bytes: int = Field(default=64 * 1024, ge=1024)
-    # A folder of static files served at ``/`` (the web UI, a later phase). Empty or missing: a
-    # placeholder page.
+    # A folder of static files served at ``/`` (the web UI, a later phase). Empty or missing: core's
+    # own welcome page.
     static_dir: str = ""
     # One browser origin allowed to call the API cross-origin, for UI development only, for
     # example ``http://localhost:5173``. Empty means no CORS headers at all.

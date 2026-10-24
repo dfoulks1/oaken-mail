@@ -77,12 +77,6 @@ class InvalidInput(OakenError):
     code = "invalid_input"
 
 
-class NotImplementedYet(OakenError):
-    """The operation is defined, but the prompt that fills it in has not been built."""
-
-    code = "not_implemented"
-
-
 class Unavailable(OakenError):
     """A service the operation needs is not running in this process."""
 

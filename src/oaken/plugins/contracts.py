@@ -219,10 +219,6 @@ class PluginOperation:
     # means the only account this plugin has. Offered even while the plugin is unhealthy or not
     # set up, because that is when you need it (signing in).
     per_account: bool = False
-    # True: one of the commands every plugin has (``enable``, ``check``, ...). Core runs it when the
-    # plugin has not written its own, and offers it whatever the plugin's state: a plugin that is
-    # disabled or unhealthy still needs ``enable`` and ``config``.
-    lifecycle: bool = False
 
 
 # -- Job kinds a plugin offers -----------------------------------------------------------------

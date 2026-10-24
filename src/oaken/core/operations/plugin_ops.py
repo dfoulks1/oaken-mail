@@ -16,7 +16,6 @@ from pydantic import BaseModel
 from oaken.core.errors import InvalidInput, OakenError, PluginError
 from oaken.core.logging import get_logger
 from oaken.core.operations.context import OpContext
-from oaken.core.operations.lifecycle_ops import lifecycle_handler
 from oaken.core.operations.registry import (
     PLUGIN_SEP,
     AnyOperation,
@@ -33,21 +32,6 @@ log = get_logger("oaken.operations")
 def adapt(host: PluginHost, offered: OfferedOperation) -> AnyOperation:
     plugin, d = offered.plugin, offered.declaration
     timeout = host.call_timeout
-    if d.lifecycle and getattr(d.handler, "_oaken_default", False):
-        # One of the commands every plugin has, and this plugin did not write its own: core runs it.
-        return Operation(
-            name=f"{plugin}{PLUGIN_SEP}{d.name}",
-            summary=d.summary,
-            permission=d.permission,
-            input=d.input,
-            output=d.output,
-            handler=lifecycle_handler(plugin, d.name),
-            mcp=d.mcp,
-            marks_read=False,
-            audit="registry",
-            plugin=plugin,
-            description=f"Offered to every plugin; run by core for {plugin}.",
-        )
 
     def pctx(ctx: OpContext) -> Any:
         return host.operation_context(

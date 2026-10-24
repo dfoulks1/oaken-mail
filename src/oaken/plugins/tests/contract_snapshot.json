@@ -247,8 +247,7 @@
       "handler",
       "preview",
       "mcp",
-      "per_account",
-      "lifecycle"
+      "per_account"
     ],
     "PluginPreview": [
       "summary",

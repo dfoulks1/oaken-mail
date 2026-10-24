@@ -55,7 +55,7 @@ async def test_an_allow_list_narrows_what_the_plugin_may_do(install_plugin: Inst
         instance = host.provider("full")
         assert inferred_capabilities(instance, "provider") == {"sync.pull"}
         assert instance.ctx.config == {"x": 1}  # the plugin never sees the host's keys
-        assert [o.name for o in instance.operations() if not o.lifecycle] == []  # no `auth`
+        assert instance.operations() == []  # no `auth`
     finally:
         await host.stop()
 
@@ -68,8 +68,7 @@ async def test_no_allow_list_means_everything_the_plugin_implements(
     try:
         st = next(s for s in host.statuses() if s.name == "full")
         assert st.capabilities == {"auth", "sync.pull", "flags.write"} and st.allowed is None
-        own = {o.name for o in host.provider("full").operations() if not o.lifecycle}
-        assert own == {"auth"}
+        assert {o.name for o in host.provider("full").operations()} == {"auth"}
     finally:
         await host.stop()
 

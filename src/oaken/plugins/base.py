@@ -41,16 +41,6 @@ from oaken.plugins.contracts import (
     VectorItem,
     VectorStats,
 )
-from oaken.plugins.plugin_control import (
-    CheckIn,
-    CheckOut,
-    ConfigOut,
-    ControlOut,
-    NoInput,
-    SetIn,
-    SetOut,
-    TargetIn,
-)
 from oaken.plugins.provider_auth import AuthIn, AuthOut, AuthStatusOut, PasswordAuthIn
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -90,7 +80,6 @@ def command(
     preview: str | None = None,
     mcp: Literal["off", "never"] = "off",
     per_account: bool = False,
-    lifecycle: bool = False,
 ) -> Callable[[F], F]:
     """Offer a method of your plugin as a command: an operation core registers as
     ``<plugin>.<name>``, reachable over the API and, because the CLI builds its verbs from the
@@ -118,7 +107,6 @@ def command(
             "preview": preview,
             "mcp": mcp,
             "per_account": per_account,
-            "lifecycle": lifecycle,
         }
         return fn
 
@@ -145,86 +133,6 @@ class _Base:
     async def stop(self) -> None:
         return None
 
-    # -- the commands every plugin has --------------------------------------------------------
-    # ``oaken <plugin> enable | disable | reload | check | config | set``. Core runs them (a plugin
-    # has no handle on the host or the config file); override one to run your own code instead.
-    # See ``oaken.plugins.plugin_control``.
-    @command(
-        "enable",
-        "Start this plugin (until the next restart if its table says it is off).",
-        input=TargetIn,
-        output=ControlOut,
-        permission="mutate",
-        mcp="never",
-        lifecycle=True,
-    )
-    @_default
-    async def _ctl_enable(self, ctx: PluginOpContext, inp: TargetIn) -> ControlOut:
-        raise NotImplementedError
-
-    @command(
-        "disable",
-        "Stop this plugin and keep it off until `enable` or a restart.",
-        input=TargetIn,
-        output=ControlOut,
-        permission="mutate",
-        mcp="never",
-        lifecycle=True,
-    )
-    @_default
-    async def _ctl_disable(self, ctx: PluginOpContext, inp: TargetIn) -> ControlOut:
-        raise NotImplementedError
-
-    @command(
-        "reload",
-        "Restart this plugin on the current config.toml, without restarting core.",
-        input=TargetIn,
-        output=ControlOut,
-        permission="mutate",
-        mcp="never",
-        lifecycle=True,
-    )
-    @_default
-    async def _ctl_reload(self, ctx: PluginOpContext, inp: TargetIn) -> ControlOut:
-        raise NotImplementedError
-
-    @command(
-        "check",
-        "Try the saved settings (or ones you give) on a throwaway instance.",
-        input=CheckIn,
-        output=CheckOut,
-        mcp="never",
-        lifecycle=True,
-    )
-    @_default
-    async def _ctl_check(self, ctx: PluginOpContext, inp: CheckIn) -> CheckOut:
-        raise NotImplementedError
-
-    @command(
-        "config",
-        "Show this plugin's settings, their schema and an example.",
-        input=NoInput,
-        output=ConfigOut,
-        mcp="never",
-        lifecycle=True,
-    )
-    @_default
-    async def _ctl_config(self, ctx: PluginOpContext, inp: NoInput) -> ConfigOut:
-        raise NotImplementedError
-
-    @command(
-        "set",
-        "Change this plugin's settings in config.toml (comments kept; no secrets).",
-        input=SetIn,
-        output=SetOut,
-        permission="mutate",
-        mcp="never",
-        lifecycle=True,
-    )
-    @_default
-    async def _ctl_set(self, ctx: PluginOpContext, inp: SetIn) -> SetOut:
-        raise NotImplementedError
-
     async def health(self) -> Health:
         return Health(True)
 
@@ -248,7 +156,6 @@ class _Base:
                     preview=preview,
                     mcp=spec["mcp"],
                     per_account=spec["per_account"],
-                    lifecycle=spec["lifecycle"],
                 )
             )
         return found

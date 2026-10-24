@@ -116,7 +116,6 @@ class SaveResult(BaseModel):
     input=ConfigCandidate,
     output=SaveResult,
     mcp="never",
-    audit="service",
 )
 async def config_save(ctx: OpContext, inp: ConfigCandidate) -> SaveResult:
     return _write(ctx, inp.text)
@@ -133,6 +132,10 @@ def _write(ctx: OpContext, text: str) -> SaveResult:
     if path.is_file():
         stamp = ctx.svc.clock.now().strftime("%Y%m%d-%H%M%S")
         bak = path.with_name(f"{path.name}.bak.{stamp}")
+        n = 1
+        while bak.exists():  # a backup is never overwritten, even by a save in the same second
+            bak = path.with_name(f"{path.name}.bak.{stamp}-{n}")
+            n += 1
         bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
         bak.chmod(0o600)
         backup = str(bak)
@@ -187,9 +190,33 @@ async def get_plugin_config(ctx: OpContext, inp: PluginName) -> PluginConfig:
 
 
 class PluginConfigCandidate(BaseModel):
+    """A change to one plugin's settings, as ``check`` tries it and ``set`` saves it. With nothing
+    but ``plugin`` it is no change at all: the saved settings."""
+
     plugin: str
-    config: dict[str, Any] = Field(default_factory=dict)  # the whole table, not a change to it
+    # An editor's TOML for the plugin's own settings (``get_plugin_config``'s ``text``). It replaces
+    # them and keeps the host's keys (``enabled``, ``capabilities``); the rest applies on top.
+    text: str | None = None
+    config: dict[str, Any] = Field(default_factory=dict)  # keys to set, on top of the saved ones
+    unset: list[str] = Field(default_factory=list)  # keys to remove
+    replace: bool = False  # True: ``config`` is the whole table, and the saved keys are dropped
     kind: str | None = None  # for a name two kinds share (ollama embeds and generates)
+
+
+def _path(plugin: str) -> list[str]:
+    return ["plugins", plugin]
+
+
+def _edited(inp: PluginConfigCandidate) -> dict[str, Any]:
+    """The settings table as ``inp`` would leave it."""
+    return config_edit.edited_table(
+        _config_text(),
+        _path(inp.plugin),
+        snippet=inp.text,
+        config=inp.config,
+        unset=inp.unset,
+        replace=inp.replace,
+    )
 
 
 class ProbeResult(BaseModel):
@@ -208,7 +235,8 @@ class PluginConfigCheck(BaseModel):
     "check_plugin_config",
     "Test one plugin's settings before saving them: they are checked against the plugin's own "
     "schema and capabilities, then a throwaway instance is started on them and asked if it is "
-    "healthy. The running plugin is not touched and nothing is written.",
+    "healthy. Give no change to test the saved settings. The running plugin is not touched and "
+    "nothing is written.",
     permission="read",
     input=PluginConfigCandidate,
     output=PluginConfigCheck,
@@ -216,38 +244,51 @@ class PluginConfigCheck(BaseModel):
 )
 async def check_plugin_config(ctx: OpContext, inp: PluginConfigCandidate) -> PluginConfigCheck:
     host = ctx.svc.need_plugins()
+    if not host.kinds_of(inp.plugin):
+        raise NotFound(f"no plugin named {inp.plugin!r}")
     try:
-        config_edit.refuse_secrets(inp.config)
+        table = _edited(inp)
+        config_edit.refuse_secrets(table)
     except ConfigError as exc:
         return PluginConfigCheck(ok=False, problems=[str(exc)])
-    problems = host.check_config(inp.plugin, inp.config)
+    problems = host.check_config(inp.plugin, table)
     if problems:
         return PluginConfigCheck(ok=False, problems=problems)
-    probes = await host.probe(inp.plugin, inp.config, kind=inp.kind)  # type: ignore[arg-type]
+    probes = await host.probe(inp.plugin, table, kind=inp.kind)  # type: ignore[arg-type]
     rows = [ProbeResult(kind=p.kind, ok=p.ok, detail=p.detail) for p in probes]
     return PluginConfigCheck(ok=all(r.ok for r in rows), probes=rows)
 
 
 @operation(
     "set_plugin_config",
-    "Save one plugin's settings as its [plugins.NAME] table, replacing that table and leaving "
-    "the rest of config.toml, comments included, as it is. Validated first; the previous file is "
-    "backed up. Does not restart the plugin: call plugin_reload to apply.",
+    "Change one plugin's settings in its [plugins.NAME] table and leave the rest of config.toml, "
+    "comments included, as it is. Keys are merged onto the saved ones (or replace them); text "
+    "from an editor keeps the person's comments. Validated first; the previous file is backed "
+    "up. Does not restart the plugin: call plugin_reload to apply.",
     permission="mutate",
     input=PluginConfigCandidate,
     output=SaveResult,
     mcp="never",
-    audit="service",
 )
 async def set_plugin_config(ctx: OpContext, inp: PluginConfigCandidate) -> SaveResult:
-    path = _config_path()
-    problems = ctx.svc.need_plugins().check_config(inp.plugin, inp.config)
-    if problems:
-        return SaveResult(ok=False, path=str(path), error="; ".join(problems))
+    path = str(_config_path())
+    host = ctx.svc.need_plugins()
+    if not host.kinds_of(inp.plugin):
+        raise NotFound(f"no plugin named {inp.plugin!r}")
     try:
-        text = config_edit.set_table(_config_text(), ["plugins", inp.plugin], inp.config)
+        table = _edited(inp)
+        problems = host.check_config(inp.plugin, table)
+        if problems:
+            return SaveResult(ok=False, path=path, error="; ".join(problems))
+        saved = _config_text()
+        if inp.text is not None:  # the person's own text and comments are kept
+            text = config_edit.set_table_text(
+                saved, _path(inp.plugin), inp.text, config=inp.config, unset=inp.unset
+            )
+        else:
+            text = config_edit.set_table(saved, _path(inp.plugin), table)
     except ConfigError as exc:
-        return SaveResult(ok=False, path=str(path), error=str(exc))
+        return SaveResult(ok=False, path=path, error=str(exc))
     return _write(ctx, text)
 
 
@@ -266,7 +307,6 @@ class ReloadResult(BaseModel):
     input=Empty,
     output=ReloadResult,
     mcp="never",
-    audit="service",
 )
 async def config_reload(ctx: OpContext, inp: Empty) -> ReloadResult:
     # Validate the on-disk config first, so an obviously broken file does not even trigger a cycle.

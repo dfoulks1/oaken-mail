@@ -32,7 +32,7 @@ from oaken.api.runtime import same_secret
 from oaken.api.stats import STATS_JS, STATS_LOGO, StatsCollector, render_stats
 from oaken.api.welcome import CONFIG_JS, JOBS_JS, WELCOME_JS, render_welcome, welcome_context
 from oaken.core.agents import TOKEN_PREFIX, Agent
-from oaken.core.errors import Conflict, OakenError, PermissionDenied
+from oaken.core.errors import Conflict, InvalidInput, OakenError, PermissionDenied
 from oaken.core.ids import JobId
 from oaken.core.logging import get_logger
 from oaken.core.operations.caller import CallerContext
@@ -259,6 +259,9 @@ class Api:
             Route("/jobs/retry-parked", safe(self.jobs_retry_parked), methods=["POST"]),
             Route("/jobs/cancel", safe(self.jobs_cancel), methods=["POST"]),
             Route("/jobs/retry", safe(self.jobs_retry), methods=["POST"]),
+            Route("/plugins/enable", safe(self.plugins_enable), methods=["POST"]),
+            Route("/plugins/disable", safe(self.plugins_disable), methods=["POST"]),
+            Route("/plugins/reload", safe(self.plugins_reload), methods=["POST"]),
         ]
         static = Path(self.cfg.static_dir).expanduser() if self.cfg.static_dir else None
         if static is not None and static.is_dir():
@@ -428,6 +431,26 @@ class Api:
 
     async def jobs_pipeline(self, request: Request) -> Response:
         return await self._config_op("pipeline_status", {})
+
+    # -- plugin control on the stats page ----------------------------------------------------
+    # The Plugins tab's switch and Reload button. Loopback-only and token-free like the rest of the
+    # console; each delegates to core's own plugin_enable / plugin_disable / plugin_reload with
+    # confirm=True, so the audit log records it and the CLI (`oaken plugins ...`) does the same.
+    async def _plugin_control(self, request: Request, op: str) -> Response:
+        body = await read_json(request)
+        name = body.get("name")
+        if not isinstance(name, str) or not name:
+            raise InvalidInput("name the plugin")
+        return await self._config_op(op, {"name": name})
+
+    async def plugins_enable(self, request: Request) -> Response:
+        return await self._plugin_control(request, "plugin_enable")
+
+    async def plugins_disable(self, request: Request) -> Response:
+        return await self._plugin_control(request, "plugin_disable")
+
+    async def plugins_reload(self, request: Request) -> Response:
+        return await self._plugin_control(request, "plugin_reload")
 
     async def jobs_pause(self, request: Request) -> Response:
         body = await read_json(request)

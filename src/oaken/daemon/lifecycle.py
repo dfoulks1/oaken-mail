@@ -15,6 +15,7 @@ import subprocess  # noqa: S404 (starts our own interpreter, never a shell)
 import sys
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -208,25 +209,76 @@ def status(runtime: Path | None = None) -> dict[str, Any] | None:
     return data
 
 
-def stop(runtime: Path | None = None, *, timeout: float = 40.0) -> bool:
-    """Ask the running core to stop and wait for it. ``False`` if none was running."""
+# How long ``stop`` waits for core to finish: core's own shutdown grace (30 seconds for running jobs
+# to drain, ``[api] shutdown_grace_seconds``) and a margin for it to close its stores.
+DEFAULT_GRACE = 40.0
+KILL_WAIT = 5.0  # after a kill, how long to wait for the process to be gone
+
+
+@dataclass(frozen=True)
+class StopResult:
+    running: bool  # core was running when it was asked to stop
+    killed: bool = False  # it did not stop in time and was killed
+    pid: int = 0
+
+
+def stop_gracefully(
+    runtime: Path | None = None,
+    *,
+    grace: float = DEFAULT_GRACE,
+    kill: bool = True,
+    notify: Callable[[str], None] | None = None,
+) -> StopResult:
+    """Ask the running core to stop, give it ``grace`` seconds to finish what it is doing, and if it
+    is still running then, kill it (``kill=False`` reports an error instead). Core's work is a
+    durable queue with leases, so a killed core loses nothing: unfinished jobs are retried.
+    ``notify`` hears each step in plain words. A killed core cannot remove its runtime file, so
+    that is cleaned up here and the next ``start`` finds a clear field."""
+    say = notify or (lambda _msg: None)
     found = status(runtime)
     if found is None:
-        return False
+        return StopResult(False)
     pid = int(found["pid"])
     try:
         sig = signal.CTRL_BREAK_EVENT if sys.platform == "win32" else signal.SIGTERM  # type: ignore[attr-defined,unused-ignore]
         os.kill(pid, sig)
     except ProcessLookupError:
-        return False
+        return StopResult(False)
     except PermissionError as exc:
         raise Unavailable(f"not allowed to stop core (pid {pid}): {exc}") from exc
-    deadline = time.monotonic() + timeout
+    say(f"stopping core (pid {pid}); waiting up to {grace:.0f}s for it to finish what it is doing")
+    deadline = time.monotonic() + grace
     while pid_alive(pid):
         if time.monotonic() > deadline:
-            raise Unavailable(f"core (pid {pid}) did not stop within {timeout:.0f}s")
+            break
         time.sleep(0.05)
-    return True
+    else:
+        return StopResult(True, pid=pid)
+    if not kill:
+        raise Unavailable(
+            f"core (pid {pid}) did not stop within {grace:.0f}s; "
+            "run `oaken stop` without --no-kill to kill it"
+        )
+    say(f"core did not stop within {grace:.0f}s; killing it (pid {pid})")
+    try:
+        os.kill(pid, getattr(signal, "SIGKILL", signal.SIGTERM))  # Windows has no SIGKILL
+    except ProcessLookupError:
+        return StopResult(True, killed=True, pid=pid)
+    except PermissionError as exc:
+        raise Unavailable(f"not allowed to kill core (pid {pid}): {exc}") from exc
+    gone = time.monotonic() + KILL_WAIT
+    while pid_alive(pid):
+        if time.monotonic() > gone:
+            raise Unavailable(f"core (pid {pid}) is still running after a kill")
+        time.sleep(0.05)
+    (runtime or paths.runtime_file()).unlink(missing_ok=True)
+    return StopResult(True, killed=True, pid=pid)
+
+
+def stop(runtime: Path | None = None, *, timeout: float = DEFAULT_GRACE) -> bool:
+    """Ask the running core to stop and wait for it, never killing it. ``False`` if none was
+    running. (``stop_gracefully`` is the one that escalates.)"""
+    return stop_gracefully(runtime, grace=timeout, kill=False).running
 
 
 def reload(runtime: Path | None = None) -> bool:
@@ -280,6 +332,9 @@ def detach(*, timeout: float = 30.0, runtime: Path | None = None) -> dict[str, A
     raise Unavailable(f"core did not start listening within {timeout:.0f}s")
 
 
-def restart(*, timeout: float = 40.0, runtime: Path | None = None) -> dict[str, Any]:
-    stop(runtime, timeout=timeout)
+def restart(
+    *, timeout: float = DEFAULT_GRACE, kill: bool = True, runtime: Path | None = None
+) -> dict[str, Any]:
+    """Stop core (killing it if it will not stop in time) and start it again in the background."""
+    stop_gracefully(runtime, grace=timeout, kill=kill)
     return detach(runtime=runtime)

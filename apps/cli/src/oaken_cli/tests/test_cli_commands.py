@@ -320,24 +320,55 @@ async def test_plugins_control_verbs_need_a_name_and_report_an_unknown_plugin(cl
         assert run.code != int(ExitCode.OK)
 
 
-async def test_every_plugin_has_enable_disable_check_config_and_set_as_verbs(
+async def test_plugins_owns_enable_disable_and_a_plugin_has_no_such_verbs(cli: Cli) -> None:
+    off = await cli("plugins", "disable", "fake", "--json")
+    assert off.code == int(ExitCode.OK), off.err
+    assert json.loads(off.out)["changed"][0] == "fake"
+    on = await cli("plugins", "enable", "fake", "--json")
+    assert on.code == int(ExitCode.OK), on.err
+    # the plugin's own verbs are its functionality, not its control: no `oaken fake enable`
+    assert (await cli("fake", "enable")).code == int(ExitCode.ERROR)
+
+
+async def test_plugins_config_set_and_check_edit_one_plugins_settings(
     cli: Cli, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("OAKEN_HOME", str(tmp_path / "home"))
     monkeypatch.setenv("OAKEN_STATE_DIR", str(tmp_path / "state"))
-    off = await cli("fake", "disable", "--json")
-    assert off.code == int(ExitCode.OK), off.err
-    assert json.loads(off.out)["output"]["changed"][0] == "fake"
-    on = await cli("fake", "enable", "--json")
-    assert all(s["enabled"] for s in json.loads(on.out)["output"]["states"])
-    saved = await cli("fake", "set", "--config", '{"alpha": 1}', "--json")
+    empty = await cli("plugins", "config", "fake")
+    assert empty.code == int(ExitCode.OK), empty.err
+    assert "no [plugins.fake] settings yet" in empty.out
+    saved = await cli("plugins", "set", "fake", "alpha=2", 'tags=["a", "b"]', "name=plain")
     assert saved.code == int(ExitCode.OK), saved.err
-    shown = json.loads((await cli("fake", "config", "--json")).out)["output"]
-    assert shown["config"] == {"alpha": 1}
-    checked = await cli("fake", "check", "--json")
-    assert checked.code == int(ExitCode.OK), checked.err
-    refused = json.loads((await cli("fake", "set", "--config", '{"token": "x"}', "--json")).out)
-    assert refused["output"]["ok"] is False
+    assert "apply it with: oaken plugins reload fake" in saved.out
+    shown = json.loads((await cli("plugins", "config", "fake", "--json")).out)
+    assert shown["config"] == {"alpha": 2, "tags": ["a", "b"], "name": "plain"}  # typed values
+    await cli("plugins", "set", "fake", "--unset", "tags", "--unset", "name")
+    assert json.loads((await cli("plugins", "config", "fake", "--json")).out)["config"] == {
+        "alpha": 2
+    }
+    ok = await cli("plugins", "check", "fake")
+    assert ok.code == int(ExitCode.OK), ok.err
+    assert "settings look good" in ok.out
+    refused = await cli("plugins", "set", "fake", "token=abc")
+    assert refused.code == int(ExitCode.ERROR) and "keyring" in refused.err
+    toml = tmp_path / "fake.toml"
+    toml.write_text("# mine\nalpha = 9  # edited\n", encoding="utf-8")
+    assert (await cli("plugins", "set", "fake", "--file", str(toml))).code == int(ExitCode.OK)
+    assert "# edited" in (await cli("plugins", "config", "fake")).out
+
+
+async def test_plugins_set_and_config_need_a_name_and_something_to_do(cli: Cli) -> None:
+    usage = int(ExitCode.USAGE)
+    for argv in (
+        ("plugins", "set"),
+        ("plugins", "set", "fake"),
+        ("plugins", "config"),
+        ("plugins", "config", "fake", "a=1"),
+        ("plugins", "set", "fake", "novalue"),
+    ):
+        assert (await cli(*argv)).code == usage, argv
+    assert (await cli("plugins", "set", "no-such-plugin", "a=1")).code != int(ExitCode.OK)
 
 
 async def test_a_bare_sync_queues_a_pull_for_every_account(cli: Cli) -> None:
