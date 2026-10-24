@@ -5,6 +5,44 @@ All notable changes to Oaken are recorded here. The format follows
 [Semantic Versioning](https://semver.org/). All four distributions (`oaken`, `oaken-cli`,
 `oaken-webui`, `oaken-core`) release in lockstep at one version (ADR 0014).
 
+## [0.1.1] — Unreleased
+
+Makes a fresh install usable without reading the docs.
+
+### Added
+
+- A live welcome page at `/`, a config editor at `/config`, a jobs and pipeline console at `/jobs`,
+  an in-app getting-started page and a shared nav, all on loopback. The `/stats` page now uses the
+  same Bootstrap look. Four new operations back the editor: `config_get`, `config_validate`,
+  `config_save` and `config_reload`.
+- `oaken start` prints where the console is.
+- A commented default `config.toml` is written on first start (never over an existing file).
+- Core remembers the last `OAKEN_HOME` it ran under. If the variable is unset it uses that home
+  and logs a warning with the line to add to your shell profile.
+
+- `capabilities = [...]` in a plugin's table narrows what it may do (Gmail receive-only, for
+  example), and a plugin can ship switched off with `enabled_default = False`. `list_plugins`
+  reports both.
+- Every plugin built on a base class has `enable`, `disable`, `reload`, `check`, `config` and `set`
+  as commands (`oaken gmail disable`, `oaken imap set --config '{"port": 993}'`), run by core and
+  available to the CLI, the web UI and the API alike; a plugin can override any of them.
+- `check_plugin_config` tries a plugin's settings on a throwaway instance before they are saved;
+  `get_plugin_config` and `set_plugin_config` read and write one `[plugins.<name>]` table, keeping
+  the comments and the rest of `config.toml` (new dependency: `tomlkit`).
+
+### Changed
+
+- A reload keeps the port core was already listening on when `[api] port` is `0`, so the stats page
+  and other clients stay put.
+- A plugin that is installed but has no `[plugins.<name>]` settings (Gmail, IMAP, SMTP) is reported
+  as "not configured" instead of logging an error.
+- `sqlite-vec` is a core dependency, so the default vector store works after a plain install.
+
+### Fixed
+
+- `test_a_fixture_with_no_matching_enricher_is_reported` read the developer's real config and a
+  running Ollama; it is now hermetic.
+
 ## [0.1.0] — 2026-10-22
 
 **First public beta.** `0.y.z` means the surfaces may still change; see

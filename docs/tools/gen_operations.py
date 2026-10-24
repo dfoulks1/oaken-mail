@@ -24,6 +24,21 @@ def _fields(schema: dict[str, Any]) -> str:
     return ", ".join(f"`{n}`" + ("" if n in required else "?") for n in props)
 
 
+def _catalog() -> list[Any]:
+    """The plugins installed in this environment, loaded but not started."""
+    import asyncio
+
+    try:
+        from oaken.core.clock import SystemClock
+        from oaken.core.settings import Settings
+        from oaken.plugins.host import PluginHost
+    except ImportError as exc:
+        raise BuildError(f"operations generator: cannot import the plugin host: {exc}") from exc
+    host = PluginHost(Settings(), SystemClock(), health_interval=3600)
+    asyncio.run(host.load())
+    return host.catalog()
+
+
 def build(cfg: Config) -> Page:
     try:
         from oaken.core.operations.builtin import core_registry
@@ -60,10 +75,62 @@ def build(cfg: Config) -> Page:
     lines += [
         "## Plugin operations",
         "",
-        "A plugin may offer more, named `<plugin>.<name>`. They are listed by `list_operations`"
-        " at run time, and are always off over MCP until the user turns them on.",
+        "A plugin may offer more, named `<plugin>.<name>` (a provider's login, say). They are"
+        " listed by `list_operations` at run time, are always off over MCP until the user turns"
+        " them on, and are reachable from the CLI as `oaken <plugin> <name>` (or"
+        " `oaken operation <plugin>.<name>`, with one flag per input field). A plugin declares one"
+        " with the `@command` decorator in `oaken.plugins.base`.",
         "",
+        "Plugins installed with this version, and the functions each offers. A plugin you install"
+        " yourself adds its own, which show up on your machine, not here.",
+        "",
+        "| Plugin | Kind | Version | Functions |",
+        "|---|---|---|---|",
     ]
+    catalog = _catalog()
+    every = next(
+        ([d for d in declared if d.lifecycle] for _k, _n, _v, declared in catalog if declared), []
+    )
+    for kind, name, version, declared in catalog:
+        own = [d for d in declared if not d.lifecycle]
+        names = ", ".join(f"`{name}.{d.name}`" for d in own) or "none of its own"
+        lines.append(f"| `{name}` | {kind} | {version or '-'} | {names} |")
+    lines.append("")
+    if every:
+        lines += [
+            "### Commands every plugin has",
+            "",
+            "A plugin built on a base class offers these with no code, as `<plugin>.<command>`"
+            " (`oaken <plugin> <command>`). Core runs them, they work whatever state the plugin is"
+            " in, and none is ever offered over MCP. A plugin may write its own to replace one.",
+            "",
+            "| Command | Permission | What it does |",
+            "|---|---|---|",
+        ]
+        lines += [f"| `{d.name}` | {d.permission} | {d.summary} |" for d in every]
+        lines.append("")
+        for d in every:
+            lines += [
+                f"#### `<plugin>.{d.name}`",
+                "",
+                f"- Input: {_fields(d.input.model_json_schema())}",
+                f"- Output: {_fields(d.output.model_json_schema())}",
+                "",
+            ]
+    for kind, name, _version, declared in catalog:
+        for d in declared:
+            if d.lifecycle:
+                continue
+            lines += [
+                f"### `{name}.{d.name}`",
+                "",
+                f"{d.summary} Offered by the `{name}` {kind} plugin; permission `{d.permission}`,"
+                f" MCP `{d.mcp}`.",
+                "",
+                f"- Input: {_fields(d.input.model_json_schema())}",
+                f"- Output: {_fields(d.output.model_json_schema())}",
+                "",
+            ]
     return page_from_meta(
         PAGE_ID,
         "Operations",

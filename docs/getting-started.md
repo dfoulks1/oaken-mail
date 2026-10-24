@@ -1,28 +1,33 @@
 +++
 title = "Set up Oaken from scratch"
-subtitle = "From a fresh checkout to a synced mailbox and a connected AI client"
+subtitle = "From install to a synced mailbox and a connected AI client"
 lead = "This walks through a first setup on one machine: install, the config file, the local model, one mail account, the daemon, a first sync, and, if you want it, the MCP server. Each step says how to check that it worked."
-badges = [["text-bg-warning", "Pre-alpha"]]
+badges = [["text-bg-warning", "Beta"]]
 group = "start"
 order = 10
 description = "A first-time setup of Oaken Mail: install with uv, write config.toml, pull the Ollama models, add an account, store its credential in the keyring, start the daemon, sync, and turn on the MCP server."
 +++
 
-Oaken is pre-alpha and is run from a source checkout. Everything below stays on your machine.
+Oaken is in beta. Everything below stays on your machine.
 
 ## 1. Install
 
 You need Python 3.11 or newer and uv.
 
 ```bash
-git clone https://github.com/dfoulks1/oaken-mail
-cd oaken-mail
-uv sync
-uv run oaken --help
+pip install oaken-core        # into a virtual environment you keep for it
+oaken --help
 ```
 
-There is no global install yet, so run commands as `uv run oaken ...` from the checkout, or
-activate the virtual environment (`source .venv/bin/activate`) to type `oaken` alone.
+To work on Oaken itself, use a checkout instead: `git clone https://github.com/dfoulks1/oaken-mail`,
+`uv sync`, then run commands as `oaken ...` (or activate `.venv` to type `oaken` alone).
+The commands below are written as `oaken ...`. To check the install:
+
+<!-- check -->
+```bash
+oaken --version
+oaken help sync
+```
 
 ## 2. Write `config.toml`
 
@@ -34,13 +39,29 @@ mkdir -p ~/.config/oaken
 cp config.example.toml ~/.config/oaken/config.toml
 ```
 
-Every section has defaults, so you only keep what you change. Set `OAKEN_HOME=/some/dir` to put
-everything under one directory instead. **Never put a password or token in this file**; step 5
-stores them in your keyring. See [Store credentials in your keyring](keyring.html) if you have not
-used one before.
+Every section has defaults, so you only keep what you change. **Never put a password or token in
+this file**; step 5 stores them in your keyring. See [Store credentials in your keyring](keyring.html)
+if you have not used one before.
 
-The template's `[plugins.gmail]` table is live, not commented out. If you do not use Gmail, delete
-it, or Oaken will report the Gmail provider as unhealthy for want of a client file.
+You do not have to copy anything: the first time core starts it writes a `config.toml` with every
+setting shown at its default, commented out. Edit it in the console at `/config` (it tests a change
+before saving and keeps a `.bak`), or with `oaken config show`, `oaken config test FILE` and
+`oaken config save FILE`, then apply it with `oaken config reload`.
+
+### Where Oaken keeps its files
+
+Set `OAKEN_HOME=/some/dir` to put everything (config, data, the runtime file) under one directory,
+and put the line in your shell profile so every shell agrees. If it is unset, core warns, then uses
+the last home it ran under, or the platform folders if there is none, and tells you the line to
+add. Core cannot export a variable into your shell; it remembers the home in a small pointer file
+outside the home instead.
+
+### Plugins that are not set up
+
+A plugin that is installed but has no `[plugins.<name>]` table (Gmail, IMAP, SMTP) is listed as
+"not configured", not as an error. To turn one off for good, set `enabled = false` in its table.
+Without restarting core: `oaken plugins disable gmail`, `oaken plugins enable gmail`, and
+`oaken plugins reload gmail` to pick up a change to its table.
 
 ## 3. Get the local models
 
@@ -68,8 +89,8 @@ Then register the account. On a terminal this asks for the provider, an id, a di
 provider's non-secret settings:
 
 ```bash
-uv run oaken admin account add
-uv run oaken admin account list
+oaken admin account add
+oaken admin account list
 ```
 
 The account id (letters, digits, `-` and `_`) names the provider instance, `gmail@<id>`, and its
@@ -78,20 +99,21 @@ keyring entry.
 ## 5. Store the credential
 
 ```bash
-uv run oaken auth gmail --account <id>     # opens Google's consent page
-uv run oaken auth imap --account <id>      # or: asks for the password, no echo
+oaken gmail auth --account-id <id>     # opens Google's consent page and waits
+oaken imap auth --account-id <id>      # or: asks for the password, no echo
 ```
 
-The credential goes to the OS keyring and is never printed. Add `--check` to test one that is
-already stored.
+Each provider owns its own sign-in, so the command starts with the provider's name
+(`oaken smtp auth` works the same way). The credential goes to the OS keyring and is never
+printed. Add `--check` to test one that is already stored.
 
 ## 6. Start the daemon and check it
 
 ```bash
-uv run oaken start --detach
-uv run oaken status                  # prints the pid and the loopback port
-uv run oaken plugins                 # your account's provider row should say healthy
-uv run oaken admin account show <id> # a "problem:" line says why one is not
+oaken start --detach
+oaken status                  # prints the pid and the loopback port
+oaken plugins                 # your account's provider row should say healthy
+oaken admin account show <id> # a "problem:" line says why one is not
 ```
 
 Core serves a small API on loopback only. Its token is the file `api_token` in the config
@@ -100,8 +122,8 @@ directory. [The daemon and the local API](architecture/daemon.html) explains the
 ## 7. Sync and look
 
 ```bash
-uv run oaken sync --account <id> --wait
-uv run oaken search "invoice"
+oaken sync --wait                    # every account on every provider; or add --account <id>
+oaken search "invoice"
 ```
 
 The first sync of a large mailbox takes a while by design. Mail is stored under your user data

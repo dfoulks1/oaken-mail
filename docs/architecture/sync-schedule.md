@@ -97,5 +97,5 @@ schedule, then start the loop. Accounts with no usable provider are returned wit
 ## Still to come
 
 IMAP IDLE and Gmail push can call `SyncService.request()` for "sync now" without any change to the
-scheduler. The [daemon](daemon.md) now starts all this, and `oaken auth` (prompt 17) is what connects it to a
+scheduler. The [daemon](daemon.md) now starts all this, and each provider's own `auth` command (`oaken gmail auth`) is what connects it to a
 real mailbox.

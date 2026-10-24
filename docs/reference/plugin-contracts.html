@@ -417,6 +417,16 @@
 <td><code>Literal['off', 'never']</code></td>
 <td><code>'off'</code></td>
 </tr>
+<tr>
+<td><code>per_account</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+</tr>
+<tr>
+<td><code>lifecycle</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+</tr>
 </tbody>
 </table></div>
 <h3 id="pluginjobcontext"><code>PluginJobContext</code></h3>
@@ -1119,6 +1129,7 @@
 <ul>
 <li><code>kind: ClassVar[PluginKind] = 'provider'</code></li>
 <li><code>supports_folders: ClassVar[bool] = False</code></li>
+<li><code>account_defaults: ClassVar[dict[str, Any]] = {}</code></li>
 </ul>
 <p>Override:</p>
 <ul>
@@ -1181,7 +1192,7 @@
 </code></pre></div>
 <p>Turn one async function into an enricher class, ready to register as an entry point: class Result(BaseModel): words: int @enricher(&quot;word-count&quot;, output=Result) async def word_count(msg: EnrichInput) -&gt; Result: return Result(words=len(msg.body.unwrap().split())) The function may return the model, a dict or an <code>EnrichOutput</code>; the host coerces it.</p>
 </section>
-  <footer>Oaken Mail 0.1.0 · Apache-2.0</footer>
+  <footer>Oaken Mail 0.1.1 · Apache-2.0</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

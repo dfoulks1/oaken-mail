@@ -113,7 +113,7 @@ To run one:
 
 ### Status of the prompts
 
-*As of 2026-10-21 (commit `7ee6308`).* **Built** means the prompt's deliverables are in `main`
+*As of 2026-10-24 (commit `65d3a9f` plus the 0.1.1 branch).* **Built** means the prompt's deliverables are in `main`
 with tests. **Partly** says what is done and what is left. A **Written** prompt has a plan and no
 code yet.
 
@@ -144,21 +144,22 @@ code yet.
 | 17 | cli-client | Built | |
 | 18 | mcp-server | Built | Both doors: `/mcp` and `/mcp/agent` |
 | 19 | security-hardening | **Open** | The dedicated pass (injection suite across all surfaces, localhost threat tests, audit review) has not been run. Enricher injection tests and ADR 0005 exist |
-| 20 | oss-docs | Partly | The site, getting started, MCP and keyring pages and this guide exist. The full pass (roadmap, plugin guide, verification) has not been run |
+| 20 | oss-docs | Built | README, `ROADMAP.md`, issue and PR templates, the site, the architecture and provider pages, and `docs/tools/check_commands.py` (runs the docs' `<!-- check -->` commands) are in. Not verified: the Gmail walkthrough on a clean Google account, and `docs/evals/latest.md` (both need real services) |
 | 21 | webui-server | Built | `oaken-webui` start, stop, restart and status |
 | 21b | webui-client-foundation | **In progress** | Server items D1–D4, the shared sidebar and the API seam are in. Check the prompt's C list before starting; another session is on it |
 | 22 | api-parity | Built | Paging, totals, sort, stars, thread tree, query operators |
-| 23 | plugin-settings | **Open** | |
+| 23 | plugin-settings | **Partly built** | In: the `capabilities` allow-list, `enabled` and a plugin's own `enabled_default`, runtime enable/disable/reload, the six commands every plugin has (`oaken <plugin> enable\|disable\|reload\|check\|config\|set`, declared on the base classes and run by core), `check_plugin_config` (schema plus a throwaway-instance health probe), `get_plugin_config` and `set_plugin_config`, and the comment-preserving section writer (`oaken.core.config_edit`, `tomlkit`). Not built: the Settings → Plugins page and the secrets rows |
 | 24 | accounts-onboarding | Built | Account ops plus the receive-only ("listen but not send") interlock in `oaken.mail.sendpolicy` (one key, one reader; surfaced by `get_account`/`list_accounts`), the `oaken admin account set\|remove` CLI verbs, and the Settings → Accounts onboarding UI (`accounts.html`) |
 | 25 | folders-labels-counts | Built | Nested folders, labels, unread counts, stars |
 | 26 | sieve-management | Built | Read/test ops plus the write path (`sieve_save`/`sieve_delete`/`sieve_get`, compile-first, atomic owner-only, never over MCP — ADR 0009), the `oaken sieve get\|save\|delete` CLI verbs with `--suggest-name`, and the Sieve editor UI (`sieve.html`) |
 | 27 | contacts-people | **Open** | `contacts.html` is still a mockup |
-| 28 | compose-and-send | **Open** | There is no `send_message` operation yet |
+| 28 | compose-and-send | **Open** | There is no `send_message` operation yet. When it lands, the outbox is a `send` job on the job queue, and a sync also runs any send waiting out a retry delay |
 | 29 | system-settings | **Open** | |
-| 30 | pipeline-management | Partly | Job list, cancel, retry, parked retry and pausing embed and enrich exist. Check the prompt's list for live concurrency and priority |
+| 30 | pipeline-management | Built | Per-stage pause (`pause_backfill`/`resume_backfill` take a `stage`, stored in the database), live concurrency (`set_pipeline_limits`), `reprocess --since/--limit`, `pipeline_status` shows `paused`, `concurrency` and the running jobs, interactive model calls go ahead of background enrich, and the `/jobs` console and `oaken pipeline` drive it. The existing operation names were kept instead of the prompt's new ones; bulk `cancel_jobs`/`retry_jobs` by stage and the web UI's Pipeline pane are not built |
 | 31 | workspace-management | **Open** | |
 | 32 | mcp-settings | **Open** | |
 | 33 | agent-enrichment | **Written** | Not built. The `/mcp/agent` door works but a claimed `ingest.enrich` job carries only ids and cannot store an answer |
+| 34 | stabilize-core | Built | Snapshot tests for operations, plugin contracts and events, import-linter boundaries, service units and plugin extension hooks (job kinds, pipeline stages, scheduled tasks) |
 
 Not written yet, on purpose: a legacy-database importer, packaging (systemd, launchd,
 installers), at-rest encryption, plugin sandboxing, and embedding-throughput tuning on CPU.

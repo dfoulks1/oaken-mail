@@ -107,13 +107,6 @@
 <td>Answer a question from the mail, citing the messages and quoting the lines it came from.</td>
 </tr>
 <tr>
-<td><code>authorization_status</code></td>
-<td>read</td>
-<td>never</td>
-<td>no</td>
-<td>How an interactive authorization is going.</td>
-</tr>
-<tr>
 <td><code>cancel_job</code></td>
 <td>mutate</td>
 <td>never</td>
@@ -121,18 +114,46 @@
 <td>Cancel a queued job, or ask a running one to stop at its next safe point.</td>
 </tr>
 <tr>
-<td><code>check_account</code></td>
+<td><code>check_plugin_config</code></td>
 <td>read</td>
 <td>never</td>
 <td>no</td>
-<td>Check the account's credential: connect, require TLS and log in. Sends and reads nothing.</td>
+<td>Test one plugin's settings before saving them: they are checked against the plugin's own schema and capabilities, then a throwaway instance is started on them and asked if it is healthy. The running plugin is not touched and nothing is written.</td>
+</tr>
+<tr>
+<td><code>config_get</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>Read the current config.toml text (non-secret; tokens are never stored here).</td>
+</tr>
+<tr>
+<td><code>config_reload</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Reload core on the saved config.toml (the Reload button). Core rebuilds in place: the old config is restored automatically if the new one fails to start. Watch /v1/health to see it come back (the port may change).</td>
+</tr>
+<tr>
+<td><code>config_save</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Validate and save config.toml, backing up the previous file (the Save button). Does not reload core; call config_reload to apply.</td>
+</tr>
+<tr>
+<td><code>config_validate</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>Test an edited config.toml against the settings schema without saving it (the Test button).</td>
 </tr>
 <tr>
 <td><code>create_account</code></td>
 <td>mutate</td>
 <td>never</td>
 <td>no</td>
-<td>Add an account. Its credential is stored separately with set_account_password or start_authorization.</td>
+<td>Add an account. Its credential is stored separately by the provider's own auth command (for example gmail.auth).</td>
 </tr>
 <tr>
 <td><code>create_agent</code></td>
@@ -189,6 +210,13 @@
 <td>on by default</td>
 <td>no</td>
 <td>How a message was filed: its labels, flags and disposition, and the rule behind each.</td>
+</tr>
+<tr>
+<td><code>get_plugin_config</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>Read one plugin's settings: its [plugins.NAME] table, the schema of its settings and an example to start from. Non-secret only.</td>
 </tr>
 <tr>
 <td><code>get_raw</code></td>
@@ -321,7 +349,7 @@
 <td>mutate</td>
 <td>never</td>
 <td>no</td>
-<td>Pause the model-bound ingest stages (embed, enrich). Mail keeps landing and being filtered.</td>
+<td>Pause the model-bound ingest stages (embed, enrich), or just one with stage. Mail keeps landing and being filtered; a running job finishes. It survives a restart.</td>
 </tr>
 <tr>
 <td><code>pause_schedule</code></td>
@@ -338,11 +366,32 @@
 <td>Where ingest stands: each stage's queue, throughput and ETA, and jobs parked as failed.</td>
 </tr>
 <tr>
+<td><code>plugin_disable</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Stop a plugin and keep it off until plugin_enable or a restart, without reloading core. Put <code>enabled = false</code> in the plugin's [plugins] table to make it last.</td>
+</tr>
+<tr>
+<td><code>plugin_enable</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Start a plugin that plugin_disable stopped. A plugin whose table says <code>enabled = false</code> stays off until that line is removed and the plugin is reloaded.</td>
+</tr>
+<tr>
 <td><code>plugin_health</code></td>
 <td>read</td>
 <td>on by default</td>
 <td>no</td>
 <td>Whether plugins are started and healthy, and why not if they are not.</td>
+</tr>
+<tr>
+<td><code>plugin_reload</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Restart one plugin on the current config.toml (and pick up a plugin installed since boot) without reloading core.</td>
 </tr>
 <tr>
 <td><code>rebuild_index</code></td>
@@ -377,7 +426,7 @@
 <td>mutate</td>
 <td>never</td>
 <td>no</td>
-<td>Resume the model-bound ingest stages after a pause.</td>
+<td>Resume the model-bound ingest stages after a pause, or just one with stage.</td>
 </tr>
 <tr>
 <td><code>resume_schedule</code></td>
@@ -436,13 +485,6 @@
 <td>Replace an account's non-secret settings (and, if given, its display name).</td>
 </tr>
 <tr>
-<td><code>set_account_password</code></td>
-<td>mutate</td>
-<td>never</td>
-<td>no</td>
-<td>Store an account's password in the OS keyring (SMTP and IMAP). It is never shown again.</td>
-</tr>
-<tr>
 <td><code>set_flagged</code></td>
 <td>mutate</td>
 <td>off until you turn it on</td>
@@ -462,6 +504,20 @@
 <td>never</td>
 <td>no</td>
 <td>Choose whether MCP clients may call an operation, or all of a plugin's operations.</td>
+</tr>
+<tr>
+<td><code>set_pipeline_limits</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Change how many jobs of a stage run at once, now and after a restart. A running job is never dropped: a lower number takes effect as running jobs finish.</td>
+</tr>
+<tr>
+<td><code>set_plugin_config</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Save one plugin's settings as its [plugins.NAME] table, replacing that table and leaving the rest of config.toml, comments included, as it is. Validated first; the previous file is backed up. Does not restart the plugin: call plugin_reload to apply.</td>
 </tr>
 <tr>
 <td><code>set_schedule</code></td>
@@ -513,13 +569,6 @@
 <td>Run a Sieve script on one message and show each effect and its rule. Stores nothing.</td>
 </tr>
 <tr>
-<td><code>start_authorization</code></td>
-<td>mutate</td>
-<td>never</td>
-<td>no</td>
-<td>Begin an interactive consent (Gmail). Returns the address to open; poll authorization_status.</td>
-</tr>
-<tr>
 <td><code>status</code></td>
 <td>read</td>
 <td>on by default</td>
@@ -538,7 +587,7 @@
 <td>mutate</td>
 <td>on by default</td>
 <td>no</td>
-<td>Sync an account (or one folder) now. Joins a sync already queued or running.</td>
+<td>Sync an account (or one folder) now, or every account on every provider when none is named. Each is a job that calls the provider's pull; it joins a sync already queued or running.</td>
 </tr>
 <tr>
 <td><code>undo</code></td>
@@ -565,26 +614,44 @@
 <li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>unread_only</code>?, <code>starred</code>?, <code>has_attachment</code>?, <code>thread_key</code>?, <code>question</code></li>
 <li>Output: <code>answer</code>, <code>message_ids</code>?, <code>citations</code>?, <code>confidence</code>?, <code>insufficient_evidence</code>?, <code>dropped_claims</code>?, <code>degraded</code>?, <code>degraded_reason</code>?, <code>evidence_tokens</code>?, <code>full_body_tokens</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
 </ul>
-<h3 id="authorization-status"><code>authorization_status</code></h3>
-<p>How an interactive authorization is going.</p>
-<ul>
-<li>Input: <code>account_id</code></li>
-<li>Output: <code>state</code>, <code>detail</code>?</li>
-</ul>
 <h3 id="cancel-job"><code>cancel_job</code></h3>
 <p>Cancel a queued job, or ask a running one to stop at its next safe point.</p>
 <ul>
 <li>Input: <code>job_id</code></li>
 <li>Output: <code>job_id</code>, <code>status</code></li>
 </ul>
-<h3 id="check-account"><code>check_account</code></h3>
-<p>Check the account's credential: connect, require TLS and log in. Sends and reads nothing.</p>
+<h3 id="check-plugin-config"><code>check_plugin_config</code></h3>
+<p>Test one plugin's settings before saving them: they are checked against the plugin's own schema and capabilities, then a throwaway instance is started on them and asked if it is healthy. The running plugin is not touched and nothing is written.</p>
 <ul>
-<li>Input: <code>account_id</code></li>
-<li>Output: <code>ok</code>, <code>detail</code>?</li>
+<li>Input: <code>plugin</code>, <code>config</code>?, <code>kind</code>?</li>
+<li>Output: <code>ok</code>, <code>problems</code>?, <code>probes</code>?</li>
+</ul>
+<h3 id="config-get"><code>config_get</code></h3>
+<p>Read the current config.toml text (non-secret; tokens are never stored here).</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>path</code>, <code>text</code>, <code>exists</code></li>
+</ul>
+<h3 id="config-reload"><code>config_reload</code></h3>
+<p>Reload core on the saved config.toml (the Reload button). Core rebuilds in place: the old config is restored automatically if the new one fails to start. Watch /v1/health to see it come back (the port may change).</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>ok</code>, <code>requested</code>, <code>error</code>?</li>
+</ul>
+<h3 id="config-save"><code>config_save</code></h3>
+<p>Validate and save config.toml, backing up the previous file (the Save button). Does not reload core; call config_reload to apply.</p>
+<ul>
+<li>Input: <code>text</code></li>
+<li>Output: <code>ok</code>, <code>path</code>, <code>backup</code>?, <code>error</code>?</li>
+</ul>
+<h3 id="config-validate"><code>config_validate</code></h3>
+<p>Test an edited config.toml against the settings schema without saving it (the Test button).</p>
+<ul>
+<li>Input: <code>text</code></li>
+<li>Output: <code>ok</code>, <code>error</code>?</li>
 </ul>
 <h3 id="create-account"><code>create_account</code></h3>
-<p>Add an account. Its credential is stored separately with set_account_password or start_authorization.</p>
+<p>Add an account. Its credential is stored separately by the provider's own auth command (for example gmail.auth).</p>
 <ul>
 <li>Input: <code>account_id</code>, <code>provider</code>, <code>display_name</code>, <code>config</code>?</li>
 <li>Output: <code>account_id</code>, <code>provider</code>, <code>display_name</code>, <code>config</code>, <code>receive_only</code>?, <code>capabilities</code>?, <code>problem</code>?, <code>config_schema</code>?</li>
@@ -636,6 +703,12 @@
 <ul>
 <li>Input: <code>message_id</code></li>
 <li>Output: <code>message_id</code>, <code>attrs</code>, <code>filter</code>?</li>
+</ul>
+<h3 id="get-plugin-config"><code>get_plugin_config</code></h3>
+<p>Read one plugin's settings: its [plugins.NAME] table, the schema of its settings and an example to start from. Non-secret only.</p>
+<ul>
+<li>Input: <code>plugin</code></li>
+<li>Output: <code>plugin</code>, <code>exists</code>, <code>config</code>, <code>text</code>?, <code>config_schema</code>?, <code>config_example</code>?</li>
 </ul>
 <h3 id="get-raw"><code>get_raw</code></h3>
 <p>The raw headers of a message, and optionally its raw bytes, for inspection. Not for MCP.</p>
@@ -746,10 +819,10 @@
 <li>Output: <code>path</code>, <code>moved</code></li>
 </ul>
 <h3 id="pause-backfill"><code>pause_backfill</code></h3>
-<p>Pause the model-bound ingest stages (embed, enrich). Mail keeps landing and being filtered.</p>
+<p>Pause the model-bound ingest stages (embed, enrich), or just one with stage. Mail keeps landing and being filtered; a running job finishes. It survives a restart.</p>
 <ul>
-<li>Input: <code>why</code>?</li>
-<li>Output: <code>llm_paused</code>, <code>reason</code>?</li>
+<li>Input: <code>why</code>?, <code>stage</code>?</li>
+<li>Output: <code>llm_paused</code>, <code>reason</code>?, <code>paused_stages</code>?</li>
 </ul>
 <h3 id="pause-schedule"><code>pause_schedule</code></h3>
 <p>Pause a sync schedule until it is resumed.</p>
@@ -763,11 +836,29 @@
 <li>Input: none</li>
 <li>Output: <code>stages</code>, <code>docs</code>, <code>chunks</code>, <code>index_stale</code>, <code>vector_model</code>?, <code>vectors</code>, <code>embedder_model</code>?, <code>embeddings_stale</code>, <code>backfill_paused</code>, <code>llm_paused</code>?, <code>quarantined_files</code>, <code>parked</code>?</li>
 </ul>
+<h3 id="plugin-disable"><code>plugin_disable</code></h3>
+<p>Stop a plugin and keep it off until plugin_enable or a restart, without reloading core. Put <code>enabled = false</code> in the plugin's [plugins] table to make it last.</p>
+<ul>
+<li>Input: <code>name</code></li>
+<li>Output: <code>changed</code>, <code>plugins</code></li>
+</ul>
+<h3 id="plugin-enable"><code>plugin_enable</code></h3>
+<p>Start a plugin that plugin_disable stopped. A plugin whose table says <code>enabled = false</code> stays off until that line is removed and the plugin is reloaded.</p>
+<ul>
+<li>Input: <code>name</code></li>
+<li>Output: <code>changed</code>, <code>plugins</code></li>
+</ul>
 <h3 id="plugin-health"><code>plugin_health</code></h3>
 <p>Whether plugins are started and healthy, and why not if they are not.</p>
 <ul>
 <li>Input: <code>name</code>?</li>
 <li>Output: <code>plugins</code></li>
+</ul>
+<h3 id="plugin-reload"><code>plugin_reload</code></h3>
+<p>Restart one plugin on the current config.toml (and pick up a plugin installed since boot) without reloading core.</p>
+<ul>
+<li>Input: <code>name</code></li>
+<li>Output: <code>changed</code>, <code>plugins</code></li>
 </ul>
 <h3 id="rebuild-index"><code>rebuild_index</code></h3>
 <p>Rebuild the search index from the raw store (resumable).</p>
@@ -790,14 +881,14 @@
 <h3 id="reprocess"><code>reprocess</code></h3>
 <p>Bring one pipeline stage up to date for old mail (parse, filter, embed or enrich).</p>
 <ul>
-<li>Input: <code>stage</code>, <code>account_id</code>?</li>
+<li>Input: <code>stage</code>, <code>account_id</code>?, <code>since</code>?, <code>limit</code>?</li>
 <li>Output: <code>job_id</code>, <code>created</code></li>
 </ul>
 <h3 id="resume-backfill"><code>resume_backfill</code></h3>
-<p>Resume the model-bound ingest stages after a pause.</p>
+<p>Resume the model-bound ingest stages after a pause, or just one with stage.</p>
 <ul>
-<li>Input: none</li>
-<li>Output: <code>llm_paused</code>, <code>reason</code>?</li>
+<li>Input: <code>stage</code>?</li>
+<li>Output: <code>llm_paused</code>, <code>reason</code>?, <code>paused_stages</code>?</li>
 </ul>
 <h3 id="resume-schedule"><code>resume_schedule</code></h3>
 <p>Resume a paused sync schedule: it is due now and its failure count is cleared.</p>
@@ -847,12 +938,6 @@
 <li>Input: <code>account_id</code>, <code>config</code>, <code>display_name</code>?</li>
 <li>Output: <code>account</code>, <code>restart_needed</code></li>
 </ul>
-<h3 id="set-account-password"><code>set_account_password</code></h3>
-<p>Store an account's password in the OS keyring (SMTP and IMAP). It is never shown again.</p>
-<ul>
-<li>Input: <code>account_id</code>, <code>password</code></li>
-<li>Output: <code>stored</code></li>
-</ul>
 <h3 id="set-flagged"><code>set_flagged</code></h3>
 <p>Star or unstar messages. Written back to the mailbox through \Flagged; undoable.</p>
 <ul>
@@ -870,6 +955,18 @@
 <ul>
 <li>Input: <code>scope</code>, <code>name</code>, <code>mcp</code></li>
 <li>Output: <code>scope</code>, <code>before</code>, <code>after</code>, <code>operations</code></li>
+</ul>
+<h3 id="set-pipeline-limits"><code>set_pipeline_limits</code></h3>
+<p>Change how many jobs of a stage run at once, now and after a restart. A running job is never dropped: a lower number takes effect as running jobs finish.</p>
+<ul>
+<li>Input: <code>stage</code>, <code>concurrency</code></li>
+<li>Output: <code>stage</code>, <code>concurrency</code></li>
+</ul>
+<h3 id="set-plugin-config"><code>set_plugin_config</code></h3>
+<p>Save one plugin's settings as its [plugins.NAME] table, replacing that table and leaving the rest of config.toml, comments included, as it is. Validated first; the previous file is backed up. Does not restart the plugin: call plugin_reload to apply.</p>
+<ul>
+<li>Input: <code>plugin</code>, <code>config</code>?, <code>kind</code>?</li>
+<li>Output: <code>ok</code>, <code>path</code>, <code>backup</code>?, <code>error</code>?</li>
 </ul>
 <h3 id="set-schedule"><code>set_schedule</code></h3>
 <p>Create or change a sync schedule. The floor and the timezone are checked now.</p>
@@ -913,12 +1010,6 @@
 <li>Input: <code>script</code>, <code>name</code>?, <code>message_id</code>?, <code>eml_base64</code>?</li>
 <li>Output: <code>check</code>, <code>disposition</code>?, <code>rule</code>?, <code>effects</code>?, <code>errors</code>?, <code>steps</code>?</li>
 </ul>
-<h3 id="start-authorization"><code>start_authorization</code></h3>
-<p>Begin an interactive consent (Gmail). Returns the address to open; poll authorization_status.</p>
-<ul>
-<li>Input: <code>account_id</code></li>
-<li>Output: <code>url</code></li>
-</ul>
 <h3 id="status"><code>status</code></h3>
 <p>A short health summary: accounts, messages, index, queue, plugins and paused schedules.</p>
 <ul>
@@ -932,10 +1023,10 @@
 <li>Output: <code>items</code>, <code>marked_read</code>?, <code>content_is_untrusted</code>?</li>
 </ul>
 <h3 id="sync-now"><code>sync_now</code></h3>
-<p>Sync an account (or one folder) now. Joins a sync already queued or running.</p>
+<p>Sync an account (or one folder) now, or every account on every provider when none is named. Each is a job that calls the provider's pull; it joins a sync already queued or running.</p>
 <ul>
-<li>Input: <code>account_id</code>, <code>folder</code>?</li>
-<li>Output: <code>job_id</code>, <code>created</code></li>
+<li>Input: <code>account_id</code>?, <code>folder</code>?</li>
+<li>Output: <code>job_id</code>, <code>created</code>, <code>jobs</code>?, <code>skipped</code>?</li>
 </ul>
 <h3 id="undo"><code>undo</code></h3>
 <p>Undo a read-state change from the audit log, restoring exactly what each message was.</p>
@@ -951,9 +1042,197 @@
 </ul>
 </section>
 <section id="plugin-operations" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Plugin operations</h2></div>
-<p>A plugin may offer more, named <code>&lt;plugin&gt;.&lt;name&gt;</code>. They are listed by <code>list_operations</code> at run time, and are always off over MCP until the user turns them on.</p>
+<p>A plugin may offer more, named <code>&lt;plugin&gt;.&lt;name&gt;</code> (a provider's login, say). They are listed by <code>list_operations</code> at run time, are always off over MCP until the user turns them on, and are reachable from the CLI as <code>oaken &lt;plugin&gt; &lt;name&gt;</code> (or <code>oaken operation &lt;plugin&gt;.&lt;name&gt;</code>, with one flag per input field). A plugin declares one with the <code>@command</code> decorator in <code>oaken.plugins.base</code>.</p>
+<p>Plugins installed with this version, and the functions each offers. A plugin you install yourself adds its own, which show up on your machine, not here.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Plugin</th>
+<th>Kind</th>
+<th>Version</th>
+<th>Functions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ollama</code></td>
+<td>embedder</td>
+<td>0.1.1</td>
+<td>none of its own</td>
+</tr>
+<tr>
+<td><code>actions</code></td>
+<td>enricher</td>
+<td>1</td>
+<td>none of its own</td>
+</tr>
+<tr>
+<td><code>inspector</code></td>
+<td>enricher</td>
+<td>1</td>
+<td>none of its own</td>
+</tr>
+<tr>
+<td><code>summary</code></td>
+<td>enricher</td>
+<td>1</td>
+<td>none of its own</td>
+</tr>
+<tr>
+<td><code>triage</code></td>
+<td>enricher</td>
+<td>1</td>
+<td>none of its own</td>
+</tr>
+<tr>
+<td><code>ollama</code></td>
+<td>llm_backend</td>
+<td>0.1.1</td>
+<td>none of its own</td>
+</tr>
+<tr>
+<td><code>ollama-remote</code></td>
+<td>llm_backend</td>
+<td>0.1.1</td>
+<td>none of its own</td>
+</tr>
+<tr>
+<td><code>gmail</code></td>
+<td>provider</td>
+<td>1</td>
+<td><code>gmail.auth</code>, <code>gmail.auth_status</code>, <code>gmail.labels</code>, <code>gmail.send_as</code></td>
+</tr>
+<tr>
+<td><code>imap</code></td>
+<td>provider</td>
+<td>1</td>
+<td><code>imap.auth</code></td>
+</tr>
+<tr>
+<td><code>smtp</code></td>
+<td>provider</td>
+<td>1</td>
+<td><code>smtp.auth</code></td>
+</tr>
+<tr>
+<td><code>sqlite-vec</code></td>
+<td>vector_store</td>
+<td>1</td>
+<td>none of its own</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="commands-every-plugin-has">Commands every plugin has</h3>
+<p>A plugin built on a base class offers these with no code, as <code>&lt;plugin&gt;.&lt;command&gt;</code> (<code>oaken &lt;plugin&gt; &lt;command&gt;</code>). Core runs them, they work whatever state the plugin is in, and none is ever offered over MCP. A plugin may write its own to replace one.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Command</th>
+<th>Permission</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>check</code></td>
+<td>read</td>
+<td>Try the saved settings (or ones you give) on a throwaway instance.</td>
+</tr>
+<tr>
+<td><code>config</code></td>
+<td>read</td>
+<td>Show this plugin's settings, their schema and an example.</td>
+</tr>
+<tr>
+<td><code>disable</code></td>
+<td>mutate</td>
+<td>Stop this plugin and keep it off until <code>enable</code> or a restart.</td>
+</tr>
+<tr>
+<td><code>enable</code></td>
+<td>mutate</td>
+<td>Start this plugin (until the next restart if its table says it is off).</td>
+</tr>
+<tr>
+<td><code>reload</code></td>
+<td>mutate</td>
+<td>Restart this plugin on the current config.toml, without restarting core.</td>
+</tr>
+<tr>
+<td><code>set</code></td>
+<td>mutate</td>
+<td>Change this plugin's settings in config.toml (comments kept; no secrets).</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="plugincheck"><code>&lt;plugin&gt;.check</code></h4>
+<ul>
+<li>Input: <code>text</code>?, <code>config</code>?, <code>unset</code>?, <code>replace</code>?</li>
+<li>Output: <code>ok</code>, <code>problems</code>?, <code>probes</code>?</li>
+</ul>
+<h4 id="pluginconfig"><code>&lt;plugin&gt;.config</code></h4>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>plugin</code>, <code>exists</code>, <code>config</code>, <code>text</code>?, <code>config_schema</code>?, <code>config_example</code>?</li>
+</ul>
+<h4 id="plugindisable"><code>&lt;plugin&gt;.disable</code></h4>
+<ul>
+<li>Input: <code>account_id</code>?</li>
+<li>Output: <code>changed</code>, <code>states</code></li>
+</ul>
+<h4 id="pluginenable"><code>&lt;plugin&gt;.enable</code></h4>
+<ul>
+<li>Input: <code>account_id</code>?</li>
+<li>Output: <code>changed</code>, <code>states</code></li>
+</ul>
+<h4 id="pluginreload"><code>&lt;plugin&gt;.reload</code></h4>
+<ul>
+<li>Input: <code>account_id</code>?</li>
+<li>Output: <code>changed</code>, <code>states</code></li>
+</ul>
+<h4 id="pluginset"><code>&lt;plugin&gt;.set</code></h4>
+<ul>
+<li>Input: <code>text</code>?, <code>config</code>?, <code>unset</code>?, <code>replace</code>?</li>
+<li>Output: <code>ok</code>, <code>path</code>, <code>backup</code>?, <code>error</code>?, <code>note</code>?</li>
+</ul>
+<h3 id="gmailauth"><code>gmail.auth</code></h3>
+<p>Sign in through the provider's consent page. Returns the address to open. Offered by the <code>gmail</code> provider plugin; permission <code>mutate</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: <code>account_id</code>?, <code>check</code>?</li>
+<li>Output: <code>account_id</code>, <code>state</code>, <code>detail</code>?, <code>open_url</code>?, <code>poll</code>?, <code>poll_input</code>?</li>
+</ul>
+<h3 id="gmailauth-status"><code>gmail.auth_status</code></h3>
+<p>How a sign-in that is waiting for the person is going. Offered by the <code>gmail</code> provider plugin; permission <code>read</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: <code>account_id</code>?, <code>check</code>?</li>
+<li>Output: <code>account_id</code>, <code>state</code>, <code>detail</code>?</li>
+</ul>
+<h3 id="gmaillabels"><code>gmail.labels</code></h3>
+<p>List this account's Gmail labels (the names and ids include_labels and exclude_labels accept). Offered by the <code>gmail</code> provider plugin; permission <code>read</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: <code>account_id</code>?</li>
+<li>Output: <code>labels</code></li>
+</ul>
+<h3 id="gmailsend-as"><code>gmail.send_as</code></h3>
+<p>List the addresses this account may send as (its verified send-as aliases). Offered by the <code>gmail</code> provider plugin; permission <code>read</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: <code>account_id</code>?</li>
+<li>Output: <code>addresses</code></li>
+</ul>
+<h3 id="imapauth"><code>imap.auth</code></h3>
+<p>Store this account's password in the OS keyring and check the login. Offered by the <code>imap</code> provider plugin; permission <code>mutate</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: <code>account_id</code>?, <code>check</code>?, <code>password</code>?</li>
+<li>Output: <code>account_id</code>, <code>state</code>, <code>detail</code>?, <code>open_url</code>?, <code>poll</code>?, <code>poll_input</code>?</li>
+</ul>
+<h3 id="smtpauth"><code>smtp.auth</code></h3>
+<p>Store this account's password in the OS keyring and check the login. Offered by the <code>smtp</code> provider plugin; permission <code>mutate</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: <code>account_id</code>?, <code>check</code>?, <code>password</code>?</li>
+<li>Output: <code>account_id</code>, <code>state</code>, <code>detail</code>?, <code>open_url</code>?, <code>poll</code>?, <code>poll_input</code>?</li>
+</ul>
 </section>
-  <footer>Oaken Mail 0.1.0 · Apache-2.0</footer>
+  <footer>Oaken Mail 0.1.1 · Apache-2.0</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

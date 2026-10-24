@@ -1,5 +1,11 @@
 # 20 — Open-source documentation and release readiness
 
+> **Status: built (0.1.1).** `README.md`, `ROADMAP.md`, `.github` templates, `CODEOWNERS` and
+> `labels.md`, and `docs/tools/check_commands.py` exist; `docs/releasing.md` is the release
+> checklist (the prompt called it `docs/release.md`). Still by hand: verify the Gmail walkthrough
+> on a clean Google account, regenerate `docs/evals/latest.md` against a real model, and fill the
+> `TODO(user)` contacts (`security`, `code-of-conduct`) that `build_site.py --strict` reports.
+
 **Read first:** `docs/prompts/00-context.md`. **Depends on:** all previous.
 
 ## Goal

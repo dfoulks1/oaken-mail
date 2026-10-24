@@ -95,7 +95,10 @@ def build(cfg: Config) -> Page:
         "The `oaken` command is a thin client over the local core: every command is one call to a"
         " [registry operation](architecture/operations.md). It holds no logic of its own, so a new"
         " operation is reachable immediately through the generic `oaken operation NAME` fallback,"
-        " with no new release.",
+        " with no new release. `oaken operation NAME` takes the operation's own fields as flags"
+        " (`--describe` lists them), and `oaken PLUGIN VERB` is shorthand for"
+        " `oaken operation PLUGIN.VERB`, so a function a plugin offers is a command the moment it"
+        " is installed.",
         "",
         "Output is human-readable by default; `--json` gives the machine form on **stdout** (never"
         " sanitized — it is the contract a script reads), while logs and errors go to **stderr**."

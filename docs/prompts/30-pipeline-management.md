@@ -1,5 +1,27 @@
 # 30 — Pipeline management: see, pause, retry, cancel and tune the queue
 
+> **Status: built (0.1.1), with the deviations below.** Where this prompt and the code differ, the
+> code is right.
+>
+> - **Names kept.** The operations that already existed were extended, not renamed:
+>   `pause_backfill`/`resume_backfill` take an optional `stage` (`embed` or `enrich`; none means
+>   every model stage), `list_jobs`/`cancel_job`/`retry_job`/`retry_parked` cover the job list.
+>   The prompt's `pause_pipeline`, `resume_pipeline`, `list_pipeline_jobs`, `retry_jobs` and
+>   `cancel_jobs` were not added.
+> - **Built:** per-stage pause (table `pipeline_stage_pause`, survives a restart),
+>   `set_pipeline_limits` (table `pipeline_limits`, outranks config, applies on the next claim),
+>   `reprocess` with `since` and `limit` (embed and enrich only; enrich was already
+>   "only what is missing" through the cache), `pipeline_status` with per-stage `paused`,
+>   `concurrency` and `current`, interactive-over-background priority (`oaken.ai.priority`,
+>   `[ai] background_yield_seconds`, default 120, 0 = never hold back), the CLI
+>   (`oaken pipeline pause|resume [STAGE]`, `oaken pipeline limits STAGE N`, `oaken reprocess
+>   --since --limit`) and the per-stage table on the core `/jobs` console.
+> - **Not built:** bulk `retry`/`cancel` by stage or state, `pipeline.paused|resumed` events on the
+>   stream, and the web UI's Settings → Pipeline pane (the core `/jobs` console covers it for now).
+> - **How priority works:** the model service counts interactive calls (anything whose caller is
+>   not `internal`). A background call holds its *next* call while one runs, up to the yield time.
+>   It cannot interrupt a background call already running, so a question waits for at most one.
+
 **Read first:** `docs/prompts/00-context.md` and `docs/prompts/21b-webui-client-foundation.md`.
 **Depends on:** 05, 13, 16, 17, 21b, 22.
 

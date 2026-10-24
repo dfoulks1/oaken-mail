@@ -388,7 +388,7 @@ funcs = [
   ["SyncService.request(account, folder=)", "Sync now; joins a running sync. The hook for IDLE or push."],
   ["SyncService.crontab()", "A read-only crontab-style export."],
 ]
-notes = ["Quiet hours mute alerts only; they never stop a sync.", "The daemon entry point and oaken auth come with prompts 16 and 17, so no real mailbox is read until then."]
+notes = ["Quiet hours mute alerts only; they never stop a sync.", "The daemon entry point and each provider's own auth command (oaken gmail auth) connect it to a real mailbox."]
 
 [[components]]
 id = "pluginhost"

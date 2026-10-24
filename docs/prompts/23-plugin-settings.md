@@ -1,5 +1,26 @@
 # 23 — Plugin settings: load, test, save, enable
 
+> **Status: partly built (0.1.1). Where this prompt and the code differ, the code is right.**
+>
+> - **Built:** the `capabilities` allow-list (narrowing only; `auth` alone is refused; an unknown
+>   name is an error), `enabled` and `enabled_default` on the base class (the table wins), runtime
+>   `plugin_enable`/`plugin_disable`/`plugin_reload`, `check_plugin_config` (schema, capabilities,
+>   then a throwaway instance's `health()`), `get_plugin_config`, `set_plugin_config`, and the shared
+>   section writer `oaken.core.config_edit` (`tomlkit`: keeps comments and every other table; refuses
+>   a key that looks like a secret). `list_plugins` reports `enabled`, `enabled_default` and
+>   `allowed_capabilities`.
+> - **On the base class.** `enable`, `disable`, `reload`, `check`, `config` and `set` are declared by
+>   every plugin base (`oaken.plugins.plugin_control`) and run by core, so a new plugin has
+>   `oaken <plugin> enable` and the rest for free, and a plugin may override one. The core
+>   operations (`plugin_enable`, `get_plugin_config`, ...) stay for the web UI.
+> - **Not built:** the Settings → Plugins page and its textarea, and the generic secret rows
+>   (`set_plugin_secret`). A plugin that is not a provider has no secrets path yet; providers sign
+>   in with their own `auth` command, which stores the credential in the keyring.
+> - **Names:** the prompt's `get_plugin_settings`/`check_plugin_settings`/`set_plugin_settings`
+>   became `get_plugin_config`/`check_plugin_config`/`set_plugin_config`, matching `config_get` and
+>   friends. `set_plugin_config` replaces the table and does not restart the plugin; call
+>   `plugin_reload`.
+
 **Read first:** `docs/prompts/00-context.md` and `docs/prompts/21b-webui-client-foundation.md`.
 **Depends on:** 04, 13, 16, 17, 21, 21b, 22.
 **Related, split out on purpose:** workspaces are **31**, MCP settings are **32**. This prompt is

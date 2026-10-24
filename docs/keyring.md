@@ -5,7 +5,7 @@ lead = "Oaken never writes a password or token to a file or an environment varia
 badges = [["text-bg-warning", "Pre-alpha"]]
 group = "start"
 order = 11
-description = "How Oaken uses the OS keyring: the service and entry names, the oaken auth commands that store credentials, a quick check that the keyring works, how to inspect entries with Seahorse, and what the no-keyring error means."
+description = "How Oaken uses the OS keyring: the service and entry names, the commands that store credentials (oaken gmail auth, oaken imap auth), a quick check that the keyring works, how to inspect entries with Seahorse, and what the no-keyring error means."
 +++
 
 ## What the keyring is
@@ -38,9 +38,9 @@ the settings store refuses keys that look like secrets (`token`, `password` and 
 You do not write to the keyring yourself. Run the command for the provider:
 
 ```
-oaken auth gmail --account default     # opens Google's consent page, stores the refresh token
-oaken auth imap --account default      # asks for the password without echoing it
-oaken auth smtp --account default      # the same
+oaken gmail auth --account-id default  # opens Google's consent page, stores the refresh token
+oaken imap auth --account-id default   # asks for the password without echoing it
+oaken smtp auth --account-id default   # the same
 ```
 
 For IMAP and SMTP the password can also be piped in with `--password-stdin`. It is never taken as a
@@ -63,7 +63,7 @@ If it prints `hello`, the keyring works. If it hangs or fails, it is locked or u
 
 A graphical keyring manager shows what is stored. On GNOME, install **Seahorse** ("Passwords and
 Keys") and open the *Login* keyring: entries written by Oaken are labelled with the service
-`oaken`. You can delete one there to reset an account, then run `oaken auth` again. The secret
+`oaken`. You can delete one there to reset an account, then run the provider's `auth` command again (`oaken gmail auth`). The secret
 itself is shown only if you ask and the keyring is unlocked.
 
 ## When there is no keyring

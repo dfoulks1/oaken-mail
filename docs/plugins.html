@@ -80,14 +80,16 @@
       <a class="nav-link" href="#be-accepting-in-what-you-return"><span class="num">3</span>Be accepting in what you return</a>
       <a class="nav-link" href="#an-embedder"><span class="num">4</span>An embedder</a>
       <a class="nav-link" href="#an-enricher-in-one-function"><span class="num">5</span>An enricher in one function</a>
-      <a class="nav-link" href="#registering-it"><span class="num">6</span>Registering it</a>
-      <a class="nav-link" href="#what-the-host-does"><span class="num">7</span>What the host does</a>
-      <a class="nav-link" href="#extending-core-operations-job-kinds-pipeline-stages-and-scheduled-tasks"><span class="num">8</span>Extending core: operations, job kinds, pipeline stages and scheduled tasks</a>
-      <a class="nav-link" href="#testing-it"><span class="num">9</span>Testing it</a>
-      <a class="nav-link" href="#a-first-party-example-ollama"><span class="num">10</span>A first-party example: Ollama</a>
-      <a class="nav-link" href="#a-first-party-example-gmail"><span class="num">11</span>A first-party example: Gmail</a>
-      <a class="nav-link" href="#plugin-events"><span class="num">12</span>Plugin events</a>
-      <a class="nav-link" href="#not-sandboxed"><span class="num">13</span>Not sandboxed</a>
+      <a class="nav-link" href="#the-commands-every-plugin-has"><span class="num">6</span>The commands every plugin has</a>
+      <a class="nav-link" href="#what-a-person-can-say-about-your-plugin"><span class="num">7</span>What a person can say about your plugin</a>
+      <a class="nav-link" href="#registering-it"><span class="num">8</span>Registering it</a>
+      <a class="nav-link" href="#what-the-host-does"><span class="num">9</span>What the host does</a>
+      <a class="nav-link" href="#extending-core-operations-job-kinds-pipeline-stages-and-scheduled-tasks"><span class="num">10</span>Extending core: operations, job kinds, pipeline stages and scheduled tasks</a>
+      <a class="nav-link" href="#testing-it"><span class="num">11</span>Testing it</a>
+      <a class="nav-link" href="#a-first-party-example-ollama"><span class="num">12</span>A first-party example: Ollama</a>
+      <a class="nav-link" href="#a-first-party-example-gmail"><span class="num">13</span>A first-party example: Gmail</a>
+      <a class="nav-link" href="#plugin-events"><span class="num">14</span>Plugin events</a>
+      <a class="nav-link" href="#not-sandboxed"><span class="num">15</span>Not sandboxed</a>
     </nav></div>
   </div></div>
 </nav>
@@ -267,7 +269,67 @@ lint test fails a module that builds a request any other way. The first-party en
 off with <code>[plugins.&lt;name&gt;] enabled = false</code>; <code>summary</code> and <code>actions</code> skip bulk mail unless you set
 <code>skip_bulk = false</code>.</p>
 </section>
-<section id="registering-it" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Registering it</h2></div>
+<section id="the-commands-every-plugin-has" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>The commands every plugin has</h2></div>
+<p>Build on <code>BaseProvider</code>, <code>BaseEmbedder</code> or another base class and your plugin offers six commands
+with no code: <code>enable</code>, <code>disable</code>, <code>reload</code>, <code>check</code>, <code>config</code> and <code>set</code>. A person runs them as
+<code>oaken &lt;plugin&gt; &lt;command&gt;</code> (<code>oaken gmail disable</code>, <code>oaken imap set --config '{&quot;port&quot;: 993}'</code>), the
+web UI and the API reach them as the operations <code>&lt;plugin&gt;.&lt;command&gt;</code>, and none is ever offered over
+MCP. They work whatever state the plugin is in, because a plugin that is off or not set up is
+exactly when you need them.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Command</th>
+<th>Does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enable</code> / <code>disable</code></td>
+<td>Start or stop it (and its accounts, or one with <code>--account-id</code>) without restarting core. <code>enabled = false</code> in its table is the lasting form.</td>
+</tr>
+<tr>
+<td><code>reload</code></td>
+<td>Restart it on the current <code>config.toml</code>, picking up a newly installed version.</td>
+</tr>
+<tr>
+<td><code>config</code></td>
+<td>Show its <code>[plugins.&lt;name&gt;]</code> settings, their schema and an example.</td>
+</tr>
+<tr>
+<td><code>set</code></td>
+<td>Change settings: merged onto the saved ones, <code>--unset KEY</code> removes one, <code>--replace</code> takes the whole table. Comments and every other table in the file are kept. A secret is refused. Run <code>reload</code> to apply.</td>
+</tr>
+<tr>
+<td><code>check</code></td>
+<td>Try the saved settings (or <code>--config</code> ones) on a throwaway instance and report its health. Nothing is written and the running plugin is untouched.</td>
+</tr>
+</tbody>
+</table></div>
+<p>A plugin cannot stop or configure itself (it has no handle on the host or the file), so core runs
+them. Write a method with the same command name to run your own code instead. A plugin that does not
+build on a base class (a duck-typed enricher) offers only the commands it writes.</p>
+</section>
+<section id="what-a-person-can-say-about-your-plugin" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>What a person can say about your plugin</h2></div>
+<p>Every plugin's <code>[plugins.&lt;name&gt;]</code> table takes two keys that belong to the host, not to you, so your
+<code>ctx.config</code> never contains them:</p>
+<ul>
+<li><code>enabled = false</code> keeps the plugin off. A plugin that should be opt-in (it costs money, or reaches
+a network) sets <code>enabled_default = False</code> on its class, and then runs only when its table says
+<code>enabled = true</code> (or someone runs <code>oaken plugins enable &lt;name&gt;</code> for that session). The table wins
+over the default, and over <code>plugins enable</code>.</li>
+<li><code>capabilities = [&quot;sync.pull&quot;, &quot;auth&quot;]</code> is an allow-list for a provider. It only narrows: a name
+your plugin does not implement does nothing, a name that does not exist is an error at start, and
+a list that leaves only <code>auth</code> is refused. <code>auth</code> left off hides the plugin's sign-in command.
+This is how a person makes Gmail receive-only at the plugin level.</li>
+</ul>
+<p><code>list_plugins</code> reports <code>enabled</code>, <code>enabled_default</code> and <code>allowed_capabilities</code> for each plugin.
+To try settings before saving them, <code>check_plugin_config</code> validates them against your
+<code>config_model</code> and then starts a throwaway instance on them and asks its <code>health()</code>. It never
+touches the running plugin, so keep <code>start()</code> free of side effects beyond connecting. A secret is
+never accepted in these settings; it belongs in the keyring.</p>
+</section>
+<section id="registering-it" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>Registering it</h2></div>
 <p>A plugin is found through an entry point in its package's <code>pyproject.toml</code>. First-party plugins
 use exactly the same mechanism. The entry-point name is the plugin's name.</p>
 <div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[project.entry-points.</span><span class="s2">"oaken.providers"</span><span class="k">]</span>
@@ -280,7 +342,7 @@ use exactly the same mechanism. The entry-point name is the plugin's name.</p>
 which plugin fills a slot (<code>[sync] provider = &quot;myservice&quot;</code>, <code>[ai] embedder = &quot;ollama&quot;</code>);
 enrichers are all used.</p>
 </section>
-<section id="what-the-host-does" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>What the host does</h2></div>
+<section id="what-the-host-does" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>What the host does</h2></div>
 <ul>
 <li><strong>Load.</strong> It imports the plugin and checks it: the <code>api_version</code>, that every capability you
 declare has a real method behind it, and that the members of its kind are present. It reports
@@ -297,7 +359,7 @@ the same confirm gate. They start off over MCP and cannot mark mail read.</li>
 </ul>
 <p>Core never stops because a plugin did. <code>start</code>, <code>stop</code> and <code>health</code> are all optional to define.</p>
 </section>
-<section id="extending-core-operations-job-kinds-pipeline-stages-and-scheduled-tasks" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>Extending core: operations, job kinds, pipeline stages and scheduled tasks</h2></div>
+<section id="extending-core-operations-job-kinds-pipeline-stages-and-scheduled-tasks" class="doc-section"><div class="section-head"><span class="section-num">10</span><h2>Extending core: operations, job kinds, pipeline stages and scheduled tasks</h2></div>
 <p>Beyond the five kinds, a plugin of <strong>any</strong> kind can add capabilities with four optional methods.
 Each is collected from the healthy plugins at start-up, validated like the rest of the contract,
 and given a plugin-scoped context with <strong>no database handle</strong> — you return data, core stores it.
@@ -387,7 +449,7 @@ your kind needs, and register an entry point. The earlier sections are the worke
 <p>Every hook has a conformance suite (next section): <code>JobHandlerContract</code>, <code>PipelineStageContract</code>
 and <code>ScheduledTaskContract</code>, plus the five kind suites.</p>
 </section>
-<section id="testing-it" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>Testing it</h2></div>
+<section id="testing-it" class="doc-section"><div class="section-head"><span class="section-num">11</span><h2>Testing it</h2></div>
 <p>Run the contract suite against your plugin. It is a set of pytest tests that check the behavior
 the host and the rest of Oaken rely on.</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
@@ -412,7 +474,7 @@ mailbox and failure injection, <code>FakeEmbedder</code>, <code>FakeLLM</code> t
 <code>FakeEnricher</code>, <code>InMemoryVectorStore</code>). Use them to test code that uses a plugin, with no network,
 no model and no real mail.</p>
 </section>
-<section id="a-first-party-example-ollama" class="doc-section"><div class="section-head"><span class="section-num">10</span><h2>A first-party example: Ollama</h2></div>
+<section id="a-first-party-example-ollama" class="doc-section"><div class="section-head"><span class="section-num">12</span><h2>A first-party example: Ollama</h2></div>
 <p><code>oaken_ollama</code> (an embedder and an LLM backend) is the reference for anything that talks to a
 model server. It reads its own <code>[plugins.&lt;entry-point-name&gt;]</code> table through <code>ctx.config</code> (here
 <code>base_url</code>, <code>model</code>, <code>keep_alive</code>, <code>timeout</code>, <code>max_retries</code>, <code>backoff</code>, <code>batch_size</code>), sets
@@ -421,7 +483,7 @@ model server. It reads its own <code>[plugins.&lt;entry-point-name&gt;]</code> t
 points to offer two differently configured instances. See <a href="architecture/ai-safety.html">prompt safety and
 workspaces</a>.</p>
 </section>
-<section id="a-first-party-example-gmail" class="doc-section"><div class="section-head"><span class="section-num">11</span><h2>A first-party example: Gmail</h2></div>
+<section id="a-first-party-example-gmail" class="doc-section"><div class="section-head"><span class="section-num">13</span><h2>A first-party example: Gmail</h2></div>
 <p><code>oaken_gmail</code> is the reference for a provider that has its own auth. It keeps its credentials in the
 OS keyring (never in <code>ctx.config</code>), renews them through a <code>TokenManager</code>, reports a dead
 credential as an unhealthy <code>health()</code> plus a plugin event instead of crashing, and overrides
@@ -437,7 +499,7 @@ through your own SMTP server</a>.</p>
 interrupted sync resumes and a renumbered folder is read again, and refuses any connection that is
 not encrypted. See <a href="providers/imap.html">Connect any IMAP server</a>.</p>
 </section>
-<section id="plugin-events" class="doc-section"><div class="section-head"><span class="section-num">12</span><h2>Plugin events</h2></div>
+<section id="plugin-events" class="doc-section"><div class="section-head"><span class="section-num">14</span><h2>Plugin events</h2></div>
 <p>Core announces what happens on an event bus, and a plugin can announce its own. Subclass
 <code>PluginEvent</code>, add plain-data fields, and publish it from <code>start()</code> or anywhere you hold the context:</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
@@ -468,13 +530,13 @@ subscription:</p>
 and skipped without affecting core or other listeners. The host ends every subscription when the
 plugin stops.</p>
 </section>
-<section id="not-sandboxed" class="doc-section"><div class="section-head"><span class="section-num">13</span><h2>Not sandboxed</h2></div>
+<section id="not-sandboxed" class="doc-section"><div class="section-head"><span class="section-num">15</span><h2>Not sandboxed</h2></div>
 <p>Plugins run in the same process as core, with full access to the machine and to whatever core can
 reach. They are not sandboxed in version 1. The contract keeps the code tidy and the data
 boundaries clear; it does not contain a hostile plugin. Only install plugins you trust, as you
 would any Python package.</p>
 </section>
-  <footer>Oaken Mail 0.1.0 · Apache-2.0</footer>
+  <footer>Oaken Mail 0.1.1 · Apache-2.0</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

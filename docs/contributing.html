@@ -205,7 +205,7 @@ changed a component). A prompt that is built but still marked Open sends the nex
 redo it.</li>
 </ol>
 <h3 id="status-of-the-prompts">Status of the prompts</h3>
-<p><em>As of 2026-10-21 (commit <code>7ee6308</code>).</em> <strong>Built</strong> means the prompt's deliverables are in <code>main</code>
+<p><em>As of 2026-10-24 (commit <code>65d3a9f</code> plus the 0.1.1 branch).</em> <strong>Built</strong> means the prompt's deliverables are in <code>main</code>
 with tests. <strong>Partly</strong> says what is done and what is left. A <strong>Written</strong> prompt has a plan and no
 code yet.</p>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
@@ -371,8 +371,8 @@ code yet.</p>
 <tr>
 <td>20</td>
 <td>oss-docs</td>
-<td>Partly</td>
-<td>The site, getting started, MCP and keyring pages and this guide exist. The full pass (roadmap, plugin guide, verification) has not been run</td>
+<td>Built</td>
+<td>README, <code>ROADMAP.md</code>, issue and PR templates, the site, the architecture and provider pages, and <code>docs/tools/check_commands.py</code> (runs the docs' <code>&lt;!-- check --&gt;</code> commands) are in. Not verified: the Gmail walkthrough on a clean Google account, and <code>docs/evals/latest.md</code> (both need real services)</td>
 </tr>
 <tr>
 <td>21</td>
@@ -395,8 +395,8 @@ code yet.</p>
 <tr>
 <td>23</td>
 <td>plugin-settings</td>
-<td><strong>Open</strong></td>
-<td></td>
+<td><strong>Partly built</strong></td>
+<td>In: the <code>capabilities</code> allow-list, <code>enabled</code> and a plugin's own <code>enabled_default</code>, runtime enable/disable/reload, the six commands every plugin has (<code>oaken &lt;plugin&gt; enable|disable|reload|check|config|set</code>, declared on the base classes and run by core), <code>check_plugin_config</code> (schema plus a throwaway-instance health probe), <code>get_plugin_config</code> and <code>set_plugin_config</code>, and the comment-preserving section writer (<code>oaken.core.config_edit</code>, <code>tomlkit</code>). Not built: the Settings → Plugins page and the secrets rows</td>
 </tr>
 <tr>
 <td>24</td>
@@ -426,7 +426,7 @@ code yet.</p>
 <td>28</td>
 <td>compose-and-send</td>
 <td><strong>Open</strong></td>
-<td>There is no <code>send_message</code> operation yet</td>
+<td>There is no <code>send_message</code> operation yet. When it lands, the outbox is a <code>send</code> job on the job queue, and a sync also runs any send waiting out a retry delay</td>
 </tr>
 <tr>
 <td>29</td>
@@ -437,8 +437,8 @@ code yet.</p>
 <tr>
 <td>30</td>
 <td>pipeline-management</td>
-<td>Partly</td>
-<td>Job list, cancel, retry, parked retry and pausing embed and enrich exist. Check the prompt's list for live concurrency and priority</td>
+<td>Built</td>
+<td>Per-stage pause (<code>pause_backfill</code>/<code>resume_backfill</code> take a <code>stage</code>, stored in the database), live concurrency (<code>set_pipeline_limits</code>), <code>reprocess --since/--limit</code>, <code>pipeline_status</code> shows <code>paused</code>, <code>concurrency</code> and the running jobs, interactive model calls go ahead of background enrich, and the <code>/jobs</code> console and <code>oaken pipeline</code> drive it. The existing operation names were kept instead of the prompt's new ones; bulk <code>cancel_jobs</code>/<code>retry_jobs</code> by stage and the web UI's Pipeline pane are not built</td>
 </tr>
 <tr>
 <td>31</td>
@@ -457,6 +457,12 @@ code yet.</p>
 <td>agent-enrichment</td>
 <td><strong>Written</strong></td>
 <td>Not built. The <code>/mcp/agent</code> door works but a claimed <code>ingest.enrich</code> job carries only ids and cannot store an answer</td>
+</tr>
+<tr>
+<td>34</td>
+<td>stabilize-core</td>
+<td>Built</td>
+<td>Snapshot tests for operations, plugin contracts and events, import-linter boundaries, service units and plugin extension hooks (job kinds, pipeline stages, scheduled tasks)</td>
 </tr>
 </tbody>
 </table></div>
@@ -477,7 +483,7 @@ records what it generated in <code>docs/.site-manifest</code> and only ever repl
 <code>docs/softmap.toml</code> in the same change that builds or alters a component (the build fails if it
 disagrees with the repository).</p>
 </section>
-  <footer>Oaken Mail 0.1.0 · Apache-2.0</footer>
+  <footer>Oaken Mail 0.1.1 · Apache-2.0</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

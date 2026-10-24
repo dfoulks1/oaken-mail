@@ -3,7 +3,7 @@
 
 # Globs (relative to docs/, '*' crosses '/') that are not site content. docs/prompts/** and
 # docs/tools/** are always excluded; the ADR sources are summarised by the generated ADR index.
-exclude = ["adr/0*.md", "spikes/*.md", "evals/*.md", "releasing.md"]
+exclude = ["adr/0*.md", "spikes/*.md", "evals/*.md", "releasing.md", "TODO-onboarding.md"]
 
 [site]
 title = "Oaken Mail"

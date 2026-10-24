@@ -36,6 +36,19 @@ changes from `never` to `off`, never `on` (see "MCP exposure of send").
   trigger is a `send_message` call from a caller the user has permitted (the user in the UI/CLI, or
   an MCP client the user has switched send on for).
 
+## Added after 0.1.1 (the job queue and sync)
+
+- **The outbox is the job queue.** A queued send is a `send` job, so it shows in `oaken jobs`
+  beside sync and ingest jobs, with leases, retries with backoff and an audit trail.
+- **`oaken sync` also runs waiting sends.** A send job runs as soon as a worker picks it up; what a
+  sync adds is "run now" for the account's sends that are waiting out a retry delay (the queue's
+  existing retry-now path). Failed-for-good sends stay parked, where `retry_parked` handles them.
+  Bare `oaken sync` already queues a pull for every account on every provider (`sync_now` with no
+  account); with sends it would also run the waiting sends of every account that can send.
+- **Receive-only accounts never send**, even from a queue: the `may_send` interlock sits in front of
+  the job. Today `sync_now` with no account skips a send-only account as "does not receive mail";
+  that becomes "nothing to send or receive".
+
 ## Decisions to make in this prompt (record an ADR)
 
 1. **Identity model.** An **identity** is `(display name, from address, route)`. A route is the
