@@ -1,6 +1,6 @@
 # 28 — Compose and send
 
-**Read first:** `docs/prompts/00-context.md`, `docs/prompts/21b-webui-client-foundation.md`.
+**Read first:** `docs/prompts/00-context.md`, `docs/prompts/WEBUI_21b-webui-client-foundation.md`.
 **Depends on:** 11, 11b, 12b, 13, 21b, 22, 24, 27.
 
 ## Goal

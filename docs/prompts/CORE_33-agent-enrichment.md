@@ -1,6 +1,6 @@
 # 33 — Agent enrichment: let an external model enrich a message through `/mcp/agent`
 
-**Read first:** `docs/prompts/00-context.md`, `docs/prompts/03b-swarm-foundations.md` and
+**Read first:** `docs/prompts/00-context.md`, `docs/prompts/CORE_03b-swarm-foundations.md` and
 `docs/architecture/swarm.md`. **Depends on:** 03b, 05, 13, 18, 31, 32.
 
 ## Why

@@ -92,5 +92,5 @@ deleted, so it must still be rebuildable and findable on request. A message flag
 - **`rebuild_index` is a plain async function** that a registered job handler calls, so prompt 09 can
   call it without the queue.
 - **`from:` matches the sender's name or address.**
-- **Only the CLI audit table in `17-cli-client.md` was extended** for the operator commands this
+- **Only the CLI audit table in `CLI_17-cli-client.md` was extended** for the operator commands this
   prompt implies (rebuild, status, integrity check); the commands themselves are decided in 17.

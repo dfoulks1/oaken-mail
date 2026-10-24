@@ -1,6 +1,6 @@
 # 26 — Sieve management in the UI (and a write path)
 
-**Read first:** `docs/prompts/00-context.md` and `docs/prompts/21b-webui-client-foundation.md`.
+**Read first:** `docs/prompts/00-context.md` and `docs/prompts/WEBUI_21b-webui-client-foundation.md`.
 **Depends on:** 06c, 13, 16, 17, 21, 21b, 22.
 
 ## What the mockup shows versus what Sieve is (from 21b A8)

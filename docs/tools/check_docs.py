@@ -227,16 +227,23 @@ def _stale(cfg: Config, fresh: Path) -> list[str]:
     return out
 
 
+EXTRA_CHECKS = ("check_commands.py", "check_prompts.py")  # each has ``check(cfg) -> problems``
+
+
 def _extra_checks(cfg: Config) -> list[str]:
-    path = HERE / "check_commands.py"
-    if not path.is_file():
-        return []
-    spec = importlib.util.spec_from_file_location("check_commands", path)
-    if spec is None or spec.loader is None:
-        return [f"cannot load {path}"]
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return [str(p) for p in mod.check(cfg)]
+    problems: list[str] = []
+    for name in EXTRA_CHECKS:
+        path = HERE / name
+        if not path.is_file():
+            continue
+        spec = importlib.util.spec_from_file_location(path.stem, path)
+        if spec is None or spec.loader is None:
+            problems.append(f"cannot load {path}")
+            continue
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        problems += [str(p) for p in mod.check(cfg)]
+    return problems
 
 
 def check(cfg: Config) -> list[str]:

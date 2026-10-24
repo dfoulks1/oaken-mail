@@ -22,7 +22,7 @@
 >   not `internal`). A background call holds its *next* call while one runs, up to the yield time.
 >   It cannot interrupt a background call already running, so a question waits for at most one.
 
-**Read first:** `docs/prompts/00-context.md` and `docs/prompts/21b-webui-client-foundation.md`.
+**Read first:** `docs/prompts/00-context.md` and `docs/prompts/WEBUI_21b-webui-client-foundation.md`.
 **Depends on:** 05, 13, 16, 17, 21b, 22.
 
 ## Why

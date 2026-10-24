@@ -1,9 +1,8 @@
-# PLUGIN — OpenAI-compatible backend (LM Studio first)
+# 38 — OpenAI-compatible backend (LM Studio first)
 
-**Read first:** `docs/prompts/00-context.md`, [04 — plugin host](04-plugin-host.md) and
-[10 — Ollama and prompt safety](10-ollama-and-prompt-safety.md). **Track:** plugin, not core. This
-prompt is unnumbered on purpose: it must not touch `src/oaken/` beyond what is listed under
-"Core touch points". It depends on 04, 08, 10 and 31.
+**Read first:** `docs/prompts/00-context.md`, [04 — plugin host](CORE_04-plugin-host.md) and
+[10 — Ollama and prompt safety](PLUGIN_10-ollama-and-prompt-safety.md). **Track:** `PLUGIN_`, not core. This
+prompt must not touch `src/oaken/` beyond what is listed under "Core touch points". It depends on 04, 08, 10 and 31.
 
 ## Goal
 

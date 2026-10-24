@@ -81,7 +81,7 @@
       <a class="nav-link" href="#repository-layout"><span class="num">3</span>Repository layout</a>
       <a class="nav-link" href="#ground-rules"><span class="num">4</span>Ground rules</a>
       <a class="nav-link" href="#ai-tooling"><span class="num">5</span>AI tooling</a>
-      <a class="nav-link" href="#picking-up-a-prompt"><span class="num">6</span>Picking up a prompt</a>
+      <a class="nav-link" href="#contributing-with-prompts"><span class="num">6</span>Contributing with prompts</a>
       <a class="nav-link" href="#documentation"><span class="num">7</span>Documentation</a>
     </nav></div>
   </div></div>
@@ -184,31 +184,80 @@ announcements, security advisories) must be reviewed by a committer before publi
 labeled as AI-generated (EU AI Act). Reviewing it as you would any other contribution is enough.</li>
 </ul>
 </section>
-<section id="picking-up-a-prompt" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Picking up a prompt</h2></div>
-<p>Oaken Mail is built from a numbered series of self-contained prompts, one per session, in
+<section id="contributing-with-prompts" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Contributing with prompts</h2></div>
+<p>Oaken Mail is built from a series of self-contained <strong>prompts</strong>, one per piece of work, in
 <a href="https://github.com/dfoulks1/oaken-mail/tree/main/docs/prompts"><code>docs/prompts/</code></a> (the index is
-<code>docs/prompts/README.md</code>). Each one says what to build, what it depends on, its acceptance
-criteria and a report-back checkpoint. You can run one by hand or with an AI coding tool, and
-anyone can take an <strong>Open</strong> one.</p>
-<p>To run one:</p>
+<code>docs/prompts/README.md</code>). A prompt is a specification: what to build, what it depends on, its
+acceptance criteria and a report-back. You can run one with an AI coding tool or follow it by hand
+as a checklist; either way the <strong>tests and acceptance criteria are the contract</strong>, not the exact
+code any one run produces.</p>
+<p>Files are named <code>TRACK_NN-name.md</code> (<code>CORE_</code>, <code>CLI_</code>, <code>MCP_</code>, <code>PLUGIN_</code>, <code>ENRICHER_</code>, <code>WEBUI_</code>,
+<code>DOCS_</code>). The number is the prompt's permanent ID and the track says what it builds. The web UI
+(<code>WEBUI_</code>) is its own product and is never folded into a core prompt.</p>
+<p><strong>Not everything needs a prompt.</strong> A bug fix, a typo, a small refactor or a docs correction is an
+ordinary pull request: say what and why, add a test, run the checks. A prompt is for a new feature,
+a new plugin, or a change to an architectural decision.</p>
+<h3 id="run-a-prompt">Run a prompt</h3>
 <ol>
 <li>Read <code>docs/prompts/00-context.md</code> (the rules and the decisions already taken), this guide, the
 ADRs and the architecture page for the part you touch.</li>
-<li>Pick a prompt below that is <strong>Open</strong> and whose dependencies are <strong>Built</strong>. If it says
-<strong>In progress</strong>, ask on the issue or pull request first: somebody is already on it.</li>
+<li>Pick a prompt in the table below that is <strong>Open</strong> and whose dependencies are <strong>Built</strong>. If it
+says <strong>In progress</strong>, ask on the issue or pull request first.</li>
+<li><strong>Make a feature branch</strong>, named for the prompt: <code>feat/28-compose-and-send</code>. One prompt per
+branch and pull request is the easiest to review.</li>
 <li>Start the session with: <em>&quot;Read <code>docs/prompts/00-context.md</code>, then execute
-<code>docs/prompts/NN-….md</code>.&quot;</em> Where a prompt and the code or the docs disagree, the code and the
-docs win; stop and report instead of guessing.</li>
+<code>docs/prompts/TRACK_NN-….md</code>.&quot;</em> Where a prompt and the code or the docs disagree, the code and
+the docs win; stop and report instead of guessing.</li>
 <li>Do the work with tests (next to the code, no network), then run the checks under
 <a href="#development-setup">Development setup</a> and <a href="#documentation">Documentation</a>.</li>
-<li><strong>In the same pull request, update the table below</strong> (and <code>docs/softmap.toml</code> if you built or
-changed a component). A prompt that is built but still marked Open sends the next contributor to
-redo it.</li>
+<li>Open a pull request. Paste the prompt's report-back into it. The pull request template lists
+what must be true before it merges.</li>
 </ol>
+<h3 id="what-a-pull-request-must-update">What a pull request must update</h3>
+<p>Every prompt you run, and every change that is not one, leaves the docs true:</p>
+<ul>
+<li><strong>Each prompt you ran</strong> gets a status block at the top of its file saying what was built and where
+the code differs from the prompt, and its row in the status table below.</li>
+<li><strong>If you ran more than one prompt</strong>, do all of the above for each, and say in the pull request which
+prompts it covers.</li>
+<li><strong>Everything else that mentions what you changed:</strong> the changelog, the architecture pages, the
+reference pages, <code>docs/softmap.toml</code> if you built or changed a component, and <code>config.example.toml</code>
+for a new setting. Search for the old behaviour and fix every mention.</li>
+<li><strong>If you move or rename a doc, update its references.</strong> Do not do it by hand: run
+<code>uv run python docs/tools/move_doc.py OLD NEW</code> (<code>--dry-run</code> first if you like). It does the <code>git mv</code>
+and fixes Markdown links, paths and bare names everywhere, including the moved file's own links.
+Then rebuild the site. <code>check_docs.py</code> fails on any prompt reference that dangles, and on an index
+or status table that is out of step with the files.</li>
+</ul>
+<h3 id="ask-for-a-feature">Ask for a feature</h3>
+<p>If you want something that has no prompt, <strong>open a feature request and write the prompt in it</strong>
+(the template shows how, and <code>docs/prompts/TEMPLATE.md</code> is the format). Then:</p>
+<ol>
+<li>A maintainer reads it. The outcomes are <strong>approved</strong>, <strong>changes asked for</strong>, or <strong>declined with a
+reason</strong>. The labels are <code>prompt: proposed</code>, <code>prompt: approved</code> and <code>prompt: declined</code>.</li>
+<li>When it is approved, a pull request adds it as <code>docs/prompts/TRACK_NN-name.md</code> with the next free
+number, status <strong>Open</strong>, a row in the index and in the status table. You can open that pull
+request or a maintainer will. Now anyone can run it.</li>
+</ol>
+<h3 id="change-a-prompt">Change a prompt</h3>
+<p>Anyone can propose a change to a prompt with a pull request, and the pull request is where the design
+is discussed. <strong>Architectural considerations live in two places: the prompts and the ADRs.</strong></p>
+<ul>
+<li><strong>Before it is built</strong> (<strong>Proposed</strong>, <strong>Written</strong> or <strong>Open</strong>): edit the prompt. If you change a
+decision it records, say why in the pull request.</li>
+<li><strong>A decision that outlives one prompt</strong> (a rule, a trade-off, a surface that must not change) is an
+ADR in <code>docs/adr/</code>, linked from the prompt.</li>
+<li><strong>After it is built</strong> the prompt is a record. Do not rewrite history to match the code: add to its
+status block where the code deviates, and describe how the thing works now in <code>docs/architecture/</code>.</li>
+<li><strong>A prompt is reviewed like code.</strong> It is a set of instructions an AI will carry out, so a prompt
+must not tell it to fetch from the network, run a script nobody has reviewed, or switch off or skip
+a check. A reviewer rejects one that does.</li>
+</ul>
 <h3 id="status-of-the-prompts">Status of the prompts</h3>
-<p><em>As of 2026-10-24 (commit <code>65d3a9f</code> plus the 0.1.1 branch).</em> <strong>Built</strong> means the prompt's deliverables are in <code>main</code>
-with tests. <strong>Partly</strong> says what is done and what is left. A <strong>Written</strong> prompt has a plan and no
-code yet.</p>
+<p><em>As of 2026-10-24 (commit <code>65d3a9f</code> plus the 0.1.1 branch).</em> <strong>Proposed</strong> is a feature request with a
+prompt in it, waiting for approval (it is not in this table yet). <strong>Open</strong> is approved and free to
+take. <strong>In progress</strong> has someone on it. <strong>Built</strong> means the prompt's deliverables are in <code>main</code> with
+tests. <strong>Partly</strong> says what is done and what is left. A <strong>Written</strong> prompt has a plan and no code yet.</p>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
 <thead>
 <tr>
@@ -221,267 +270,273 @@ code yet.</p>
 <tbody>
 <tr>
 <td>01</td>
-<td>bootstrap</td>
+<td>CORE_01-bootstrap</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>01a</td>
-<td>docs-site-scaffold</td>
+<td>DOCS_01a-docs-site-scaffold</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>02</td>
-<td>core-foundation</td>
+<td>CORE_02-core-foundation</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>03</td>
-<td>events-and-jobs</td>
+<td>CORE_03-events-and-jobs</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>03b</td>
-<td>swarm-foundations</td>
+<td>CORE_03b-swarm-foundations</td>
 <td>Built</td>
 <td>External agents; see 33 for enrichment through them</td>
 </tr>
 <tr>
 <td>04</td>
-<td>plugin-host</td>
+<td>CORE_04-plugin-host</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>05</td>
-<td>raw-store</td>
+<td>CORE_05-raw-store</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>06</td>
-<td>parsing-and-cleaning</td>
+<td>CORE_06-parsing-and-cleaning</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>06c</td>
-<td>sieve-filtering</td>
+<td>CORE_06c-sieve-filtering</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>07</td>
-<td>index-and-fts</td>
+<td>CORE_07-index-and-fts</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>08</td>
-<td>vector-store</td>
+<td>PLUGIN_08-vector-store</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>09</td>
-<td>ingest-pipeline</td>
+<td>CORE_09-ingest-pipeline</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>10</td>
-<td>ollama-and-prompt-safety</td>
+<td>PLUGIN_10-ollama-and-prompt-safety</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>11</td>
-<td>gmail-plugin</td>
+<td>PLUGIN_11-gmail-plugin</td>
 <td>Built</td>
 <td>New mail now arrives ahead of a long first sync's backlog</td>
 </tr>
 <tr>
 <td>11b</td>
-<td>smtp-send</td>
+<td>PLUGIN_11b-smtp-send</td>
 <td>Built</td>
 <td>Provider only; the send operation is 28</td>
 </tr>
 <tr>
 <td>11c</td>
-<td>imap-provider</td>
+<td>PLUGIN_11c-imap-provider</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>12</td>
-<td>read-state</td>
+<td>CORE_12-read-state</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>12b</td>
-<td>sync-scheduling</td>
+<td>CORE_12b-sync-scheduling</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>13</td>
-<td>operation-registry</td>
+<td>CORE_13-operation-registry</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>14</td>
-<td>enrichers</td>
+<td>ENRICHER_14-enrichers</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>15</td>
-<td>retrieval-and-ask</td>
+<td>CORE_15-retrieval-and-ask</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>16</td>
-<td>api-daemon</td>
+<td>CORE_16-api-daemon</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>17</td>
-<td>cli-client</td>
+<td>CLI_17-cli-client</td>
 <td>Built</td>
 <td></td>
 </tr>
 <tr>
 <td>18</td>
-<td>mcp-server</td>
+<td>MCP_18-mcp-shim</td>
 <td>Built</td>
 <td>Both doors: <code>/mcp</code> and <code>/mcp/agent</code></td>
 </tr>
 <tr>
 <td>19</td>
-<td>security-hardening</td>
+<td>CORE_19-security-hardening</td>
 <td><strong>Open</strong></td>
 <td>The dedicated pass (injection suite across all surfaces, localhost threat tests, audit review) has not been run. Enricher injection tests and ADR 0005 exist</td>
 </tr>
 <tr>
 <td>20</td>
-<td>oss-docs</td>
+<td>DOCS_20-oss-docs</td>
 <td>Built</td>
 <td>README, <code>ROADMAP.md</code>, issue and PR templates, the site, the architecture and provider pages, and <code>docs/tools/check_commands.py</code> (runs the docs' <code>&lt;!-- check --&gt;</code> commands) are in. Not verified: the Gmail walkthrough on a clean Google account, and <code>docs/evals/latest.md</code> (both need real services)</td>
 </tr>
 <tr>
 <td>21</td>
-<td>webui-server</td>
+<td>WEBUI_21-webui-server</td>
 <td>Built</td>
 <td><code>oaken-webui</code> start, stop, restart and status</td>
 </tr>
 <tr>
 <td>21b</td>
-<td>webui-client-foundation</td>
+<td>WEBUI_21b-webui-client-foundation</td>
 <td><strong>In progress</strong></td>
 <td>Server items D1–D4, the shared sidebar and the API seam are in. Check the prompt's C list before starting; another session is on it</td>
 </tr>
 <tr>
 <td>22</td>
-<td>api-parity</td>
+<td>CORE_22-api-parity</td>
 <td>Built</td>
 <td>Paging, totals, sort, stars, thread tree, query operators</td>
 </tr>
 <tr>
 <td>23</td>
-<td>plugin-settings</td>
+<td>CORE_23-plugin-settings</td>
 <td><strong>Partly built</strong></td>
 <td>In: the <code>capabilities</code> allow-list, <code>enabled</code> and a plugin's own <code>enabled_default</code>, and plugin control under core's <code>oaken plugins</code> (<code>enable</code>, <code>disable</code>, <code>reload</code>, <code>config</code>, <code>check</code>, <code>set</code>; <code>check</code> tries settings on a throwaway instance). The same operations back the stats page's switch and Reload button. <code>oaken.core.config_edit</code> (<code>tomlkit</code>) edits one table and keeps comments. A plugin does not offer these itself. Not built: the Settings → Plugins page and the secrets rows</td>
 </tr>
 <tr>
 <td>24</td>
-<td>accounts-onboarding</td>
+<td>CORE_24-accounts-onboarding</td>
 <td>Built</td>
 <td>Account ops plus the receive-only (&quot;listen but not send&quot;) interlock in <code>oaken.mail.sendpolicy</code> (one key, one reader; surfaced by <code>get_account</code>/<code>list_accounts</code>), the <code>oaken admin account set|remove</code> CLI verbs, and the Settings → Accounts onboarding UI (<code>accounts.html</code>)</td>
 </tr>
 <tr>
 <td>25</td>
-<td>folders-labels-counts</td>
+<td>CORE_25-folders-labels-counts</td>
 <td>Built</td>
 <td>Nested folders, labels, unread counts, stars</td>
 </tr>
 <tr>
 <td>26</td>
-<td>sieve-management</td>
+<td>CORE_26-sieve-management</td>
 <td>Built</td>
 <td>Read/test ops plus the write path (<code>sieve_save</code>/<code>sieve_delete</code>/<code>sieve_get</code>, compile-first, atomic owner-only, never over MCP — ADR 0009), the <code>oaken sieve get|save|delete</code> CLI verbs with <code>--suggest-name</code>, and the Sieve editor UI (<code>sieve.html</code>)</td>
 </tr>
 <tr>
 <td>27</td>
-<td>contacts-people</td>
+<td>CORE_27-contacts-people</td>
 <td><strong>Open</strong></td>
 <td><code>contacts.html</code> is still a mockup</td>
 </tr>
 <tr>
 <td>28</td>
-<td>compose-and-send</td>
+<td>CORE_28-compose-and-send</td>
 <td><strong>Open</strong></td>
 <td>There is no <code>send_message</code> operation yet. When it lands, the outbox is a <code>send</code> job on the job queue, and a sync also runs any send waiting out a retry delay</td>
 </tr>
 <tr>
 <td>29</td>
-<td>system-settings</td>
+<td>CORE_29-system-settings</td>
 <td><strong>Partly built</strong></td>
 <td>Operations and CLI: <code>get/check/set_settings</code> (<code>oaken settings</code>), <code>storage_info</code> and <code>vacuum</code> (<code>oaken storage</code>, <code>oaken vacuum</code>), <code>cache_stats</code>/<code>clear_cache</code> (<code>oaken cache</code>), <code>events_tail</code> over a persisted event log (<code>oaken events</code>), and a paged <code>list_audit</code>. Not built: the Settings panes in the web UI</td>
 </tr>
 <tr>
 <td>30</td>
-<td>pipeline-management</td>
+<td>CORE_30-pipeline-management</td>
 <td>Built</td>
 <td>Per-stage pause (<code>pause_backfill</code>/<code>resume_backfill</code> take a <code>stage</code>, stored in the database), live concurrency (<code>set_pipeline_limits</code>), <code>reprocess --since/--limit</code>, <code>pipeline_status</code> shows <code>paused</code>, <code>concurrency</code> and the running jobs, interactive model calls go ahead of background enrich, and the <code>/jobs</code> console and <code>oaken pipeline</code> drive it. The existing operation names were kept instead of the prompt's new ones; bulk <code>cancel_jobs</code>/<code>retry_jobs</code> by stage and the web UI's Pipeline pane are not built</td>
 </tr>
 <tr>
 <td>31</td>
-<td>workspace-management</td>
+<td>CORE_31-workspace-management</td>
 <td><strong>Open</strong></td>
 <td></td>
 </tr>
 <tr>
 <td>32</td>
-<td>mcp-settings</td>
+<td>MCP_32-mcp-settings</td>
 <td><strong>Open</strong></td>
 <td></td>
 </tr>
 <tr>
 <td>33</td>
-<td>agent-enrichment</td>
+<td>CORE_33-agent-enrichment</td>
 <td><strong>Written</strong></td>
 <td>Not built. The <code>/mcp/agent</code> door works but a claimed <code>ingest.enrich</code> job carries only ids and cannot store an answer</td>
 </tr>
 <tr>
 <td>34</td>
-<td>stabilize-core</td>
+<td>CORE_34-stabilize-core</td>
 <td>Built</td>
 <td>Snapshot tests for operations, plugin contracts and events, import-linter boundaries, service units and plugin extension hooks (job kinds, pipeline stages, scheduled tasks)</td>
 </tr>
 <tr>
 <td>35</td>
-<td>onboarding-0-1-1</td>
+<td>CORE_35-onboarding-0-1-1</td>
 <td>Built</td>
 <td>The record of the 0.1.1 work: first-run defaults, core's console pages, plugin-first commands</td>
 </tr>
 <tr>
 <td>36</td>
-<td>after-0-1-1</td>
+<td>CORE_36-after-0-1-1</td>
 <td><strong>Open</strong></td>
 <td>What 0.1.1 left: label/folder write-back, workspace routing by Sieve rule, a datastore per account, send, Gmail sign-in</td>
 </tr>
 <tr>
 <td>37</td>
-<td>gmail-sign-in</td>
+<td>PLUGIN_37-gmail-sign-in</td>
 <td><strong>Written</strong></td>
 <td>The plan only; nothing built. Least-privilege permissions that follow capabilities, <code>oaken gmail doctor</code>, a clearer consent flow, and a private copy of the client JSON</td>
+</tr>
+<tr>
+<td>38</td>
+<td>PLUGIN_38-openai-compat-lmstudio</td>
+<td><strong>Written</strong></td>
+<td>The plan only; an OpenAI-compatible LLM backend and embedder, LM Studio first</td>
 </tr>
 </tbody>
 </table></div>

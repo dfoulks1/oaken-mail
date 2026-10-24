@@ -3,7 +3,7 @@
 > **Status: built (0.1.1).** This began as the working TODO list for the `feat/0.1.1-onboarding`
 > branch and is kept as the record of what that work was and why. Where it and the code differ, the
 > code is right. The rule was **no new features: make 0.1 useful.** The follow-ups it left are in
-> [36 — after 0.1.1](36-after-0-1-1.md).
+> [36 — after 0.1.1](CORE_36-after-0-1-1.md).
 
 ## What the first pass shipped
 

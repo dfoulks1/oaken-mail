@@ -5,10 +5,10 @@
 > (`--account-id`, `--check`). A password is never an argument: it is read without echo, or from
 > standard input with `--password-stdin`. The core operations `set_account_password`,
 > `check_account`, `start_authorization` and `authorization_status` are gone; the provider's
-> `<provider>.auth` and `<provider>.auth_status` replace them. See [35](35-onboarding-0-1-1.md).
+> `<provider>.auth` and `<provider>.auth_status` replace them. See [35](CORE_35-onboarding-0-1-1.md).
 
 **Read first:** `docs/prompts/00-context.md`, `docs/adr/0007-webui-is-a-separate-client.md`,
-`docs/prompts/21-webui-server.md`. **Depends on:** 13, 16, 21. **Feeds:** 22–29.
+`docs/prompts/WEBUI_21-webui-server.md`. **Depends on:** 13, 16, 21. **Feeds:** 22–29.
 
 ## Goal
 

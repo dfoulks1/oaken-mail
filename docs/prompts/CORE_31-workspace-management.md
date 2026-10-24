@@ -1,7 +1,7 @@
 # 31 — Workspace management
 
-**Read first:** `docs/prompts/00-context.md`, `docs/prompts/21b-webui-client-foundation.md` and
-`docs/prompts/23-plugin-settings.md` (the section writer and live settings reload).
+**Read first:** `docs/prompts/00-context.md`, `docs/prompts/WEBUI_21b-webui-client-foundation.md` and
+`docs/prompts/CORE_23-plugin-settings.md` (the section writer and live settings reload).
 **Depends on:** 10, 13, 16, 17, 21b, 22, 23.
 **Used by:** 32 (MCP settings), which links the MCP to existing workspaces by name.
 

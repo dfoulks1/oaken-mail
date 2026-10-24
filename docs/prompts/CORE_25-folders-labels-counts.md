@@ -1,6 +1,6 @@
 # 25 — Mailbox chrome: folders, labels and unread counts
 
-**Read first:** `docs/prompts/00-context.md`, `docs/prompts/21b-webui-client-foundation.md` and
+**Read first:** `docs/prompts/00-context.md`, `docs/prompts/WEBUI_21b-webui-client-foundation.md` and
 `docs/adr/0008-location-and-enrichment-attrs.md`. **Depends on:** 07, 12, 13, 16, 17, 21, 21b, 22
 (22 adds the `location`/`starred` filters and `offset`/`total`; do not duplicate them here).
 

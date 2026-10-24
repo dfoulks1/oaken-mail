@@ -26,7 +26,7 @@
 > - **Not built:** the Settings panes (AI & Models, Schedule, Storage & Data, Logs) and
 >   `Oaken.form.fromSchema` rendering; `ui-contract.json` entries for the new operations.
 
-**Read first:** `docs/prompts/00-context.md`, `docs/prompts/21b-webui-client-foundation.md`.
+**Read first:** `docs/prompts/00-context.md`, `docs/prompts/WEBUI_21b-webui-client-foundation.md`.
 **Depends on:** 13, 21b, 22, 23.
 
 ## Goal

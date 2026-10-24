@@ -1,8 +1,8 @@
 # 32 — MCP settings: what AI clients may do, and in which workspaces
 
-**Read first:** `docs/prompts/00-context.md`, `docs/prompts/21b-webui-client-foundation.md`,
-`docs/prompts/23-plugin-settings.md` (the section writer, live reload) and
-`docs/prompts/31-workspace-management.md`.
+**Read first:** `docs/prompts/00-context.md`, `docs/prompts/WEBUI_21b-webui-client-foundation.md`,
+`docs/prompts/CORE_23-plugin-settings.md` (the section writer, live reload) and
+`docs/prompts/CORE_31-workspace-management.md`.
 **Depends on:** 13, 16, 17, 18, 21b, 22, 23, 29, 31.
 **Related:** 28 makes `send_message` an ordinary operation and amends ADR 0004; this prompt is
 where a person decides whether the MCP may use it.

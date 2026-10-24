@@ -1,8 +1,8 @@
 # 37 — Gmail sign-in: the standard consent flow, least-privilege permissions, and a doctor
 
-**Read first:** `docs/prompts/00-context.md`, [11 — gmail plugin](11-gmail-plugin.md),
-[35 — onboarding](35-onboarding-0-1-1.md) (the Gmail section, which holds the ceiling you must not
-re-litigate) and [36 — after 0.1.1](36-after-0-1-1.md).
+**Read first:** `docs/prompts/00-context.md`, [11 — gmail plugin](PLUGIN_11-gmail-plugin.md),
+[35 — onboarding](CORE_35-onboarding-0-1-1.md) (the Gmail section, which holds the ceiling you must not
+re-litigate) and [36 — after 0.1.1](CORE_36-after-0-1-1.md).
 **Depends on:** 11, 23 (the `capabilities` allow-list), 24 (accounts), 35.
 
 > **Status: written, not built.** This is the plan for a later session. Nothing in `src/oaken_gmail`

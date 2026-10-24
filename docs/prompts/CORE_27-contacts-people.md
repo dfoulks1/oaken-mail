@@ -1,6 +1,6 @@
 # 27 — Contacts / people
 
-**Read first:** `docs/prompts/00-context.md` and `docs/prompts/21b-webui-client-foundation.md`.
+**Read first:** `docs/prompts/00-context.md` and `docs/prompts/WEBUI_21b-webui-client-foundation.md`.
 **Depends on:** 06, 07, 13, 16, 17, 21, 21b, 22.
 
 ## Goal
