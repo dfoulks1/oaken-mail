@@ -61,7 +61,8 @@ command groups:
   organize      mailbox · label · folder · star · sieve · schedule · reprocess · rebuild-index
   queue         jobs · pipeline · watch
   accounts      admin · auth · accounts
-  system        status · usage · plugins · config · audit · operations
+  system        status · usage · plugins · config · settings · audit · operations
+  storage       storage · vacuum · cache · events
   agents        agents · jobs (claim/heartbeat/complete/fail)
   tools         operation · mcp · completion · help
 
@@ -101,6 +102,7 @@ def build_parser() -> argparse.ArgumentParser:
     _register_mail(sub, g)
     _register_organize(sub, g)
     _register_system(sub, g)
+    _register_admin(sub, g)
     _register_swarm(sub, g)
     _register_mcp(sub, g)
     _register_content(sub)
@@ -561,6 +563,9 @@ def _register_system(
         "--limit", type=int, default=50, metavar="N", help="How many rows (max 500)."
     )
     audit.add_argument("--op", metavar="OP", help="Only rows for this operation.")
+    audit.add_argument("--since", metavar="DATE", help="Nothing older than this (ISO 8601).")
+    audit.add_argument("--cursor", metavar="C", help="The next page: the cursor the last one gave.")
+    audit.add_argument("--all", action="store_true", help="Page through every row, not just one.")
     audit.set_defaults(func=_lazy("system_cmd", "cmd_audit"))
 
     operations = sub.add_parser(
@@ -594,6 +599,90 @@ def _register_system(
 
     watch = sub.add_parser("watch", help="Stream core events as lines (or --json).", parents=[g])
     watch.set_defaults(func=_lazy("system_cmd", "cmd_watch"))
+
+
+def _register_admin(
+    sub: argparse._SubParsersAction[argparse.ArgumentParser], g: argparse.ArgumentParser
+) -> None:
+    """Looking after a running core: settings, storage, vacuum, the cache, the event history."""
+    settings = sub.add_parser(
+        "settings",
+        help="Show, check or change core's own settings (index, retrieval, ai, sync, ...).",
+        parents=[g],
+        description=(
+            "'settings' lists every section; 'settings SECTION' one. 'settings set SECTION "
+            "KEY=VALUE ...' saves a change (--unset KEY goes back to the default) to config.toml, "
+            "keeping its comments; 'settings check ...' tests it without saving. Saved settings "
+            "reach core on 'oaken reload' (or add --reload); the answer says which need more. "
+            "An environment variable that overrides a key is reported."
+        ),
+    )
+    settings.add_argument(
+        "words", nargs="*", metavar="[get|check|set] [SECTION] [KEY=VALUE ...]",
+        help="The action (default get), the section, then settings.",
+    )  # fmt: skip
+    settings.add_argument(
+        "--unset", action="append", metavar="KEY", help="Remove a setting: back to its default."
+    )
+    settings.add_argument(
+        "--reload", action="store_true", help="With set: reload core on the change."
+    )
+    settings.set_defaults(func=_lazy("admin_cmd", "cmd_settings"))
+
+    storage = sub.add_parser("storage", help="Where the data is and how big it is.", parents=[g])
+    storage.set_defaults(func=_lazy("admin_cmd", "cmd_storage"))
+
+    vacuum = sub.add_parser(
+        "vacuum",
+        help="Give back the space deleted mail left in the databases.",
+        parents=[g],
+        description=(
+            "Rewrites raw.db and index.db. One at a time, and not while an index rebuild runs. "
+            "It holds each database's write lock while it works (ingest waits, reads go on) and "
+            "needs about the database's own size free on the disk."
+        ),
+    )
+    vacuum.add_argument("--wait", action="store_true", help="Wait for it, and show the sizes.")
+    vacuum.add_argument(
+        "--timeout",
+        type=float,
+        default=3600.0,
+        metavar="S",
+        help="Give up waiting after S seconds.",
+    )
+    vacuum.set_defaults(func=_lazy("admin_cmd", "cmd_vacuum"))
+
+    cache = sub.add_parser(
+        "cache",
+        help="The enrichment cache: how it is doing, or clear it.",
+        parents=[g],
+        description=(
+            "'cache' (or 'cache stats') shows what it holds and how often it saved a model call. "
+            "'cache clear' deletes cached answers (--task TASK for one task): mail and the index "
+            "are untouched, and cleared answers are recomputed on demand."
+        ),
+    )
+    cache.add_argument("action", nargs="?", default="stats", choices=["stats", "clear"])
+    cache.add_argument("--task", metavar="TASK", help="With clear: only this task's answers.")
+    cache.add_argument("--yes", action="store_true", help="With clear: do not ask.")
+    cache.set_defaults(func=_lazy("admin_cmd", "cmd_cache"))
+
+    events = sub.add_parser(
+        "events",
+        help="Recent events from core's event log (--follow keeps watching).",
+        parents=[g],
+        description=(
+            "What core published recently, including before it was last restarted: ids, states "
+            "and numbers, never mail text. --follow prints the history and then the live stream."
+        ),
+    )
+    events.add_argument(
+        "--tail", "-n", type=int, default=50, metavar="N", help="How many (default 50, max 1000)."
+    )
+    events.add_argument("--kind", action="append", metavar="KIND", help="Only this kind of event.")
+    events.add_argument("--since", metavar="DATE", help="Nothing older than this (ISO 8601).")
+    events.add_argument("--follow", "-f", action="store_true", help="Then keep watching.")
+    events.set_defaults(func=_lazy("admin_cmd", "cmd_events"))
 
 
 def _register_mcp(

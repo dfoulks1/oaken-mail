@@ -19,6 +19,10 @@ def cmd_status(args: argparse.Namespace) -> int:
     info = daemon.status(
         url=getattr(args, "url", None), token_file=getattr(args, "token_file", None)
     )
+    if info.get("running") and not info.get("starting"):
+        summary = _summary(args)
+        if summary is not None:
+            info = {**info, "summary": summary}
 
     def text() -> None:
         from oaken_cli.output import print_text
@@ -31,11 +35,55 @@ def cmd_status(args: argparse.Namespace) -> int:
             version = f" {info['version']}" if info.get("version") else ""
             pid = f", pid {info['pid']}" if info.get("pid") else ""
             print_text(f"core{version} is running at {info.get('url', '')}{pid}")
+            for line in _summary_lines(info.get("summary")):
+                print_text(line)
 
     emit(args, data=info, text=text)
     # Exit 0 whether up or down: ``status`` answers a question, it does not fail because core is
     # down. (``--json`` scripts read the ``running`` field.)
     return int(ExitCode.OK)
+
+
+def _summary(args: argparse.Namespace) -> dict[str, Any] | None:
+    """Core's own health summary (the ``status`` operation), or ``None`` if it cannot be had: a
+    status question never fails because the summary was out of reach."""
+    from oaken_cli.commands.runtime import run
+
+    box: list[dict[str, Any]] = []
+
+    async def fetch(client: Any) -> int:
+        result = await client.call("status", {})
+        if isinstance(result.output, dict):
+            box.append(dict(result.output))
+        return int(ExitCode.OK)
+
+    try:
+        run(fetch, args)
+    except Exception:  # noqa: BLE001 - any failure here just means no summary
+        return None
+    return box[0] if box else None
+
+
+def _summary_lines(summary: Any) -> list[str]:
+    if not isinstance(summary, dict):
+        return []
+    plural = "" if summary["accounts"] == 1 else "s"
+    parts = [
+        f"{summary['accounts']} account{plural}",
+        f"{summary['messages']:,} messages ({summary['indexed']:,} indexed)",
+    ]
+    if summary.get("queue_depth") is not None:
+        parts.append(f"queue {summary['queue_depth']}")
+    if summary.get("plugins_total") is not None:
+        parts.append(f"plugins {summary['plugins_healthy']}/{summary['plugins_total']} healthy")
+    lines = ["  " + " · ".join(parts)]
+    if summary.get("index_stale"):
+        lines.append("  the search index is out of date: run `oaken rebuild-index`")
+    if summary.get("schedules_paused"):
+        lines.append(f"  {summary['schedules_paused']} sync schedule(s) paused")
+    if summary.get("schedules_failing"):
+        lines.append(f"  {summary['schedules_failing']} sync schedule(s) failing: `oaken schedule`")
+    return lines
 
 
 def _started(args: argparse.Namespace, info: dict[str, Any] | None, verb: str) -> int:

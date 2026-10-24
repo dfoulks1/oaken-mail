@@ -141,3 +141,22 @@ def test_the_edited_table_is_what_a_save_would_leave() -> None:
         "x": 1,
     }
     assert edited_table(HOSTED, GMAIL, config={"x": 1}, replace=True) == {"x": 1}
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["password", "imap_password", "api_key", "apiKey", "access_token", "token", "client_secret",
+     "oauthSecret", "credential", "passphrase"],
+)  # fmt: skip
+def test_a_key_that_names_a_secret_is_refused(key: str) -> None:
+    with pytest.raises(ConfigError, match="keyring"):
+        refuse_secrets({key: "x"})
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["chunk_tokens", "ask_context_tokens", "enrich_max_input_tokens", "max_tokens",
+     "client_secret_file", "token_file", "secret_path", "api_key_name", "host", "port"],
+)  # fmt: skip
+def test_a_key_that_only_counts_or_points_at_one_is_not_a_secret(key: str) -> None:
+    refuse_secrets({key: 1})  # no error: these are ordinary settings

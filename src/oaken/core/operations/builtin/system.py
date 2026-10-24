@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from oaken.core.errors import ConfigError, Conflict, NotFound
+from oaken.core.errors import ConfigError, Conflict, InvalidInput, NotFound
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.exposure import OP, PLUGIN, scope_of
 from oaken.core.operations.registry import AnyOperation, Change, Preview, operation
@@ -375,6 +375,8 @@ async def plugin_health(ctx: OpContext, inp: PluginsInput) -> PluginsOutput:
 class AuditInput(BaseModel):
     limit: int = Field(default=50, ge=1, le=500)
     op: str | None = None
+    since: datetime | None = None  # nothing older than this
+    cursor: str | None = None  # the `next_cursor` of the previous page: the rows after it
 
 
 class AuditItem(BaseModel):
@@ -392,6 +394,7 @@ class AuditItem(BaseModel):
 
 class AuditOutput(BaseModel):
     entries: list[AuditItem]
+    next_cursor: str | None = None  # pass it back as `cursor` for the next, older page
 
 
 @operation(
@@ -403,8 +406,14 @@ class AuditOutput(BaseModel):
     mcp="never",
 )
 async def list_audit(ctx: OpContext, inp: AuditInput) -> AuditOutput:
-    rows = await ctx.svc.audit.recent(inp.limit, op=inp.op)
+    try:
+        rows, next_cursor = await ctx.svc.audit.page(
+            inp.limit, op=inp.op, since=inp.since, cursor=inp.cursor
+        )
+    except ValueError as exc:
+        raise InvalidInput(str(exc)) from None
     return AuditOutput(
+        next_cursor=next_cursor,
         entries=[
             AuditItem(
                 audit_id=e.id,
@@ -419,7 +428,7 @@ async def list_audit(ctx: OpContext, inp: AuditInput) -> AuditOutput:
                 undoable=e.op in READ_OPS and e.undone_by is None,
             )
             for e in rows
-        ]
+        ],
     )
 
 

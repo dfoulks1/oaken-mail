@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from oaken.core.errors import InvalidInput, NotFound, PermissionDenied
+from oaken.core.errors import Conflict, InvalidInput, NotFound, PermissionDenied, Unavailable
 from oaken.core.ids import MessageId
 from oaken.core.operations.builtin import core_operations
 from oaken.core.operations.tests.conftest import CLI, UI, Ops, agent
@@ -53,6 +53,9 @@ def examples(a: MessageId, job_id: str = "none") -> dict[str, Any]:
         "config_save": {"text": "[api]\nport = 8123\n"},
         "plugin_disable": {"name": "no-such-plugin"}, "plugin_enable": {"name": "no-such-plugin"},
         "plugin_reload": {"name": "no-such-plugin"},
+        "get_settings": {}, "check_settings": {"section": "ui"},
+        "set_settings": {"section": "ui", "values": {"mark_read_delay_ms": 2000}},  # the default
+        "storage_info": {}, "vacuum": {}, "cache_stats": {}, "clear_cache": {}, "events_tail": {},
         "get_plugin_config": {"plugin": "no-such-plugin"},
         "check_plugin_config": {"plugin": "no-such-plugin", "config": {}},
         "set_plugin_config": {"plugin": "no-such-plugin", "config": {}},
@@ -87,6 +90,10 @@ async def test_no_operation_that_does_not_mark_read_changes_read_state(ops: Ops)
     for name, payload in table.items():
         try:
             await ops.call(name, payload, CLI)
+        except Unavailable:
+            assert name == "events_tail"  # this rig keeps no event log
+        except Conflict:
+            assert name == "vacuum"  # the loop queued a rebuild first, and a vacuum waits for it
         except NotFound:
             assert name in {
                 "revoke_agent", "remove_account", "sieve_get",

@@ -308,8 +308,19 @@ async def _audit(client: ApiClient, args: argparse.Namespace) -> int:
     payload: dict[str, object] = {"limit": args.limit}
     if args.op:
         payload["op"] = args.op
+    if args.since:
+        payload["since"] = args.since
+    if args.cursor:
+        payload["cursor"] = args.cursor
     result = await client.call("list_audit", payload)
     out = result.output if isinstance(result.output, dict) else {}
+    entries = list(out.get("entries", []) if isinstance(out, dict) else [])
+    next_cursor = out.get("next_cursor") if isinstance(out, dict) else None
+    while args.all and next_cursor:  # every page, one after the other
+        page = await client.call("list_audit", {**payload, "cursor": next_cursor})
+        more = page.output if isinstance(page.output, dict) else {}
+        entries += more.get("entries", [])
+        next_cursor = more.get("next_cursor")
     rows = [
         {
             "audit_id": e.get("audit_id", ""),
@@ -318,8 +329,9 @@ async def _audit(client: ApiClient, args: argparse.Namespace) -> int:
             "count": e.get("count", 0),
             "undoable": e.get("undoable", False),
         }
-        for e in (out.get("entries", []) if isinstance(out, dict) else [])
+        for e in entries
     ]
+    data = {"entries": entries, "next_cursor": next_cursor} if args.all else result.output
 
     def text() -> None:
         from oaken_cli.output import print_table, print_text
@@ -328,8 +340,15 @@ async def _audit(client: ApiClient, args: argparse.Namespace) -> int:
             print_text("no audit entries")
             return
         print_table(rows, ["audit_id", "op", "actor", "count", "undoable"], title="audit")
+        if next_cursor:
+            more = " ".join(f"--{k} {v}" for k, v in (("op", args.op), ("since", args.since)) if v)
+            print_text(
+                f"more: oaken audit {more} --limit {args.limit} --cursor {next_cursor}".replace(
+                    "  ", " "
+                )
+            )
 
-    return emit(args, data=result.output, text=text)
+    return emit(args, data=data, text=text)
 
 
 def cmd_operations(args: argparse.Namespace) -> int:

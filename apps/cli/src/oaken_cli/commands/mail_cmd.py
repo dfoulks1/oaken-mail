@@ -227,7 +227,7 @@ async def _wait_for_job(client: ApiClient, job_id: str, timeout: float) -> str: 
         return await asyncio.wait_for(follow(), timeout)
     except TimeoutError:
         raise CliError(
-            f"sync job {job_id} did not finish within {timeout:.0f}s", ExitCode.ERROR
+            f"job {job_id} did not finish within {timeout:.0f}s", ExitCode.ERROR
         ) from None
 
 

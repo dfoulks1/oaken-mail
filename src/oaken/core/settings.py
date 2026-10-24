@@ -413,6 +413,12 @@ class LogSettings(_Section):
     file: str = ""
     file_max_bytes: int = Field(default=10 * 1024 * 1024, ge=1024)
     file_backups: int = Field(default=5, ge=0, le=100)  # rotated copies kept: oaken.log.1 ...
+    # Every event core publishes (ids, kinds and numbers, never mail text) as one JSON line, so
+    # ``oaken events`` has history after a restart. Relative paths sit under the data directory;
+    # empty turns the log off. Owner-only, and rotated like the log file.
+    events_file: str = "events.jsonl"
+    events_max_bytes: int = Field(default=10 * 1024 * 1024, ge=1024)
+    events_backups: int = Field(default=3, ge=0, le=100)
 
 
 class Settings(BaseSettings):

@@ -24,8 +24,27 @@ from oaken.core.errors import ConfigError
 HOST_KEYS = ("enabled", "capabilities")
 
 # A secret never goes in config.toml: it lives in the OS keyring. A form that tries to save one
-# here is refused, not trusted to be careful.
-_SECRETISH = re.compile(r"(password|passwd|secret|token|api[_-]?key|credential)", re.I)
+# here is refused, not trusted to be careful. The guess is made on the words of the key, so that
+# ``password``, ``api_key`` and ``access_token`` are refused while ``chunk_tokens`` (a count) and
+# ``client_secret_file`` (where a secret is kept, not the secret) are not.
+_SECRET_WORDS = frozenset(
+    {"password", "passwd", "passphrase", "secret", "token", "apikey", "credential", "credentials"}
+)
+_WHERE_IT_LIVES = frozenset({"file", "path", "dir", "folder", "name", "url", "id"})
+
+
+def _words(key: str) -> list[str]:
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", key)  # camelCase -> camel_Case
+    return [w for w in re.split(r"[^A-Za-z0-9]+", spaced.lower()) if w]
+
+
+def looks_secret(key: str) -> bool:
+    words = _words(key)
+    if not words or words[-1] in _WHERE_IT_LIVES:
+        return False
+    return any(w in _SECRET_WORDS for w in words) or any(
+        a == "api" and b == "key" for a, b in zip(words, words[1:], strict=False)
+    )
 
 
 def _parse(text: str) -> tomlkit.TOMLDocument:
@@ -47,7 +66,7 @@ def _table(doc: Container | Mapping[str, Any], path: Sequence[str]) -> Mapping[s
 def refuse_secrets(values: Mapping[str, Any]) -> None:
     """Raise ``ConfigError`` if any key looks like a secret (searched through nested tables)."""
     for key, value in values.items():
-        if _SECRETISH.search(key):
+        if looks_secret(key):
             raise ConfigError(
                 f"{key!r} looks like a secret, and secrets are never stored in config.toml; "
                 "they go in the OS keyring (the plugin's own auth command stores them there)"

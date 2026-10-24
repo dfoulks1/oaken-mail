@@ -19,9 +19,11 @@ from oaken.core.attrs import AttrStore
 from oaken.core.clock import Clock, SystemClock
 from oaken.core.db import Database, migrate
 from oaken.core.errors import OakenError
+from oaken.core.eventlog import EventLog, event_log_path
 from oaken.core.events import EventBus
 from oaken.core.jobs import JobQueue, JobRunner
 from oaken.core.logging import get_logger
+from oaken.core.maintenance import register_maintenance_jobs
 from oaken.core.operations import CoreClient, Services
 from oaken.core.operations.builtin import agent_registry, core_registry
 from oaken.core.operations.plugin_ops import plugin_operations
@@ -149,13 +151,21 @@ class Core:
             after_providers=[self.readstate.resume_pending],
         )  # fmt: skip
         self.sync.register(self.runner)
+        register_maintenance_jobs(self.runner, self.raw_db, self.index.db)
         self.agents = AgentRegistry(self.raw_db, clock, s.swarm, bus)
+        self.eventlog: EventLog | None = None
+        if s.log.events_file:  # a record of events that survives a restart (``oaken events``)
+            self.eventlog = EventLog(
+                event_log_path(s.log.events_file),
+                max_bytes=s.log.events_max_bytes,
+                backups=s.log.events_backups,
+            )
         self.services = Services(
             raw=self.raw, index=self.index, attrs=self.attrs, queue=self.queue, audit=self.audit,
             settings=s, clock=clock, bus=bus, readstate=self.readstate, pipeline=self.pipeline,
             indexer=self.indexer, usage=self.usage, sync=self.sync, plugins=self.host,
             llm=self.llm, agents=self.agents, pipeline_control=self.pipeline_control,
-            version=oaken.__version__,
+            eventlog=self.eventlog, version=oaken.__version__,
         )  # fmt: skip
         registry = core_registry()
         registry.attach_plugins(lambda: plugin_operations(self.host))
@@ -195,7 +205,10 @@ class Core:
         async def start_api() -> None:
             self._port = await self.server.start()
 
-        units = [
+        units: list[ServiceUnit] = []
+        if self.eventlog is not None:  # first, so the plugins' start-up is in the record
+            units.append(unit("events", self._start_eventlog, self._stop_eventlog))
+        units += [
             unit("host", self.host.start, self._stop_host),
             unit("sync", self.sync.start, self.sync.stop),
             unit("jobs", self._start_jobs, lambda: self._stop_jobs(grace)),
@@ -204,6 +217,17 @@ class Core:
             units.append(unit("mcp", self._start_mcp, self._stop_mcp))
         units.append(unit("api", start_api, self.server.stop))
         return units
+
+    async def _start_eventlog(self) -> None:
+        if self.eventlog is not None:
+            self._detach_eventlog = self.eventlog.attach(self.bus)
+
+    async def _stop_eventlog(self) -> None:
+        detach = getattr(self, "_detach_eventlog", None)
+        if detach is not None:
+            detach()
+        if self.eventlog is not None:
+            self.eventlog.close()
 
     # -- running --------------------------------------------------------------------------
     async def start(self) -> int:

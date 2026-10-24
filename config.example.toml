@@ -155,3 +155,7 @@
 #                              # detached core has no stderr, so set this to keep its logs
 # file_max_bytes = 10485760    # rotate at this size ...
 # file_backups = 5             # ... keeping oaken.log.1 to oaken.log.5
+# events_file = "events.jsonl" # every event (ids and numbers, never mail text), one JSON line each,
+#                              # for `oaken events`; empty turns it off
+# events_max_bytes = 10485760  # rotate at this size ...
+# events_backups = 3           # ... keeping events.jsonl.1 to events.jsonl.3

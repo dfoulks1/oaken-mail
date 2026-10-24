@@ -277,6 +277,84 @@
     "permission": "read",
     "streaming": false
   },
+  "cache_stats": {
+    "input_schema": {
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "by_task": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "By Task",
+          "type": "object"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "entries": {
+          "title": "Entries",
+          "type": "integer"
+        },
+        "hit_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hit Rate"
+        },
+        "hits": {
+          "title": "Hits",
+          "type": "integer"
+        },
+        "misses": {
+          "title": "Misses",
+          "type": "integer"
+        },
+        "oldest": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Oldest"
+        },
+        "prompt_versions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Prompt Versions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "entries",
+        "bytes",
+        "hits",
+        "misses"
+      ],
+      "title": "CacheStats",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
   "cancel_job": {
     "input_schema": {
       "properties": {
@@ -425,6 +503,154 @@
       "type": "object"
     },
     "permission": "read",
+    "streaming": false
+  },
+  "check_settings": {
+    "input_schema": {
+      "properties": {
+        "section": {
+          "title": "Section",
+          "type": "string"
+        },
+        "unset": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unset",
+          "type": "array"
+        },
+        "values": {
+          "additionalProperties": true,
+          "title": "Values",
+          "type": "object"
+        }
+      },
+      "required": [
+        "section"
+      ],
+      "title": "SettingsChange",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "FieldError": {
+          "properties": {
+            "key": {
+              "title": "Key",
+              "type": "string"
+            },
+            "message": {
+              "title": "Message",
+              "type": "string"
+            }
+          },
+          "required": [
+            "key",
+            "message"
+          ],
+          "title": "FieldError",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "changed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Changed",
+          "type": "array"
+        },
+        "env_overridden": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Env Overridden",
+          "type": "array"
+        },
+        "errors": {
+          "items": {
+            "$ref": "#/$defs/FieldError"
+          },
+          "title": "Errors",
+          "type": "array"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "reindex_needed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reindex Needed",
+          "type": "array"
+        },
+        "reload_needed": {
+          "default": false,
+          "title": "Reload Needed",
+          "type": "boolean"
+        },
+        "restart_needed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Restart Needed",
+          "type": "array"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "ok"
+      ],
+      "title": "SettingsCheck",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
+  "clear_cache": {
+    "input_schema": {
+      "properties": {
+        "task": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task"
+        }
+      },
+      "title": "ClearCacheInput",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "deleted": {
+          "title": "Deleted",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "deleted"
+      ],
+      "title": "ClearCacheOutput",
+      "type": "object"
+    },
+    "permission": "mutate",
     "streaming": false
   },
   "config_get": {
@@ -1032,6 +1258,96 @@
       "type": "object"
     },
     "permission": "mutate",
+    "streaming": false
+  },
+  "events_tail": {
+    "input_schema": {
+      "properties": {
+        "kinds": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kinds"
+        },
+        "limit": {
+          "default": 100,
+          "maximum": 1000,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "since": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Since"
+        }
+      },
+      "title": "EventsInput",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "EventRow": {
+          "properties": {
+            "data": {
+              "additionalProperties": true,
+              "title": "Data",
+              "type": "object"
+            },
+            "kind": {
+              "title": "Kind",
+              "type": "string"
+            },
+            "ts": {
+              "format": "date-time",
+              "title": "Ts",
+              "type": "string"
+            }
+          },
+          "required": [
+            "ts",
+            "kind",
+            "data"
+          ],
+          "title": "EventRow",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "events": {
+          "items": {
+            "$ref": "#/$defs/EventRow"
+          },
+          "title": "Events",
+          "type": "array"
+        }
+      },
+      "required": [
+        "events"
+      ],
+      "title": "EventsOutput",
+      "type": "object"
+    },
+    "permission": "read",
     "streaming": false
   },
   "get_account": {
@@ -1668,6 +1984,152 @@
     "permission": "read",
     "streaming": false
   },
+  "get_settings": {
+    "input_schema": {
+      "properties": {
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        }
+      },
+      "title": "GetSettingsInput",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "SectionOut": {
+          "properties": {
+            "section": {
+              "title": "Section",
+              "type": "string"
+            },
+            "settings": {
+              "items": {
+                "$ref": "#/$defs/SettingInfo"
+              },
+              "title": "Settings",
+              "type": "array"
+            },
+            "summary": {
+              "title": "Summary",
+              "type": "string"
+            },
+            "table": {
+              "title": "Table",
+              "type": "string"
+            }
+          },
+          "required": [
+            "section",
+            "table",
+            "summary",
+            "settings"
+          ],
+          "title": "SectionOut",
+          "type": "object"
+        },
+        "SettingInfo": {
+          "properties": {
+            "default": {
+              "title": "Default"
+            },
+            "description": {
+              "default": "",
+              "title": "Description",
+              "type": "string"
+            },
+            "editable": {
+              "title": "Editable",
+              "type": "boolean"
+            },
+            "effect": {
+              "enum": [
+                "reload",
+                "reindex",
+                "restart"
+              ],
+              "title": "Effect",
+              "type": "string"
+            },
+            "env_var": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Env Var"
+            },
+            "json_schema": {
+              "additionalProperties": true,
+              "title": "Json Schema",
+              "type": "object"
+            },
+            "key": {
+              "title": "Key",
+              "type": "string"
+            },
+            "note": {
+              "default": "",
+              "title": "Note",
+              "type": "string"
+            },
+            "source": {
+              "enum": [
+                "default",
+                "file",
+                "env"
+              ],
+              "title": "Source",
+              "type": "string"
+            },
+            "value": {
+              "title": "Value"
+            }
+          },
+          "required": [
+            "key",
+            "value",
+            "default",
+            "source",
+            "editable",
+            "effect"
+          ],
+          "title": "SettingInfo",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/SectionOut"
+          },
+          "title": "Sections",
+          "type": "array"
+        }
+      },
+      "required": [
+        "sections"
+      ],
+      "title": "GetSettingsOutput",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
   "get_thread": {
     "input_schema": {
       "properties": {
@@ -2088,6 +2550,18 @@
   "list_audit": {
     "input_schema": {
       "properties": {
+        "cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cursor"
+        },
         "limit": {
           "default": 50,
           "maximum": 500,
@@ -2106,6 +2580,19 @@
           ],
           "default": null,
           "title": "Op"
+        },
+        "since": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Since"
         }
       },
       "title": "AuditInput",
@@ -2189,6 +2676,18 @@
           },
           "title": "Entries",
           "type": "array"
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Next Cursor"
         }
       },
       "required": [
@@ -7131,6 +7630,146 @@
     "permission": "mutate",
     "streaming": false
   },
+  "set_settings": {
+    "input_schema": {
+      "properties": {
+        "section": {
+          "title": "Section",
+          "type": "string"
+        },
+        "unset": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unset",
+          "type": "array"
+        },
+        "values": {
+          "additionalProperties": true,
+          "title": "Values",
+          "type": "object"
+        }
+      },
+      "required": [
+        "section"
+      ],
+      "title": "SettingsChange",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "FieldError": {
+          "properties": {
+            "key": {
+              "title": "Key",
+              "type": "string"
+            },
+            "message": {
+              "title": "Message",
+              "type": "string"
+            }
+          },
+          "required": [
+            "key",
+            "message"
+          ],
+          "title": "FieldError",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "backup": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Backup"
+        },
+        "changed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Changed",
+          "type": "array"
+        },
+        "env_overridden": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Env Overridden",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "errors": {
+          "items": {
+            "$ref": "#/$defs/FieldError"
+          },
+          "title": "Errors",
+          "type": "array"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "path": {
+          "default": "",
+          "title": "Path",
+          "type": "string"
+        },
+        "reindex_needed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reindex Needed",
+          "type": "array"
+        },
+        "reload_needed": {
+          "default": false,
+          "title": "Reload Needed",
+          "type": "boolean"
+        },
+        "restart_needed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Restart Needed",
+          "type": "array"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "ok"
+      ],
+      "title": "SettingsSaved",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
   "sieve_check": {
     "input_schema": {
       "properties": {
@@ -7787,6 +8426,77 @@
     "permission": "read",
     "streaming": false
   },
+  "storage_info": {
+    "input_schema": {
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "data_dir": {
+          "title": "Data Dir",
+          "type": "string"
+        },
+        "index_db": {
+          "title": "Index Db",
+          "type": "string"
+        },
+        "index_db_bytes": {
+          "title": "Index Db Bytes",
+          "type": "integer"
+        },
+        "quarantine_bytes": {
+          "default": 0,
+          "title": "Quarantine Bytes",
+          "type": "integer"
+        },
+        "quarantine_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quarantine Dir"
+        },
+        "quarantined_files": {
+          "default": 0,
+          "title": "Quarantined Files",
+          "type": "integer"
+        },
+        "raw_db": {
+          "title": "Raw Db",
+          "type": "string"
+        },
+        "raw_db_bytes": {
+          "title": "Raw Db Bytes",
+          "type": "integer"
+        },
+        "wal_bytes": {
+          "title": "Wal Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "data_dir",
+        "raw_db",
+        "raw_db_bytes",
+        "index_db",
+        "index_db_bytes",
+        "wal_bytes"
+      ],
+      "title": "StorageInfo",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
   "summarize_message": {
     "input_schema": {
       "properties": {
@@ -8178,5 +8888,34 @@
     },
     "permission": "read",
     "streaming": false
+  },
+  "vacuum": {
+    "input_schema": {
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "created": {
+          "title": "Created",
+          "type": "boolean"
+        },
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "created"
+      ],
+      "title": "QueuedOutput",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": true
   }
 }
