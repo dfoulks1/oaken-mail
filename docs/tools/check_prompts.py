@@ -55,7 +55,7 @@ def _tracked(root: Path) -> list[Path]:
         for n in names
         if Path(n).suffix in TEXT
         and n not in skip
-        and not n.startswith(("docs/tools/tests/", ".venv/"))
+        and not n.startswith(("docs/tools/", ".venv/"))  # the tools' docstrings show examples
         and (root / n).is_file()
     ]
 
@@ -94,6 +94,29 @@ def _index(prompts: Path) -> list[str]:
     for name in sorted(linked):
         if not (prompts / name).is_file():
             problems.append(f"docs/prompts/README.md links {name}, which does not exist")
+    return problems + _index_status(prompts, text)
+
+
+def _index_status(prompts: Path, readme: str) -> list[str]:
+    """The index's Status column must say what the status table in CONTRIBUTING.md says."""
+    contributing = prompts.parents[1] / "CONTRIBUTING.md"
+    if not contributing.is_file():
+        return []
+    plain = lambda t: t.replace("**", "").strip()  # noqa: E731
+    table = {
+        n: plain(st)
+        for n, st in re.findall(r"^\| (\d+[a-z]?) \| [A-Za-z0-9_-]+ \| ([^|]+) \|",
+                                contributing.read_text("utf-8"), re.M)
+    }  # fmt: skip
+    problems: list[str] = []
+    for number, cell in re.findall(
+        r"^\| (\d+[a-z]?) \| \[[^\]]+\]\([^)]+\) \| ([^|]+) \|", readme, re.M
+    ):
+        if number in table and plain(cell) != table[number]:
+            problems.append(
+                f"docs/prompts/README.md says prompt {number} is {plain(cell)!r} but "
+                f"CONTRIBUTING.md says {table[number]!r}; the status table is the one to edit"
+            )
     return problems
 
 

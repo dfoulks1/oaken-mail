@@ -103,7 +103,7 @@ def test_a_dry_run_changes_nothing_and_still_counts(tmp_path: Path) -> None:
 def prompt_repo(tmp_path: Path, extra: dict[str, str] | None = None) -> Config:
     files = {
         "docs/prompts/00-context.md": "rules\n",
-        "docs/prompts/README.md": "| 01 | [boot](CORE_01-boot.md) | x |\n",
+        "docs/prompts/README.md": "| 01 | [boot](CORE_01-boot.md) | Built | x | |\n",
         "docs/prompts/CORE_01-boot.md": "# 1\n",
         "CONTRIBUTING.md": "| 01 | CORE_01-boot | Built | |\n",
         **(extra or {}),
@@ -145,3 +145,22 @@ def test_a_status_row_that_names_the_wrong_file_is_caught(tmp_path: Path) -> Non
 
 def test_the_real_prompt_tree_is_consistent() -> None:
     assert check_prompts.check(load_config(ROOT / "docs", ROOT)) == []
+
+
+def test_an_index_status_that_disagrees_with_the_status_table_is_caught(tmp_path: Path) -> None:
+    cfg = prompt_repo(
+        tmp_path,
+        {
+            "docs/prompts/README.md": "| 01 | [boot](CORE_01-boot.md) | **Open** | x | |\n",
+            "CONTRIBUTING.md": "| 01 | CORE_01-boot | Built | |\n",
+        },
+    )
+    assert "says prompt 01 is 'Open' but CONTRIBUTING.md says 'Built'" in "\n".join(
+        check_prompts.check(cfg)
+    )
+    (tmp_path / "ok").mkdir()
+    ok = prompt_repo(
+        tmp_path / "ok",
+        {"docs/prompts/README.md": "| 01 | [boot](CORE_01-boot.md) | Built | x | |\n"},
+    )
+    assert check_prompts.check(ok) == []
