@@ -24,6 +24,12 @@ assets/site.css
 assets/site.js
 code-of-conduct.html
 contributing.html
+demo-chooser.html
+demo-core/config.html
+demo-core/getting_started.html
+demo-core/index.html
+demo-core/jobs.html
+demo-core/stats.html
 demo/accounts.html
 demo/assets/api.js
 demo/assets/brand/apple-touch-icon.png

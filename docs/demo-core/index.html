@@ -1,0 +1,169 @@
+<!doctype html>
+<!-- Oaken Core demo landing: a static snapshot of the welcome page (/) the core daemon serves. The
+     live page shows the version and the daemon environment; here they are representative. Nav and
+     card links are relative; no external /welcome.js. -->
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Oaken Core — console (demo)</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+" crossorigin="anonymous">
+  <style>
+    :root { --oaken-oak: #527e61; --oaken-oak-dark: #3a5a45; --oaken-acorn: #8b5a2b; --oaken-acorn-2: #c6792e; --oaken-accent: var(--oaken-oak); }
+    [data-bs-theme="dark"] { --oaken-accent: var(--oaken-acorn-2); }
+    .ok-welcome-hero { background: linear-gradient(135deg, rgba(82,126,97,0.08) 0%, rgba(58,90,69,0.03) 100%); border: 1px solid rgba(82,126,97,0.2); border-radius: 12px; padding: 2.5rem; margin-bottom: 2rem; }
+    [data-bs-theme="dark"] .ok-welcome-hero { background: linear-gradient(135deg, rgba(198,121,46,0.10) 0%, rgba(92,58,33,0.05) 100%); border-color: rgba(198,121,46,0.30); }
+    .ok-logo-graphic { max-width: 180px; height: auto; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.08)); }
+    .ok-card-link { transition: all 0.2s ease-in-out; border: 1px solid var(--bs-border-color); border-radius: 10px; text-decoration: none; color: inherit; }
+    .ok-card-link:hover { transform: translateY(-2px); box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.08); border-color: var(--oaken-accent); color: inherit; }
+    .ok-icon-box { width: 42px; height: 42px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; background-color: rgba(82,126,97,0.12); color: var(--oaken-accent); }
+    [data-bs-theme="dark"] .ok-icon-box { background-color: rgba(198,121,46,0.14); }
+    .btn-oaken { background-color: var(--oaken-accent); border-color: var(--oaken-accent); color: #fff; }
+    .btn-oaken:hover { filter: brightness(1.08); color: #fff; }
+    .ok-badge-status { display: inline-flex; align-items: center; gap: 0.375rem; font-family: var(--bs-font-monospace); font-size: 0.75rem; padding: 0.25rem 0.6rem; border-radius: 50rem; background-color: rgba(82,126,97,0.15); color: var(--oaken-oak); border: 1px solid rgba(82,126,97,0.35); }
+    [data-bs-theme="dark"] .ok-badge-status { color: #8fc5a1; }
+    .ok-badge-version { display: inline-flex; align-items: center; font-family: var(--bs-font-monospace); font-size: 0.75rem; padding: 0.25rem 0.6rem; border-radius: 50rem; background-color: rgba(139,90,43,0.15); color: var(--oaken-acorn); border: 1px solid rgba(139,90,43,0.35); }
+    [data-bs-theme="dark"] .ok-badge-version { color: var(--oaken-acorn-2); }
+    .ok-status-dot { width: 6px; height: 6px; border-radius: 50%; background-color: var(--oaken-oak); box-shadow: 0 0 6px var(--oaken-oak); }
+    .oaken-nav { display: flex; align-items: center; gap: 1rem; padding: 0.6rem 1rem; border-bottom: 1px solid rgba(127,127,127,0.25); font: 500 0.95rem/1.2 system-ui, sans-serif; }
+    .oaken-nav .oaken-nav-brand { font-weight: 700; text-decoration: none; color: inherit; display: inline-flex; align-items: center; gap: 0.4rem; }
+    .oaken-nav .oaken-nav-brand b { color: var(--oaken-accent); }
+    .oaken-nav .oaken-nav-links { margin-left: auto; display: flex; align-items: center; gap: 1rem; }
+    .oaken-nav a { color: inherit; text-decoration: none; opacity: 0.8; }
+    .oaken-nav a:hover { opacity: 1; }
+    .oaken-nav a.active { opacity: 1; border-bottom: 2px solid var(--oaken-accent); padding-bottom: 2px; }
+    .oaken-nav #theme-toggle { font: inherit; cursor: pointer; padding: 0.2rem 0.7rem; border-radius: 0.4rem; border: 1px solid rgba(127,127,127,0.4); background: transparent; color: inherit; }
+    .oaken-nav #theme-toggle:hover { border-color: var(--oaken-accent); }
+    .demo-ribbon { background: var(--oaken-acorn); color: #fff; text-align: center; padding: .35rem 1rem; font: 600 .8rem/1.3 system-ui, sans-serif; }
+    .demo-ribbon a { color: #fff; }
+  </style>
+</head>
+<body>
+<div class="demo-ribbon">Demo snapshot of Oaken Core's browser console (the pages the daemon serves on loopback). Sample data; nothing is live. <a href="../demo-chooser.html">Both demos</a></div>
+<nav class="oaken-nav">
+  <a class="oaken-nav-brand" href="index.html">Oaken<b>Core</b></a>
+  <div class="oaken-nav-links">
+    <a href="index.html" class="active">Home</a>
+    <a href="stats.html">Stats</a>
+    <a href="jobs.html">Jobs</a>
+    <a href="config.html">Config</a>
+    <a href="../index.html">Docs</a>
+    <button type="button" id="theme-toggle" aria-label="Toggle light and dark theme"><span id="theme-label">Light</span></button>
+  </div>
+</nav>
+
+<main class="container py-4" style="max-width: 920px;">
+
+  <div class="ok-welcome-hero d-flex flex-column flex-md-row align-items-center gap-4">
+    <div class="text-center text-md-start flex-grow-1">
+      <div class="d-inline-flex align-items-center gap-2 mb-2">
+        <span class="ok-badge-status"><span class="ok-status-dot"></span> Local Server Active</span>
+        <span class="ok-badge-version">v0.1.1</span>
+      </div>
+      <h1 class="display-6 fw-bold mb-2">Oaken Core console</h1>
+      <p class="text-muted fs-6 mb-4">
+        The pipeline, CLI and MCP server that let an AI work with your mail, locally. This is Core's
+        own browser console &mdash; the read-only status, the pipeline, and the config editor the
+        daemon serves on loopback. It is a different product from the OakenMail web client.
+      </p>
+      <div class="d-flex flex-wrap align-items-center justify-content-center justify-content-md-start gap-2">
+        <a href="getting_started.html" class="btn btn-oaken px-3"><i class="bi bi-rocket-takeoff me-1"></i> Getting Started</a>
+        <a href="stats.html" class="btn btn-outline-secondary px-3"><i class="bi bi-activity me-1"></i> System Status</a>
+        <a href="../index.html" class="btn btn-link text-muted"><i class="bi bi-book me-1"></i> Documentation</a>
+      </div>
+    </div>
+    <div class="text-center">
+      <svg class="ok-logo-graphic" viewBox="0 0 320 220" fill="none" role="img" aria-label="Oaken leaf and acorn mark">
+        <path d="M160 20 C85 10, 20 65, 10 120 C45 110, 75 130, 85 165 C130 195, 220 185, 250 150 C300 130, 310 65, 265 30 C210 10, 180 35, 160 20 Z" fill="#527e61" stroke="#233529" stroke-width="7" stroke-linejoin="round"/>
+        <path d="M20 135 C90 105, 190 80, 280 55" stroke="#233529" stroke-width="9" stroke-linecap="round"/>
+        <path d="M110 85 C95 50, 130 25, 165 35 C195 45, 180 85, 110 85 Z" fill="#5c3a21" stroke="#233529" stroke-width="6"/>
+        <path d="M125 45 L155 70 M140 40 L170 65" stroke="#3d2616" stroke-width="3"/>
+        <path d="M110 85 C98 135, 130 160, 165 155 C195 150, 200 115, 180 85 Z" fill="#8b5a2b" stroke="#233529" stroke-width="6"/>
+        <path d="M115 92 L148 118 L180 92" stroke="#233529" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M118 135 L138 110 M178 135 L158 110" stroke="#233529" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+    </div>
+  </div>
+
+  <h2 class="h6 text-uppercase text-muted fw-bold mb-3">Quick Navigation</h2>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-6">
+      <a href="getting_started.html" class="ok-card-link card h-100 p-3">
+        <div class="card-body p-0 d-flex gap-3 align-items-start">
+          <div class="ok-icon-box flex-shrink-0"><i class="bi bi-compass"></i></div>
+          <div><h3 class="h6 fw-bold mb-1">Getting Started Guide</h3>
+            <p class="small text-muted mb-0">Walk the <code>config.toml</code> settings top to bottom: providers, local AI, sync, the API and MCP.</p></div>
+        </div>
+      </a>
+    </div>
+    <div class="col-md-6">
+      <a href="stats.html" class="ok-card-link card h-100 p-3">
+        <div class="card-body p-0 d-flex gap-3 align-items-start">
+          <div class="ok-icon-box flex-shrink-0"><i class="bi bi-speedometer2"></i></div>
+          <div><h3 class="h6 fw-bold mb-1">System Status &amp; Stats</h3>
+            <p class="small text-muted mb-0">Counts, health, per-stage pipeline throughput, token savings, plugins, the audit log and the operation reference.</p></div>
+        </div>
+      </a>
+    </div>
+    <div class="col-md-6">
+      <a href="jobs.html" class="ok-card-link card h-100 p-3">
+        <div class="card-body p-0 d-flex gap-3 align-items-start">
+          <div class="ok-icon-box flex-shrink-0"><i class="bi bi-list-task"></i></div>
+          <div><h3 class="h6 fw-bold mb-1">Jobs &amp; Pipeline</h3>
+            <p class="small text-muted mb-0">The durable job queue and the ingest stages: pause the model stages, change concurrency, retry parked jobs.</p></div>
+        </div>
+      </a>
+    </div>
+    <div class="col-md-6">
+      <a href="config.html" class="ok-card-link card h-100 p-3">
+        <div class="card-body p-0 d-flex gap-3 align-items-start">
+          <div class="ok-icon-box flex-shrink-0"><i class="bi bi-sliders"></i></div>
+          <div><h3 class="h6 fw-bold mb-1">Configuration</h3>
+            <p class="small text-muted mb-0">Edit <code>config.toml</code> in the browser: test, save with a backup, and reload core in place.</p></div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <div class="card border mb-4">
+    <div class="card-header bg-transparent py-2 px-3 border-bottom d-flex align-items-center justify-content-between">
+      <span class="fw-semibold small"><i class="bi bi-server me-1 text-muted"></i> Daemon Environment</span>
+      <span class="ok-badge-status"><span class="ok-status-dot"></span> OK</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-borderless mb-0 small">
+          <tbody>
+            <tr class="border-bottom"><td class="ps-3 text-muted" style="width: 35%;">Listen Address</td><td class="pe-3 text-end font-monospace">127.0.0.1:7437</td></tr>
+            <tr class="border-bottom"><td class="ps-3 text-muted">OAKEN_HOME</td><td class="pe-3 text-end font-monospace">~/.oaken</td></tr>
+            <tr class="border-bottom"><td class="ps-3 text-muted">Health Endpoint</td><td class="pe-3 text-end font-monospace">/v1/health</td></tr>
+            <tr class="border-bottom"><td class="ps-3 text-muted">Configuration File</td><td class="pe-3 text-end font-monospace">~/.oaken/config.toml</td></tr>
+            <tr><td class="ps-3 text-muted">Data Directory</td><td class="pe-3 text-end font-monospace">~/.oaken/data</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script>
+(function () {
+  var root = document.documentElement, btn = document.getElementById("theme-toggle"), lab = document.getElementById("theme-label");
+  var stored = null; try { stored = localStorage.getItem("oaken-theme"); } catch (e) {}
+  if (stored === "light" || stored === "dark") { root.setAttribute("data-bs-theme", stored); }
+  function sync() { if (lab) { lab.textContent = root.getAttribute("data-bs-theme") === "dark" ? "Light" : "Dark"; } }
+  sync();
+  if (btn) { btn.addEventListener("click", function () {
+    var next = root.getAttribute("data-bs-theme") === "dark" ? "light" : "dark";
+    root.setAttribute("data-bs-theme", next);
+    try { localStorage.setItem("oaken-theme", next); } catch (e) {}
+    sync();
+  }); }
+})();
+</script>
+</body>
+</html>

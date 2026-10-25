@@ -44,39 +44,59 @@ TODO_MARKER = "TODO(user)"
 MANIFEST = ".site-manifest"
 
 
-DEMO_SRC = Path("apps/webui/oakenmail-templates")
-DEMO_OUT = "demo"
+# Two demos, two products (ADR 0014). The WebUI mockup lives beside the webui app; the Core
+# console mockup lives beside the core app. Each is copied under docs/ with its CDN tags pinned.
+WEBUI_DEMO_SRC = Path("apps/webui/oakenmail-templates")
+WEBUI_DEMO_OUT = "demo"
+CORE_DEMO_SRC = Path("apps/core/oakencore-templates")
+CORE_DEMO_OUT = "demo-core"
 _FONT_LINK = re.compile(r"[ \t]*<link[^>]*(?:fonts\.googleapis|fonts\.gstatic)[^>]*>\n")
 _CDN_LINK = re.compile(r'<link href="(https://cdn\.jsdelivr\.net/[^"]+)" rel="stylesheet">')
 _CDN_SCRIPT = re.compile(r'<script src="(https://cdn\.jsdelivr\.net/[^"]+)"></script>')
 
 
-def demo_files(cfg: Config) -> dict[str, bytes]:
-    """The clickable UI mockups, published under demo/. The CDN tags get the pinned integrity
-    hashes from sri.toml and the Google Fonts links are dropped (the UI falls back to system
-    fonts), so the demo passes the same checks as every other page."""
-    src = cfg.repo_root / DEMO_SRC
-    if not src.is_dir():
-        return {}
+def _pin_cdn(text: str) -> str:
+    """Give every bare jsdelivr CDN tag the pinned integrity+crossorigin from sri.toml, and drop
+    Google Fonts links (the mockups fall back to system fonts). So a demo page passes the same
+    link checks as every other page. Raises if a page names a CDN URL that is not pinned."""
     pinned = {v["url"]: v["integrity"] for v in pagebase.sri().values()}
 
     def pin(m: re.Match[str]) -> str:
         url = m.group(1)
         if url not in pinned:
             raise BuildError(f"demo uses a CDN URL that is not pinned in sri.toml: {url}")
-        tag = m.group(0)
-        return tag.replace(">", f' integrity="{pinned[url]}" crossorigin="anonymous">', 1)
+        return m.group(0).replace(">", f' integrity="{pinned[url]}" crossorigin="anonymous">', 1)
 
+    text = _FONT_LINK.sub("", text)
+    return _CDN_LINK.sub(pin, _CDN_SCRIPT.sub(pin, text))
+
+
+def _demo_tree(cfg: Config, src_rel: Path, out_prefix: str) -> dict[str, bytes]:
+    """Copy one demo mockup tree under docs/, pinning CDN tags in every HTML file."""
+    src = cfg.repo_root / src_rel
+    if not src.is_dir():
+        return {}
     out: dict[str, bytes] = {}
     for path in sorted(p for p in src.rglob("*") if p.is_file()):
-        rel = f"{DEMO_OUT}/{path.relative_to(src).as_posix()}"
+        rel = f"{out_prefix}/{path.relative_to(src).as_posix()}"
         data = path.read_bytes()
         if path.suffix == ".html":
-            text = _FONT_LINK.sub("", data.decode("utf-8"))
-            text = _CDN_LINK.sub(pin, _CDN_SCRIPT.sub(pin, text))
-            data = text.encode("utf-8")
+            data = _pin_cdn(data.decode("utf-8")).encode("utf-8")
         out[rel] = data
     return out
+
+
+def demo_files(cfg: Config) -> dict[str, bytes]:
+    """Both clickable demos, published under docs/: the OakenMail web client mockup (demo/) and
+    the Oaken Core console mockup (demo-core/). The chooser that differentiates them is added by
+    build()."""
+    out = _demo_tree(cfg, WEBUI_DEMO_SRC, WEBUI_DEMO_OUT)
+    out.update(_demo_tree(cfg, CORE_DEMO_SRC, CORE_DEMO_OUT))
+    return out
+
+
+def has_webui_demo(cfg: Config) -> bool:
+    return (cfg.repo_root / WEBUI_DEMO_SRC).is_dir()
 
 
 def make_env() -> Environment:
@@ -212,6 +232,11 @@ def build(cfg: Config, out: Path, strict: bool = False) -> list[str]:
     home_rendered.intro_html = home_rendered.intro_html.replace(CARDS_MARKER, cards_html)
     subtitle = home.subtitle if home.subtitle != home.title else ""
     demo = demo_files(cfg)
+    if demo:
+        # The chooser that differentiates the two product demos (Core console vs web client). Its
+        # CDN tags are pinned the same way the mockups' are.
+        chooser = env.get_template("demo-chooser.html").render(**common, prefix="")
+        written["demo-chooser.html"] = _pin_cdn(chooser).encode("utf-8")
     written["index.html"] = (
         env.get_template("home.html")
         .render(
