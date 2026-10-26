@@ -10,13 +10,13 @@
 {%- endmacro %}
 
 {# An on/off switch that is its own small form: pressing it posts the opposite value. #}
-{% macro switch(action, back, on, label, fields, value_name="mcp", on_value="on", off_value="off", disabled=False, reason="") -%}
+{% macro switch(action, back, on, label, fields, value_name="mcp", on_value="on", off_value="off", disabled=False, reason="", text=True) -%}
   <form class="inline" method="post" action="/ui/{{ action }}">{{ guard(back) }}
     {%- for k, v in fields.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor -%}
     <input type="hidden" name="{{ value_name }}" value="{{ off_value if on else on_value }}">
     <button class="switch" type="submit" role="switch" aria-checked="{{ 'true' if on else 'false' }}"
             aria-label="{{ label }}"{% if disabled %} disabled title="{{ reason }}"{% endif %}><span class="knob"></span></button>
-    <span class="switch-text">{{ "on" if on else "off" }}</span>
+    {% if text %}<span class="switch-text">{{ "on" if on else "off" }}</span>{% endif %}
   </form>
 {%- endmacro %}
 

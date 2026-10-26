@@ -326,7 +326,7 @@
             <td>{% if o.permission == "mutate" %}<span class="badge badge-warn">mutate</span>
                 {%- elif o.permission == "send" %}<span class="badge badge-danger">send</span>
                 {%- else %}<span class="badge badge-ok">read</span>{% endif %}</td>
-            <td>{{ m.switch("expose", "/stats?tab=ref", o.mcp_enabled, "Expose " ~ o.name ~ " over MCP", {"name": o.name}, "mcp", "on", "off", not o.mcp_allowed, "Never offered over MCP (" ~ (o.mcp_locked_reason or "ceiling") ~ ")") }}</td>
+            <td>{{ m.switch("expose", "/stats?tab=ref", o.mcp_enabled, "Expose " ~ o.name ~ " over MCP", {"name": o.name}, "mcp", "on", "off", not o.mcp_allowed, "Never offered over MCP (" ~ (o.mcp_locked_reason or "ceiling") ~ ")", false) }}</td>
             <td class="muted">{{ o.summary }}</td>
           </tr>
         {% else %}
