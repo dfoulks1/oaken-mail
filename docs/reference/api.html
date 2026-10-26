@@ -90,8 +90,8 @@
     <h1 class="display-6">HTTP API</h1>
     <p class="lead">The loopback API: authentication, the Host and Origin rules, every operation route, the event stream and the agent job routes, from the OpenAPI document.</p>
   </header>
-<p>The local API core serves on <code>127.0.0.1</code>. The CLI and other local clients use it, and the OpenAPI document
-this page is built from is served at <code>GET /v1/openapi.json</code>.
+<p>The local API core serves on <code>127.0.0.1</code>. The CLI and other local clients use it, and the
+OpenAPI document this page is built from is served at <code>GET /v1/openapi.json</code>.
 <a href="../architecture/daemon.html">How it is kept safe</a>.</p>
 
 <section id="reaching-it" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>Reaching it</h2></div>
@@ -177,7 +177,7 @@ tokens. See <a href="../mcp.html">Connect an AI client</a>.</p>
 <td>POST</td>
 <td><code>/v1/operations/{name}</code></td>
 <td>API token</td>
-<td>Call one operation. 80 exist.</td>
+<td>Call one operation. 86 exist.</td>
 </tr>
 </tbody>
 </table></div>
@@ -228,6 +228,12 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td>read</td>
 <td>never</td>
 <td><code>POST /v1/operations/check_settings</code></td>
+</tr>
+<tr>
+<td><code>check_workspace</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/check_workspace</code></td>
 </tr>
 <tr>
 <td><code>clear_cache</code></td>
@@ -344,6 +350,12 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/get_thread</code></td>
 </tr>
 <tr>
+<td><code>get_workspace</code></td>
+<td>read</td>
+<td>off until turned on</td>
+<td><code>POST /v1/operations/get_workspace</code></td>
+</tr>
+<tr>
 <td><code>list_accounts</code></td>
 <td>read</td>
 <td>on by default</td>
@@ -402,6 +414,12 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td>read</td>
 <td>on by default</td>
 <td><code>POST /v1/operations/list_schedules</code></td>
+</tr>
+<tr>
+<td><code>list_workspaces</code></td>
+<td>read</td>
+<td>off until turned on</td>
+<td><code>POST /v1/operations/list_workspaces</code></td>
 </tr>
 <tr>
 <td><code>mailbox_counts</code></td>
@@ -500,10 +518,22 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/remove_schedule</code></td>
 </tr>
 <tr>
+<td><code>remove_workspace</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/remove_workspace</code></td>
+</tr>
+<tr>
 <td><code>reprocess</code></td>
 <td>mutate</td>
 <td>never</td>
 <td><code>POST /v1/operations/reprocess</code></td>
+</tr>
+<tr>
+<td><code>reset_usage</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/reset_usage</code></td>
 </tr>
 <tr>
 <td><code>resume_backfill</code></td>
@@ -600,6 +630,12 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td>mutate</td>
 <td>never</td>
 <td><code>POST /v1/operations/set_settings</code></td>
+</tr>
+<tr>
+<td><code>set_workspace</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/set_workspace</code></td>
 </tr>
 <tr>
 <td><code>sieve_check</code></td>

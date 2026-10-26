@@ -17,7 +17,6 @@ open questions for what is next. Nothing here is a promise or a date.
 - **Workspaces by rule.** A Sieve rule decides which workspace a message belongs to, so sensitive
   mail only ever meets a more secure (local-only) model, embedder and search scope. *Open:* how
   retrieval is kept from returning a more sensitive message into a less secure model's context.
-- **Contacts** (27): a People view derived from mail, with an ADR on deriving versus storing.
 - **Agent enrichment** (33): let an external model enrich a message through the agent door and store
   the answer.
 - **Security review** (19): the dedicated pass, including the opt-in remote bind.

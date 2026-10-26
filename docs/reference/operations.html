@@ -136,6 +136,13 @@
 <td>Test a change to one section of core's settings without saving it: field-level errors, which keys would change, and whether it needs a reload, a reindex or a restart.</td>
 </tr>
 <tr>
+<td><code>check_workspace</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>Validate workspace settings without saving: field errors, the effective backend, and a warning when trust would drop from secure to insecure.</td>
+</tr>
+<tr>
 <td><code>clear_cache</code></td>
 <td>mutate</td>
 <td>never</td>
@@ -269,6 +276,13 @@
 <td>A conversation as a tree: every message that shares a thread, in reading order, each with its parent and depth.</td>
 </tr>
 <tr>
+<td><code>get_workspace</code></td>
+<td>read</td>
+<td>off until you turn it on</td>
+<td>no</td>
+<td>One workspace: its settings as editable TOML, the effective LLM backend, and usage numbers.</td>
+</tr>
+<tr>
 <td><code>list_accounts</code></td>
 <td>read</td>
 <td>on by default</td>
@@ -337,6 +351,13 @@
 <td>on by default</td>
 <td>no</td>
 <td>Every sync schedule: when it next runs, how the last run went, and whether it is paused.</td>
+</tr>
+<tr>
+<td><code>list_workspaces</code></td>
+<td>read</td>
+<td>off until you turn it on</td>
+<td>no</td>
+<td>List every configured workspace plus the implicit 'default', with its trust level, effective LLM backend, and aggregate usage numbers.</td>
 </tr>
 <tr>
 <td><code>mailbox_counts</code></td>
@@ -451,11 +472,25 @@
 <td>Remove a sync schedule (a per-folder one, or an account's, which stops its sync).</td>
 </tr>
 <tr>
+<td><code>remove_workspace</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Remove a workspace from config.toml. Refuses to remove 'default'. LLM cache and usage rows are kept; clear them separately.</td>
+</tr>
+<tr>
 <td><code>reprocess</code></td>
 <td>mutate</td>
 <td>never</td>
 <td>no</td>
 <td>Bring one pipeline stage up to date for old mail (parse, filter, embed or enrich).</td>
+</tr>
+<tr>
+<td><code>reset_usage</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Clear the token-usage record (the figures the stats page shows). Model calls and the context savings both go; mail, the index and the enrichment cache are untouched. The accounting starts fresh from the next call.</td>
 </tr>
 <tr>
 <td><code>resume_backfill</code></td>
@@ -570,6 +605,13 @@
 <td>Change core's settings in one section of config.toml, keeping the file's comments and every other table. Validated first (the whole file), and the previous file is backed up. It does not reload core: apply it with config_reload (<code>oaken reload</code>). The result says which keys need a reload, a reindex or a restart.</td>
 </tr>
 <tr>
+<td><code>set_workspace</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Create or update a workspace in config.toml, keeping all other tables and comments. The change takes effect immediately (live reload); no restart needed.</td>
+</tr>
+<tr>
 <td><code>sieve_check</code></td>
 <td>read</td>
 <td>never</td>
@@ -666,10 +708,10 @@
 <section id="inputs-and-outputs" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>Inputs and outputs</h2></div>
 <p>A trailing <code>?</code> marks an optional field.</p>
 <h3 id="ask"><code>ask</code></h3>
-<p>Every quote is checked against the message it cites; claims that fail are dropped, and with none left the answer is <code>insufficient_evidence</code>. Never marks anything read.</p>
+<p>Every quote is checked against the message it cites; claims that fail are dropped, and with none left the answer is <code>insufficient_evidence</code>. Never marks anything read. With <code>raw</code> the model is not called: the matching messages come back with their stored enrichments verbatim, so a person sees the data without AI rewriting it.</p>
 <ul>
-<li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>unread_only</code>?, <code>starred</code>?, <code>has_attachment</code>?, <code>thread_key</code>?, <code>question</code></li>
-<li>Output: <code>answer</code>, <code>message_ids</code>?, <code>citations</code>?, <code>confidence</code>?, <code>insufficient_evidence</code>?, <code>dropped_claims</code>?, <code>degraded</code>?, <code>degraded_reason</code>?, <code>evidence_tokens</code>?, <code>full_body_tokens</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
+<li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>unread_only</code>?, <code>starred</code>?, <code>has_attachment</code>?, <code>thread_key</code>?, <code>question</code>, <code>raw</code>?</li>
+<li>Output: <code>answer</code>, <code>message_ids</code>?, <code>citations</code>?, <code>confidence</code>?, <code>insufficient_evidence</code>?, <code>dropped_claims</code>?, <code>degraded</code>?, <code>degraded_reason</code>?, <code>evidence_tokens</code>?, <code>full_body_tokens</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?, <code>evidence</code>?</li>
 </ul>
 <h3 id="cache-stats"><code>cache_stats</code></h3>
 <p>The enrichment cache: how many answers it holds, how big, from which prompt versions, and how often it saved a model call.</p>
@@ -694,6 +736,12 @@
 <ul>
 <li>Input: <code>section</code>, <code>values</code>?, <code>unset</code>?</li>
 <li>Output: <code>ok</code>, <code>errors</code>?, <code>changed</code>?, <code>reload_needed</code>?, <code>reindex_needed</code>?, <code>restart_needed</code>?, <code>env_overridden</code>?, <code>warnings</code>?</li>
+</ul>
+<h3 id="check-workspace"><code>check_workspace</code></h3>
+<p>Validate workspace settings without saving: field errors, the effective backend, and a warning when trust would drop from secure to insecure.</p>
+<ul>
+<li>Input: <code>name</code>, <code>toml</code>?</li>
+<li>Output: <code>valid</code>, <code>errors</code>?, <code>warnings</code>?, <code>effective_backend</code>?</li>
 </ul>
 <h3 id="clear-cache"><code>clear_cache</code></h3>
 <p>Delete cached model answers (all, or one task's). Only derived results go: mail, the index and the usage record are untouched, and anything cleared is recomputed the next time it is asked for, at the cost of the model calls the cache had saved.</p>
@@ -809,6 +857,12 @@
 <li>Input: <code>message_id</code>?, <code>thread_key</code>?, <code>limit</code>?</li>
 <li>Output: <code>thread_key</code>, <code>items</code>?, <code>total</code>?, <code>truncated</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
 </ul>
+<h3 id="get-workspace"><code>get_workspace</code></h3>
+<p>One workspace: its settings as editable TOML, the effective LLM backend, and usage numbers.</p>
+<ul>
+<li>Input: <code>name</code></li>
+<li>Output: <code>name</code>, <code>trust</code>, <code>llm_backend</code>, <code>llm_backend_raw</code>, <code>toml</code>, <code>overridden_keys</code>?, <code>usage</code>?</li>
+</ul>
 <h3 id="list-accounts"><code>list_accounts</code></h3>
 <p>The configured accounts: id, provider and display name (never credentials).</p>
 <ul>
@@ -868,6 +922,12 @@
 <ul>
 <li>Input: <code>crontab</code>?</li>
 <li>Output: <code>schedules</code>, <code>crontab</code>?</li>
+</ul>
+<h3 id="list-workspaces"><code>list_workspaces</code></h3>
+<p>List every configured workspace plus the implicit 'default', with its trust level, effective LLM backend, and aggregate usage numbers.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>workspaces</code></li>
 </ul>
 <h3 id="mailbox-counts"><code>mailbox_counts</code></h3>
 <p>The sidebar's numbers in one call: Inbox, Starred and Discarded, every folder (location) and every label, each with how many messages and how many are unread. No mail content.</p>
@@ -965,11 +1025,23 @@
 <li>Input: <code>account_id</code>, <code>folder</code>?</li>
 <li>Output: <code>removed</code></li>
 </ul>
+<h3 id="remove-workspace"><code>remove_workspace</code></h3>
+<p>Remove a workspace from config.toml. Refuses to remove 'default'. LLM cache and usage rows are kept; clear them separately.</p>
+<ul>
+<li>Input: <code>name</code></li>
+<li>Output: <code>removed</code>, <code>name</code>, <code>path</code>?, <code>backup</code>?, <code>cache_kept</code>?, <code>error</code>?</li>
+</ul>
 <h3 id="reprocess"><code>reprocess</code></h3>
 <p>Bring one pipeline stage up to date for old mail (parse, filter, embed or enrich).</p>
 <ul>
 <li>Input: <code>stage</code>, <code>account_id</code>?, <code>since</code>?, <code>limit</code>?</li>
 <li>Output: <code>job_id</code>, <code>created</code></li>
+</ul>
+<h3 id="reset-usage"><code>reset_usage</code></h3>
+<p>Clear the token-usage record (the figures the stats page shows). Model calls and the context savings both go; mail, the index and the enrichment cache are untouched. The accounting starts fresh from the next call.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>deleted</code></li>
 </ul>
 <h3 id="resume-backfill"><code>resume_backfill</code></h3>
 <p>Resume the model-bound ingest stages after a pause, or just one with stage.</p>
@@ -1067,6 +1139,12 @@
 <li>Input: <code>section</code>, <code>values</code>?, <code>unset</code>?</li>
 <li>Output: <code>ok</code>, <code>errors</code>?, <code>changed</code>?, <code>reload_needed</code>?, <code>reindex_needed</code>?, <code>restart_needed</code>?, <code>env_overridden</code>?, <code>warnings</code>?, <code>path</code>?, <code>backup</code>?, <code>error</code>?</li>
 </ul>
+<h3 id="set-workspace"><code>set_workspace</code></h3>
+<p>Create or update a workspace in config.toml, keeping all other tables and comments. The change takes effect immediately (live reload); no restart needed.</p>
+<ul>
+<li>Input: <code>name</code>, <code>toml</code>?</li>
+<li>Output: <code>ok</code>, <code>name</code>, <code>path</code>?, <code>backup</code>?, <code>error</code>?, <code>errors</code>?</li>
+</ul>
 <h3 id="sieve-check"><code>sieve_check</code></h3>
 <p>Compile a Sieve script and report the first error, with its line.</p>
 <ul>
@@ -1107,7 +1185,7 @@
 <p>A short health summary: accounts, messages, index, queue, plugins and paused schedules.</p>
 <ul>
 <li>Input: none</li>
-<li>Output: <code>version</code>, <code>accounts</code>, <code>messages</code>, <code>indexed</code>, <code>index_stale</code>, <code>queue_depth</code>?, <code>plugins_healthy</code>?, <code>plugins_total</code>?, <code>schedules_paused</code>?, <code>schedules_failing</code>?</li>
+<li>Output: <code>version</code>, <code>accounts</code>, <code>messages</code>, <code>indexed</code>, <code>index_stale</code>, <code>queue_depth</code>?, <code>plugins_healthy</code>?, <code>plugins_total</code>?, <code>schedules_paused</code>?, <code>schedules_failing</code>?, <code>mcp_workspaces</code>?</li>
 </ul>
 <h3 id="storage-info"><code>storage_info</code></h3>
 <p>Where Oaken keeps its data and how big it is: the two databases, their write-ahead logs and the quarantine folder. Read from the filesystem, not by scanning mail.</p>

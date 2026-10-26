@@ -158,6 +158,7 @@ types = [
   ["Operation", "dataclass", "Name, permission (read, mutate, send), input and output models, MCP ceiling, preview and handler."],
   ["CoreClient", "class", "The one path every call takes: exposure, input, class, confirm gate, handler, audit."],
   ["Proposal", "model", "What a mutation would change, with a single-use token an agent redeems."],
+  ["McpScope", "class", "Limits an MCP caller to the workspaces [mcp] workspaces lists: refuses a call that names, or cannot be narrowed away from, mail outside them, and trims list_accounts. One workspace_of function maps a message to its workspace."],
 ]
 notes = ["Anything that mutates mail is gated here, in code, not in a prompt.", "34 core operations, plus those plugins offer as <plugin>.<name>. Retrieval (search, ask) is built (prompt 15).", "The HTTP surface is the API component. Exposure to MCP is a ceiling in code and a user setting in operation_settings."]
 

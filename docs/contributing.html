@@ -410,8 +410,8 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <tr>
 <td>31</td>
 <td>CORE_31-workspace-management</td>
-<td><strong>Open</strong></td>
-<td></td>
+<td><strong>Partly built</strong></td>
+<td>Ops + CLI built (<code>list/get/check/set/remove_workspace</code>, <code>oaken workspaces …</code>), via 23's section writer + live reload. Owed: <code>set_workspace</code> must enforce the <code>secure</code>⇒local-backend confidentiality rule itself (today only <code>check</code> does, so a save can skip it — a security gap) and its owed test; plus the Settings → Workspaces UI pane. <code>effective_backend</code>, <code>used_by.mcp</code>, and the refuse-a-workspace-MCP-names guard wait on 32. <code>check_workspace</code> is <code>mcp=&quot;never&quot;</code> (stricter than the original draft). Where prompt and code differ, code is right except those two owed gaps</td>
 </tr>
 <tr>
 <td>33</td>
@@ -446,14 +446,20 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <tr>
 <td>41</td>
 <td>CORE_41-stats-controls</td>
-<td><strong>Partly built</strong></td>
-<td>Configure AI from <code>/stats</code>, companion to 40. Shipped: enable/disable (the <code>[plugins.&lt;name&gt;] enabled</code> flag, switches on the Plugins tab), <code>reset_usage</code>, agent list/revoke, enricher <code>config_model</code> forms (CORE_23 pipe filled), and a backend model picker fed by <code>BaseLLMBackend.available_models()</code> (pick any installed Ollama model; saved to <code>[plugins.&lt;name&gt;] model</code> + reload). Remaining: <strong>per-enricher</strong> models (CORE_42). Invariant: agents never manage capabilities, only the file and UI do</td>
+<td><strong>Built</strong></td>
+<td>Configure AI from <code>/stats</code>, companion to 40. enable/disable (the <code>[plugins.&lt;name&gt;] enabled</code> flag, switches on the Plugins tab), <code>reset_usage</code>, agent list/revoke, enricher <code>config_model</code> forms (CORE_23 pipe filled), a backend model picker and a per-enricher model field, both fed by <code>BaseLLMBackend.available_models()</code> (saved to <code>[plugins.&lt;name&gt;] model</code>; CORE_42 honors the per-enricher one). Invariant: agents never manage capabilities, only the file and UI do</td>
 </tr>
 <tr>
 <td>42</td>
 <td>CORE_42-per-enricher-models</td>
-<td><strong>Written</strong></td>
-<td>Each enricher on its own model. <code>generate(request, *, model=…)</code> on the LLM contract + <code>BaseLLMBackend</code> + Ollama (bumps <code>PLUGIN_API_VERSION</code>, ADR 0010); the effective model threaded through <code>generate_cached</code> into the cache key and usage record (fixes the cross-model cache collision); <code>EnricherConfig.model</code> (held back in 41) lands and shows in the form. Carries the effective model into the cache boundary so PLUGIN_43's slot stays clean. Plan only</td>
+<td><strong>Built</strong></td>
+<td>Each enricher on its own model. <code>generate(request, *, model=…)</code> on the LLM contract + <code>BaseLLMBackend</code> + Ollama (bumped <code>PLUGIN_API_VERSION</code> 1→2, ADR 0010); the effective model threaded through <code>generate_cached</code> into the cache key and usage record (no <code>backend.model_id</code> reach-back, so two models cache apart); <code>EnricherConfig.model</code> surfaced in the <code>/stats</code> form, fed by <code>available_models()</code>; unknown model warns and falls back. Per-model <code>context_window</code> is a documented follow-on. Carries the effective model to PLUGIN_43's cache slot</td>
+</tr>
+<tr>
+<td>44</td>
+<td>CORE_44-workspace-ops-fixes</td>
+<td><strong>Built</strong></td>
+<td><code>set_workspace</code> runs the same check as <code>check_workspace</code> (name, shape, and a secure workspace needs a local backend) and refuses on failure, with the field in <code>errors</code>; one validator for both. <code>cache_entries</code> is the real count or <code>None</code>, never a false 0. Two dead branches cut</td>
 </tr>
 </tbody>
 </table></div>
@@ -502,8 +508,8 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <tr>
 <td>32</td>
 <td>MCP_32-mcp-settings</td>
-<td><strong>Open</strong></td>
-<td></td>
+<td><strong>Partly built</strong></td>
+<td>In: <code>[mcp] workspaces</code> (default <code>[&quot;default&quot;]</code>, <code>[]</code> = all) enforced for MCP callers by <code>McpScope</code>, the <code>mcp</code> settings section and its check, <code>mcp_locked_reason</code>, <code>mcp_workspaces</code> on <code>status</code>, the instructions, and the <code>/stats</code> status line and picker. Not built: filtering search, list, ask, labels and counts by a set of accounts (they are refused until an account in scope is named), a <code>tools/list_changed</code> spike, and send (waits for 28)</td>
 </tr>
 </tbody>
 </table></div>

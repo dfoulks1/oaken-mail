@@ -161,6 +161,19 @@ accounts and their credentials, Sieve diagnostics, and running the enrichers by 
 setting is one global list in the database, changed through <code>set_operation_exposure</code>, which is never
 available to an agent, so an agent cannot widen its own reach. Each change is audited. Per-token
 scoping is left for the MCP server.</p>
+<h3 id="which-mail-an-agent-may-reach">Which mail an agent may reach</h3>
+<p>Exposure says what an agent may <em>do</em>. <code>[mcp] workspaces</code> says whose mail it may <em>see</em>. It lists
+workspace names, and a fresh install lists only <code>default</code>. An empty list means every workspace; a
+name that is not a workspace matches nothing, so a typo hides mail and never exposes it.</p>
+<p>A message belongs to the workspace of its account. With a restricted list, an MCP call that names
+mail outside it (a message id, or an <code>account_id</code>) is refused, <code>list_accounts</code> leaves those accounts
+out, and <code>status</code> and the MCP instructions report the listed names, never mail. A call that reads
+across every account and cannot be narrowed (<code>list_labels</code>, <code>list_mailbox</code>, and <code>search</code>,
+<code>list_messages</code>, <code>ask</code>, <code>get_thread</code> or <code>mailbox_counts</code> with no account) is refused rather than let
+through: name an account in scope. When the list covers every account, as on a default install, none
+of this changes anything. The CLI and the console are not scoped; the list only limits MCP clients.</p>
+<p>Set it with <code>oaken settings set mcp</code> or on the <strong>Reference</strong> tab of <code>/stats</code>. <code>check</code> rejects an
+unknown workspace and warns on <code>[]</code>.</p>
 </section>
 <section id="read-state" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Read state</h2></div>
 <p>Reading never marks mail read. The handler that marks it is the one place that does, after the gate

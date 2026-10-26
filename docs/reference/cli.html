@@ -211,6 +211,10 @@
 <td>The configured accounts (never credentials).</td>
 </tr>
 <tr>
+<td><a href="#workspaces"><code>workspaces</code></a></td>
+<td>List, inspect, create, edit and remove AI workspaces.</td>
+</tr>
+<tr>
 <td><a href="#audit"><code>audit</code></a></td>
 <td>The newest audit-log rows.</td>
 </tr>
@@ -337,12 +341,14 @@
 <p>Start the core daemon (in the background; --fg to stay attached).</p>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--fg</code> — Run in the foreground, logging to this terminal (default: the background).</li>
 </ul>
 <h3 id="stop"><code>stop</code></h3>
 <p>Asks core to stop, waits for it to finish what it is doing (up to --grace seconds), and kills it if it is still running. Core's work is a durable queue, so a killed core loses nothing: unfinished jobs are retried when it starts again.</p>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--grace</code> — How long core gets to finish what it is doing before it is killed (default 40; 0 kills it at once).</li>
 <li><code>--no-kill</code> — Report an error if core does not stop in time, instead of killing it.</li>
 </ul>
@@ -350,13 +356,17 @@
 <p>Restart the core daemon (in the background; --fg to stay attached).</p>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--fg</code> — Run in the foreground, logging to this terminal (default: the background).</li>
 <li><code>--grace</code> — How long core gets to finish what it is doing before it is killed (default 40; 0 kills it at once).</li>
 <li><code>--no-kill</code> — Report an error if core does not stop in time, instead of killing it.</li>
 </ul>
 <h3 id="reload"><code>reload</code></h3>
 <p>Signals the running core (SIGHUP) to re-read its configuration and rebuild itself in the same process. An invalid file changes nothing.</p>
-<p>No arguments.</p>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h3 id="operation"><code>operation</code></h3>
 <p>Call a registry operation directly. The input is JSON on --json-input or stdin. This reaches every operation the daemon offers, including ones added after this CLI was released. 'oaken operation' with no name lists the operations. The operation's own fields can be given as flags built from its input schema (see --describe), e.g. 'oaken operation list_messages --limit 5'; 'oaken PLUGIN VERB' is a shorthand for 'oaken operation PLUGIN.VERB'.</p>
 <p>Arguments:</p>
@@ -365,6 +375,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--json-input</code> — The operation input as a JSON object. Use '-' or omit to read stdin when piped.</li>
 <li><code>--no-browser</code> — Print an address, never open it.</li>
 <li><code>--timeout</code> — When an operation waits on the person (a sign-in), give up after S seconds.</li>
@@ -373,7 +384,10 @@
 </ul>
 <h3 id="status"><code>status</code></h3>
 <p>Is core running? (does not start it)</p>
-<p>No arguments.</p>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h3 id="search"><code>search</code></h3>
 <p>Hybrid search: keyword and vector results merged by rank. Operators in the query: from:, before:, after:, label:, in:, -term, &quot;phrase&quot;, term*. Each hit says which retriever found it; if the vector side was down the result says so.</p>
 <p>Arguments:</p>
@@ -382,6 +396,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--from</code> — Only this sender.</li>
 <li><code>--since</code> — Only after this date (ISO 8601).</li>
 <li><code>--before</code> — Only before this date (ISO 8601).</li>
@@ -405,6 +420,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--raw</code> — Include the raw bytes (base64 in --json).</li>
 <li><code>--headers</code> — Show only the raw headers.</li>
 </ul>
@@ -416,6 +432,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--limit</code> — Most messages to show.</li>
 </ul>
 <h3 id="summarize"><code>summarize</code></h3>
@@ -426,6 +443,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--mark-read</code> — Also mark the summarized messages read.</li>
 </ul>
 <h3 id="read"><code>read</code></h3>
@@ -436,6 +454,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--yes</code> — Confirm a bulk change (&gt;25 messages).</li>
 </ul>
 <h3 id="unread"><code>unread</code></h3>
@@ -446,6 +465,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--yes</code> — Confirm a bulk change (&gt;25 messages).</li>
 </ul>
 <h3 id="undo"><code>undo</code></h3>
@@ -454,10 +474,15 @@
 <ul>
 <li><code>audit_id</code> — The audit id to undo (see 'oaken audit').</li>
 </ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h3 id="sync"><code>sync</code></h3>
 <p>Sync every account on every provider now (or one account, or one folder).</p>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--account</code> — Account to sync; default is all.</li>
 <li><code>--folder</code> — One folder; default is the whole account.</li>
 <li><code>--wait</code> — Wait until the sync job finishes.</li>
@@ -473,6 +498,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--yes</code> — Confirm a change to over 25 messages.</li>
 </ul>
 <h3 id="folder"><code>folder</code></h3>
@@ -485,6 +511,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--yes</code> — Confirm a change to over 25 messages.</li>
 </ul>
 <h3 id="star"><code>star</code></h3>
@@ -497,6 +524,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--yes</code> — Confirm a change to over 25 messages.</li>
 <li><code>--limit</code> — With list: most to show.</li>
 </ul>
@@ -508,6 +536,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--yes</code> — Confirm a change to over 25 messages.</li>
 </ul>
 <h3 id="mailbox"><code>mailbox</code></h3>
@@ -519,6 +548,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--account</code> — Only this account.</li>
 <li><code>--folder</code> — With messages: only this folder.</li>
 <li><code>--label</code> — With messages: only this label.</li>
@@ -536,6 +566,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--timeout</code> — Give up waiting for the answer after S seconds (a local model can be slow).</li>
 </ul>
 <h3 id="pipeline"><code>pipeline</code></h3>
@@ -547,6 +578,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--why</code> — A note recorded with a pause.</li>
 <li><code>--retry</code> — With 'parked': re-queue this one parked job.</li>
 <li><code>--all</code> — With 'parked': re-queue every parked ingest job.</li>
@@ -555,6 +587,7 @@
 <p>Model calls and tokens per workspace, stage and model.</p>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--since-hours</code> — Only the last H hours of usage.</li>
 <li><code>--workspace</code> — Only this workspace.</li>
 </ul>
@@ -568,6 +601,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--check</code> — Run each plugin's health probe.</li>
 <li><code>--unset</code> — With set/check: remove a setting.</li>
 <li><code>--replace</code> — With set/check: KEY=VALUE is the whole table.</li>
@@ -580,13 +614,34 @@
 <li><code>subcommand</code> —</li>
 <li><code>file</code> — With test/save: the TOML to use, or - for stdin.</li>
 </ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h3 id="accounts"><code>accounts</code></h3>
 <p>The configured accounts (never credentials).</p>
-<p>No arguments.</p>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
+<h3 id="workspaces"><code>workspaces</code></h3>
+<p>Workspaces are named confidentiality levels: each has a trust level (secure or insecure) and an LLM backend. A secure workspace only uses a local backend. Default lists workspaces. 'get NAME' shows one. 'check NAME [TOML...]' validates without saving. 'set NAME [TOML...] [--file FILE]' creates or replaces. 'remove NAME' removes it (default cannot be removed).</p>
+<p>Arguments:</p>
+<ul>
+<li><code>subcommand</code> — list (default), get, check, set, or remove.</li>
+<li><code>name</code> — The workspace name.</li>
+<li><code>TOML</code> — With check/set: TOML lines for the workspace settings (e.g. 'trust = &quot;insecure&quot;').</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+<li><code>--file</code> — With check/set: a TOML file for the workspace settings (- for stdin).</li>
+</ul>
 <h3 id="audit"><code>audit</code></h3>
 <p>The newest audit-log rows.</p>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--limit</code> — How many rows (max 500).</li>
 <li><code>--op</code> — Only rows for this operation.</li>
 <li><code>--since</code> — Nothing older than this (ISO 8601).</li>
@@ -595,7 +650,10 @@
 </ul>
 <h3 id="operations"><code>operations</code></h3>
 <p>Every operation with its permission and MCP exposure.</p>
-<p>No arguments.</p>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h3 id="reprocess"><code>reprocess</code></h3>
 <p>Bring one pipeline stage up to date.</p>
 <p>Arguments:</p>
@@ -604,6 +662,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--account</code> — Restrict to one account.</li>
 <li><code>--since</code> — embed and enrich: mail dated on or after this day.</li>
 <li><code>--limit</code> — embed and enrich: just the newest N messages.</li>
@@ -612,12 +671,16 @@
 <p>Rebuild the search index from the raw store.</p>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--account</code> — Restrict to one account.</li>
 <li><code>--force</code> — Re-index even where the content hash is unchanged.</li>
 </ul>
 <h3 id="watch"><code>watch</code></h3>
 <p>Stream core events as lines (or --json).</p>
-<p>No arguments.</p>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h3 id="settings"><code>settings</code></h3>
 <p>'settings' lists every section; 'settings SECTION' one. 'settings set SECTION KEY=VALUE ...' saves a change (--unset KEY goes back to the default) to config.toml, keeping its comments; 'settings check ...' tests it without saving. Saved settings reach core on 'oaken reload' (or add --reload); the answer says which need more. An environment variable that overrides a key is reported.</p>
 <p>Arguments:</p>
@@ -626,16 +689,21 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--unset</code> — Remove a setting: back to its default.</li>
 <li><code>--reload</code> — With set: reload core on the change.</li>
 </ul>
 <h3 id="storage"><code>storage</code></h3>
 <p>Where the data is and how big it is.</p>
-<p>No arguments.</p>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h3 id="vacuum"><code>vacuum</code></h3>
 <p>Rewrites raw.db and index.db. One at a time, and not while an index rebuild runs. It holds each database's write lock while it works (ingest waits, reads go on) and needs about the database's own size free on the disk.</p>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--wait</code> — Wait for it, and show the sizes.</li>
 <li><code>--timeout</code> — Give up waiting after S seconds.</li>
 </ul>
@@ -647,6 +715,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--task</code> — With clear: only this task's answers.</li>
 <li><code>--yes</code> — With clear: do not ask.</li>
 </ul>
@@ -654,6 +723,7 @@
 <p>What core published recently, including before it was last restarted: ids, states and numbers, never mail text. --follow prints the history and then the live stream.</p>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--tail</code>, <code>-n</code> — How many (default 50, max 1000).</li>
 <li><code>--kind</code> — Only this kind of event.</li>
 <li><code>--since</code> — Nothing older than this (ISO 8601).</li>
@@ -661,6 +731,10 @@
 </ul>
 <h3 id="agents"><code>agents</code></h3>
 <p>Agents lease jobs from the queue with a token of their own (the swarm page).</p>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h4 id="agents-create"><code>agents create</code></h4>
 <p>Register an agent and print its token once.</p>
 <p>Arguments:</p>
@@ -669,6 +743,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--kind</code> — A job kind it may lease.</li>
 <li><code>--account</code> — Limit it to this account (repeatable).</li>
 <li><code>--max-leases</code> — Jobs it may hold at once.</li>
@@ -678,6 +753,7 @@
 <p>List agents.</p>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--all</code> — Include revoked agents.</li>
 </ul>
 <h4 id="agents-revoke"><code>agents revoke</code></h4>
@@ -686,16 +762,22 @@
 <ul>
 <li><code>agent_id</code> — The agent id (see 'oaken agents list').</li>
 </ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h3 id="jobs"><code>jobs</code></h3>
 <p>Inspect and steer the durable queue (list, show, cancel, retry) with your API token. The agent protocol (claim, heartbeat, complete, fail) is authenticated by the agent's own token (OAKEN_AGENT_TOKEN or --agent-token-file) instead.</p>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--agent-token-file</code> — Read the agent token from PATH.</li>
 </ul>
 <h4 id="jobs-list"><code>jobs list</code></h4>
 <p>List jobs in the queue.</p>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--status</code> — Only jobs in this state.</li>
 <li><code>--kind</code> — Only this kind, e.g. ingest.enrich.</li>
 <li><code>--account</code> — Only this account.</li>
@@ -707,11 +789,19 @@
 <ul>
 <li><code>job_id</code> —</li>
 </ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h4 id="jobs-cancel"><code>jobs cancel</code></h4>
 <p>Cancel a queued job (or ask a running one to stop).</p>
 <p>Arguments:</p>
 <ul>
 <li><code>job_id</code> —</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 </ul>
 <h4 id="jobs-retry"><code>jobs retry</code></h4>
 <p>Re-queue a failed or cancelled job to run now.</p>
@@ -719,10 +809,15 @@
 <ul>
 <li><code>job_id</code> —</li>
 </ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h4 id="jobs-claim"><code>jobs claim</code></h4>
 <p>Lease the next job.</p>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--kind</code> — Only this kind.</li>
 </ul>
 <h4 id="jobs-heartbeat"><code>jobs heartbeat</code></h4>
@@ -730,6 +825,10 @@
 <p>Arguments:</p>
 <ul>
 <li><code>job_id</code> —</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 </ul>
 <h4 id="jobs-complete"><code>jobs complete</code></h4>
 <p>Hand back a result.</p>
@@ -739,6 +838,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--result</code> — The result object; '-' reads stdin.</li>
 <li><code>--produced-by</code> — The model or tool that made it.</li>
 </ul>
@@ -750,6 +850,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--error</code> — What went wrong (no mail).</li>
 <li><code>--permanent</code> — Do not retry it.</li>
 </ul>
@@ -763,6 +864,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--timeout</code> — Give up on a call after.</li>
 <li><code>--agent</code> — Speak to the swarm door as an agent (token from OAKEN_AGENT_TOKEN).</li>
 <li><code>--agent-token-file</code> — Read the agent token from a file.</li>
@@ -770,6 +872,10 @@
 </ul>
 <h3 id="enrich"><code>enrich</code></h3>
 <p>Run or show the enrichers (summary, triage, actions, inspector) on a message.</p>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h4 id="enrich-run"><code>enrich run</code></h4>
 <p>Run the enrichers on one message now.</p>
 <p>Arguments:</p>
@@ -779,6 +885,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--force</code> — Run even if a current result is stored.</li>
 </ul>
 <h4 id="enrich-show"><code>enrich show</code></h4>
@@ -788,13 +895,25 @@
 <li><code>message_id</code> —</li>
 <li><code>enricher</code> — One enricher (default: all stored).</li>
 </ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h3 id="sieve"><code>sieve</code></h3>
 <p>Scripts are files you edit; these commands never change them.</p>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h4 id="sieve-check"><code>sieve check</code></h4>
 <p>Compile a script file.</p>
 <p>Arguments:</p>
 <ul>
 <li><code>file</code> —</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 </ul>
 <h4 id="sieve-test"><code>sieve test</code></h4>
 <p>Run a script on one message and show each effect. Stores nothing.</p>
@@ -804,17 +923,25 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--message</code> — A stored message.</li>
 <li><code>--eml</code> — A message file.</li>
 </ul>
 <h4 id="sieve-list"><code>sieve list</code></h4>
 <p>The scripts core would load.</p>
-<p>No arguments.</p>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h4 id="sieve-get"><code>sieve get</code></h4>
 <p>Print one script's text (to edit it).</p>
 <p>Arguments:</p>
 <ul>
 <li><code>name</code> — The script file name, e.g. 10-lists.sieve.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 </ul>
 <h4 id="sieve-save"><code>sieve save</code></h4>
 <p>Compiles the script first and writes it only if it compiles, atomically and owner-only. Run order is by name, so a new script is best named NN-name.sieve; 'oaken sieve save --suggest-name' prints the next free NN.</p>
@@ -825,6 +952,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--suggest-name</code> — Print the next free NN-prefixed name and exit (give a base with --base).</li>
 <li><code>--base</code> — Base for --suggest-name (default filter).</li>
 </ul>
@@ -834,29 +962,50 @@
 <ul>
 <li><code>name</code> — The script file name.</li>
 </ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h4 id="sieve-refilter"><code>sieve refilter</code></h4>
 <p>Re-run the scripts over stored mail (a job).</p>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--account</code> — Restrict to one account.</li>
 </ul>
 <h3 id="admin"><code>admin</code></h3>
 <p>Administration: add and inspect accounts.</p>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h4 id="admin-account"><code>admin account</code></h4>
 <p>Mail accounts.</p>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h5 id="admin-account-list"><code>admin account list</code></h5>
 <p>List accounts.</p>
-<p>No arguments.</p>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h5 id="admin-account-show"><code>admin account show</code></h5>
 <p>One account and its settings.</p>
 <p>Arguments:</p>
 <ul>
 <li><code>account_id</code> —</li>
 </ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h5 id="admin-account-add"><code>admin account add</code></h5>
 <p>Asks for the provider, an id, a name and the provider's own non-secret settings, then stores them. The credential is stored afterwards with 'oaken PROVIDER auth'. Give --provider, --id and --name (and --set) to skip the questions.</p>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--provider</code> — gmail, smtp or imap.</li>
 <li><code>--id</code> — a-z, 0-9, - and _.</li>
 <li><code>--name</code> — A display name.</li>
@@ -871,6 +1020,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--set</code> — A setting to change (repeatable).</li>
 <li><code>--receive-only</code> — Mark the account receive-only (listen but never send).</li>
 <li><code>--can-send</code> — Allow this account to be a send route (undo receive-only).</li>
@@ -881,12 +1031,21 @@
 <ul>
 <li><code>account_id</code> —</li>
 </ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h3 id="schedule"><code>schedule</code></h3>
 <p>When each account syncs. 'set' takes 'every 15m' or a five-field cron expression; edits are audited and take effect live. Editing a schedule is never offered over MCP.</p>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
 <h4 id="schedule-list"><code>schedule list</code></h4>
 <p>Every schedule and its state.</p>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--crontab</code> — Also print a read-only crontab export.</li>
 </ul>
 <h4 id="schedule-set"><code>schedule set</code></h4>
@@ -898,6 +1057,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--folder</code> — A per-folder schedule (default: account).</li>
 <li><code>--timezone</code> — e.g. America/New_York (unchanged if omitted).</li>
 <li><code>--quiet</code> — Mute alerts in this window; sync still runs.</li>
@@ -912,6 +1072,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--folder</code> — A per-folder schedule (default: account).</li>
 <li><code>--why</code> — A note recorded with the pause.</li>
 </ul>
@@ -923,6 +1084,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--folder</code> — A per-folder schedule (default: account).</li>
 </ul>
 <h4 id="schedule-remove"><code>schedule remove</code></h4>
@@ -933,6 +1095,7 @@
 </ul>
 <p>Options:</p>
 <ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--folder</code> — A per-folder schedule (default: account).</li>
 </ul>
 <h3 id="completion"><code>completion</code></h3>

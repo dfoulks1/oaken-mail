@@ -8,7 +8,7 @@ over that store, so a stronger model can work on sensitive mail without the mail
 machine.
 
 **Status: beta (0.1.x).** The engine, the CLI, the MCP server and the Gmail, IMAP and SMTP
-providers work today. Sending mail, the contacts view and several settings screens are still to
+providers work today. Sending mail and several settings screens are still to
 come: see the [roadmap](ROADMAP.md). Surfaces may change before 1.0; the
 [versioning ADR](docs/adr/0010-the-stable-surface-and-its-versioning.md) says what is held stable.
 

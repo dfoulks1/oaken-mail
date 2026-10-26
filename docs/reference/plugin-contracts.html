@@ -1162,6 +1162,9 @@
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">generate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">LLMRequest</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LLMResponse</span>
 </code></pre></div>
 <p>Answer <code>request</code>. With a <code>json_schema</code>, <code>data</code> carries the parsed result. <code>model</code> names which of the backend's models to run; <code>None</code> means the started default (<code>model_id</code>). The response's <code>model_id</code> is the model that actually ran.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">available_models</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+</code></pre></div>
+<p>The model ids this backend can run right now, for a picker to offer.</p>
 <h3 id="enricher"><code>Enricher</code></h3>
 <p>Derives something from one message. <code>version</code> is part of the cache key: bump it when the output could change.</p>
 <p>Attributes:</p>

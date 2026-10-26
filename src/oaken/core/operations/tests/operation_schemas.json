@@ -104,6 +104,12 @@
           "title": "Question",
           "type": "string"
         },
+        "raw": {
+          "default": false,
+          "description": "Skip the model: return the matching messages and their stored enrichments (summary, triage, actions, inspector) verbatim, so you see the data without AI rewriting.",
+          "title": "Raw",
+          "type": "boolean"
+        },
         "starred": {
           "anyOf": [
             {
@@ -194,6 +200,50 @@
           ],
           "title": "CitationInfo",
           "type": "object"
+        },
+        "EnrichedMessage": {
+          "properties": {
+            "date": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Date"
+            },
+            "enrichments": {
+              "additionalProperties": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "title": "Enrichments",
+              "type": "object"
+            },
+            "message_id": {
+              "title": "Message Id",
+              "type": "string"
+            },
+            "sender": {
+              "default": "",
+              "title": "Sender",
+              "type": "string"
+            },
+            "subject": {
+              "default": "",
+              "title": "Subject",
+              "type": "string"
+            }
+          },
+          "required": [
+            "message_id"
+          ],
+          "title": "EnrichedMessage",
+          "type": "object"
         }
       },
       "properties": {
@@ -237,6 +287,13 @@
           "default": 0,
           "title": "Dropped Claims",
           "type": "integer"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EnrichedMessage"
+          },
+          "title": "Evidence",
+          "type": "array"
         },
         "evidence_tokens": {
           "default": 0,
@@ -611,6 +668,83 @@
         "ok"
       ],
       "title": "SettingsCheck",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
+  "check_workspace": {
+    "input_schema": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "toml": {
+          "default": "",
+          "description": "The workspace's settings as TOML text (no header). An empty string leaves the existing settings unchanged.",
+          "title": "Toml",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "WorkspaceCandidate",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "FieldError": {
+          "properties": {
+            "key": {
+              "title": "Key",
+              "type": "string"
+            },
+            "message": {
+              "title": "Message",
+              "type": "string"
+            }
+          },
+          "required": [
+            "key",
+            "message"
+          ],
+          "title": "FieldError",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "effective_backend": {
+          "default": "",
+          "title": "Effective Backend",
+          "type": "string"
+        },
+        "errors": {
+          "items": {
+            "$ref": "#/$defs/FieldError"
+          },
+          "title": "Errors",
+          "type": "array"
+        },
+        "valid": {
+          "title": "Valid",
+          "type": "boolean"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "valid"
+      ],
+      "title": "CheckWorkspaceOutput",
       "type": "object"
     },
     "permission": "read",
@@ -2373,6 +2507,104 @@
     "permission": "read",
     "streaming": false
   },
+  "get_workspace": {
+    "input_schema": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "WorkspaceRef",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "off",
+    "output_schema": {
+      "$defs": {
+        "WorkspaceUsage": {
+          "properties": {
+            "cache_entries": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cache Entries"
+            },
+            "calls": {
+              "default": 0,
+              "title": "Calls",
+              "type": "integer"
+            },
+            "tokens_in": {
+              "default": 0,
+              "title": "Tokens In",
+              "type": "integer"
+            },
+            "tokens_out": {
+              "default": 0,
+              "title": "Tokens Out",
+              "type": "integer"
+            }
+          },
+          "title": "WorkspaceUsage",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "llm_backend": {
+          "title": "Llm Backend",
+          "type": "string"
+        },
+        "llm_backend_raw": {
+          "title": "Llm Backend Raw",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "overridden_keys": {
+          "description": "Keys whose values are overridden by an environment variable.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Overridden Keys",
+          "type": "array"
+        },
+        "toml": {
+          "title": "Toml",
+          "type": "string"
+        },
+        "trust": {
+          "title": "Trust",
+          "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/WorkspaceUsage"
+        }
+      },
+      "required": [
+        "name",
+        "trust",
+        "llm_backend",
+        "llm_backend_raw",
+        "toml"
+      ],
+      "title": "GetWorkspaceOutput",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
   "list_accounts": {
     "input_schema": {
       "properties": {},
@@ -3444,6 +3676,18 @@
               "title": "Mcp Enabled",
               "type": "boolean"
             },
+            "mcp_locked_reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Mcp Locked Reason"
+            },
             "name": {
               "title": "Name",
               "type": "string"
@@ -3824,6 +4068,99 @@
         "schedules"
       ],
       "title": "ListSchedulesOutput",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
+  "list_workspaces": {
+    "input_schema": {
+      "properties": {},
+      "title": "ListWorkspacesInput",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "off",
+    "output_schema": {
+      "$defs": {
+        "WorkspaceInfo": {
+          "properties": {
+            "is_default": {
+              "title": "Is Default",
+              "type": "boolean"
+            },
+            "llm_backend": {
+              "title": "Llm Backend",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "trust": {
+              "title": "Trust",
+              "type": "string"
+            },
+            "usage": {
+              "$ref": "#/$defs/WorkspaceUsage"
+            }
+          },
+          "required": [
+            "name",
+            "trust",
+            "llm_backend",
+            "is_default"
+          ],
+          "title": "WorkspaceInfo",
+          "type": "object"
+        },
+        "WorkspaceUsage": {
+          "properties": {
+            "cache_entries": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cache Entries"
+            },
+            "calls": {
+              "default": 0,
+              "title": "Calls",
+              "type": "integer"
+            },
+            "tokens_in": {
+              "default": 0,
+              "title": "Tokens In",
+              "type": "integer"
+            },
+            "tokens_out": {
+              "default": 0,
+              "title": "Tokens Out",
+              "type": "integer"
+            }
+          },
+          "title": "WorkspaceUsage",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "workspaces": {
+          "items": {
+            "$ref": "#/$defs/WorkspaceInfo"
+          },
+          "title": "Workspaces",
+          "type": "array"
+        }
+      },
+      "required": [
+        "workspaces"
+      ],
+      "title": "ListWorkspacesOutput",
       "type": "object"
     },
     "permission": "read",
@@ -5494,6 +5831,78 @@
     "permission": "mutate",
     "streaming": false
   },
+  "remove_workspace": {
+    "input_schema": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "WorkspaceRef",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "backup": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Backup"
+        },
+        "cache_kept": {
+          "default": true,
+          "description": "LLM cache and usage rows are kept; clear them with cache_clear.",
+          "title": "Cache Kept",
+          "type": "boolean"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "path": {
+          "default": "",
+          "title": "Path",
+          "type": "string"
+        },
+        "removed": {
+          "title": "Removed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "removed",
+        "name"
+      ],
+      "title": "RemoveWorkspaceOutput",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
   "reprocess": {
     "input_schema": {
       "properties": {
@@ -5576,6 +5985,30 @@
     },
     "permission": "mutate",
     "streaming": true
+  },
+  "reset_usage": {
+    "input_schema": {
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "deleted": {
+          "title": "Deleted",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "deleted"
+      ],
+      "title": "ResetUsageOutput",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
   },
   "resume_backfill": {
     "input_schema": {
@@ -7189,6 +7622,18 @@
               "title": "Mcp Enabled",
               "type": "boolean"
             },
+            "mcp_locked_reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Mcp Locked Reason"
+            },
             "name": {
               "title": "Name",
               "type": "string"
@@ -7770,6 +8215,105 @@
     "permission": "mutate",
     "streaming": false
   },
+  "set_workspace": {
+    "input_schema": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "toml": {
+          "default": "",
+          "description": "The workspace's settings as TOML text (no header). An empty string leaves the existing settings unchanged.",
+          "title": "Toml",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "WorkspaceCandidate",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "FieldError": {
+          "properties": {
+            "key": {
+              "title": "Key",
+              "type": "string"
+            },
+            "message": {
+              "title": "Message",
+              "type": "string"
+            }
+          },
+          "required": [
+            "key",
+            "message"
+          ],
+          "title": "FieldError",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "backup": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Backup"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "errors": {
+          "items": {
+            "$ref": "#/$defs/FieldError"
+          },
+          "title": "Errors",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "path": {
+          "default": "",
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ok",
+        "name"
+      ],
+      "title": "SetWorkspaceOutput",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
   "sieve_check": {
     "input_schema": {
       "properties": {
@@ -8343,6 +8887,21 @@
         "indexed": {
           "title": "Indexed",
           "type": "integer"
+        },
+        "mcp_workspaces": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mcp Workspaces"
         },
         "messages": {
           "title": "Messages",

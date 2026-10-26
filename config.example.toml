@@ -68,6 +68,15 @@
 # timeout = 30.0
 
 
+# --- Enrichers ------------------------------------------------------------------------
+# The enrichers. triage runs first, and a bar here skips mail it rated below it, to save model
+# calls (0 ignore, 1 low, 2 normal, 3 soon). Unset runs everything.
+# [plugins.summary]
+# min_priority = 1
+# [plugins.actions]
+# min_priority = 1
+
+
 # --- Local AI (Ollama) ----------------------------------------------------------------
 # Oaken runs a LOCAL Ollama by default; nothing leaves the machine. The model names live in [ai];
 # [plugins.ollama] only tunes the connection. Pull the models first: `ollama pull <name>`.
@@ -136,6 +145,9 @@
 # max_agents = 8               # active (unrevoked) agents
 # default_max_leases = 2       # jobs one agent may hold at once
 # default_max_per_hour = 600   # jobs one agent may claim per hour
+# enrich_lease_seconds = 600   # how long an agent holds an ingest.enrich job before it heartbeats
+#                              # (long: a large model on modest hardware is slow)
+# Which mail an agent is offered follows [mcp] workspaces (the agent door is an MCP door).
 
 
 # --- Read state -----------------------------------------------------------------------
@@ -145,6 +157,14 @@
 
 # [ui]
 # mark_read_delay_ms = 2000    # how long a message must stay open before core marks it read
+
+
+# --- MCP ------------------------------------------------------------------------------
+# [mcp]
+# workspaces = ["default"]     # which workspaces' mail an MCP client may reach; [] = all of them
+#
+# [mcp.allowed]                # which operations it may call: an operation or plugin name -> true | false
+# get_message = true           # (written by `oaken mcp expose` and the /stats switches)
 
 
 # --- Logging --------------------------------------------------------------------------

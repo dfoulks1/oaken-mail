@@ -40,7 +40,7 @@ No client ever holds business logic. If the UI needs something the CLI cannot al
      needs, and mark which are **missing** from the registry today. Known gaps to record (built by
      23–29, not here): plugin config load/test/save (23); accounts onboarding and receive-only
      (24); per-folder/label **unread counts** and **star** (25); a Sieve **write** path (26);
-     **contacts/people** (27); **send, identities** (28); **core settings, storage, cache,
+     **send, identities** (28); **core settings, storage, cache,
      vacuum, event tail** (29). Note also any read op the UI needs that only exists as a
      CLI convenience, and vice versa.
 2. **Parity test.** Add a test that asserts, for a declared set of "UI capabilities", each maps to a

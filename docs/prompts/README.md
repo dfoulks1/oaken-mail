@@ -66,14 +66,15 @@ all tables (a `CLI_` prompt and a `CORE_` prompt do not restart the count).
 | 28 | [compose-and-send](CORE_28-compose-and-send.md) | **Open** | Identities, `send_message` (permission `send`, never MCP), outbox job, the one compose path | 11, 11b, 22, 24 |
 | 29 | [system-settings](CORE_29-system-settings.md) | **Partly built** | Core settings, storage figures, vacuum, cache stats/clear, event tail, MCP exposure link | 13, 22, 23 |
 | 30 | [pipeline-management](CORE_30-pipeline-management.md) | Built | Manage the queue: job list with ids, pause/resume, retry, cancel, live concurrency, interactive-over-background priority | 05, 13, 17, 21b, 22 |
-| 31 | [workspace-management](CORE_31-workspace-management.md) | **Open** | List/get/check/set/remove workspaces (Oaken's confidentiality levels) from the UI and CLI; `[workspaces.*]` stays the one source of truth | 10, 13, 22, 23 |
-| 33 | [agent-enrichment](CORE_33-agent-enrichment.md) | **Written** | Let an external model (LM Studio, 27B) enrich a message through `/mcp/agent`: claimable payload with text and instructions, a real result type, storage, cache and workspace rules | 03b, 05, 13, 18, 31, 32 |
+| 31 | [workspace-management](CORE_31-workspace-management.md) | **Partly built** | Ops + CLI built (`list/get/check/set/remove_workspace`, `oaken workspaces …`), reusing 23's section writer + live reload. Owed: `set_workspace` must enforce the `secure`⇒local-backend rule itself (today only `check` does — a save can skip it), and the Settings → Workspaces pane. `effective_backend`/`used_by.mcp` and the MCP-name removal guard wait on 32. `check_workspace` is `mcp="never"` | 10, 13, 22, 23 |
+| 33 | [agent-enrichment](CORE_33-agent-enrichment.md) | **Built** | An external model enriches through the agent door: claimable payload with the fenced message, owed enrichers and schemas; `complete_job` validates and stores `{enrichments}` as `agent:<label>`; offered mail follows `[mcp] workspaces`. Live LM Studio demo not done | 03b, 05, 13, 18, 31, 32 |
 | 34 | [stabilize-core](CORE_34-stabilize-core.md) | Built | Lock the public surface (snapshot tests + versioning ADR), enforce import boundaries (import-linter), turn `Core.open()` into dependency-ordered service units, let plugins declare+validate config, and add the missing extension hooks (job kinds, pipeline stages, scheduled tasks) with a conformance suite — so a second dev builds features without touching core | 02, 04, 13, 16, 23 |
 | 35 | [onboarding-0-1-1](CORE_35-onboarding-0-1-1.md) | Built | The record of the 0.1.1 work: first-run defaults, core's console pages, plugin-first commands, plugin control under `oaken plugins` | 16, 17, 23, 34 |
 | 36 | [after-0-1-1](CORE_36-after-0-1-1.md) | **Open** | What 0.1.1 left: label/folder write-back, workspace routing by Sieve rule, a datastore per account, send, Gmail sign-in, concurrent plugin start | 28, 31, 35 |
 | 40 | [mcp-allowed-config](CORE_40-mcp-allowed-config.md) | **Written** | `[mcp.allowed]` in config.toml as the source of truth for MCP exposure (seeded to the store on load, file wins), a generated commented menu, op write-back, and a toggle on `/stats` → Reference. The plan only, not built | 13, 16, 18, 29 |
 | 41 | [stats-controls](CORE_41-stats-controls.md) | **Built** | Configure AI from `/stats`: enable/disable, clear-usage, agent list/revoke, enricher `config_model` forms, a backend model picker and a per-enricher model field, both fed by `available_models()` (CORE_42 honors the per-enricher model). All controls `mcp="never"` | 13, 16, 23, 29, 40 |
 | 42 | [per-enricher-models](CORE_42-per-enricher-models.md) | **Built** | Each enricher on its own model: `generate(request, *, model=…)` on `BaseLLMBackend` (bumped `PLUGIN_API_VERSION` 1→2, ADR 0010), the effective model carried into the cache key + usage (no `backend.model_id` reach-back, two models cache apart), `EnricherConfig.model` in the `/stats` form fed by `available_models()`. Unknown model warns + falls back. Per-model `context_window` is the documented follow-on. Carries the effective model to PLUGIN_43's cache slot | 41, 10, 43 |
+| 44 | [workspace-ops-fixes](CORE_44-workspace-ops-fixes.md) | **Built** | Close the save-path confidentiality gap in `set_workspace` (one validator, refuses a secure workspace on a remote backend); honest `cache_entries`; two dead branches cut | 31 |
 
 ### CLI — the command line
 
@@ -87,7 +88,7 @@ all tables (a `CLI_` prompt and a `CORE_` prompt do not restart the count).
 | # | Prompt | Status | Delivers | Depends on |
 |---|---|---|---|---|
 | 18 | [mcp-server](MCP_18-mcp-shim.md) | Built | MCP server hosted by core (+ `oaken mcp` stdio bridge), generated from registry | 16 |
-| 32 | [mcp-settings](MCP_32-mcp-settings.md) | **Open** | Settings → MCP: the `[mcp]` section in a textarea (`allow_send`, `workspaces=[]`, enable/disable), operation list with presets, workspace scoping, live reload | 13, 18, 22, 23, 29, 31 |
+| 32 | [mcp-settings](MCP_32-mcp-settings.md) | **Partly built** | `[mcp] workspaces` scoping by the mail's account, `mcp_locked_reason`, a status line and picker on `/stats`. Search, list, ask, labels and counts are refused, not filtered, under a restricted scope; send waits for 28 | 13, 16, 17, 18, 22, 29, 31, 40 |
 
 ### PLUGIN — providers, models, vector store
 

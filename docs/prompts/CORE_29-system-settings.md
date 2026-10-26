@@ -24,7 +24,7 @@
 > - **Environment overrides** (`OAKEN_AI__CHUNK_TOKENS`) are reported in `get_settings` and as a
 >   warning on save, never silently shadowed.
 > - **Not built:** the Settings panes (AI & Models, Schedule, Storage & Data, Logs) and
->   `Oaken.form.fromSchema` rendering.
+>   `Oaken.form.fromSchema` rendering; `ui-contract.json` entries for the new operations.
 
 **Read first:** `docs/prompts/00-context.md`.
 **Depends on:** 13, 22, 23.
