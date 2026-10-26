@@ -117,6 +117,9 @@ class ActionsEnricher(LLMEnricher):
     prompt = ACTIONS
     output_model = ActionsResult
 
+    def needs_model(self, msg: EnrichInput) -> bool:
+        return not (self.skips_bulk() and bulk_reasons(msg))
+
     async def enrich(self, msg: EnrichInput) -> EnrichOutput:
         if self.skips_bulk() and bulk_reasons(msg):
             return EnrichOutput(ActionsResult(skipped="bulk").model_dump(mode="json"))

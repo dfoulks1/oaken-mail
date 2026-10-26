@@ -19,11 +19,17 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from oaken.core.errors import Conflict, NotExposed, PermissionDenied
-from oaken.core.ids import AccountId, AgentId, JobId
+from oaken.core.errors import Conflict, InvalidResult, NotExposed, PermissionDenied
+from oaken.core.ids import AccountId, AgentId, JobId, MessageId
 from oaken.core.jobs import Job
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import AnyOperation, OperationRegistry, operation
+from oaken.core.operations.scope import McpScope
+from oaken.ingest.pipeline import ENRICH
+
+# Jobs an agent claims that core can settle itself (skipped mail, work needing no model) are
+# finished here and the next one is tried, up to this many in one claim.
+MAX_SETTLED_PER_CLAIM = 25
 
 LOST = "lease_lost: this agent no longer holds the job"
 
@@ -52,6 +58,13 @@ class ClaimJobInput(BaseModel):
     kinds: list[str] | None = Field(
         default=None, max_length=64, description="Job kinds to claim; default: all of the agent's."
     )
+    max_chars: int = Field(
+        default=12000,
+        ge=500,
+        le=200000,
+        description="For an ingest.enrich job: the most message text to send (head and tail are "
+        "kept). Lower it for a model with a small context window.",
+    )
 
 
 class ClaimJobOutput(BaseModel):
@@ -79,20 +92,34 @@ async def claim_job(ctx: OpContext, inp: ClaimJobInput) -> ClaimJobOutput:
     if not set(kinds) <= agent.kinds:
         raise PermissionDenied("an agent may claim only the job kinds it was given")
     queue = ctx.svc.queue
-    job = await queue.claim(agent.worker, kinds, queue.settings.kind_limits, agent=agent)
-    if job is None:
-        return ClaimJobOutput()
-    return ClaimJobOutput(
-        job=JobLease(
-            id=str(job.id),
-            kind=job.kind,
-            account_id=str(job.account_id) if job.account_id else None,
-            payload=json.loads(job.payload_json),
-            attempts=job.attempts,
-            max_attempts=job.max_attempts,
-            lease_expires_at=job.locked_until.isoformat() if job.locked_until else None,
+    hidden = await McpScope(ctx.svc).blocked_accounts()  # the workspaces [mcp] does not list
+    for _ in range(MAX_SETTLED_PER_CLAIM):
+        job = await queue.claim(
+            agent.worker, kinds, queue.settings.kind_limits, agent=agent, hidden_accounts=hidden
         )
-    )
+        if job is None:
+            return ClaimJobOutput()
+        payload = json.loads(job.payload_json)
+        if job.kind == ENRICH:
+            offer = await ctx.svc.need_pipeline().agent_offer(
+                MessageId(payload["message_id"]), inp.max_chars
+            )
+            if offer is None:  # skipped mail, or core settled all of it: nothing for an agent
+                await queue.complete(job.id, agent.worker, {"skipped": 1})
+                continue
+            payload = {**payload, **offer}
+        return ClaimJobOutput(
+            job=JobLease(
+                id=str(job.id),
+                kind=job.kind,
+                account_id=str(job.account_id) if job.account_id else None,
+                payload=payload,
+                attempts=job.attempts,
+                max_attempts=job.max_attempts,
+                lease_expires_at=job.locked_until.isoformat() if job.locked_until else None,
+            )
+        )
+    return ClaimJobOutput()
 
 
 class JobRef(BaseModel):
@@ -132,29 +159,58 @@ class Done(BaseModel):
     ok: bool = True
 
 
+class CompleteJobOutput(Done):
+    stored: int = 0  # enrichments stored (ingest.enrich)
+    still_owed: int = 0  # enrichments not answered: the job went back to the queue for them
+
+
 @operation(
     "complete_job",
     "Finish a job you hold with a result that matches its kind's schema.",
     permission="read",
     input=CompleteJobInput,
-    output=Done,
+    output=CompleteJobOutput,
     mcp="on",
     audit="always",
 )
-async def complete_job(ctx: OpContext, inp: CompleteJobInput) -> Done:
+async def complete_job(ctx: OpContext, inp: CompleteJobInput) -> CompleteJobOutput:
     """The result is checked before anything is stored: a result that does not match the kind's
-    schema is rejected as invalid_result and the job stays yours, so you can fix it or fail it."""
-    done = await ctx.svc.queue.complete(
-        JobId(inp.job_id), _worker(ctx), inp.result, produced_by=inp.produced_by
-    )
-    if not done:
+    schema is rejected as invalid_result and the job stays yours, so you can fix it or fail it.
+    For ingest.enrich the result is ``{"enrichments": {"<enricher>": {...}}}``; answer some and
+    the rest stay owed (the job goes back to the queue), answer all and the job is done."""
+    queue, worker = ctx.svc.queue, _worker(ctx)
+    job = await queue.get(JobId(inp.job_id))
+    if job is None or job.kind != ENRICH or job.locked_by != worker or job.status != "running":
+        done = await queue.complete(
+            JobId(inp.job_id), worker, inp.result, produced_by=inp.produced_by
+        )
+        if not done:
+            raise Conflict(LOST)
+        return CompleteJobOutput()
+    answers = (inp.result or {}).get("enrichments")
+    if not isinstance(answers, dict) or not answers:
+        raise InvalidResult('the result must be {"enrichments": {"<enricher>": {...}}}')
+    agent = await ctx.svc.need_agents().get(_agent_id(ctx))
+    label = inp.produced_by or agent.label
+    message_id = MessageId(json.loads(job.payload_json)["message_id"])
+    stored, owed = await ctx.svc.need_pipeline().agent_accept(message_id, answers, label)
+    if owed:  # a partial answer: what was answered is kept, the rest goes back, attempt not spent
+        if not await queue.release(job.id, worker):
+            raise Conflict(LOST)
+        return CompleteJobOutput(stored=stored, still_owed=owed)
+    if not await queue.complete(job.id, worker, {"done": stored}, produced_by=label):
         raise Conflict(LOST)
-    return Done()
+    return CompleteJobOutput(stored=stored)
 
 
 class FailJobInput(JobRef):
     error: str = Field(max_length=2000, description="What went wrong. Never quote mail text.")
     permanent: bool = False
+    retry: bool = Field(
+        default=False,
+        description="You simply could not do it (too big, wrong model): put the job back without "
+        "spending an attempt.",
+    )
 
 
 class FailJobOutput(BaseModel):
@@ -171,7 +227,11 @@ class FailJobOutput(BaseModel):
     audit="always",
 )
 async def fail_job(ctx: OpContext, inp: FailJobInput) -> FailJobOutput:
-    """Use permanent=true only when retrying cannot help."""
+    """Use permanent=true only when retrying cannot help; retry=true hands it back unharmed."""
+    if inp.retry and not inp.permanent:
+        if not await ctx.svc.queue.release(JobId(inp.job_id), _worker(ctx)):
+            raise Conflict(LOST)
+        return FailJobOutput(status="queued")
     status = await ctx.svc.queue.fail(
         JobId(inp.job_id), _worker(ctx), inp.error, permanent=inp.permanent
     )

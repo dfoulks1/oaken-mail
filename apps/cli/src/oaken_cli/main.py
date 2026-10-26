@@ -840,6 +840,9 @@ def _register_swarm(
     claim.add_argument(
         "--kind", action="append", default=[], metavar="KIND", help="Only this kind."
     )
+    claim.add_argument(
+        "--max-chars", type=int, metavar="N", help="For ingest.enrich: the most text to send."
+    )
     beat = verbs.add_parser("heartbeat", parents=[_globals(True)], help="Extend a lease.")
     beat.add_argument("job_id")
     done = verbs.add_parser("complete", parents=[_globals(True)], help="Hand back a result.")
@@ -850,6 +853,9 @@ def _register_swarm(
     fail.add_argument("job_id")
     fail.add_argument("--error", required=True, metavar="TEXT", help="What went wrong (no mail).")
     fail.add_argument("--permanent", action="store_true", help="Do not retry it.")
+    fail.add_argument(
+        "--retry", action="store_true", help="Hand it back without spending an attempt."
+    )
     jobs.set_defaults(func=_lazy("agent_cmd", "cmd_jobs"))
 
 

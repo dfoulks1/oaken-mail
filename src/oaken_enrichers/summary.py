@@ -66,6 +66,9 @@ class SummaryEnricher(LLMEnricher):
     prompt = SUMMARY
     output_model = SummaryResult
 
+    def needs_model(self, msg: EnrichInput) -> bool:
+        return not (self.skips_bulk() and bulk_reasons(msg))
+
     async def enrich(self, msg: EnrichInput) -> EnrichOutput:
         if self.skips_bulk() and bulk_reasons(msg):
             return EnrichOutput(SummaryResult(skipped="bulk").model_dump(mode="json"))

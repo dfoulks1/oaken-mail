@@ -624,25 +624,25 @@ class Api:
         )
 
     # -- the agent surface (a separate token; see ``claim`` and the swarm page) --------------------
+    def _agent_call(self, agent: Agent, name: str, body: dict[str, Any]) -> Any:
+        """Run an agent operation as this agent: the same operations (and rules) as the MCP agent
+        door, so the HTTP routes and the CLI are not a second implementation."""
+        from oaken.core.operations.builtin import agent_registry
+
+        client = CoreClient(
+            agent_registry(),
+            self.client.svc,
+            proposals=self.client.proposals,
+            exposure=self.client.exposure,
+        )
+        return client.call(name, body, CallerContext.mcp(agent.label, agent_id=str(agent.id)))
+
     async def claim(self, request: Request) -> Response:
         agent: Agent = request.scope["oaken"]["principal"]
         req = parse(models.ClaimRequest, await read_json(request))
-        kinds = sorted(set(req.kinds)) if req.kinds else sorted(agent.kinds)
-        if not set(kinds) <= agent.kinds:
-            raise PermissionDenied("an agent may claim only the job kinds it was given")
-        queue = self.client.svc.queue
-        job = await queue.claim(agent.worker, kinds, queue.settings.kind_limits, agent=agent)
-        lease = None
-        if job is not None:
-            lease = models.JobLease(
-                id=str(job.id),
-                kind=job.kind,
-                account_id=str(job.account_id) if job.account_id else None,
-                payload=json.loads(job.payload_json),
-                attempts=job.attempts,
-                max_attempts=job.max_attempts,
-                lease_expires_at=job.locked_until.isoformat() if job.locked_until else None,
-            )
+        result = await self._agent_call(agent, "claim_job", req.model_dump(exclude_none=True))
+        job = result.output.job
+        lease = None if job is None else models.JobLease(**job.model_dump())
         return _json(models.ClaimResponse(job=lease).model_dump(mode="json"))
 
     async def heartbeat(self, request: Request) -> Response:
@@ -657,22 +657,13 @@ class Api:
     async def complete(self, request: Request) -> Response:
         agent: Agent = request.scope["oaken"]["principal"]
         req = parse(models.CompleteRequest, await read_json(request))
-        done = await self.client.svc.queue.complete(
-            JobId(request.path_params["job_id"]),
-            agent.worker,
-            req.result,
-            produced_by=req.produced_by,
-        )
-        if not done:
-            raise Conflict("lease_lost: this agent no longer holds the job")
-        return _json(models.Ok().model_dump())
+        body = {"job_id": request.path_params["job_id"], **req.model_dump()}
+        result = await self._agent_call(agent, "complete_job", body)
+        return _json(models.CompleteResponse(**result.output.model_dump()).model_dump())
 
     async def fail(self, request: Request) -> Response:
         agent: Agent = request.scope["oaken"]["principal"]
         req = parse(models.FailRequest, await read_json(request))
-        status = await self.client.svc.queue.fail(
-            JobId(request.path_params["job_id"]), agent.worker, req.error, permanent=req.permanent
-        )
-        if status == "lost":
-            raise Conflict("lease_lost: this agent no longer holds the job")
-        return _json(models.FailResponse(status=status).model_dump())  # type: ignore[arg-type]
+        body = {"job_id": request.path_params["job_id"], **req.model_dump()}
+        result = await self._agent_call(agent, "fail_job", body)
+        return _json(models.FailResponse(status=result.output.status).model_dump())

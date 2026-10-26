@@ -3,14 +3,15 @@
 rule for mail that nobody wrote to the reader."""
 
 import hashlib
-from typing import ClassVar
+from typing import Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from oaken.core.errors import PluginError
 from oaken.core.untrusted import UntrustedText
 from oaken.mail.clean import bulk_signals
 from oaken.mail.tokens import Tokenizer, load_tokenizer
+from oaken.ai.prompts import PromptBuilder
 from oaken.plugins.base import BaseEnricher
 from oaken.plugins.contracts import EnrichInput, LLMAccess, PluginContext
 
@@ -52,8 +53,8 @@ def fit(text: str, budget: int, tokenizer: Tokenizer) -> tuple[str, bool]:
 
 class EnricherConfig(BaseModel):
     """The ``[plugins.<name>]`` settings every model-backed enricher shares. Each enricher may
-    subclass this to add its own. ``model`` is declared but not yet honored per-enricher (every
-    enricher still uses the one shared backend); that waits on the many-model LLM contract."""
+    subclass this to add its own. The field descriptions are shown as help text in the ``/stats``
+    config form, so keep them plain and about what the setting does."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -88,6 +89,9 @@ class LLMEnricher(BaseEnricher):
     needs_llm = True
     skip_bulk: ClassVar[bool] = False  # a default, overridden by [plugins.<name>] skip_bulk
     config_model = EnricherConfig
+    # The instructions and answer shape the model gets. An external agent (the swarm) is handed
+    # the same, so it answers what a native model would.
+    prompt: ClassVar[PromptBuilder[Any] | None] = None
 
     llm: LLMAccess
     tokenizer: Tokenizer
@@ -101,6 +105,11 @@ class LLMEnricher(BaseEnricher):
         if llm is None:
             raise PluginError(f"{self.ctx.name} needs a language model and none was provided")
         return llm
+
+    def needs_model(self, msg: EnrichInput) -> bool:
+        """False when this message can be settled without a model (bulk mail, a header rule): core
+        then runs the enricher itself and an external agent is never asked for it."""
+        return True
 
     def skips_bulk(self) -> bool:
         chosen = self.config.skip_bulk if self.config is not None else None

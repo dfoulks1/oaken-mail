@@ -287,6 +287,7 @@ class JobQueue:
         limits: Mapping[str, int] | None = None,
         *,
         agent: Agent | None = None,
+        hidden_accounts: Collection[str] = (),
     ) -> Job | None:
         """Atomically take the best runnable job of one of ``kinds`` and lease it to ``worker``.
 
@@ -297,7 +298,8 @@ class JobQueue:
         ``agent.worker``), and the agent's row is re-read inside the transaction: it must not be
         revoked, only kinds it is scoped to and ``[swarm] allowed_kinds`` permit are considered,
         only its accounts are visible, and ``QuotaExceeded`` is raised at its lease or hourly
-        limit.
+        limit. ``hidden_accounts`` are accounts whose mail this agent may not be offered (the
+        workspace policy, decided by the caller).
         """
         now = self.clock.now()
         extra = ""
@@ -318,6 +320,10 @@ class JobQueue:
                     marks = ",".join("?" * len(scoped.account_ids))
                     extra = f" AND account_id IN ({marks})"
                     extra_args = tuple(sorted(scoped.account_ids))
+                if hidden_accounts:
+                    marks = ",".join("?" * len(hidden_accounts))
+                    extra += f" AND (account_id IS NULL OR account_id NOT IN ({marks}))"
+                    extra_args += tuple(sorted(hidden_accounts))
             blocked = await self._blocked_kinds(tx, limits or {})
             allowed = [k for k in kinds if k not in blocked]
             if not allowed:
@@ -332,7 +338,7 @@ class JobQueue:
                 )
             job: Job | None = None
             if row:
-                lease = now + timedelta(seconds=self.settings.lease_seconds)
+                lease = now + timedelta(seconds=self._lease(row["kind"], agent is not None))
                 await tx.execute(
                     "UPDATE jobs SET status = 'running', locked_by = ?, locked_until = ?,"
                     " attempts = attempts + 1, updated_at = ?, agent_id = ?, claimed_at = ?"
@@ -411,8 +417,11 @@ class JobQueue:
     async def heartbeat(self, job_id: JobId, worker: str) -> tuple[bool, bool]:
         """Extend the lease. Returns ``(still_owner, cancel_requested)``."""
         now = self.clock.now()
-        lease = now + timedelta(seconds=self.settings.lease_seconds)
         async with self.db.transaction() as tx:
+            kind = await tx.fetchone("SELECT kind FROM jobs WHERE id = ?", (job_id,))
+            lease = now + timedelta(
+                seconds=self._lease(kind["kind"] if kind else "", worker.startswith("agent:"))
+            )
             changed = await tx.execute(
                 "UPDATE jobs SET locked_until = ?, updated_at = ?"
                 " WHERE id = ? AND locked_by = ? AND status = 'running'",
@@ -420,6 +429,13 @@ class JobQueue:
             )
             row = await tx.fetchone("SELECT cancel_requested FROM jobs WHERE id = ?", (job_id,))
         return changed > 0, bool(row and row["cancel_requested"])
+
+    def _lease(self, kind: str, agent: bool) -> float:
+        """How long a lease lasts. An agent's enrich job gets longer: a large model on modest
+        hardware is slow, and the agent extends it with heartbeat_job."""
+        if agent and kind == "ingest.enrich":
+            return max(self.settings.lease_seconds, self.swarm.enrich_lease_seconds)
+        return self.settings.lease_seconds
 
     def register_result(self, kind: str, model: type[BaseModel]) -> None:
         """Declare the schema of the result that jobs of ``kind`` produce."""

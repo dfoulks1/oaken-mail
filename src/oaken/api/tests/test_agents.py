@@ -62,7 +62,7 @@ async def test_claim_heartbeat_and_complete_with_a_result_and_provenance(rig: Ri
         json={"result": {"text": "a summary", "score": 3}, "produced_by": "big-model-1"},
         headers=bearer(token),
     )
-    assert done.status_code == 200 and done.json() == {"ok": True}
+    assert done.status_code == 200 and done.json() == {"ok": True, "stored": 0, "still_owed": 0}
     job = await rig.ops.rig.queue.get(job_id)
     assert job is not None and job.status == "succeeded"
     assert job.produced_by == "big-model-1" and job.completed_by.startswith("agent:")

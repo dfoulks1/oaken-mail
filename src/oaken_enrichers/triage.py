@@ -86,6 +86,11 @@ def rule_for(headers: dict[str, tuple[str, ...]], sender: str) -> tuple[Category
 class TriageEnricher(LLMEnricher):
     version = "1"
     output_model = TriageResult
+    prompt = TRIAGE
+
+    def needs_model(self, msg: EnrichInput) -> bool:
+        sender = msg.headers.get("from", UntrustedText("")).unwrap()
+        return rule_for(header_values(msg), sender) is None
 
     async def enrich(self, msg: EnrichInput) -> EnrichOutput:
         sender = msg.headers.get("from", UntrustedText("")).unwrap()

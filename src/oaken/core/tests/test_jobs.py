@@ -127,6 +127,47 @@ async def test_failing_handler_backs_off_then_fails_for_good(
     assert await runner.drain() == 0  # terminal
 
 
+async def test_a_wedged_handler_times_out_and_frees_its_worker(
+    queue: JobQueue, clock: FakeClock
+) -> None:
+    """One handler that never returns (a hung model call) must not hold its worker: the run is
+    bounded, failed with backoff, and a sibling job still completes. This is the queue-freeze from
+    the field (all workers stuck in _execute, zero further claims) turned into a test."""
+    runner, done = JobRunner(queue, workers=2), []
+
+    async def wedged(_p: Ping, _job: Job) -> None:
+        await asyncio.sleep(3600)  # never returns within the test's lifetime
+
+    async def quick(p: Ping, _job: Job) -> None:
+        done.append(p.n)
+
+    runner.register("slow", Ping, wedged, timeout=0.05)
+    runner.register("fast", Ping, quick)
+    hung = (await queue.enqueue("slow", Ping())).job_id
+    await queue.enqueue("fast", Ping(n=7))
+
+    await runner.drain()
+
+    # The sibling ran: the wedged handler did not freeze the pool.
+    assert done == [7]
+    # The hung job was cancelled and requeued with backoff (not left running, not lost).
+    job = await row(queue, hung)
+    assert (job.status, job.attempts) == ("queued", 1)
+    assert job.last_error is not None and "exceeded" in job.last_error
+
+
+async def test_a_handler_within_its_timeout_still_completes(queue: JobQueue) -> None:
+    runner, done = JobRunner(queue), []
+
+    async def handler(p: Ping, _job: Job) -> None:
+        await asyncio.sleep(0.01)
+        done.append(p.n)
+
+    runner.register("k", Ping, handler, timeout=5.0)
+    await queue.enqueue("k", Ping(n=1))
+    assert await runner.drain() == 1 and done == [1]
+
+
 def test_backoff_is_capped_and_jittered(queue: JobQueue) -> None:
     s = JobsSettings(backoff_base_seconds=10, backoff_max_seconds=60, backoff_jitter=0.5)
     q = JobQueue(queue.db, queue.clock, settings=s, rng=random.Random(7))

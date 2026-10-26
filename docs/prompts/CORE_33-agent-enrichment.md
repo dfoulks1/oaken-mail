@@ -1,5 +1,17 @@
 # 33 — Agent enrichment: let an external model enrich a message through `/mcp/agent`
 
+> **Status: built.** `ingest.enrich` claims carry the fenced message, the owed enrichers and their
+> instructions and schemas (`Pipeline.agent_offer`); `complete_job` takes
+> `{enrichments: {...}}`, validates each answer against the enricher's output model and stores it as
+> `agent:<label>` (`Pipeline.agent_accept`); an agent row satisfies the native cache. `claim_job`
+> takes `max_chars`; `fail_job` takes `retry`; an agent's enrich lease is
+> `[swarm] enrich_lease_seconds` (600). The HTTP agent routes and the CLI now run the same
+> operations as the MCP door (one implementation). Enrichers gained `needs_model(msg)` and `prompt`.
+> **Deviations:** no `local` flag and no `agents create --local` (Q3): which mail an agent is offered
+> follows `[mcp] workspaces`, the one definition (an agent's `account_ids` narrows it further).
+> Per-workspace command exposure is MCP_32 phase 2. `min_priority` gating is not applied to agent
+> answers. Not done: the live LM Studio demonstration.
+
 **Read first:** `docs/prompts/00-context.md`, `docs/prompts/CORE_03b-swarm-foundations.md` and
 `docs/architecture/swarm.md`. **Depends on:** 03b, 05, 13, 18, 31, 32.
 

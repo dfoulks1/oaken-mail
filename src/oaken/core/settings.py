@@ -158,6 +158,9 @@ class SwarmSettings(_Section):
     max_agents: int = Field(default=8, ge=1, le=256)  # active (unrevoked) agents
     default_max_leases: int = Field(default=2, ge=1)  # jobs one agent may hold at once
     default_max_per_hour: int = Field(default=600, ge=1)  # jobs one agent may claim per hour
+    # How long an agent holds an ingest.enrich job before it must heartbeat. Long, because a large
+    # model on modest hardware is slow.
+    enrich_lease_seconds: float = Field(default=600.0, gt=0)
 
 
 class ThreadingSettings(_Section):

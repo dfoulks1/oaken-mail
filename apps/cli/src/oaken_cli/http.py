@@ -233,8 +233,13 @@ class AgentClient(_Base):
         data: dict[str, Any] = (await self._request("POST", path, json=dict(body or {}))).json()
         return data
 
-    async def claim(self, kinds: list[str] | None = None) -> dict[str, Any]:
-        return await self._post("/v1/agent/jobs/claim", {"kinds": kinds} if kinds else {})
+    async def claim(
+        self, kinds: list[str] | None = None, max_chars: int | None = None
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {"kinds": kinds} if kinds else {}
+        if max_chars:
+            body["max_chars"] = max_chars
+        return await self._post("/v1/agent/jobs/claim", body)
 
     async def heartbeat(self, job_id: str) -> dict[str, Any]:
         return await self._post(f"/v1/agent/jobs/{job_id}/heartbeat")
@@ -246,7 +251,10 @@ class AgentClient(_Base):
             f"/v1/agent/jobs/{job_id}/complete", {"result": result, "produced_by": produced_by}
         )
 
-    async def fail(self, job_id: str, error: str, *, permanent: bool = False) -> dict[str, Any]:
+    async def fail(
+        self, job_id: str, error: str, *, permanent: bool = False, retry: bool = False
+    ) -> dict[str, Any]:
         return await self._post(
-            f"/v1/agent/jobs/{job_id}/fail", {"error": error, "permanent": permanent}
+            f"/v1/agent/jobs/{job_id}/fail",
+            {"error": error, "permanent": permanent, "retry": retry},
         )

@@ -40,6 +40,12 @@ class ClaimRequest(_Body):
     kinds: list[str] | None = Field(
         default=None, max_length=64, description="Job kinds to claim; default: all of the agent's."
     )
+    max_chars: int = Field(
+        default=12000,
+        ge=500,
+        le=200000,
+        description="For an ingest.enrich job: the most message text to send.",
+    )
 
 
 class JobLease(BaseModel):
@@ -69,10 +75,17 @@ class CompleteRequest(_Body):
 class FailRequest(_Body):
     error: str = Field(max_length=2000)
     permanent: bool = False
+    retry: bool = Field(default=False, description="Hand the job back without spending an attempt.")
 
 
 class FailResponse(BaseModel):
     status: Literal["queued", "failed"]
+
+
+class CompleteResponse(BaseModel):
+    ok: bool = True
+    stored: int = 0
+    still_owed: int = 0
 
 
 class Ok(BaseModel):

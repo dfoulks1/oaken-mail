@@ -20,7 +20,7 @@ import asyncio
 import json
 import sqlite3
 import time
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any, Literal
@@ -31,7 +31,7 @@ from oaken.ai.fresh import FRESH
 from oaken.core.actors import SYSTEM, Actor
 from oaken.core.attrs import AttrStore
 from oaken.core.clock import Clock, fmt_ts, parse_ts
-from oaken.core.errors import Conflict, PluginError
+from oaken.core.errors import Conflict, InvalidResult, PluginError
 from oaken.core.events import (
     AttachmentQuarantined,
     EventBus,
@@ -60,7 +60,13 @@ from oaken.mail.parse import parse, read_attachment
 from oaken.mail.threading import normalize_subject
 from oaken.mail.tokens import Tokenizer, load_tokenizer
 from oaken.plugins.adapt import to_enrich_output, to_vectors
-from oaken.plugins.contracts import EnrichAttachment, EnrichInput, PluginStageInput, VectorItem
+from oaken.plugins.contracts import (
+    EnrichAttachment,
+    EnrichInput,
+    Enricher,
+    PluginStageInput,
+    VectorItem,
+)
 
 log = get_logger("oaken.ingest")
 
@@ -708,20 +714,24 @@ class Pipeline:
         """True if the result is stored for this message; if only another message has it, copy
         it here (and say True)."""
         content_hash, name, version, model = key
+        # A row an external agent produced (model_id ``agent:<label>``) counts as current whatever
+        # the native model is: the person chose to have a larger model do that work.
         mine = await self.raw.db.fetchone(
             "SELECT 1 FROM enrichments WHERE message_id = ? AND enricher = ? AND version = ?"
-            " AND model_id = ? AND content_hash = ?",
+            " AND (model_id = ? OR model_id LIKE 'agent:%') AND content_hash = ?",
             (message_id, name, version, model, content_hash),
         )
         if mine:
             return True
         other = await self.raw.db.fetchone(
-            "SELECT data_json FROM enrichments WHERE content_hash = ? AND enricher = ?"
-            " AND version = ? AND model_id = ? LIMIT 1",
+            "SELECT data_json, model_id FROM enrichments WHERE content_hash = ? AND enricher = ?"
+            " AND version = ? AND (model_id = ? OR model_id LIKE 'agent:%') LIMIT 1",
             (content_hash, name, version, model),
         )
-        if other:
-            await self._store_enrichment(message_id, key, other["data_json"])
+        if other:  # copied under the model that made it, so who produced it is never lost
+            await self._store_enrichment(
+                message_id, (content_hash, name, version, other["model_id"]), other["data_json"]
+            )
             return True
         return False
 

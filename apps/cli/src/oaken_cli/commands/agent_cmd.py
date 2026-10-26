@@ -157,7 +157,7 @@ async def _queue_jobs(client: ApiClient, args: argparse.Namespace) -> int:
 
 async def _agent_jobs(client: Any, args: argparse.Namespace) -> int:
     if args.action == "claim":
-        data = await client.claim(list(args.kind) or None)
+        data = await client.claim(list(args.kind) or None, args.max_chars)
         job = data.get("job")
 
         def claimed() -> None:
@@ -181,8 +181,12 @@ async def _agent_jobs(client: Any, args: argparse.Namespace) -> int:
         return emit(args, data=data, text=beat)
     if args.action == "complete":
         data = await client.complete(args.job_id, _read_result(args), args.produced_by)
-        return emit(args, data=data, text=lambda: _say("job completed"))
-    data = await client.fail(args.job_id, args.error, permanent=bool(args.permanent))
+        owed = data.get("still_owed", 0)
+        note = f"; {owed} enrichment(s) still owed, job requeued" if owed else ""
+        return emit(args, data=data, text=lambda: _say(f"job completed{note}"))
+    data = await client.fail(
+        args.job_id, args.error, permanent=bool(args.permanent), retry=bool(args.retry)
+    )
     return emit(args, data=data, text=lambda: _say(f"job {data.get('status', 'failed')}"))
 
 
