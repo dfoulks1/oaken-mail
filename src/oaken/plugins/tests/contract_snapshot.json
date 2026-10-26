@@ -118,6 +118,7 @@
       "setup_help",
       "start",
       "stop",
+      "thinking_for",
       "version"
     ],
     "BaseProvider": [
@@ -204,7 +205,8 @@
       "user",
       "json_schema",
       "max_output_tokens",
-      "temperature"
+      "temperature",
+      "think"
     ],
     "LLMResponse": [
       "text",

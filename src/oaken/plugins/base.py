@@ -322,6 +322,13 @@ class BaseLLMBackend(_Base):
     # backend that does not say "local", so a plugin that forgets this is treated as remote.
     locality: str = "remote"
 
+    def thinking_for(self, request: LLMRequest) -> bool | None:
+        """Whether to let the model reason on this call, or None to leave it to the model. A
+        ``think`` in the plugin's own settings wins over what the request asks for. A backend that
+        cannot reason, or has no switch for it, need not call this: the field is optional."""
+        chosen = getattr(self.config, "think", None) if self.config is not None else None
+        return chosen if isinstance(chosen, bool) else request.think
+
     @_default
     async def generate(self, request: LLMRequest, *, model: str | None = None) -> LLMResponse:
         raise NotImplementedError

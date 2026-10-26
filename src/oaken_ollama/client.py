@@ -35,6 +35,10 @@ class OllamaConfig(BaseModel):
     max_retries: int = Field(default=2, ge=0, le=10)  # extra tries after a connection error / 5xx
     backoff: float = Field(default=0.5, ge=0)  # seconds, doubled each retry
     batch_size: int = Field(default=32, ge=1, le=1024)  # texts per /api/embed call
+    # Override whether a reasoning model thinks before it answers. Unset, each request decides, and
+    # Oaken's tasks ask for no reasoning (a short JSON answer; reasoning costs time and can use up
+    # the output limit before the answer is written). true turns it on for every call.
+    think: bool | None = None
 
     @classmethod
     def parse(cls, raw: dict[str, Any], who: str) -> "OllamaConfig":
@@ -175,6 +179,7 @@ class OllamaClient:
         schema: dict[str, Any] | None,
         temperature: float,
         max_tokens: int | None,
+        think: bool | None = None,
     ) -> dict[str, Any]:
         options: dict[str, Any] = {"temperature": temperature}
         if max_tokens:
@@ -191,6 +196,8 @@ class OllamaClient:
         }
         if schema is not None:
             body["format"] = schema
+        if think is not None:  # None: leave it to the model (a backend skips what it cannot do)
+            body["think"] = think
         data = await self._call("POST", "/api/chat", body)
         if not isinstance(data, dict) or not isinstance(data.get("message"), dict):
             raise AIBackendError(f"{self.who}: Ollama sent an unexpected reply")

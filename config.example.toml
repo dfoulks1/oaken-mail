@@ -84,6 +84,7 @@
 # base_url = "http://127.0.0.1:11434"   # loopback only unless ai.allow_remote = true
 # model = ""                   # empty: use ai.embed_model / ai.llm_model below
 # keep_alive = "5m"            # how long Ollama keeps the model loaded after a call
+# think = false                # true lets a reasoning model think before answering (slower)
 # timeout = 120.0
 # max_retries = 2
 # backoff = 0.5

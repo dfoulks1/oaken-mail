@@ -178,6 +178,18 @@ async def test_structured_output_sends_the_schema_as_format(ollama: FakeOllama) 
     assert resp.data == {"ok": True} and (resp.input_tokens, resp.output_tokens) == (31, 6)
 
 
+async def test_the_request_decides_thinking_and_the_plugin_setting_overrides_it(
+    ollama: FakeOllama,
+) -> None:
+    quiet = LLMRequest("Reply briefly.", ("Hi.",), think=False)  # what every Oaken task asks for
+    await (await started_llm(ollama)).generate(quiet)
+    assert ollama.bodies("/api/chat")[-1]["think"] is False
+    await (await started_llm(ollama)).generate(LLMRequest("Reply briefly.", ("Hi.",)))
+    assert "think" not in ollama.bodies("/api/chat")[-1]  # nothing asked: left to the model
+    await (await started_llm(ollama, config={"think": True})).generate(quiet)
+    assert ollama.bodies("/api/chat")[-1]["think"] is True  # [plugins.ollama] think wins
+
+
 async def test_plain_generation_sends_no_format(ollama: FakeOllama) -> None:
     llm = await started_llm(ollama)
     resp = await llm.generate(LLMRequest("Reply briefly.", ("Hi.",)))

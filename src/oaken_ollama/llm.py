@@ -66,6 +66,7 @@ class OllamaLLM(BaseLLMBackend):
             schema=request.json_schema,
             temperature=request.temperature,
             max_tokens=request.max_output_tokens,
+            think=self.thinking_for(request),
         )
         text = str(data["message"].get("content", ""))
         parsed: dict[str, Any] | None = None

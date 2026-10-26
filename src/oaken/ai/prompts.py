@@ -102,6 +102,7 @@ class PromptBuilder(Generic[T]):
             json_schema=self.schema,
             max_output_tokens=self.max_output_tokens,
             temperature=0.0,
+            think=False,  # every task here wants a short structured answer, not a reasoning trace
         )
 
     def repair(self, request: LLMRequest, problem: str) -> LLMRequest:
@@ -115,6 +116,7 @@ class PromptBuilder(Generic[T]):
             json_schema=request.json_schema,
             max_output_tokens=request.max_output_tokens,
             temperature=request.temperature,
+            think=request.think,
         )
 
 

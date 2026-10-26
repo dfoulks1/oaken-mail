@@ -462,6 +462,10 @@ class LLMRequest:
     json_schema: dict[str, Any] | None = None
     max_output_tokens: int | None = None
     temperature: float = 0.0
+    # False asks a backend whose model can reason to answer without it (a task wants a short JSON
+    # answer, and reasoning costs time and output budget). None leaves it to the backend. A backend
+    # that cannot reason, or does not support the switch, skips it.
+    think: bool | None = None
 
 
 @dataclass(frozen=True)

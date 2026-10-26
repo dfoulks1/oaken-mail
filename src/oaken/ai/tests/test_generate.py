@@ -177,3 +177,9 @@ async def test_a_backend_that_does_not_say_where_it_runs_counts_as_remote(rig: R
 
 def test_safe_output_is_the_base_of_every_task() -> None:
     assert issubclass(Summary, SafeOutput) and SafeOutput().injection_suspected is False
+
+
+async def test_every_task_asks_for_no_reasoning(rig: Rig) -> None:
+    rig.llm.reply(GOOD)
+    await ask(rig)
+    assert rig.llm.requests[-1].think is False  # a short structured answer, not a reasoning trace
