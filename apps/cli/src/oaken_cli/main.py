@@ -453,9 +453,11 @@ def _register_system(
     """System, inspection and job verbs: pipeline, usage, plugins, accounts, audit, operations,
     reprocess, rebuild-index, ask, watch."""
     ask = sub.add_parser(
-        "ask", help="Answer a question from the mail, citing the messages.", parents=[g]
+        "ask",
+        help="Ask about your mail: a summary, what needs you, actions, or a cited answer.",
+        parents=[g],
     )
-    ask.add_argument("question", help="The question to answer.")
+    ask.add_argument("question", help="What you want to know or see, in plain words.")
     ask.add_argument(
         "--timeout",
         type=float,

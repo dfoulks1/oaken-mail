@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from oaken.ai.prompts import PromptBuilder, SafeOutput
 from oaken.core.untrusted import UntrustedText
-from oaken.plugins.contracts import EnrichInput, EnrichOutput
+from oaken.plugins.contracts import AskIntent, EnrichInput, EnrichOutput
 from oaken_enrichers._common import GatedConfig, LLMEnricher, bulk_reasons, digest, fit, labeled
 
 MAX_ITEMS = 20
@@ -115,6 +115,11 @@ class ActionsEnricher(LLMEnricher):
     skip_bulk = True
     config_model = GatedConfig
     prompt = ACTIONS
+    ask_intent = AskIntent(
+        "actions",
+        "The reader asks for tasks, to-dos, action items or deadlines in mail.",
+        ("action_items", "deadlines"),
+    )
     output_model = ActionsResult
 
     def needs_model(self, msg: EnrichInput) -> bool:

@@ -9,7 +9,7 @@ import base64
 import contextlib
 import dataclasses
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -27,6 +27,7 @@ from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import AnyOperation, operation
 from oaken.core.rawstore import header_block
 from oaken.core.search import HybridFilters
+from oaken.core.search import route as routing
 from oaken.index.query import DISPOSITIONS, parse_query
 from oaken.index.store import SORTS, SearchFilters
 from oaken.mail.parse import parse
@@ -317,6 +318,7 @@ async def search(ctx: OpContext, inp: SearchInput) -> SearchOutput:
 class AskInput(MessageFilter):
     question: str = Field(max_length=2000)
     thread_key: str | None = None
+    limit: int = Field(default=10, ge=1, le=50, description="Most messages a listing returns.")
     raw: bool = Field(
         default=False,
         description="Skip the model: return the matching messages and their stored enrichments "
@@ -342,7 +344,21 @@ class EnrichedMessage(BaseModel):
     enrichments: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
+class RoutedMessage(BaseModel):
+    """A message an ``ask`` listing found, with the stored enrichment it was asked about."""
+
+    message_id: str
+    subject: str = ""
+    sender: str = ""
+    date: datetime | None = None
+    view: dict[str, Any] = Field(default_factory=dict)  # the fields of the stored result to show
+    not_enriched: bool = False  # nothing stored for this enricher yet
+
+
 class AskOutput(BaseModel):
+    intent: str = "qa"  # what the question was read as
+    interpreted: str = ""  # one plain sentence saying how it was read
+    results: list[RoutedMessage] = Field(default_factory=list)
     answer: str
     message_ids: list[str] = Field(default_factory=list)
     citations: list[CitationInfo] = Field(default_factory=list)
@@ -398,8 +414,19 @@ async def ask(ctx: OpContext, inp: AskInput) -> AskOutput:
             warnings=list(found.warnings),
             evidence=gathered,
         )
+    enrichers = ctx.svc.pipeline.backends.enrichers() if ctx.svc.pipeline is not None else {}
+    menu = routing.catalog(enrichers)
+    picked = (
+        await routing.route(ctx.svc.llm, inp.question, menu)
+        if ctx.svc.llm is not None
+        else routing.rule_route(inp.question, menu)
+    )
+    if picked.intent != "qa":
+        return await _routed(ctx, inp, picked, routing.sources(enrichers))
     result = await retrieval.ask(inp.question, filters)
     return AskOutput(
+        intent="qa",
+        interpreted="read as: a factual question, answered from the mail with quotes",
         answer=result.answer,
         message_ids=list(result.references),
         citations=[

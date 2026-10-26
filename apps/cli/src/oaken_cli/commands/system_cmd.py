@@ -419,6 +419,18 @@ async def _ask(client: ApiClient, args: argparse.Namespace) -> int:
     def text() -> None:
         from oaken_cli.output import print_text
 
+        if out.get("interpreted"):
+            print_text(f"({out['interpreted']})")
+        for r in out.get("results", []) or []:
+            print_text(
+                f"\n{str(r.get('date') or '')[:10]}  {r.get('sender', '')}: {r.get('subject', '')}"
+                f"  [{r.get('message_id', '')}]"
+            )
+            if r.get("not_enriched"):
+                print_text("    (not enriched yet)")
+            for key, value in (r.get("view") or {}).items():
+                shown = ", ".join(map(str, value)) if isinstance(value, list) else value
+                print_text(f"    {key}: {shown}")
         print_text(out.get("answer", ""))
         if out.get("insufficient_evidence"):
             print_text("(not enough in the mail to answer this)")

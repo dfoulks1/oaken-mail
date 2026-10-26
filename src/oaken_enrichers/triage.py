@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from oaken.ai.prompts import PromptBuilder, SafeOutput
 from oaken.core.untrusted import UntrustedText
-from oaken.plugins.contracts import EnrichInput, EnrichOutput
+from oaken.plugins.contracts import AskIntent, EnrichInput, EnrichOutput
 from oaken_enrichers._common import LLMEnricher, digest, fit, header_values, labeled
 
 Category = Literal[
@@ -113,6 +113,11 @@ class TriageEnricher(LLMEnricher):
     version = "1"
     output_model = TriageResult
     prompt = TRIAGE
+    ask_intent = AskIntent(
+        "triage",
+        "The reader asks what is important, urgent or needs attention or a reply.",
+        ("category", "priority", "needs_reply", "reason"),
+    )
 
     def needs_model(self, msg: EnrichInput) -> bool:
         return settled(msg) is None

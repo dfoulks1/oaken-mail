@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from oaken.ai.prompts import PromptBuilder, SafeOutput
 from oaken.core.untrusted import UntrustedText
-from oaken.plugins.contracts import EnrichInput, EnrichOutput
+from oaken.plugins.contracts import AskIntent, EnrichInput, EnrichOutput
 from oaken_enrichers._common import GatedConfig, LLMEnricher, bulk_reasons, digest, fit, labeled
 
 MAX_POINTS = 5
@@ -64,6 +64,9 @@ class SummaryEnricher(LLMEnricher):
     skip_bulk = True
     config_model = GatedConfig
     prompt = SUMMARY
+    ask_intent = AskIntent(
+        "summary", "The reader wants a summary or the gist of messages.", ("summary", "key_points")
+    )
     output_model = SummaryResult
 
     def needs_model(self, msg: EnrichInput) -> bool:

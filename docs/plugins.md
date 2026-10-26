@@ -195,6 +195,28 @@ lint test fails a module that builds a request any other way. The first-party en
 off with `[plugins.<name>] enabled = false`; `summary` and `actions` skip bulk mail unless you set
 `skip_bulk = false`.
 
+### Teaching `ask` what an enricher knows
+
+An enricher can declare an `ask_intent`, so a person's question like "any deadlines this week?" or
+"how upbeat was that thread?" is understood and answered from what the enricher has stored:
+
+```python
+from oaken.plugins.base import BaseEnricher
+from oaken.plugins.contracts import AskIntent
+
+
+class Sentiment(BaseEnricher):
+    ask_intent = AskIntent(
+        "sentiment",  # the name the router may choose: lowercase letters and _
+        "The reader asks how upbeat or upset a message is.",  # one plain sentence, 120 characters
+        ("score",),  # the keys of your stored result worth showing; empty means all of it
+    )
+```
+
+The description is written into the router's prompt, so keep it plain and about what a person would
+say. It is checked when your class is defined (a bad name or a long description is an error naming
+the field). It must never contain mail text.
+
 ## A cache
 
 The cache holds validated model answers. Core hands it the facts of a question and the cache builds

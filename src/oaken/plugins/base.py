@@ -27,6 +27,7 @@ from oaken.plugins.authorize import Authorizations
 from oaken.plugins.contracts import (
     CAPABILITIES,
     PLUGIN_API_VERSION,
+    AskIntent,
     CacheEntry,
     CacheStats,
     EnrichInput,
@@ -341,6 +342,9 @@ class BaseEnricher(_Base):
     version: ClassVar[str] = "1"
     needs_llm: bool = False
     output_model: ClassVar[type[BaseModel] | None] = None
+    # What this enricher lets ``ask`` understand. Declared, the router can choose it by name and
+    # show this enricher's stored result for the messages the question is about.
+    ask_intent: ClassVar[AskIntent | None] = None
 
     @property
     def output_schema(self) -> dict[str, Any]:

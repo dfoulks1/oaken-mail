@@ -82,6 +82,7 @@
     ],
     "BaseEnricher": [
       "api_version",
+      "ask_intent",
       "config",
       "config_example",
       "config_model",

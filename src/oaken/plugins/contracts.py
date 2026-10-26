@@ -10,6 +10,7 @@ Core is lenient in what it receives from plugins (see ``oaken.plugins.adapt``: d
 tuples are accepted and coerced into these types) and strict about what it hands on.
 """
 
+import re
 from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -524,6 +525,30 @@ class EnrichInput:
     date: datetime | None = None
     is_reply: bool = False
     parent_summary: UntrustedText | None = None
+
+
+_INTENT_NAME = re.compile(r"^[a-z][a-z_]{0,31}$")
+
+
+@dataclass(frozen=True)
+class AskIntent:
+    """What an enricher lets ``ask`` understand: ``name`` is the intent a router may choose,
+    ``description`` says in one plain sentence what a person asking for it wants, and ``fields``
+    are the keys of the stored result worth showing (empty: all of it). It is written in the
+    enricher's code, never taken from mail, and is checked when the class is defined."""
+
+    name: str
+    description: str
+    fields: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not _INTENT_NAME.match(self.name):
+            raise ValueError(f"ask intent name {self.name!r}: 1 to 32 lowercase letters and _")
+        text = self.description
+        if not text.strip() or len(text) > 120 or "\n" in text or "<<<" in text:
+            raise ValueError(
+                "ask intent description: one plain sentence of at most 120 characters, no line breaks"
+            )
 
 
 @dataclass(frozen=True)

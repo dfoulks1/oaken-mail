@@ -18,7 +18,13 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from oaken.plugins.base import BaseEnricher
-from oaken.plugins.contracts import EnrichAttachment, EnrichInput, EnrichOutput, PluginContext
+from oaken.plugins.contracts import (
+    AskIntent,
+    EnrichAttachment,
+    EnrichInput,
+    EnrichOutput,
+    PluginContext,
+)
 from oaken_enrichers._common import bulk_reasons, header_values
 
 LONG_PATH_HOPS = 8
@@ -181,6 +187,11 @@ class InspectorEnricher(BaseEnricher):
     version = "1"
     needs_llm = False
     output_model = InspectorResult
+    ask_intent = AskIntent(
+        "inspector",
+        "The reader asks whether mail is authentic, spam or suspicious.",
+        ("warnings", "authentication", "spam_headers"),
+    )
 
     async def start(self, ctx: PluginContext) -> None:
         await super().start(ctx)

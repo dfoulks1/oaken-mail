@@ -68,6 +68,27 @@ user-initiated operation.
 
 ## Ask
 
+### What an `ask` is asking for
+
+`ask` first works out the intent. A small model reads only the question, never any mail, and picks
+from a menu: `find` (show messages), `qa` (a factual question, below) and one intent for each
+installed enricher that declares one, so out of the box `summary`, `triage` (what needs me, most
+important first), `actions` (to-dos and deadlines) and `inspector` (is this suspicious). It also
+picks a sender, a period in days and unread-only when the question names them, and core does the
+dates and the lookups. The result begins with how it was read ("read as: ..."), and a message
+with no stored result for that enricher is listed as `not enriched` rather than dropped.
+
+The menu is built from the enrichers that are running, so a new enricher teaches `ask` a new skill
+with no core change (see [Plugins](../plugins.html)). The model's system prompt is a fixed template
+plus that menu, which is plugin code checked when it loads, so mail text never reaches it. If the
+model is missing or wrong, plain words decide: "summarize", "urgent", "to-do", "spam" pick an
+intent, a question picks `qa`, and anything else is a listing. Routing never fails an `ask`.
+
+`find` and the enricher intents search every account and make no model call to answer. Only `qa`
+asks the model about mail, one account at a time.
+
+### Cited answers (`qa`)
+
 `ask(question, filters)` retrieves, builds a context, and asks the model to answer in **claims**.
 Each claim has the excerpt it rests on and the exact words it quotes.
 
