@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, field_validator
 from oaken.ai.prompts import PromptBuilder, SafeOutput
 from oaken.core.untrusted import UntrustedText
 from oaken.plugins.contracts import EnrichInput, EnrichOutput
-from oaken_enrichers._common import LLMEnricher, bulk_reasons, digest, fit, labeled
+from oaken_enrichers._common import GatedConfig, LLMEnricher, bulk_reasons, digest, fit, labeled
 
 MAX_ITEMS = 20
 MIN_QUOTE = 4
@@ -113,6 +113,8 @@ def verbatim(quote: str, sent: str, full: str) -> tuple[str, int, int] | None:
 class ActionsEnricher(LLMEnricher):
     version = "1"
     skip_bulk = True
+    config_model = GatedConfig
+    prompt = ACTIONS
     output_model = ActionsResult
 
     async def enrich(self, msg: EnrichInput) -> EnrichOutput:

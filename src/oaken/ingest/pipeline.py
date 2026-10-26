@@ -69,6 +69,8 @@ EMBED = "ingest.embed"
 ENRICH = "ingest.enrich"
 REPROCESS = "ingest.reprocess"
 STAGE_KINDS = (PARSE, EMBED, ENRICH, REPROCESS)
+GATE = "triage"  # its priority can gate the others (``[plugins.<name>] min_priority``)
+CUT = "\n[... the middle of this message was cut to fit the size limit ...]\n"
 
 Stage = Literal["parse", "filter", "embed", "enrich"]
 STAGES: tuple[Stage, ...] = ("parse", "filter", "embed", "enrich")
@@ -113,6 +115,7 @@ class EmbedResult:
 class EnrichResult:
     ran: int = 0
     cached: int = 0
+    gated: int = 0  # skipped because triage rated the message below the enricher's min_priority
 
 
 @dataclass(frozen=True)
@@ -389,7 +392,7 @@ class Pipeline:
     # -- ingest.enrich ----------------------------------------------------------------------
     async def _enrich_job(self, p: MessagePayload, _job: Job) -> StageJobResult:
         r = await self.enrich_message(MessageId(p.message_id))
-        return StageJobResult(done=r.ran, skipped=r.cached)
+        return StageJobResult(done=r.ran, skipped=r.cached + r.gated)
 
     async def enrich_message(
         self,
@@ -422,11 +425,19 @@ class Pipeline:
         llm = self.backends.llm()
         account = AccountId(doc["account_id"])
         msg_input: EnrichInput | None = None
-        for name, enricher in self.backends.enrichers().items():
+        # Triage runs first so its priority can gate the others (``min_priority``).
+        for name, enricher in sorted(
+            self.backends.enrichers().items(), key=lambda kv: kv[0] != GATE
+        ):
             if only is not None and name not in only:
                 continue
-            if self.settings.plugins.get(name, {}).get("enabled") is False:
+            table = self.settings.plugins.get(name, {})
+            if table.get("enabled") is False:
                 continue  # switched off with [plugins.<name>] enabled = false
+            bar = table.get("min_priority")
+            if name != GATE and isinstance(bar, int) and await self._rated_below(message_id, bar):
+                out.gated += 1
+                continue
             if enricher.needs_llm and llm is None:
                 raise PluginError(f"enricher {name} needs a language model, none is available")
             model = ""
@@ -476,6 +487,139 @@ class Pipeline:
                 )
         await self._run_plugin_stages(message_id, doc, account, force)
         return out
+
+    # -- enrichment by an external agent (the swarm, prompt 33) ------------------------------
+    async def _owed_to_agent(
+        self, message_id: MessageId, doc: sqlite3.Row, msg: EnrichInput
+    ) -> dict[str, Enricher]:
+        """The enrichers an agent could still supply for this message: model-backed, switched on,
+        able to say what they ask a model, needing one for this message, and not stored yet."""
+        owed: dict[str, Enricher] = {}
+        for name, enricher in self.backends.enrichers().items():
+            if not enricher.needs_llm or getattr(enricher, "prompt", None) is None:
+                continue
+            if self.settings.plugins.get(name, {}).get("enabled") is False:
+                continue
+            needs = getattr(enricher, "needs_model", None)
+            if needs is not None and not needs(msg):
+                continue
+            have = await self.raw.db.fetchone(
+                "SELECT 1 FROM enrichments WHERE message_id = ? AND enricher = ? AND version = ?"
+                " AND content_hash = ?",
+                (message_id, name, enricher.version, doc["content_hash"]),
+            )
+            if not have:
+                owed[name] = enricher
+        return owed
+
+    async def agent_offer(self, message_id: MessageId, max_chars: int) -> dict[str, Any] | None:
+        """What an agent is handed for an ``ingest.enrich`` job: the message, fenced as mail, and
+        for each enrichment still owed its instructions and answer schema. None when there is
+        nothing left for an agent: the message is skipped, or core could settle all of it.
+        What needs no model (the inspector, bulk mail, a header rule) runs here, in core."""
+        if await self._skip_ai(message_id):
+            return None
+        doc = await self.index.get_doc(message_id)
+        if doc is None:
+            return None
+        msg = await self._enrich_input(message_id, doc)
+        owed = await self._owed_to_agent(message_id, doc, msg)
+        native = {n for n in self.backends.enrichers() if n not in owed}
+        if native:
+            await self.enrich_message(message_id, only=native)
+        if not owed:
+            return None
+        body = msg.body.unwrap()
+        cut = len(body) > max_chars
+        if (
+            cut
+        ):  # keep the head and the tail: the start says who and what, the end says what is asked
+            body = body[: max_chars * 2 // 3] + CUT + body[len(body) - max_chars // 3 :]
+
+        def fenced(value: str, label: str) -> str:
+            return UntrustedText(value, label).render(label)
+
+        return {
+            "message_id": str(message_id),
+            "message": {
+                "subject": fenced(msg.subject.unwrap(), "subject"),
+                "from": fenced(msg.headers.get("from", UntrustedText("")).unwrap(), "from"),
+                "body": fenced(body, "body"),
+                "date": msg.date.isoformat() if msg.date else None,
+                "is_reply": msg.is_reply,
+                "parent_summary": fenced(msg.parent_summary.unwrap(), "parent_summary")
+                if msg.parent_summary
+                else None,
+                "attachments": [
+                    {"filename": a.filename.unwrap() if a.filename else None, "size": a.size}
+                    for a in msg.attachments
+                ],
+                "truncated": cut,
+            },
+            "owed": [
+                {
+                    "enricher": n,
+                    "version": e.version,
+                    "instructions": e.prompt.system,  # type: ignore[attr-defined]
+                    "schema": e.prompt.schema,  # type: ignore[attr-defined]
+                }
+                for n, e in owed.items()
+            ],
+            "answer": {"enrichments": {"<enricher>": "an object matching that enricher's schema"}},
+            "content_is_untrusted": True,
+        }
+
+    async def agent_accept(
+        self, message_id: MessageId, answers: Mapping[str, Any], label: str
+    ) -> tuple[int, int]:
+        """Store what an agent supplied. Every answer is checked against its enricher's output
+        model first; one bad answer stores nothing and raises ``InvalidResult`` naming it.
+        Returns ``(stored, still owed)``."""
+        doc = await self.index.get_doc(message_id)
+        if doc is None:
+            raise InvalidResult("that message is no longer indexed")
+        owed = await self._owed_to_agent(message_id, doc, await self._enrich_input(message_id, doc))
+        checked: dict[str, str] = {}
+        for name, data in answers.items():
+            if name not in owed:
+                raise InvalidResult(
+                    f"enricher {name!r} is not owed for this message (owed: {sorted(owed) or 'none'})"
+                )
+            try:
+                result = to_enrich_output(
+                    data, f"enricher {name}", getattr(owed[name], "output_model", None)
+                )
+            except PluginError as exc:
+                raise InvalidResult(f"{name}: {exc}") from exc
+            checked[name] = json.dumps(result.data, sort_keys=True)
+        account = AccountId(doc["account_id"])
+        model = f"agent:{label or 'agent'}"
+        tokens = self.tokenizer.count(doc["cleaned_text"])
+        for name, data in checked.items():
+            await self._store_enrichment(
+                message_id, (doc["content_hash"], name, owed[name].version, model), data
+            )
+            await self.usage.record(
+                "enrich", model, tokens_in=tokens, tokens_out=self.tokenizer.count(data),
+                account_id=account, message_id=message_id,
+            )  # fmt: skip
+            if self.bus:
+                await self.bus.publish(
+                    MessageEnriched(
+                        ts=self.clock.now(),
+                        account_id=account,
+                        message_id=message_id,
+                        enricher=name,
+                    )
+                )
+        return len(checked), len(owed) - len(checked)
+
+    async def _rated_below(self, message_id: MessageId, bar: int) -> bool:
+        """True when triage has rated this message under ``bar``. With no triage result (it is off,
+        or has not run) nothing is gated: an enricher is never skipped on a guess."""
+        triage = await self.enrichment(message_id, GATE)
+        priority = triage.get("priority") if triage else None
+        return isinstance(priority, int) and priority < bar
 
     async def _run_plugin_stages(
         self, message_id: MessageId, doc: sqlite3.Row, account: AccountId, force: bool

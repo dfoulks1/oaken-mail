@@ -57,11 +57,29 @@ class EnricherConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # None: use the enricher class's own ``skip_bulk`` default. A value overrides it.
-    skip_bulk: bool | None = None
-    # None: use the backend's default model. A value runs this enricher on that model, if the
-    # backend has it (checked against available_models(); an unknown name warns and falls back).
-    model: str | None = None
+    skip_bulk: bool | None = Field(
+        default=None,
+        description="Skip bulk/automated mail (newsletters, notifications) for this enricher, to "
+        "save model calls. Leave unset to use the enricher's own default.",
+    )
+    model: str | None = Field(
+        default=None,
+        description="Which installed model this enricher runs on. Leave as the backend default "
+        "unless you want this one enricher on a different model.",
+    )
+
+
+class GatedConfig(EnricherConfig):
+    """For enrichers that triage's priority can gate (summary, actions)."""
+
+    min_priority: int | None = Field(
+        default=None,
+        ge=0,
+        le=3,
+        description="Skip mail that triage rated below this (0 ignore, 1 low, 2 normal, 3 soon) "
+        "to save model calls. Leave unset to run on everything. Needs the triage enricher on; "
+        "mail triage has not rated yet is never skipped.",
+    )
 
 
 class LLMEnricher(BaseEnricher):

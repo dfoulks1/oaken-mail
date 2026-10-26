@@ -115,7 +115,9 @@ refreshes only that enricher's rows.
 The model-backed ones cut a long message to `ai.enrich_max_input_tokens` by keeping its head and
 tail with a marker between, and say `truncated`. `summary` and `actions` do not ask a model about
 bulk or automated mail (`skip_bulk`, on by default): nobody wrote it to the reader, and it is the
-largest saving there is. Every model call goes through `generate_cached`, so mail is only ever
+largest saving there is. `triage` runs first on every message, and `[plugins.summary] min_priority`
+or `[plugins.actions] min_priority` (0 ignore, 1 low, 2 normal, 3 soon) skips a message triage
+rated below that number. With no triage result, or no bar set, nothing is skipped. Every model call goes through `generate_cached`, so mail is only ever
 fenced `UntrustedText`, answers are validated against a schema, and a rerun is a cache hit.
 Enrichment never marks a message read.
 
@@ -161,6 +163,7 @@ store can sit behind it later.
 | `ai.enrich_max_input_tokens` | 3000 | Most tokens of one message an LLM enricher is sent |
 | `plugins.<enricher>.enabled` | true | `false` skips that enricher |
 | `plugins.summary.skip_bulk` / `plugins.actions.skip_bulk` | true | Do not ask a model about bulk mail |
+| `plugins.summary.min_priority` / `plugins.actions.min_priority` | unset | Skip mail triage rated below this (0 to 3) |
 | `ingest.throughput_window_seconds` | 600 | Window for the embedding speed shown in status |
 | `mail.attachments.quarantine` | true | Write flagged attachments to the quarantine folder |
 | `mail.attachments.quarantine_dir` | `quarantine` | Folder, relative to the data folder |

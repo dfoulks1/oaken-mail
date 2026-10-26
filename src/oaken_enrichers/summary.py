@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 from oaken.ai.prompts import PromptBuilder, SafeOutput
 from oaken.core.untrusted import UntrustedText
 from oaken.plugins.contracts import EnrichInput, EnrichOutput
-from oaken_enrichers._common import LLMEnricher, bulk_reasons, digest, fit, labeled
+from oaken_enrichers._common import GatedConfig, LLMEnricher, bulk_reasons, digest, fit, labeled
 
 MAX_POINTS = 5
 
@@ -62,6 +62,8 @@ SUMMARY = PromptBuilder(
 class SummaryEnricher(LLMEnricher):
     version = "1"
     skip_bulk = True
+    config_model = GatedConfig
+    prompt = SUMMARY
     output_model = SummaryResult
 
     async def enrich(self, msg: EnrichInput) -> EnrichOutput:
