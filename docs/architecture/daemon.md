@@ -105,7 +105,7 @@ The registry has a caller class, which decides whether a person's `confirm` is a
 [operations](operations.md)). Over HTTP:
 
 - a request is `cli` unless it says otherwise;
-- `X-Oaken-Client: ui` is a browser UI, the same privileges;
+- `X-Oaken-Client: ui` is an interactive UI client, the same privileges;
 - `X-Oaken-Client: mcp` makes the request an agent's: it cannot confirm by saying so, only with the
   token from its own proposal, and operations closed to MCP are hidden and refused;
 - anything else, including `internal`, is a 400. A header can lower privilege and never raise it.

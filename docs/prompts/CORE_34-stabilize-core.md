@@ -102,7 +102,7 @@ only the bookkeeping is declared instead of duplicated.
 | New **job kind** | **No** | Only core subsystems call `JobRunner.register` (`core/jobs.py:692`); no plugin reaches the runner | A `job_handlers()` method on a plugin, collected by the host and registered by a `JobsUnit` at start |
 | New **scheduled task** | **No** | The `Scheduler` is fed only by `SyncService`; schedules are per-account sync rows | A `scheduled_tasks()` plugin method the scheduler seeds, or a core API to register a recurring job kind |
 | Plugin-contributed **CLI verb** | **No bespoke verb**, but reachable | The CLI has a generic `oaken operation <name>` fallback over the registry, so a plugin op *is* callable; there is no custom-named subcommand | Out of scope for core; a client concern (ADR 0006). Document the generic path |
-| Plugin-contributed **UI page** | **No** | `ui-contract.json` is fixed; the UI calls named operations | Out of scope for core; a UI concern |
+| Plugin-contributed **UI page** | **No** | the UI calls named operations | Out of scope for core; a UI concern |
 | New **config section** (typed, core-style) | **No** | `Settings` is frozen, `extra="forbid"` (`settings.py`); a plugin gets only the free-form `[plugins.<name>]` dict. `host.config_schema()` reads `config_model` but nothing validates against it at load | Step 4 below |
 
 ### 4. Settings — can a plugin/subsystem declare and validate its own section?

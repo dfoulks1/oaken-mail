@@ -219,7 +219,7 @@ are never logged, because a URL can hold a search.</p>
 <a href="operations.html">operations</a>). Over HTTP:</p>
 <ul>
 <li>a request is <code>cli</code> unless it says otherwise;</li>
-<li><code>X-Oaken-Client: ui</code> is a browser UI, the same privileges;</li>
+<li><code>X-Oaken-Client: ui</code> is an interactive UI client, the same privileges;</li>
 <li><code>X-Oaken-Client: mcp</code> makes the request an agent's: it cannot confirm by saying so, only with the
 token from its own proposal, and operations closed to MCP are hidden and refused;</li>
 <li>anything else, including <code>internal</code>, is a 400. A header can lower privilege and never raise it.</li>

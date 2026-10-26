@@ -48,7 +48,7 @@ Python case only.
 ### Deferred decision: off-host access (what a mobile UI forces)
 
 Core binds loopback only, and configuration cannot ask for another address (ADR 0005). A **desktop**
-UI runs on the same machine, so loopback is enough, exactly as a browser UI would assume. A **mobile** UI
+UI runs on the same machine, so loopback is enough, exactly as a local UI would assume. A **mobile** UI
 runs on a different device and **cannot reach `127.0.0.1`** on the user's machine — so the first
 real mobile UI forces an **authenticated, networked, off-host surface**, which ADR 0005's
 loopback-only guarantee forbids today.
