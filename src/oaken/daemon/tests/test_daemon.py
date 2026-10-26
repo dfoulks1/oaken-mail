@@ -18,7 +18,7 @@ from oaken.api.runtime import RuntimeFile, read_runtime
 from oaken.core import paths
 from oaken.core.clock import SystemClock
 from oaken.core.errors import Conflict
-from oaken.core.settings import Settings
+from oaken.core.settings import APISettings, Settings
 from oaken.daemon import Core, detach, serve, status, stop
 from oaken.daemon.tests.conftest import PYTHON, child_env
 
@@ -47,6 +47,11 @@ def token_of(home: Path) -> str:
     return (home / "config" / "api_token").read_text().strip()
 
 
+def free_port() -> Settings:
+    """The default port is fixed, so a test never uses it (a real daemon may hold it)."""
+    return Settings(api=APISettings(port=0))
+
+
 async def test_a_failure_during_open_surfaces_the_real_error_not_a_teardown_crash(
     home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -62,7 +67,7 @@ async def test_a_failure_during_open_surfaces_the_real_error_not_a_teardown_cras
 
     monkeypatch.setattr(core_mod, "migrate", boom)
     runtime = paths.runtime_file()
-    core = Core(Settings())
+    core = Core(free_port())
     with pytest.raises(StorageError, match="database is locked"):
         await serve(core, RuntimeFile(runtime, SystemClock(), "t"), handle_signals=False)
     # the half-built core never assigned a server, and stop() tolerated that
@@ -73,7 +78,7 @@ async def test_a_failure_during_open_surfaces_the_real_error_not_a_teardown_cras
 
 async def test_stop_is_idempotent_and_safe_before_open(home: Path) -> None:
     # stop() on a never-opened core must be a no-op, and calling it twice must not raise.
-    core = Core(Settings())
+    core = Core(free_port())
     await core.stop()
     await core.stop()
     assert core._started == [] and core._open is False
@@ -81,7 +86,7 @@ async def test_stop_is_idempotent_and_safe_before_open(home: Path) -> None:
 
 async def test_a_real_socket_serves_the_api_and_a_stop_leaves_nothing_behind(home: Path) -> None:
     runtime = paths.runtime_file()
-    core = Core(Settings())
+    core = Core(free_port())
     stopper, ready = asyncio.Event(), asyncio.Event()
     task = asyncio.create_task(
         serve(
@@ -121,7 +126,7 @@ async def test_a_real_socket_serves_the_api_and_a_stop_leaves_nothing_behind(hom
 
 async def test_a_second_core_is_refused_and_leaves_the_first_alone(home: Path) -> None:
     runtime = paths.runtime_file()
-    first = Core(Settings())
+    first = Core(free_port())
     stopper, ready = asyncio.Event(), asyncio.Event()
     task = asyncio.create_task(
         serve(first, RuntimeFile(runtime, SystemClock(), "t"), stop=stopper, ready=ready,
@@ -133,7 +138,7 @@ async def test_a_second_core_is_refused_and_leaves_the_first_alone(home: Path) -
     runtime.write_text(json.dumps({**(before or {}), "pid": os.getppid()}))
     with pytest.raises(Conflict):
         await serve(
-            Core(Settings()), RuntimeFile(runtime, SystemClock(), "t"), handle_signals=False
+            Core(free_port()), RuntimeFile(runtime, SystemClock(), "t"), handle_signals=False
         )
     assert read_runtime(runtime) is not None, "the refused start did not remove the file"
     runtime.write_text(json.dumps({**(before or {})}))
@@ -147,7 +152,7 @@ async def test_a_stale_runtime_file_is_replaced_by_a_start(home: Path) -> None:
     assert status(runtime) is None
     stopper, ready = asyncio.Event(), asyncio.Event()
     task = asyncio.create_task(
-        serve(Core(Settings()), RuntimeFile(runtime, SystemClock(), "t"), stop=stopper,
+        serve(Core(free_port()), RuntimeFile(runtime, SystemClock(), "t"), stop=stopper,
               ready=ready, handle_signals=False)
     )  # fmt: skip
     await asyncio.wait_for(ready.wait(), 30)

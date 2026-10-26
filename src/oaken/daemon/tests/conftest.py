@@ -17,6 +17,8 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
         if name.startswith("OAKEN_") and name != "OAKEN_HOME":
             monkeypatch.delenv(name)
     monkeypatch.setenv("OAKEN_STATE_DIR", str(tmp_path / "state"))  # the last-known-home pointer
+    # The default port is fixed; a test must never bind it (a real daemon may hold it).
+    monkeypatch.setenv("OAKEN_API__PORT", "0")
     yield root
 
 
