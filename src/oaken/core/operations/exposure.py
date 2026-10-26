@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from oaken.core.actors import Actor
 from oaken.core.clock import Clock, fmt_ts
 from oaken.core.db import Database
-from oaken.core.operations.registry import AnyOperation
+from oaken.core.operations.registry import AnyOperation, OperationRegistry
 from oaken.readstate.audit import AuditLog, new_audit_id
 
 OP, PLUGIN = "op", "plugin"

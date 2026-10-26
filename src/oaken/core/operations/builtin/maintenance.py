@@ -156,9 +156,9 @@ class ResetUsageOutput(BaseModel):
 
 @operation(
     "reset_usage",
-    "Clear the token-usage record (the figures the stats page shows). Model calls and the context "
-    "savings both go; mail, the index and the enrichment cache are untouched. The accounting starts "
-    "fresh from the next call.",
+    "Clear the token-usage record (the figures the stats page shows). Model calls and the "
+    "context savings both go; mail, the index and the enrichment cache are untouched. The "
+    "accounting starts fresh from the next call.",
     permission="mutate",
     input=Empty,
     output=ResetUsageOutput,

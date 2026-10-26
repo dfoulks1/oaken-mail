@@ -44,8 +44,8 @@ def _ok_schema(op: dict[str, Any], doc: dict[str, Any]) -> dict[str, Any] | None
 
 
 INTRO = """\
-The local API core serves on `127.0.0.1`. The CLI and other local clients use it, and the OpenAPI document
-this page is built from is served at `GET /v1/openapi.json`.
+The local API core serves on `127.0.0.1`. The CLI and other local clients use it, and the
+OpenAPI document this page is built from is served at `GET /v1/openapi.json`.
 [How it is kept safe](architecture/daemon.md).
 
 ## Reaching it

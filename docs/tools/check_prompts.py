@@ -102,7 +102,10 @@ def _index_status(prompts: Path, readme: str) -> list[str]:
     contributing = prompts.parents[1] / "CONTRIBUTING.md"
     if not contributing.is_file():
         return []
-    plain = lambda t: t.replace("**", "").strip()  # noqa: E731
+
+    def plain(t: str) -> str:
+        return t.replace("**", "").strip()
+
     table = {
         n: plain(st)
         for n, st in re.findall(r"^\| (\d+[a-z]?) \| [A-Za-z0-9_-]+ \| ([^|]+) \|",

@@ -578,9 +578,9 @@ def _mcp_allowed_menu(menu: list[tuple[str, str | None, bool]]) -> list[str]:
     lines = [
         "# [mcp.allowed]",
         "# Which operations MCP clients may call, from the file so Oaken runs headless.",
-        "# Key = an operation name, or a plugin name (all its operations). true allows, false denies.",
-        "# An operation's own line beats its plugin's line. Never-exposable operations are omitted.",
-        "# Each line shows the code default; uncomment to override. Regenerate with: oaken mcp scaffold",
+        "# Key = an operation name, or a plugin name (all its operations). true allows, false denies.",  # noqa: E501
+        "# An operation's own line beats its plugin's line. Never-exposable operations are omitted.",  # noqa: E501
+        "# Each line shows the code default; uncomment to override. Regenerate with: oaken mcp scaffold",  # noqa: E501
     ]
     plugins = sorted({p for _, p, _ in menu if p is not None})
     for plugin in plugins:

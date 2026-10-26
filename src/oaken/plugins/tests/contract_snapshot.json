@@ -351,6 +351,7 @@
       "generate_cached"
     ],
     "LLMBackend": [
+      "available_models",
       "context_window",
       "generate",
       "health",

@@ -40,7 +40,7 @@ async def test_skip_bulk_is_read_from_typed_config_and_defaults_to_the_class(rig
     # [plugins.<name>] skip_bulk = false overrides it, read through the typed self.config.
     enricher = await rig.start(SummaryEnricher(), config={"skip_bulk": False})
     assert enricher.config.skip_bulk is False and enricher.skips_bulk() is False
-    # the config_model surfaces as a JSON Schema the console can render (the CORE_23 pipe, now filled)
+    # the config_model surfaces as a JSON Schema the console can render (the CORE_23 pipe, filled)
     schema = SummaryEnricher.config_model.model_json_schema()
     assert "skip_bulk" in schema["properties"]
 

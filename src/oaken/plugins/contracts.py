@@ -485,6 +485,10 @@ class LLMBackend(Plugin, Protocol):
         (``model_id``). The response's ``model_id`` is the model that actually ran."""
         ...
 
+    async def available_models(self) -> list[str]:
+        """The model ids this backend can run right now, for a picker to offer."""
+        ...
+
 
 # -- Enricher ----------------------------------------------------------------------------------
 
