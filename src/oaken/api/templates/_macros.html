@@ -20,10 +20,10 @@
   </form>
 {%- endmacro %}
 
-{# A destructive button that asks first, with no script: a details element opens a small panel. #}
+{# A destructive button that asks first, with no script: a panel opens on hover or focus. #}
 {% macro confirm(action, back, label, question, yes, fields) -%}
-  <details class="menu">
-    <summary class="btn btn-danger btn-sm">{{ label }}</summary>
+  <div class="menu">
+    <button type="button" class="btn btn-danger btn-sm menu-btn" aria-haspopup="true">{{ label }}</button>
     <div class="confirm-pop">
       <p>{{ question }}</p>
       <form class="inline" method="post" action="/ui/{{ action }}">{{ guard(back) }}
@@ -31,7 +31,7 @@
         <button class="btn btn-danger btn-sm" type="submit">{{ yes }}</button>
       </form>
     </div>
-  </details>
+  </div>
 {%- endmacro %}
 
 {% macro icon(name) -%}<svg class="icon" aria-hidden="true"><use href="#i-{{ name }}"/></svg>{%- endmacro %}

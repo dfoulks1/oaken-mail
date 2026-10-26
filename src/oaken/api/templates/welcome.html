@@ -1,33 +1,28 @@
 {#- SPDX-License-Identifier: Apache-2.0 -#}
 {#- The home page. Version, paths and a status flag only: no mail content. -#}
 {% extends "_base.html" %}
-{% block title %}Welcome · Oaken Mail{% endblock %}
-{% block mast_class %} hero{% endblock %}
-{% block tagline %}<p class="tagline">Mail that stays yours. Local first, and quiet about it.</p>
-  <p class="row hero-actions">
-    <span class="badge badge-ok">Local server active</span><span class="badge badge-muted">v{{ version }}</span>
-  </p>{% endblock %}
+{% block title %}Oaken Mail{% endblock %}
+{% block header %}<header class="hd bare">{% include "_theme.html" %}</header>{% endblock %}
 {% block main %}
-<p class="row hero-actions">
-  <a class="btn btn-primary" href="/getting_started">Getting started</a>
-  <a class="btn" href="/stats">System status</a>
-  <a class="btn btn-ghost" href="{{ docs_url }}" target="_blank" rel="noopener">Documentation</a>
-</p>
-<h2 class="eyebrow">Where to go</h2>
-<div class="grid-2">
-  <a class="card tile-link" href="/getting_started"><div class="card-body"><h3>Getting started</h3><p class="muted">Walk the <code>config.toml</code> settings, top to bottom, and connect your first account.</p></div></a>
-  <a class="card tile-link" href="/stats"><div class="card-body"><h3>Status</h3><p class="muted">Queue, models, plugins, agents and the audit log. Counts and health only.</p></div></a>
-  <a class="card tile-link" href="/config"><div class="card-body"><h3>Configuration</h3><p class="muted">Edit <code>config.toml</code> here: test it, save with a backup, reload core in place.</p></div></a>
-  <a class="card tile-link" href="{{ docs_url }}" target="_blank" rel="noopener"><div class="card-body"><h3>Documentation</h3><p class="muted">API specs, the CLI, and the architecture, published online.</p></div></a>
-</div>
-<div class="card">
-  <div class="card-head"><span>Daemon environment</span><span class="badge badge-ok">OK</span></div>
-  <div class="table-wrap"><table class="table"><tbody>
-    <tr><td class="muted">Listen address</td><td class="mono right">127.0.0.1:{{ env.port if env.port else "—" }}</td></tr>
-    <tr><td class="muted">OAKEN_HOME</td><td class="mono right">{{ env.oaken_home if env.oaken_home else "(unset: platform defaults)" }}</td></tr>
-    <tr><td class="muted">Health endpoint</td><td class="mono right"><a href="/v1/health">/v1/health</a></td></tr>
-    <tr><td class="muted">Configuration file</td><td class="mono right"><a href="/config">{{ env.config_dir }}/config.toml</a></td></tr>
-    <tr><td class="muted">Data directory</td><td class="mono right">{{ env.data_dir }}</td></tr>
-  </tbody></table></div>
+<div class="home">
+  <div class="home-logo"><img src="/oaken-logo.png" width="196" height="128" alt=""></div>
+  <h1>Oaken<span>Mail</span></h1>
+  <p class="tagline">Your mail, kept close.</p>
+  <p class="state"><span class="dot"></span>All quiet. Oaken is running.</p>
+  <nav class="links" aria-label="Pages">
+    <a href="/stats">Status</a>
+    <a href="/getting_started">Getting started</a>
+    <a href="/jobs">Jobs</a>
+    <a href="{{ docs_url }}" target="_blank" rel="noopener">Docs ↗</a>
+  </nav>
+  <section class="env">
+    <h2>Daemon environment</h2>
+    <div><span>Version</span><code>{{ version }}</code></div>
+    <div><span>Listen address</span><code>127.0.0.1:{{ env.port if env.port else "—" }}</code></div>
+    <div><span>OAKEN_HOME</span><code>{{ env.oaken_home if env.oaken_home else "(unset: platform defaults)" }}</code></div>
+    <div><span>Config file</span><code><a href="/config">{{ env.config_dir }}/config.toml</a></code></div>
+    <div><span>Data directory</span><code>{{ env.data_dir }}</code></div>
+    <div><span>Health</span><code><a href="/v1/health">/v1/health</a></code></div>
+  </section>
 </div>
 {% endblock %}

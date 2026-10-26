@@ -1,13 +1,11 @@
 {#- SPDX-License-Identifier: Apache-2.0 -#}
 {#- The status page (ADR 0013, CORE_50). Context is StatsCollector.collect() plus the console's base.
     Counts and health only, never mail content. No script: tabs are radio inputs, menus are
-    <details>, dialogs are popovers, every action is a form. /refresh.js only updates live numbers. -#}
+    hover menus, dialogs are popovers, every action is a form. /refresh.js only updates live numbers. -#}
 {% extends "_base.html" %}
 {% import "_macros.html" as m with context %}
 {% block title %}Status · Oaken Mail{% endblock %}
 {% block body_attrs %} data-refresh="/stats.json" data-refresh-seconds="15"{% endblock %}
-{% block tagline %}<p class="tagline">Local mail, quietly kept. <span class="mono">{{ core.version }}</span>
-  {% if core.uptime_seconds is not none %}· up <span data-bind="core.uptime_minutes">{{ (core.uptime_seconds // 60) | int }}</span> min{% endif %}</p>{% endblock %}
 
 {% macro setting(plugin, field, spec, val, row) %}
   {% set kinds = (spec.anyOf | map(attribute="type") | list) if spec.anyOf else [spec.type] %}
@@ -45,11 +43,13 @@
 
 {% macro health(p) %}
   {%- if p.healthy %}<span class="badge badge-ok">healthy</span>
-  {%- elif p.started %}<span class="badge badge-danger">{{ p.detail or "unhealthy" }}</span>
-  {%- else %}<span class="badge badge-warn">{{ p.detail or "not started" }}</span>{% endif -%}
+  {%- elif p.started %}<span class="badge badge-danger" title="{{ p.detail }}">{{ p.detail or "unhealthy" }}</span>
+  {%- else %}<span class="badge badge-warn" title="{{ p.detail }}">{{ p.detail or "not started" }}</span>{% endif -%}
 {% endmacro %}
 
 {% block main %}
+<h1>Status</h1>
+<p class="muted small mono">{{ core.version }}{% if core.uptime_seconds is not none %} · up <span data-bind="core.uptime_minutes">{{ (core.uptime_seconds // 60) | int }}</span> min{% endif %}</p>
 <div class="tabset">
   {% for key, label in [("general","General"),("ingest","Ingest"),("ai","AI & Models"),("plugins","Plugins"),("audit","Audit log"),("ref","Reference")] %}
   <input type="radio" name="tab" id="t-{{ key }}" aria-label="{{ label }}"{% if tab == key %} checked{% endif %}>
@@ -188,14 +188,14 @@
             <td class="ok">{{ "{:,}".format(u.tokens_saved) }}</td>
             <td class="right">
               {% if c and c.kind != "ask" %}
-              <details class="menu">
-                <summary aria-label="Actions for {{ c.label }}">{{ m.icon("dots") }}</summary>
+              <div class="menu">
+                <button type="button" class="menu-btn" aria-haspopup="true" aria-label="Actions for {{ c.label }}">{{ m.icon("dots") }}</button>
                 <div class="menu-list">
                   {% if has_settings %}<button type="button" popovertarget="pm-{{ c.kind }}-{{ c.name }}" popovertargetaction="show">Edit plugin…</button>
                   {% else %}<button type="button" disabled title="This plugin declares no settings">Edit plugin…</button>{% endif %}
                   <form method="post" action="/ui/plugin">{{ m.guard("/stats?tab=ai") }}<input type="hidden" name="verb" value="reload"><input type="hidden" name="name" value="{{ c.name }}"><button type="submit">Reload plugin</button></form>
                 </div>
-              </details>
+              </div>
               {% endif %}
             </td>
           </tr>
