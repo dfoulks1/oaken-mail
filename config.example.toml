@@ -122,7 +122,7 @@
 # token is a file in the config dir (mode 0600). The console pages (/, /config, /jobs, /stats) carry no token and
 # are only ever served to this machine, even on a remote bind.
 # [api]
-# port = 0                     # 0 = pick a free port (a reload keeps it); set one to pin it
+# port = 62536                 # the default; 0 = pick a free port (a reload keeps it)
 # host = "127.0.0.1"           # an IP address. Anything but loopback needs allow_remote = true
 # allow_remote = false         # true: the token-protected API is reachable from other machines.
 #                              # The token travels in clear text: use an SSH tunnel or TLS proxy

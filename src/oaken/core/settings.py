@@ -390,6 +390,10 @@ class UISettings(_Section):
     mark_read_delay_ms: int = Field(default=2000, ge=0, le=600_000)
 
 
+# Spells OAKEN on a phone keypad, and is above Linux's ephemeral range (32768 to 60999).
+DEFAULT_PORT = 62536
+
+
 class APISettings(_Section):
     # The address the API listens on. Anything but loopback needs ``allow_remote = true``: the
     # console pages (/, /config, /jobs, /stats) stay for clients on this machine either way, and
@@ -419,7 +423,8 @@ class APISettings(_Section):
             )
         return self
 
-    port: int = Field(default=0, ge=0, le=65535)  # 0 = pick a free port
+    # A fixed default, so clients find core even without the runtime file. 0 still picks a free port.
+    port: int = Field(default=DEFAULT_PORT, ge=0, le=65535)
     # The MCP server (ADR 0004) mounts at ``/mcp`` on this listener when true. It has its own
     # token and its own limits, so a heavy MCP call cannot starve the general API.
     mcp: bool = False

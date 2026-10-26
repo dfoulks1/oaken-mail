@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from oaken.core import paths
 from oaken.core.errors import ConfigError
-from oaken.core.settings import CONFIG_FILE, Settings
+from oaken.core.settings import CONFIG_FILE, DEFAULT_PORT, Settings
 
 
 def write_config(text: str) -> None:
@@ -15,7 +15,7 @@ def write_config(text: str) -> None:
 
 def test_defaults() -> None:
     s = Settings.load()
-    assert s.api.host == "127.0.0.1" and s.api.port == 0
+    assert s.api.host == "127.0.0.1" and s.api.port == DEFAULT_PORT
     assert s.ai.embedder == "ollama" and s.log.format == "console"
 
 
@@ -36,7 +36,7 @@ def test_env_overrides_file(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_pure_constructor_ignores_file_and_env(monkeypatch: pytest.MonkeyPatch) -> None:
     write_config("[api]\nport = 8123\n")
     monkeypatch.setenv("OAKEN_API__PORT", "9000")
-    assert Settings().api.port == 0
+    assert Settings().api.port == DEFAULT_PORT
 
 
 def test_unknown_key_in_file_is_an_error() -> None:
@@ -99,7 +99,7 @@ def test_the_default_config_is_valid_and_changes_nothing() -> None:
     from oaken.core.settings import default_config_text
 
     text = default_config_text()
-    assert "# [api]" in text and "# port = 0" in text
+    assert "# [api]" in text and f"# port = {DEFAULT_PORT}" in text
     path = paths.config_dir() / "config.toml"
     path.write_text(text, encoding="utf-8")
     assert Settings.load() == Settings()  # all commented out: still the defaults

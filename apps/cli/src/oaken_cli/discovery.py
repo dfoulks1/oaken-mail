@@ -44,11 +44,13 @@ from __future__ import annotations
 
 import json
 import os
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
 from oaken.core import paths
+from oaken.core.settings import DEFAULT_PORT
 from oaken_cli.exits import CliError, CoreUnavailable, ExitCode
 
 RUNTIME_FILE = "runtime.json"
@@ -149,17 +151,35 @@ def discover(
         _require_loopback(url)
         return Endpoint(base_url=url.rstrip("/"), token=credential())
 
-    runtime = _read_runtime(runtime_path or _runtime_path())
-    pid = runtime.get("pid")
-    if not isinstance(pid, int) or not _pid_alive(pid):
-        raise CoreUnavailable("runtime file is stale (process not running)")
-    host = runtime.get("host", "127.0.0.1")
-    port = runtime.get("port")
-    if port == 0:
-        raise CoreUnavailable("core is still starting (no port yet)")
-    if host not in _LOOPBACK or not isinstance(port, int) or not (0 < port <= 65535):
-        raise CoreUnavailable("runtime file does not name a loopback host and port")
+    try:
+        runtime = _read_runtime(runtime_path or _runtime_path())
+        pid = runtime.get("pid")
+        if not isinstance(pid, int) or not _pid_alive(pid):
+            raise CoreUnavailable("runtime file is stale (process not running)")
+        host = runtime.get("host", "127.0.0.1")
+        port = runtime.get("port")
+        if port == 0:
+            raise CoreUnavailable("core is still starting (no port yet)")
+        if host not in _LOOPBACK or not isinstance(port, int) or not (0 < port <= 65535):
+            raise CoreUnavailable("runtime file does not name a loopback host and port")
+    except CoreUnavailable:
+        if _answers_on_default_port():  # no usable runtime file: core may still be on its default
+            return Endpoint(base_url=f"http://127.0.0.1:{DEFAULT_PORT}", token=credential())
+        raise
     return Endpoint(base_url=f"http://{host}:{port}", token=credential())
+
+
+def _answers_on_default_port() -> bool:
+    """Does something answer core's health check on the default loopback port? It is only a
+    guess (anything can answer), so it is tried after the runtime file and never before."""
+    try:
+        url = f"http://127.0.0.1:{DEFAULT_PORT}/v1/health"
+        with urllib.request.urlopen(url, timeout=1) as response:  # noqa: S310 (loopback http)
+            return bool(
+                response.status == 200 and json.loads(response.read(200)).get("status") == "ok"
+            )
+    except (OSError, ValueError):
+        return False
 
 
 def runtime_info(runtime_path: Path | None = None) -> dict[str, object] | None:
