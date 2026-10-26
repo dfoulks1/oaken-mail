@@ -59,11 +59,21 @@
 
   // --- plugins tab: the enable switch and the reload button ---
   var result = document.getElementById("plugin-result");
-  function say(kind, msg) {
-    if (!result) return;
-    result.className = "alert alert-" + kind + " mb-0 rounded-0 small";
-    result.textContent = msg;
+  // Status messages are fixed on screen (see the page style): a success fades after a few
+  // seconds, anything else stays until it is clicked, so none is lost off the scrolled page.
+  function toast(el, kind, msg) {
+    if (!el) return;
+    clearTimeout(el._hide);
+    el.className = "alert alert-" + kind + " small";
+    el.textContent = msg;
+    el.title = "Click to dismiss";
+    if (kind === "success") el._hide = setTimeout(function () { el.classList.add("d-none"); }, 7000);
   }
+  document.addEventListener("click", function (ev) {
+    var t = ev.target.closest && ev.target.closest('[id$="-result"].alert');
+    if (t) t.classList.add("d-none");
+  });
+  function say(kind, msg) { toast(result, kind, msg); }
   function badge(p) {
     var cls = p.healthy ? "text-bg-success" : p.started ? "text-bg-danger" : "badge-oaken-warn";
     var text = p.healthy ? "healthy" : (p.detail || (p.started ? "unhealthy" : "not started"));
@@ -130,10 +140,7 @@
 
   // --- AI & Models tab: clear usage stats, and revoke an agent (same idiom as the plugin tab) ---
   function aiSay(kind, msg) {
-    var el = document.getElementById("ai-result");
-    if (!el) return;
-    el.className = "alert alert-" + kind + " mb-3 rounded small";
-    el.textContent = msg;
+    toast(document.getElementById("ai-result"), kind, msg);
   }
   function post(path, body) {
     return fetch(path, {
@@ -167,55 +174,149 @@
     }
   });
 
-  // --- AI & Models tab: enricher config forms and the model picker (reuse post/aiSay) ---
+  // --- AI & Models tab: model dropdowns, the three-dot menu and the plugin settings dialog ---
+  // Bootstrap's own script is not loaded (scripts stay same-origin), so the menu and the dialog are
+  // plain DOM: keyboard reachable, Escape closes, focus returns to where it came from.
   function fieldValue(el) {
     var t = el.getAttribute("data-field-type");
     if (t === "boolean") return el.checked;
     if (t === "number") return el.value === "" ? null : Number(el.value);
     return el.value;
   }
-  document.addEventListener("submit", function (ev) {
-    var enr = ev.target.closest && ev.target.closest("[data-enricher-save]");
-    if (enr) {
-      ev.preventDefault();
-      var name = enr.getAttribute("data-enricher-save");
-      var config = {};
-      enr.querySelectorAll("[data-field-type]").forEach(function (el) {
-        config[el.getAttribute("name")] = fieldValue(el);
-      });
-      aiSay("secondary", "saving " + name + "…");
-      post("/stats/enricher-config", { plugin: name, config: config }).then(function (res) {
-        if (!res.ok || (res.body && res.body.ok === false)) {
-          aiSay("danger", (res.body && (res.body.error || res.body.message)) || "could not save " + name);
-          return;
-        }
-        aiSay("success", name + " settings saved to config.toml; they apply on the next enrich job.");
-      }).catch(function () { aiSay("danger", "core did not answer"); });
+  function saveConfig(plugin, config) {
+    return post("/stats/enricher-config", { plugin: plugin, config: config });
+  }
+  function failed(res) { return !res.ok || (res.body && res.body.ok === false); }
+  function why(res, fallback) { return (res.body && (res.body.error || res.body.message)) || fallback; }
+
+  // A model dropdown saves on change: the backend's model also reloads it, an enricher's applies
+  // to its next job. A failure puts the choice back.
+  document.addEventListener("change", function (ev) {
+    var sel = ev.target.closest && ev.target.closest("[data-model-select]");
+    if (!sel) return;
+    var plugin = sel.getAttribute("data-plugin"), kind = sel.getAttribute("data-kind");
+    var prev = sel.getAttribute("data-prev") || "";
+    aiSay("secondary", "setting " + plugin + " model to " + (sel.value || "the backend default") + "…");
+    var request = kind === "llm_backend"
+      ? post("/stats/model", { plugin: plugin, model: sel.value })
+      : saveConfig(plugin, { model: sel.value });
+    request.then(function (res) {
+      if (failed(res)) { sel.value = prev; aiSay("danger", why(res, "could not set the model")); return; }
+      sel.setAttribute("data-prev", sel.value);
+      aiSay("success", kind === "llm_backend"
+        ? "model set to " + sel.value + "; core is reloading (watch /v1/health, the port may change)."
+        : plugin + " will use " + (sel.value || "the backend default") + " from its next job.");
+    }).catch(function () { sel.value = prev; aiSay("danger", "core did not answer"); });
+  });
+
+  // The three-dot menu.
+  var openMenu = null;
+  function closeMenu(returnFocus) {
+    if (!openMenu) return;
+    openMenu.menu.classList.remove("show");
+    openMenu.button.setAttribute("aria-expanded", "false");
+    if (returnFocus) openMenu.button.focus();
+    openMenu = null;
+  }
+  document.addEventListener("click", function (ev) {
+    var button = ev.target.closest && ev.target.closest("[data-kebab]");
+    if (button) {
+      var menu = button.nextElementSibling, wasOpen = openMenu && openMenu.button === button;
+      closeMenu(false);
+      if (!wasOpen) {
+        menu.classList.add("show");
+        button.setAttribute("aria-expanded", "true");
+        openMenu = { button: button, menu: menu };
+        var first = menu.querySelector("button:not([disabled])");
+        if (first) first.focus();
+      }
       return;
     }
-    var mdl = ev.target.closest && ev.target.closest("[data-model-save]");
-    if (mdl) {
-      ev.preventDefault();
-      var plugin = mdl.getAttribute("data-model-save");
-      var sel = mdl.querySelector("[name=model]");
-      var model = sel ? sel.value : "";
-      aiSay("secondary", "setting model to " + model + " and reloading…");
-      post("/stats/model", { plugin: plugin, model: model }).then(function (res) {
-        if (!res.ok || (res.body && res.body.ok === false)) {
-          aiSay("danger", (res.body && (res.body.error || res.body.message)) || "could not set the model");
-          return;
-        }
-        aiSay("success", "model set to " + model + "; core is reloading (watch /v1/health, the port may change).");
-      }).catch(function () { aiSay("danger", "core did not answer"); });
+    if (openMenu && !ev.target.closest(".dropdown-menu")) closeMenu(false);
+  });
+
+  // Reload a plugin from the menu (the same route as the Plugins tab).
+  document.addEventListener("click", function (ev) {
+    var btn = ev.target.closest && ev.target.closest("[data-reload-plugin]");
+    if (!btn) return;
+    var name = btn.getAttribute("data-reload-plugin");
+    closeMenu(true);
+    aiSay("secondary", "reloading " + name + "…");
+    post("/plugins/reload", { name: name }).then(function (res) {
+      var row = ((res.body && res.body.plugins) || []).filter(function (p) { return p.name === name; })[0] || {};
+      if (!res.ok) { aiSay("danger", (res.body && res.body.message) || "could not reload " + name); return; }
+      aiSay(row.healthy === false ? "warning" : "success",
+        "reloaded " + name + ": " + (row.detail || (row.healthy ? "healthy" : "done")));
+    }).catch(function () { aiSay("danger", "core did not answer"); });
+  });
+
+  // The settings dialog.
+  var modal = document.getElementById("plugin-modal");
+  var backdrop = document.getElementById("pm-backdrop");
+  var modalPlugin = null, modalOpener = null;
+  function closeModal() {
+    if (!modal || modal.hidden) return;
+    modal.hidden = true; backdrop.hidden = true;
+    modal.classList.remove("show", "d-block");
+    document.body.classList.remove("modal-open");
+    if (modalOpener) modalOpener.focus();
+    modalPlugin = null;
+  }
+  document.addEventListener("click", function (ev) {
+    var edit = ev.target.closest && ev.target.closest("[data-edit-plugin]");
+    if (edit && modal) {
+      var name = edit.getAttribute("data-edit-plugin"), kind = edit.getAttribute("data-kind");
+      var tpl = document.getElementById("pf-" + kind + "-" + name);
+      if (!tpl) return;
+      modalOpener = openMenu ? openMenu.button : edit;
+      closeMenu(false);
+      modalPlugin = name;
+      document.getElementById("pm-title").textContent = (edit.getAttribute("data-label") || name) + " settings";
+      var fields = document.getElementById("pm-fields");
+      fields.textContent = "";
+      fields.appendChild(tpl.content.cloneNode(true));
+      modal.hidden = false; backdrop.hidden = false;
+      modal.classList.add("show", "d-block");
+      document.body.classList.add("modal-open");
+      var first = fields.querySelector("input, select");
+      if (first) first.focus();
+      return;
     }
+    if (ev.target.closest && ev.target.closest("[data-pm-close]")) { closeModal(); return; }
+    if (modal && !modal.hidden && ev.target === modal) closeModal();  // a click on the dim area
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape") {
+      if (modal && !modal.hidden) { closeModal(); return; }
+      closeMenu(true);
+      return;
+    }
+    if (ev.key === "Tab" && modal && !modal.hidden) {  // keep Tab inside the dialog
+      var items = modal.querySelectorAll("input, select, button:not([disabled])");
+      if (!items.length) return;
+      var firstItem = items[0], lastItem = items[items.length - 1];
+      if (ev.shiftKey && document.activeElement === firstItem) { ev.preventDefault(); lastItem.focus(); }
+      else if (!ev.shiftKey && document.activeElement === lastItem) { ev.preventDefault(); firstItem.focus(); }
+    }
+  });
+  document.addEventListener("submit", function (ev) {
+    if (!ev.target.closest || !ev.target.closest("#pm-form")) return;
+    ev.preventDefault();
+    var plugin = modalPlugin, config = {};
+    document.querySelectorAll("#pm-fields [data-field-type]").forEach(function (el) {
+      config[el.getAttribute("name")] = fieldValue(el);
+    });
+    aiSay("secondary", "saving " + plugin + "…");
+    saveConfig(plugin, config).then(function (res) {
+      if (failed(res)) { aiSay("danger", why(res, "could not save " + plugin)); return; }
+      closeModal();
+      aiSay("success", plugin + " settings saved to config.toml. Reload the plugin (⋮ menu) to apply them.");
+    }).catch(function () { aiSay("danger", "core did not answer"); });
   });
 
   // --- Reference tab: the MCP exposure switch (same revert-on-failure idiom as the plugin switch) ---
   function exposeSay(kind, msg) {
-    var el = document.getElementById("expose-result");
-    if (!el) return;
-    el.className = "alert alert-" + kind + " mb-3 rounded small";
-    el.textContent = msg;
+    toast(document.getElementById("expose-result"), kind, msg);
   }
   document.addEventListener("change", function (ev) {
     var box = ev.target.closest && ev.target.closest("[data-op-switch]");

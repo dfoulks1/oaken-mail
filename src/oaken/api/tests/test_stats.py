@@ -144,3 +144,70 @@ async def test_the_workspace_picker_refuses_a_bad_list_and_an_unknown_workspace(
     assert bad.status_code == 422  # InvalidInput
     unknown = await rig.http.post("/stats/mcp-workspaces", json={"workspaces": ["nope"]})
     assert unknown.json()["ok"] is False  # check_settings: no workspace named 'nope'
+
+
+async def test_the_ai_tab_is_one_compact_table_with_a_menu_and_a_settings_dialog(rig: Rig) -> None:
+    body = (await rig.http.get("/stats")).text
+    # one table of usage with the model and its menu on the row, not a long form per enricher
+    assert 'id="usage-card"' in body and 'id="models-card"' not in body
+    assert "data-enricher-save" not in body
+    # the dialog says what to do after saving, and carries a Save button
+    assert 'id="plugin-modal"' in body and "Reload the plugin once saved" in body
+    assert 'type="submit" form="pm-form"' in body
+    # the usage and agents cards are unchanged
+    assert "Model &amp; token usage" in body and ">Agents<" in body  # the agents card is unchanged
+
+
+async def test_stats_json_lists_the_models_the_ai_tab_shows(rig: Rig) -> None:
+    models = (await rig.http.get("/stats.json")).json()["models"]
+    assert isinstance(models, list)
+    for row in models:
+        assert {"kind", "label", "name", "model", "choices", "config", "config_schema"} <= set(row)
+
+
+async def test_status_messages_are_fixed_and_the_page_loads_no_third_party_script(rig: Rig) -> None:
+    body = (await rig.http.get("/stats")).text
+    assert '[id$="-result"].alert:not(.d-none)' in body and "position: fixed" in body
+    assert "bootstrap.bundle" not in body  # the menu and dialog are plain script (same-origin only)
+    js = (await rig.http.get("/stats.js")).text
+    assert (
+        "data-model-select" in js and "data-reload-plugin" in js and "/stats/enricher-config" in js
+    )
+
+
+async def test_the_model_column_is_the_dropdown_on_the_usage_row(rig: Rig) -> None:
+    body = (await rig.http.get("/stats")).text
+    table = body.split("Model &amp; token usage")[1].split("Agents")[0]
+    assert "<th>Model</th>" in table and "<th>Stage</th>" in table  # one table: usage and model
+    assert (await rig.http.get("/stats.json")).json()["usage"] is not None
+
+
+def test_the_dropdown_and_menu_sit_on_the_first_row_of_each_component_and_none_is_lost() -> None:
+    from oaken.api.stats import StatsCollector
+
+    def comp(kind: str, name: str, label: str) -> dict[str, object]:
+        return {"kind": kind, "name": name, "label": label, "model": "m", "choices": ["m"],
+                "default": "", "config": {}, "config_schema": None, "enabled": True}  # fmt: skip
+
+    def use(stage: str, model: str) -> dict[str, object]:
+        return {"workspace": "default", "stage": stage, "model_id": model, "calls": 1,
+                "cached_calls": 0, "tokens_in": 1, "tokens_out": 1, "tokens_saved": 0}  # fmt: skip
+
+    models = [comp("llm_backend", "ollama", "Language model"), comp("embedder", "ollama", "Embedder"),
+              comp("enricher", "triage", "triage"), comp("enricher", "summary", "summary")]  # fmt: skip
+    usage = [
+        use("enrich", "inspector"),
+        use("llm.enrich.triage", "a"),
+        use("llm.enrich.triage", "b"),
+    ]
+    rows = StatsCollector._usage_view(usage, models)
+    owners = [(r["stage"], (r["component"] or {}).get("label")) for r in rows]
+    assert owners == [
+        ("enrich", None),  # the pipeline's own row: no component, no controls
+        ("llm.enrich.triage", "triage"),  # controls on the first row only
+        ("llm.enrich.triage", None),
+        ("llm", "Language model"),  # nothing recorded yet: a zero row keeps it editable
+        ("embed", "Embedder"),
+        ("llm.enrich.summary", "summary"),
+    ]
+    assert rows[3]["calls"] == 0 and rows[3]["workspace"] == "—"

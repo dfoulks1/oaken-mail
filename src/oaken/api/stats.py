@@ -58,12 +58,16 @@ class StatsCollector:
 
     async def collect(self) -> dict[str, Any]:
         now = self._clock.now()
+        llm = await self._llm()
+        usage = await self._usage()
+        models = await self._models(llm)
         data: dict[str, Any] = {
             "generated_at": now.isoformat(),
             "core": self._core(now),
             "mail": await self._mail(),
             "pipeline": await self._pipeline(),
-            "usage": await self._usage(),
+            "usage": usage,
+            "usage_rows": self._usage_view(usage, models),
             "accounts": await self._accounts(),
             "plugins": self._plugins(),
             "audit": await self._audit(),
@@ -71,7 +75,8 @@ class StatsCollector:
             "mcp": await self._mcp(),
             "agents": await self._agents(),
             "enrichers": await self._enrichers(),
-            "llm": await self._llm(),
+            "llm": llm,
+            "models": models,
         }
         return data
 
@@ -127,6 +132,114 @@ class StatsCollector:
             "model_id": backend.model_id,
             "available": models,
         }
+
+    async def _models(self, llm: dict[str, Any] | None) -> list[dict[str, Any]]:
+        """One row per component that runs a model, for the compact AI table: the language model,
+        the embedder, and each enricher that can pick its own model. ``choices`` are only models
+        the backend can run (None: shown, not editable). ``config`` and ``config_schema`` feed the
+        plugin's settings dialog, through the real ``get_plugin_config`` operation."""
+        rows: list[dict[str, Any]] = []
+        plugins = self._svc.plugins
+        if plugins is None:
+            return rows
+
+        async def settings(name: str) -> tuple[dict[str, Any], dict[str, Any] | None]:
+            cfg = await self._run_op("get_plugin_config", {"plugin": name})
+            return (cfg.config, cfg.config_schema) if cfg else ({}, None)
+
+        if llm and llm.get("name"):
+            config, schema = await settings(llm["name"])
+            rows.append(
+                {
+                    "kind": "llm_backend",
+                    "label": "Language model",
+                    "name": llm["name"],
+                    "model": llm["model_id"],
+                    "choices": llm["available"],
+                    "default": "",
+                    "config": config,
+                    "config_schema": schema,
+                    "enabled": True,
+                }  # fmt: skip
+            )
+        try:
+            embedder = plugins.embedder()
+        except Exception:  # noqa: BLE001 - no started embedder: no row
+            embedder = None
+        ectx = getattr(embedder, "ctx", None)
+        if embedder is not None and ectx is not None:
+            config, schema = await settings(ectx.name)
+            rows.append(
+                {
+                    "kind": "embedder",
+                    "label": "Embedder",
+                    "name": ectx.name,
+                    "model": embedder.model_id,
+                    "choices": None,
+                    "default": "",
+                    "config": config,
+                    "config_schema": schema,
+                    "enabled": True,
+                }  # fmt: skip
+            )
+        for e in await self._enrichers():
+            props = (e["config_schema"] or {}).get("properties", {})
+            if "model" not in props:
+                continue
+            rows.append(
+                {
+                    "kind": "enricher",
+                    "label": e["name"],
+                    "name": e["name"],
+                    "model": e["config"].get("model") or "",
+                    "choices": llm["available"] if llm else None,
+                    "default": llm["model_id"] if llm else "",
+                    "config": e["config"],
+                    "config_schema": e["config_schema"],
+                    "enabled": e["enabled"],
+                }  # fmt: skip
+            )
+        return rows
+
+    @staticmethod
+    def _usage_view(
+        usage: list[dict[str, Any]], models: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """The usage rows with the component that owns each one, so the page can show one table:
+        the model dropdown and the settings menu sit on the row that reports its tokens. Only the
+        first row of a component carries the controls. A component that has recorded nothing yet
+        gets a row of zeros, so it can still be edited."""
+        by_name = {m["name"]: m for m in models if m["kind"] == "enricher"}
+        backend = next((m for m in models if m["kind"] == "llm_backend"), None)
+        embedder = next((m for m in models if m["kind"] == "embedder"), None)
+
+        def owner(stage: str) -> dict[str, Any] | None:
+            if stage.startswith("llm.enrich."):
+                return by_name.get(stage.removeprefix("llm.enrich."))
+            if stage.startswith("llm."):
+                return backend
+            return embedder if stage == "embed" else None
+
+        rows: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+        for u in usage:
+            comp = owner(u["stage"])
+            first = comp is not None and (comp["kind"], comp["name"]) not in seen
+            if comp is not None:
+                seen.add((comp["kind"], comp["name"]))
+            rows.append({**u, "component": comp if first else None, "model_text": u["model_id"]})
+        for comp in models:
+            if (comp["kind"], comp["name"]) in seen:
+                continue
+            stage = {"enricher": f"llm.enrich.{comp['name']}", "embedder": "embed"}.get(
+                comp["kind"], "llm"
+            )
+            rows.append(
+                {"workspace": "—", "stage": stage, "model_id": comp["model"], "calls": 0,
+                 "cached_calls": 0, "tokens_in": 0, "tokens_out": 0, "tokens_saved": 0,
+                 "component": comp, "model_text": comp["model"]}
+            )  # fmt: skip
+        return rows
 
     async def _usage(self) -> list[dict[str, Any]]:
         if self._svc.usage is None:

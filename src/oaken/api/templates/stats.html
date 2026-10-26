@@ -29,6 +29,13 @@
   #t-ref:checked     ~ .nav .lab-ref { background: var(--bs-primary); color: #fff; border-radius: .375rem; }
   .tablabels label { cursor: pointer; }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  /* Status messages stay on screen wherever the page is scrolled, and a click dismisses one. */
+  [id$="-result"].alert:not(.d-none) {
+    position: fixed; right: 1rem; bottom: 1rem; max-width: 26rem; z-index: 2000;
+    margin: 0 !important; box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .25); cursor: pointer;
+  }
+  .kebab { font-size: 1.2rem; line-height: 1; text-decoration: none; }
+  .dropdown-menu.show { display: block; }
 </style>
 </head>
 <body>
@@ -149,25 +156,55 @@
   {# ---- AI & Models ---- #}
   <section class="pane" id="p-ai">
     <div id="ai-result" class="alert d-none mb-3 rounded small" role="status" aria-live="polite"></div>
-    <div class="card mb-3">
+    <div class="card mb-3" id="usage-card">
       <div class="card-header d-flex justify-content-between align-items-center text-secondary small text-uppercase fw-semibold">
         <span>Model &amp; token usage</span>
         <button class="btn btn-sm btn-outline-danger text-none" data-reset-usage
                 title="Clear the token-usage figures; mail, the index and the cache are untouched">Clear usage stats</button>
       </div>
-      <table class="table table-sm mb-0">
-        <thead><tr><th>Workspace</th><th>Stage</th><th>Model</th><th>Calls</th><th>Cached</th><th>Tokens in</th><th>Tokens out</th><th>Saved</th></tr></thead>
+      <table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Workspace</th><th>Stage</th><th>Model</th><th>Calls</th><th>Cached</th><th>Tokens in</th><th>Tokens out</th><th>Saved</th><th class="text-end" style="width: 3rem;"><span class="visually-hidden">Actions</span></th></tr></thead>
         <tbody>
-        {% for u in usage %}
-          <tr><td>{{ u.workspace }}</td><td>{{ u.stage }}</td><td class="mono">{{ u.model_id }}</td>
-              <td>{{ "{:,}".format(u.calls) }}</td><td class="text-secondary">{{ "{:,}".format(u.cached_calls) }}</td>
-              <td>{{ "{:,}".format(u.tokens_in) }}</td><td>{{ "{:,}".format(u.tokens_out) }}</td>
-              <td class="text-success">{{ "{:,}".format(u.tokens_saved) }}</td></tr>
+        {% for u in usage_rows %}
+          {% set m = u.component %}
+          {% set has_settings = m and m.config_schema and m.config_schema.properties %}
+          <tr>
+            <td>{{ u.workspace }}</td><td>{{ u.stage }}</td>
+            <td>
+              {% if m and m.choices %}
+                <select class="form-select form-select-sm mono" aria-label="Model for {{ m.label }}"
+                        data-model-select data-plugin="{{ m.name }}" data-kind="{{ m.kind }}" data-prev="{{ m.model }}">
+                  {% if m.kind == "enricher" %}<option value=""{% if not m.model %} selected{% endif %}>— backend default ({{ m.default }}) —</option>{% endif %}
+                  {% for c in m.choices %}<option value="{{ c }}"{% if c == m.model %} selected{% endif %}>{{ c }}</option>{% endfor %}
+                  {% if m.model and m.model not in m.choices %}<option value="{{ m.model }}" selected>{{ m.model }} (not installed)</option>{% endif %}
+                </select>
+              {% else %}
+                <span class="mono{% if not m %} text-secondary{% endif %}">{{ u.model_text or "—" }}</span>
+              {% endif %}
+            </td>
+            <td>{{ "{:,}".format(u.calls) }}</td><td class="text-secondary">{{ "{:,}".format(u.cached_calls) }}</td>
+            <td>{{ "{:,}".format(u.tokens_in) }}</td><td>{{ "{:,}".format(u.tokens_out) }}</td>
+            <td class="text-success">{{ "{:,}".format(u.tokens_saved) }}</td>
+            <td class="text-end">
+              {% if m %}
+              <div class="position-relative d-inline-block">
+                <button type="button" class="btn btn-sm btn-link text-secondary px-2 kebab" data-kebab
+                        aria-haspopup="menu" aria-expanded="false" aria-label="Actions for {{ m.label }}">&#8942;</button>
+                <ul class="dropdown-menu dropdown-menu-end" role="menu">
+                  <li><button type="button" class="dropdown-item" role="menuitem" data-edit-plugin="{{ m.name }}" data-kind="{{ m.kind }}"
+                              data-label="{{ m.label }}"{% if not has_settings %} disabled title="This plugin declares no settings"{% endif %}>Edit plugin…</button></li>
+                  <li><button type="button" class="dropdown-item" role="menuitem" data-reload-plugin="{{ m.name }}">Reload plugin</button></li>
+                </ul>
+              </div>
+              {% endif %}
+            </td>
+          </tr>
         {% else %}
-          <tr><td colspan="8" class="text-secondary">No model usage recorded yet.</td></tr>
+          <tr><td colspan="9" class="text-secondary">No model usage recorded yet.</td></tr>
         {% endfor %}
         </tbody>
       </table>
+      <div class="card-footer text-secondary small">Vector store model: <code>{{ pipeline.vector_model or "—" if pipeline else "—" }}</code></div>
     </div>
     <div class="card mb-3">
       <div class="card-header text-secondary small text-uppercase fw-semibold">Agents</div>
@@ -190,83 +227,54 @@
         </tbody>
       </table>
     </div>
-    <div class="card mb-3">
-      <div class="card-header text-secondary small text-uppercase fw-semibold">Enrichers</div>
-      <div class="card-body">
-        {% for e in enrichers %}
-          <form class="mb-3 pb-3{% if not loop.last %} border-bottom{% endif %}" data-enricher-save="{{ e.name }}">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <span class="mono fw-semibold">{{ e.name }}</span>
-              {% if not e.enabled %}<span class="badge text-bg-secondary">disabled</span>{% endif %}
+    {# One compact table: the model each component runs, a three-dot menu for its settings. #}
+    {% macro setting(plugin, field, spec, val, row) %}
+      <div class="row mb-2 align-items-start">
+        <label class="col-sm-4 col-form-label col-form-label-sm mono small" for="pf-{{ plugin }}-{{ field }}">{{ field }}</label>
+        <div class="col-sm-8">
+          {% if field == "model" and row.choices %}
+            <select class="form-select form-select-sm mono" id="pf-{{ plugin }}-{{ field }}" name="{{ field }}" data-field-type="string">
+              {% if row.kind == "enricher" %}<option value=""{% if not val %} selected{% endif %}>— backend default ({{ row.default }}) —</option>{% endif %}
+              {% for m in row.choices %}<option value="{{ m }}"{% if m == val %} selected{% endif %}>{{ m }}</option>{% endfor %}
+              {% if val and val not in row.choices %}<option value="{{ val }}" selected>{{ val }} (not installed)</option>{% endif %}
+            </select>
+          {% elif spec.type == "boolean" or (spec.anyOf and spec.anyOf | selectattr("type", "equalto", "boolean") | list) %}
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" role="switch" id="pf-{{ plugin }}-{{ field }}" name="{{ field }}" data-field-type="boolean"{% if val %} checked{% endif %}>
             </div>
-            {% if e.config_schema and e.config_schema.properties %}
-              {% for field, spec in e.config_schema.properties.items() %}
-                {% set val = e.config.get(field, spec.default) %}
-                <div class="row mb-2 align-items-center">
-                  <label class="col-sm-4 col-form-label col-form-label-sm mono small" for="{{ e.name }}-{{ field }}">{{ field }}</label>
-                  <div class="col-sm-8">
-                    {% if field == "model" and llm and llm.available %}
-                      <select class="form-select form-select-sm mono" id="{{ e.name }}-{{ field }}"
-                              name="{{ field }}" data-field-type="string">
-                        <option value=""{% if not val %} selected{% endif %}>— backend default ({{ llm.model_id }}) —</option>
-                        {% for m in llm.available %}
-                          <option value="{{ m }}"{% if m == val %} selected{% endif %}>{{ m }}</option>
-                        {% endfor %}
-                      </select>
-                    {% elif spec.type == "boolean" %}
-                      <div class="form-check form-switch mb-0">
-                        <input class="form-check-input" type="checkbox" role="switch"
-                               id="{{ e.name }}-{{ field }}" name="{{ field }}" data-field-type="boolean"{% if val %} checked{% endif %}>
-                      </div>
-                    {% elif spec.type == "integer" or spec.type == "number" %}
-                      <input class="form-control form-control-sm" type="number" id="{{ e.name }}-{{ field }}"
-                             name="{{ field }}" data-field-type="number" value="{{ val if val is not none else '' }}">
-                    {% else %}
-                      <input class="form-control form-control-sm" type="text" id="{{ e.name }}-{{ field }}"
-                             name="{{ field }}" data-field-type="string" value="{{ val if val is not none else '' }}">
-                    {% endif %}
-                    {% if spec.description %}<div class="form-text small">{{ spec.description }}</div>{% endif %}
-                  </div>
-                </div>
-              {% endfor %}
-              <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
-            {% else %}
-              <p class="text-secondary small mb-0">No settings declared.</p>
-            {% endif %}
-          </form>
-        {% else %}
-          <p class="text-secondary mb-0">No enrichers installed.</p>
+          {% elif spec.type == "integer" or spec.type == "number" or (spec.anyOf and (spec.anyOf | selectattr("type", "equalto", "integer") | list or spec.anyOf | selectattr("type", "equalto", "number") | list)) %}
+            <input class="form-control form-control-sm" type="number" id="pf-{{ plugin }}-{{ field }}" name="{{ field }}" data-field-type="number" value="{{ val if val is not none else '' }}">
+          {% else %}
+            <input class="form-control form-control-sm" type="text" id="pf-{{ plugin }}-{{ field }}" name="{{ field }}" data-field-type="string" value="{{ val if val is not none else '' }}">
+          {% endif %}
+          {% if spec.description %}<div class="form-text small">{{ spec.description }}</div>{% endif %}
+        </div>
+      </div>
+    {% endmacro %}
+    {% for m in models %}{% if m.config_schema and m.config_schema.properties %}
+      <template id="pf-{{ m.kind }}-{{ m.name }}">
+        {% for field, spec in m.config_schema.properties.items() %}
+          {{ setting(m.name, field, spec, m.config.get(field, spec.default), m) }}
         {% endfor %}
+      </template>
+    {% endif %}{% endfor %}
+    <div class="modal" id="plugin-modal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="pm-title" hidden>
+      <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 class="modal-title h6 mb-0" id="pm-title">Plugin settings</h2>
+            <button type="button" class="btn-close" data-pm-close aria-label="Close"></button>
+          </div>
+          <div class="modal-body"><form id="pm-form" novalidate><div id="pm-fields"></div></form></div>
+          <div class="modal-footer">
+            <p class="text-secondary small me-auto mb-0">Saved to <code>config.toml</code>. Reload the plugin once saved for the change to take effect.</p>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-pm-close>Cancel</button>
+            <button type="submit" form="pm-form" class="btn btn-sm btn-primary">Save</button>
+          </div>
+        </div>
       </div>
     </div>
-    {% if pipeline %}
-    <div class="card mb-3">
-      <div class="card-header text-secondary small text-uppercase fw-semibold">Models</div>
-      <div class="card-body">
-        {% if llm and llm.name %}
-          <form class="row g-2 align-items-center mb-3" data-model-save="{{ llm.name }}">
-            <label class="col-sm-3 col-form-label col-form-label-sm" for="llm-model">Language model</label>
-            <div class="col-sm-6">
-              {% if llm.available %}
-                <select class="form-select form-select-sm mono" id="llm-model" name="model">
-                  {% for m in llm.available %}
-                    <option value="{{ m }}"{% if m == llm.model_id %} selected{% endif %}>{{ m }}</option>
-                  {% endfor %}
-                </select>
-              {% else %}
-                <input class="form-control form-control-sm mono" id="llm-model" name="model" value="{{ llm.model_id }}">
-              {% endif %}
-            </div>
-            <div class="col-sm-3"><button type="submit" class="btn btn-sm btn-outline-primary">Save &amp; reload</button></div>
-            <div class="col-12"><div class="form-text small">Only models Ollama has pulled are offered. Saving writes
-              <code>[plugins.{{ llm.name }}] model</code> and reloads the backend.</div></div>
-          </form>
-        {% endif %}
-        <p class="text-secondary mb-0">Embedder: <code>{{ pipeline.embedder_model or "—" }}</code>
-           · Vector model: <code>{{ pipeline.vector_model or "—" }}</code></p>
-      </div>
-    </div>
-    {% endif %}
+    <div class="modal-backdrop fade show" id="pm-backdrop" hidden></div>
   </section>
 
   {# ---- Plugins ---- #}
