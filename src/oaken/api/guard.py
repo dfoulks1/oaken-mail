@@ -28,6 +28,9 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from oaken.api.errors import body as error_body
 from oaken.api.ratelimit import RateLimiter
+from oaken.core.logging import get_logger
+
+log = get_logger("oaken.api.guard")
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 PUBLIC_HEALTH = "/v1/health"
@@ -169,15 +172,25 @@ class Guard:
             return
 
         mutating = method not in SAFE_METHODS
+        # A console form carries its own token (the real defense) and browsers may send
+        # ``Origin: null`` on a same-site form post, so that one value is let through there.
+        form_post = path.startswith("/ui/") and origin == "null"
         if mutating and (
-            (origin is not None and origin not in p.origins)
+            (origin is not None and origin not in p.origins and not form_post)
             or headers.get("sec-fetch-site") == "cross-site"
         ):
+            log.warning(
+                "refused cross-origin request",
+                path=path,
+                origin=origin,
+                fetch_site=headers.get("sec-fetch-site"),
+            )
             await _send_json(send, 403, "bad_origin", "cross-origin requests are not allowed")
             return
         if mutating:
             ctype = headers.get("content-type", "").split(";")[0].strip().lower()
-            if ctype != "application/json":
+            console_form = path.startswith("/ui/") and ctype == "application/x-www-form-urlencoded"
+            if ctype != "application/json" and not console_form:  # console pages post forms
                 await _send_json(send, 415, "unsupported_media_type", "send application/json")
                 return
 

@@ -1,409 +1,342 @@
 {#- SPDX-License-Identifier: Apache-2.0 -#}
-{#- The read-only /stats page (ADR 0013). Context is oaken.api.stats.StatsCollector.collect():
-    counts and health only — never mail content. Bootstrap for a consistent core look; the live
-    refresh is the one same-origin script (stats.js). Pure-CSS radio tabs so the tab state needs
-    no JS. -#}
-<!doctype html>
-<html lang="en" data-bs-theme="dark">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Oaken Mail — status</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-<style>
-  /* Only what Bootstrap does not give us: the pure-CSS radio tabs (no JS for tab state). */
-  .tabs > input[type=radio] { display: none; }  /* the tab state only: not the switches in a pane */
-  .pane { display: none; }
-  #t-general:checked ~ #p-general,
-  #t-ingest:checked  ~ #p-ingest,
-  #t-ai:checked      ~ #p-ai,
-  #t-plugins:checked ~ #p-plugins,
-  #t-audit:checked   ~ #p-audit,
-  #t-ref:checked     ~ #p-ref { display: block; }
-  #t-general:checked ~ .nav .lab-general,
-  #t-ingest:checked  ~ .nav .lab-ingest,
-  #t-ai:checked      ~ .nav .lab-ai,
-  #t-plugins:checked ~ .nav .lab-plugins,
-  #t-audit:checked   ~ .nav .lab-audit,
-  #t-ref:checked     ~ .nav .lab-ref { background: var(--bs-primary); color: #fff; border-radius: .375rem; }
-  .tablabels label { cursor: pointer; }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  /* Status messages stay on screen wherever the page is scrolled, and a click dismisses one. */
-  [id$="-result"].alert:not(.d-none) {
-    position: fixed; right: 1rem; bottom: 1rem; max-width: 26rem; z-index: 2000;
-    margin: 0 !important; box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .25); cursor: pointer;
-  }
-  .kebab { font-size: 1.2rem; line-height: 1; text-decoration: none; }
-  .dropdown-menu.show { display: block; }
-</style>
-</head>
-<body>
-{% include "_nav.html" with context %}
+{#- The status page (ADR 0013, CORE_50). Context is StatsCollector.collect() plus the console's base.
+    Counts and health only, never mail content. No script: tabs are radio inputs, menus are
+    <details>, dialogs are popovers, every action is a form. /refresh.js only updates live numbers. -#}
+{% extends "_base.html" %}
+{% import "_macros.html" as m with context %}
+{% block title %}Status · Oaken Mail{% endblock %}
+{% block body_attrs %} data-refresh="/stats.json" data-refresh-seconds="15"{% endblock %}
+{% block tagline %}<p class="tagline">Local mail, quietly kept. <span class="mono">{{ core.version }}</span>
+  {% if core.uptime_seconds is not none %}· up <span data-bind="core.uptime_minutes">{{ (core.uptime_seconds // 60) | int }}</span> min{% endif %}</p>{% endblock %}
 
-<main class="container py-4" style="max-width: 68rem;">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h1 class="h4 mb-0">Status</h1>
-    <span class="text-secondary small mono">
-      {{ core.version }}
-      {% if core.uptime_seconds is not none %}· up <span data-stat="core.uptime_minutes">{{ (core.uptime_seconds // 60) | int }}</span> min{% endif %}
-      · <span id="stats-updated">{{ generated_at }}</span>
-    </span>
+{% macro setting(plugin, field, spec, val, row) %}
+  {% set kinds = (spec.anyOf | map(attribute="type") | list) if spec.anyOf else [spec.type] %}
+  <div class="field">
+    <label for="pf-{{ plugin }}-{{ field }}">{{ field }}</label>
+    <div>
+    {% if field == "model" and row.choices %}
+      <input type="hidden" name="type:{{ field }}" value="string">
+      <select class="select" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}">
+        {% if row.kind == "enricher" %}<option value=""{% if not val %} selected{% endif %}>backend default ({{ row.default }})</option>{% endif %}
+        {% for c in row.choices %}<option value="{{ c }}"{% if c == val %} selected{% endif %}>{{ c }}</option>{% endfor %}
+        {% if val and val not in row.choices %}<option value="{{ val }}" selected>{{ val }} (not installed)</option>{% endif %}
+      </select>
+    {% elif "boolean" in kinds and "null" in kinds %}
+      <input type="hidden" name="type:{{ field }}" value="tristate">
+      <select class="select" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}">
+        <option value=""{% if val is none %} selected{% endif %}>automatic</option>
+        <option value="true"{% if val is sameas true %} selected{% endif %}>on</option>
+        <option value="false"{% if val is sameas false %} selected{% endif %}>off</option>
+      </select>
+    {% elif "boolean" in kinds %}
+      <input type="hidden" name="type:{{ field }}" value="boolean">
+      <label class="check"><input type="checkbox" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}" value="1"{% if val %} checked{% endif %}> on</label>
+    {% elif "integer" in kinds or "number" in kinds %}
+      <input type="hidden" name="type:{{ field }}" value="number">
+      <input class="input" type="number" step="any" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}" value="{{ val if val is not none else '' }}">
+    {% else %}
+      <input type="hidden" name="type:{{ field }}" value="string">
+      <input class="input" type="text" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}" value="{{ val if val is not none else '' }}">
+    {% endif %}
+    {% if spec.description %}<p class="hint">{{ spec.description }}</p>{% endif %}
+    </div>
   </div>
+{% endmacro %}
 
-<div class="tabs">
-  <input type="radio" name="tab" id="t-general" checked>
-  <input type="radio" name="tab" id="t-ingest">
-  <input type="radio" name="tab" id="t-ai">
-  <input type="radio" name="tab" id="t-plugins">
-  <input type="radio" name="tab" id="t-audit">
-  <input type="radio" name="tab" id="t-ref">
-  <div class="nav tablabels gap-1 mb-3 border-bottom pb-2">
-    <label for="t-general" class="lab-general px-3 py-1">General</label>
-    <label for="t-ingest" class="lab-ingest px-3 py-1">Ingest</label>
-    <label for="t-ai" class="lab-ai px-3 py-1">AI &amp; Models</label>
-    <label for="t-plugins" class="lab-plugins px-3 py-1">Plugins</label>
-    <label for="t-audit" class="lab-audit px-3 py-1">Audit Log</label>
-    <label for="t-ref" class="lab-ref px-3 py-1">Reference</label>
+{% macro health(p) %}
+  {%- if p.healthy %}<span class="badge badge-ok">healthy</span>
+  {%- elif p.started %}<span class="badge badge-danger">{{ p.detail or "unhealthy" }}</span>
+  {%- else %}<span class="badge badge-warn">{{ p.detail or "not started" }}</span>{% endif -%}
+{% endmacro %}
+
+{% block main %}
+<div class="tabset">
+  {% for key, label in [("general","General"),("ingest","Ingest"),("ai","AI & Models"),("plugins","Plugins"),("audit","Audit log"),("ref","Reference")] %}
+  <input type="radio" name="tab" id="t-{{ key }}" aria-label="{{ label }}"{% if tab == key %} checked{% endif %}>
+  {% endfor %}
+  <div class="tabbar" aria-hidden="true">
+    <label for="t-general">General</label><label for="t-ingest">Ingest</label><label for="t-ai">AI &amp; Models</label>
+    <label for="t-plugins">Plugins</label><label for="t-audit">Audit log</label><label for="t-ref">Reference</label>
   </div>
 
   {# ---- General ---- #}
-  <section class="pane" id="p-general">
-    <div class="card mb-3">
-      <div class="card-header text-secondary small text-uppercase fw-semibold">Headline health</div>
-      <div class="card-body">
-        <div class="row g-3">
-          <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="text-secondary small text-uppercase">Accounts</div><div class="fs-4 mono" data-stat="mail.accounts">{{ mail.accounts }}</div></div></div>
-          <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="text-secondary small text-uppercase">Messages</div><div class="fs-4 mono" data-stat="mail.messages">{{ "{:,}".format(mail.messages) }}</div></div></div>
-          <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="text-secondary small text-uppercase">Indexed</div><div class="fs-4 mono" data-stat="mail.indexed">{{ "{:,}".format(mail.indexed) }}</div>
-            <div class="small">index {% if mail.index_stale %}<span class="badge text-bg-danger">stale</span>{% else %}<span class="badge text-bg-success">fresh</span>{% endif %}</div></div></div>
-          <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="text-secondary small text-uppercase">Queue depth</div><div class="fs-4 mono" data-stat="mail.queue_depth">{{ mail.queue_depth if mail.queue_depth is not none else "—" }}</div></div></div>
-        </div>
-      </div>
+  <section class="pane" id="p-general" aria-label="General">
+    <div class="tiles">
+      <div class="tile"><span class="label">Accounts</span><span class="value" data-bind="mail.accounts">{{ mail.accounts }}</span></div>
+      <div class="tile"><span class="label">Messages</span><span class="value" data-bind="mail.messages" data-format="int">{{ "{:,}".format(mail.messages) }}</span></div>
+      <div class="tile"><span class="label">Indexed</span><span class="value" data-bind="mail.indexed" data-format="int">{{ "{:,}".format(mail.indexed) }}</span>
+        <span class="note">index {% if mail.index_stale %}<span class="badge badge-danger">stale</span>{% else %}<span class="badge badge-ok">fresh</span>{% endif %}</span></div>
+      <div class="tile"><span class="label">Queue depth</span><span class="value" data-bind="mail.queue_depth" data-format="int">{{ mail.queue_depth if mail.queue_depth is not none else "—" }}</span></div>
     </div>
-    <div class="card mb-3">
-      <div class="card-header text-secondary small text-uppercase fw-semibold">Connected accounts</div>
-      <table class="table table-sm mb-0">
+    <div class="card">
+      <div class="card-head">Connected accounts</div>
+      <div class="table-wrap"><table class="table">
         <thead><tr><th>Account</th><th>Provider</th><th>Sync</th></tr></thead>
         <tbody>
         {% for a in accounts %}
           <tr>
-            <td>{{ a.display_name }}<div class="text-secondary mono small">{{ a.account_id }}</div></td>
+            <td>{{ a.display_name }}<div class="muted mono small">{{ a.account_id }}</div></td>
             <td>{{ a.provider }}</td>
-            <td>{% if a.paused %}<span class="badge badge-oaken-warn">paused</span>
-                {%- elif a.failures %}<span class="badge text-bg-danger">{{ a.failures }} failing</span>
-                {%- else %}<span class="badge text-bg-success">ok</span>{% endif %}</td>
+            <td>{% if a.paused %}<span class="badge badge-warn">paused</span>
+                {%- elif a.failures %}<span class="badge badge-danger">{{ a.failures }} failing</span>
+                {%- else %}<span class="badge badge-ok">ok</span>{% endif %}</td>
           </tr>
         {% else %}
-          <tr><td colspan="3" class="text-secondary">No accounts configured.</td></tr>
+          <tr><td colspan="3" class="muted">No accounts configured.</td></tr>
         {% endfor %}
         </tbody>
-      </table>
+      </table></div>
     </div>
   </section>
 
   {# ---- Ingest ---- #}
-  <section class="pane" id="p-ingest">
+  <section class="pane" id="p-ingest" aria-label="Ingest">
     {% if pipeline %}
-    <div class="card mb-3">
-      <div class="card-header text-secondary small text-uppercase fw-semibold">Pipeline</div>
+    <div class="card">
+      <div class="card-head"><span>Pipeline</span>
+        <span class="row">
+          {% call m.post("pause", "/stats?tab=ingest") %}<button class="btn btn-sm" type="submit">{{ m.icon("pause") }} Pause model stages</button>{% endcall %}
+          {% call m.post("resume", "/stats?tab=ingest") %}<button class="btn btn-sm" type="submit">{{ m.icon("play") }} Resume</button>{% endcall %}
+        </span>
+      </div>
       <div class="card-body">
-        <p class="text-secondary mono small">
+        <p class="muted mono small">
           {{ "{:,}".format(pipeline.docs) }} docs · {{ "{:,}".format(pipeline.chunks) }} chunks ·
           {{ "{:,}".format(pipeline.vectors) }} vectors · {{ pipeline.quarantined_files }} quarantined
-          {% if pipeline.llm_paused %}· <span class="badge badge-oaken-warn">model paused</span>{% endif %}
-          {% if pipeline.backfill_paused %}· <span class="badge badge-oaken-warn">backfill paused</span>{% endif %}
-          {% if pipeline.embeddings_stale %}· <span class="badge text-bg-danger">embeddings stale</span>{% endif %}
+          {% if pipeline.llm_paused %}· <span class="badge badge-warn">model paused</span>{% endif %}
+          {% if pipeline.backfill_paused %}· <span class="badge badge-warn">backfill paused</span>{% endif %}
+          {% if pipeline.embeddings_stale %}· <span class="badge badge-danger">embeddings stale</span>{% endif %}
         </p>
-        <table class="table table-sm mb-0">
-          <thead><tr><th>Stage</th><th>Pending</th><th>Retrying</th><th>Running</th><th>Failed</th><th>Oldest</th><th>Per&nbsp;sec</th><th>ETA</th></tr></thead>
-          <tbody>
-          {% for name, s in pipeline.stages.items() %}
+      </div>
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>Stage</th><th>Pending</th><th>Retrying</th><th>Running</th><th>Failed</th><th>Oldest</th><th>Per sec</th><th>ETA</th><th>At once</th></tr></thead>
+        <tbody>
+        {% for name, s in pipeline.stages.items() %}
           <tr>
             <td class="mono">{{ name }}</td>
-            <td>{{ s.pending }}</td><td>{{ s.retrying }}</td>
-            <td>{{ s.running }}</td>
-            <td>{% if s.failed %}<span class="badge text-bg-danger">{{ s.failed }}</span>{% else %}0{% endif %}</td>
-            <td class="text-secondary">{% if s.oldest_pending_seconds is not none %}{{ s.oldest_pending_seconds | int }}s{% else %}—{% endif %}</td>
+            <td data-bind="pipeline.stages.{{ name }}.pending" data-format="int">{{ s.pending }}</td><td>{{ s.retrying }}</td>
+            <td data-bind="pipeline.stages.{{ name }}.running" data-format="int">{{ s.running }}</td>
+            <td>{% if s.failed %}<span class="badge badge-danger">{{ s.failed }}</span>{% else %}0{% endif %}</td>
+            <td class="muted">{% if s.oldest_pending_seconds is not none %}{{ s.oldest_pending_seconds | int }}s{% else %}—{% endif %}</td>
             <td>{{ "%.2f" | format(s.per_second) }}</td>
-            <td class="text-secondary">{% if s.eta_seconds is not none %}{{ s.eta_seconds | int }}s{% else %}—{% endif %}</td>
+            <td class="muted">{% if s.eta_seconds is not none %}{{ s.eta_seconds | int }}s{% else %}—{% endif %}</td>
+            <td>
+              {% call m.post("limit", "/stats?tab=ingest") %}
+                <input type="hidden" name="stage" value="{{ name }}">
+                <input class="input input-sm" type="number" name="concurrency" min="1" max="64" value="{{ s.concurrency if s.concurrency is defined and s.concurrency else '' }}" aria-label="Jobs at once for {{ name }}">
+                <button class="btn btn-sm" type="submit">Set</button>
+              {% endcall %}
+            </td>
           </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      </div>
+        {% endfor %}
+        </tbody>
+      </table></div>
     </div>
     {% if pipeline.parked %}
-    <div class="card mb-3">
-      <div class="card-header text-secondary small text-uppercase fw-semibold">Parked jobs</div>
-      <table class="table table-sm mb-0">
+    <div class="card">
+      <div class="card-head"><span>Parked jobs</span>
+        {% call m.post("retry-parked", "/stats?tab=ingest") %}<button class="btn btn-sm" type="submit">{{ m.icon("retry") }} Retry all</button>{% endcall %}
+      </div>
+      <div class="table-wrap"><table class="table">
         <thead><tr><th>Job</th><th>Stage</th><th>Message</th><th>Attempts</th><th>Error</th></tr></thead>
         <tbody>
         {% for j in pipeline.parked %}
           <tr><td class="mono">{{ j.job_id }}</td><td>{{ j.stage }}</td>
-              <td class="mono text-secondary">{{ j.message_id or "—" }}</td><td>{{ j.attempts }}</td>
-              <td class="text-danger">{{ j.error }}</td></tr>
+              <td class="mono muted">{{ j.message_id or "—" }}</td><td>{{ j.attempts }}</td>
+              <td class="bad">{{ j.error }}</td></tr>
         {% endfor %}
         </tbody>
-      </table>
+      </table></div>
     </div>
     {% endif %}
     {% else %}
-    <div class="card mb-3"><div class="card-body text-secondary">The ingest pipeline is not running.</div></div>
+    <div class="card"><div class="card-body muted">The ingest pipeline is not running.</div></div>
     {% endif %}
   </section>
 
   {# ---- AI & Models ---- #}
-  <section class="pane" id="p-ai">
-    <div id="ai-result" class="alert d-none mb-3 rounded small" role="status" aria-live="polite"></div>
-    <div class="card mb-3" id="usage-card">
-      <div class="card-header d-flex justify-content-between align-items-center text-secondary small text-uppercase fw-semibold">
-        <span>Model &amp; token usage</span>
-        <button class="btn btn-sm btn-outline-danger text-none" data-reset-usage
-                title="Clear the token-usage figures; mail, the index and the cache are untouched">Clear usage stats</button>
+  <section class="pane" id="p-ai" aria-label="AI and models">
+    <div class="card">
+      <div class="card-head"><span>Model &amp; token usage</span>
+        {{ m.confirm("reset-usage", "/stats?tab=ai", "Clear usage stats", "Clear the token figures? Mail, the index and the cache stay.", "Clear", {}) }}
       </div>
-      <table class="table table-sm align-middle mb-0">
-        <thead><tr><th>Workspace</th><th>Stage</th><th>Model</th><th>Calls</th><th>Cached</th><th>Tokens in</th><th>Tokens out</th><th>Saved</th><th class="text-end" style="width: 3rem;"><span class="visually-hidden">Actions</span></th></tr></thead>
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>Workspace</th><th>Stage</th><th>Model</th><th>Calls</th><th>Cached</th><th>In</th><th>Out</th><th>Saved</th><th><span class="sr-only">Actions</span></th></tr></thead>
         <tbody>
         {% for u in usage_rows %}
-          {% set m = u.component %}
-          {% set has_settings = m and m.config_schema and m.config_schema.properties %}
+          {% set c = u.component %}
+          {% set has_settings = c and c.config_schema and c.config_schema.properties %}
           <tr>
             <td>{{ u.workspace }}</td><td>{{ u.stage }}</td>
             <td>
-              {% if m and m.choices %}
-                <select class="form-select form-select-sm mono" aria-label="Model for {{ m.label }}"
-                        data-model-select data-plugin="{{ m.name }}" data-kind="{{ m.kind }}" data-prev="{{ m.model }}">
-                  {% if m.kind == "enricher" %}<option value=""{% if not m.model %} selected{% endif %}>— backend default ({{ m.default }}) —</option>{% endif %}
-                  {% for c in m.choices %}<option value="{{ c }}"{% if c == m.model %} selected{% endif %}>{{ c }}</option>{% endfor %}
-                  {% if m.model and m.model not in m.choices %}<option value="{{ m.model }}" selected>{{ m.model }} (not installed)</option>{% endif %}
-                </select>
+              {% if c and c.choices %}
+                {% call m.post("model", "/stats?tab=ai") %}
+                  <input type="hidden" name="kind" value="{{ c.kind }}"><input type="hidden" name="plugin" value="{{ c.name }}">
+                  <select class="select select-sm mono" name="model" aria-label="Model for {{ c.label }}">
+                    {% if c.kind in ("enricher", "ask") %}<option value=""{% if not c.model %} selected{% endif %}>default ({{ c.default }})</option>{% endif %}
+                    {% for ch in c.choices %}<option value="{{ ch }}"{% if ch == c.model %} selected{% endif %}>{{ ch }}</option>{% endfor %}
+                    {% if c.model and c.model not in c.choices %}<option value="{{ c.model }}" selected>{{ c.model }} (not installed)</option>{% endif %}
+                  </select>
+                  <button class="btn btn-sm" type="submit">Use</button>
+                {% endcall %}
               {% else %}
-                <span class="mono{% if not m %} text-secondary{% endif %}">{{ u.model_text or "—" }}</span>
+                <span class="mono{% if not c %} muted{% endif %}">{{ u.model_text or "—" }}</span>
               {% endif %}
             </td>
-            <td>{{ "{:,}".format(u.calls) }}</td><td class="text-secondary">{{ "{:,}".format(u.cached_calls) }}</td>
+            <td>{{ "{:,}".format(u.calls) }}</td><td class="muted">{{ "{:,}".format(u.cached_calls) }}</td>
             <td>{{ "{:,}".format(u.tokens_in) }}</td><td>{{ "{:,}".format(u.tokens_out) }}</td>
-            <td class="text-success">{{ "{:,}".format(u.tokens_saved) }}</td>
-            <td class="text-end">
-              {% if m and m.kind != "ask" %}  {# ask is a core setting, not a plugin: no settings dialog or reload #}
-              <div class="position-relative d-inline-block">
-                <button type="button" class="btn btn-sm btn-link text-secondary px-2 kebab" data-kebab
-                        aria-haspopup="menu" aria-expanded="false" aria-label="Actions for {{ m.label }}">&#8942;</button>
-                <ul class="dropdown-menu dropdown-menu-end" role="menu">
-                  <li><button type="button" class="dropdown-item" role="menuitem" data-edit-plugin="{{ m.name }}" data-kind="{{ m.kind }}"
-                              data-label="{{ m.label }}"{% if not has_settings %} disabled title="This plugin declares no settings"{% endif %}>Edit plugin…</button></li>
-                  <li><button type="button" class="dropdown-item" role="menuitem" data-reload-plugin="{{ m.name }}">Reload plugin</button></li>
-                </ul>
-              </div>
+            <td class="ok">{{ "{:,}".format(u.tokens_saved) }}</td>
+            <td class="right">
+              {% if c and c.kind != "ask" %}
+              <details class="menu">
+                <summary aria-label="Actions for {{ c.label }}">{{ m.icon("dots") }}</summary>
+                <div class="menu-list">
+                  {% if has_settings %}<button type="button" popovertarget="pm-{{ c.kind }}-{{ c.name }}" popovertargetaction="show">Edit plugin…</button>
+                  {% else %}<button type="button" disabled title="This plugin declares no settings">Edit plugin…</button>{% endif %}
+                  <form method="post" action="/ui/plugin">{{ m.guard("/stats?tab=ai") }}<input type="hidden" name="verb" value="reload"><input type="hidden" name="name" value="{{ c.name }}"><button type="submit">Reload plugin</button></form>
+                </div>
+              </details>
               {% endif %}
             </td>
           </tr>
         {% else %}
-          <tr><td colspan="9" class="text-secondary">No model usage recorded yet.</td></tr>
+          <tr><td colspan="9" class="muted">No model usage recorded yet.</td></tr>
         {% endfor %}
         </tbody>
-      </table>
-      <div class="card-footer text-secondary small">Vector store model: <code>{{ pipeline.vector_model or "—" if pipeline else "—" }}</code></div>
+      </table></div>
+      <div class="card-foot">Vector store model: <code>{{ (pipeline.vector_model or "—") if pipeline else "—" }}</code></div>
     </div>
-    <div class="card mb-3">
-      <div class="card-header text-secondary small text-uppercase fw-semibold">Agents</div>
-      <table class="table table-sm mb-0">
-        <thead><tr><th>Agent</th><th>Kinds</th><th>Last seen</th><th>State</th><th class="text-end">Revoke</th></tr></thead>
+
+    <div class="card">
+      <div class="card-head">Agents</div>
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>Agent</th><th>Kinds</th><th>Last seen</th><th>State</th><th class="right">Revoke</th></tr></thead>
         <tbody>
         {% for a in agents %}
           <tr>
             <td>{{ a.label }}</td>
-            <td class="text-secondary mono small">{{ a.kinds | join(", ") or "—" }}</td>
-            <td class="text-secondary mono small">{{ a.last_seen_at or "never" }}</td>
-            <td>{% if a.revoked %}<span class="badge text-bg-secondary">revoked</span>
-                {%- else %}<span class="badge text-bg-success">active</span>{% endif %}</td>
-            <td class="text-end">{% if not a.revoked %}<button class="btn btn-sm btn-outline-danger"
-                data-revoke-agent="{{ a.id }}" title="Revoke {{ a.label }}; the jobs it holds return to the queue">Revoke</button>{% endif %}</td>
+            <td class="muted mono small">{{ a.kinds | join(", ") or "—" }}</td>
+            <td class="muted mono small">{{ a.last_seen_at or "never" }}</td>
+            <td>{% if a.revoked %}<span class="badge badge-muted">revoked</span>{% else %}<span class="badge badge-ok">active</span>{% endif %}</td>
+            <td class="right">{% if not a.revoked %}{{ m.confirm("revoke-agent", "/stats?tab=ai", "Revoke", "Revoke " ~ a.label ~ "? Its jobs return to the queue.", "Revoke", {"agent_id": a.id}) }}{% endif %}</td>
           </tr>
         {% else %}
-          <tr><td colspan="5" class="text-secondary">No agents registered.</td></tr>
+          <tr><td colspan="5" class="muted">No agents registered.</td></tr>
         {% endfor %}
         </tbody>
-      </table>
+      </table></div>
     </div>
-    {# One compact table: the model each component runs, a three-dot menu for its settings. #}
-    {% macro setting(plugin, field, spec, val, row) %}
-      <div class="row mb-2 align-items-start">
-        <label class="col-sm-4 col-form-label col-form-label-sm mono small" for="pf-{{ plugin }}-{{ field }}">{{ field }}</label>
-        <div class="col-sm-8">
-          {% if field == "model" and row.choices %}
-            <select class="form-select form-select-sm mono" id="pf-{{ plugin }}-{{ field }}" name="{{ field }}" data-field-type="string">
-              {% if row.kind == "enricher" %}<option value=""{% if not val %} selected{% endif %}>— backend default ({{ row.default }}) —</option>{% endif %}
-              {% for m in row.choices %}<option value="{{ m }}"{% if m == val %} selected{% endif %}>{{ m }}</option>{% endfor %}
-              {% if val and val not in row.choices %}<option value="{{ val }}" selected>{{ val }} (not installed)</option>{% endif %}
-            </select>
-          {% elif spec.type == "boolean" or (spec.anyOf and spec.anyOf | selectattr("type", "equalto", "boolean") | list) %}
-            <div class="form-check form-switch mb-0">
-              <input class="form-check-input" type="checkbox" role="switch" id="pf-{{ plugin }}-{{ field }}" name="{{ field }}" data-field-type="boolean"{% if val %} checked{% endif %}>
-            </div>
-          {% elif spec.type == "integer" or spec.type == "number" or (spec.anyOf and (spec.anyOf | selectattr("type", "equalto", "integer") | list or spec.anyOf | selectattr("type", "equalto", "number") | list)) %}
-            <input class="form-control form-control-sm" type="number" id="pf-{{ plugin }}-{{ field }}" name="{{ field }}" data-field-type="number" value="{{ val if val is not none else '' }}">
-          {% else %}
-            <input class="form-control form-control-sm" type="text" id="pf-{{ plugin }}-{{ field }}" name="{{ field }}" data-field-type="string" value="{{ val if val is not none else '' }}">
-          {% endif %}
-          {% if spec.description %}<div class="form-text small">{{ spec.description }}</div>{% endif %}
+
+    {% for c in models %}{% if c.config_schema and c.config_schema.properties %}
+    <div class="dialog" id="pm-{{ c.kind }}-{{ c.name }}" popover role="dialog" aria-labelledby="pm-{{ c.kind }}-{{ c.name }}-t">
+      <form method="post" action="/ui/plugin-settings">
+        {{ m.guard("/stats?tab=ai") }}<input type="hidden" name="plugin" value="{{ c.name }}">
+        <div class="dialog-head"><h2 id="pm-{{ c.kind }}-{{ c.name }}-t">{{ c.label }} settings</h2>
+          <button class="btn btn-ghost btn-sm" type="button" popovertarget="pm-{{ c.kind }}-{{ c.name }}" popovertargetaction="hide" aria-label="Close">{{ m.icon("x") }}</button></div>
+        <div class="dialog-body">
+          {% for field, spec in c.config_schema.properties.items() %}{{ setting(c.name, field, spec, c.config.get(field, spec.default), c) }}{% endfor %}
         </div>
-      </div>
-    {% endmacro %}
-    {% for m in models %}{% if m.config_schema and m.config_schema.properties %}
-      <template id="pf-{{ m.kind }}-{{ m.name }}">
-        {% for field, spec in m.config_schema.properties.items() %}
-          {{ setting(m.name, field, spec, m.config.get(field, spec.default), m) }}
-        {% endfor %}
-      </template>
+        <div class="dialog-foot">
+          <p class="note">Saved to <code>config.toml</code>. Reload the plugin for it to take effect.</p>
+          <button class="btn" type="button" popovertarget="pm-{{ c.kind }}-{{ c.name }}" popovertargetaction="hide">Cancel</button>
+          <button class="btn btn-primary" type="submit">Save</button>
+        </div>
+      </form>
+    </div>
     {% endif %}{% endfor %}
-    <div class="modal" id="plugin-modal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="pm-title" hidden>
-      <div class="modal-dialog modal-dialog-scrollable">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h2 class="modal-title h6 mb-0" id="pm-title">Plugin settings</h2>
-            <button type="button" class="btn-close" data-pm-close aria-label="Close"></button>
-          </div>
-          <div class="modal-body"><form id="pm-form" novalidate><div id="pm-fields"></div></form></div>
-          <div class="modal-footer">
-            <p class="text-secondary small me-auto mb-0">Saved to <code>config.toml</code>. Reload the plugin once saved for the change to take effect.</p>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-pm-close>Cancel</button>
-            <button type="submit" form="pm-form" class="btn btn-sm btn-primary">Save</button>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="modal-backdrop fade show" id="pm-backdrop" hidden></div>
   </section>
 
   {# ---- Plugins ---- #}
-  <section class="pane" id="p-plugins">
-    <div class="card mb-3">
-      <div class="card-header text-secondary small text-uppercase fw-semibold">Plugins</div>
-      <div id="plugin-result" class="alert d-none mb-0 rounded-0 small" role="status" aria-live="polite"></div>
-      <table class="table table-sm mb-0">
-        <thead><tr><th>Plugin</th><th>Kind</th><th>Version</th><th>Capabilities</th><th>Health</th><th><span class="visually-hidden">Enabled</span></th><th class="text-end">Reload</th></tr></thead>
+  <section class="pane" id="p-plugins" aria-label="Plugins">
+    <div class="card">
+      <div class="card-head">Plugins</div>
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>Plugin</th><th>Kind</th><th>Version</th><th>Capabilities</th><th>Health</th><th>Enabled</th><th class="right">Reload</th></tr></thead>
         <tbody>
         {% for p in plugins %}
           <tr>
             <td class="mono">{{ p.name }}</td><td>{{ p.kind }}</td><td class="mono">{{ p.version }}</td>
-            <td class="text-secondary mono small">{{ p.capabilities | join(", ") or "—" }}</td>
-            <td data-plugin-health="{{ p.name }}">{% if p.healthy %}<span class="badge text-bg-success">healthy</span>
-                {%- elif p.started %}<span class="badge text-bg-danger">{{ p.detail or "unhealthy" }}</span>
-                {%- else %}<span class="badge badge-oaken-warn">{{ p.detail or "not started" }}</span>{% endif %}</td>
-            <td><div class="form-check form-switch mb-0">
-              <input class="form-check-input" type="checkbox" role="switch" data-plugin-switch="{{ p.name }}"
-                     aria-label="Enable {{ p.name }}"{% if p.enabled %} checked{% endif %}>
-            </div></td>
-            <td class="text-end"><button class="btn btn-sm btn-outline-secondary" data-plugin-reload="{{ p.name }}"
-                title="Restart {{ p.name }} on the current config.toml">Reload</button></td>
+            <td class="muted mono small">{{ p.capabilities | join(", ") or "—" }}</td>
+            <td>{{ health(p) }}</td>
+            <td>{{ m.switch("plugin", "/stats?tab=plugins", p.enabled, "Enable " ~ p.name, {"name": p.name}, "verb", "enable", "disable") }}</td>
+            <td class="right">{% call m.post("plugin", "/stats?tab=plugins") %}<input type="hidden" name="name" value="{{ p.name }}"><input type="hidden" name="verb" value="reload"><button class="btn btn-sm" type="submit" title="Restart {{ p.name }} on the current config.toml">Reload</button>{% endcall %}</td>
           </tr>
         {% else %}
-          <tr><td colspan="7" class="text-secondary">No plugins installed.</td></tr>
+          <tr><td colspan="7" class="muted">No plugins installed.</td></tr>
         {% endfor %}
         </tbody>
-      </table>
+      </table></div>
     </div>
   </section>
 
   {# ---- Audit log ---- #}
-  <section class="pane" id="p-audit">
-    <div class="card mb-3">
-      <div class="card-header text-secondary small text-uppercase fw-semibold">Recent audit log</div>
-      <table class="table table-sm mb-0">
+  <section class="pane" id="p-audit" aria-label="Audit log">
+    <div class="card">
+      <div class="card-head">Recent audit log</div>
+      <div class="table-wrap"><table class="table">
         <thead><tr><th>When</th><th>Actor</th><th>Operation</th><th>Count</th><th>Reason</th><th>State</th></tr></thead>
         <tbody>
         {% for e in audit %}
           <tr>
-            <td class="mono text-secondary small">{{ e.ts }}</td>
-            <td class="mono">{{ e.actor }}</td>
-            <td class="mono">{{ e.op }}</td>
-            <td>{{ e.count }}</td>
-            <td class="text-secondary">{{ e.reason }}</td>
-            <td>{% if e.undone_by %}<span class="badge text-bg-secondary">undone</span>{% else %}<span class="badge text-bg-success">applied</span>{% endif %}</td>
+            <td class="mono muted small">{{ e.ts }}</td><td class="mono">{{ e.actor }}</td><td class="mono">{{ e.op }}</td>
+            <td>{{ e.count }}</td><td class="muted">{{ e.reason }}</td>
+            <td>{% if e.undone_by %}<span class="badge badge-muted">undone</span>{% else %}<span class="badge badge-ok">applied</span>{% endif %}</td>
           </tr>
         {% else %}
-          <tr><td colspan="6" class="text-secondary">No audit entries yet.</td></tr>
+          <tr><td colspan="6" class="muted">No audit entries yet.</td></tr>
         {% endfor %}
         </tbody>
-      </table>
+      </table></div>
     </div>
-    <p class="text-secondary small">Ids and metadata only — the audit log never records message text.</p>
+    <p class="muted small">Ids and metadata only. The audit log never records message text.</p>
   </section>
 
-  {# ---- Reference (the operation registry) ---- #}
-  <section class="pane" id="p-ref">
-    <div id="expose-result" class="alert d-none mb-3 rounded small" role="status" aria-live="polite"></div>
-    <div class="card mb-3" id="mcp-workspaces">
-      <div class="card-header text-secondary small text-uppercase fw-semibold">MCP workspaces</div>
-      <div class="card-body small">
-        <p class="mb-2">
-          {% if not mcp.mounted %}<span class="badge text-bg-secondary">MCP is off</span>
-            <span class="text-secondary">(set <code>[api] mcp = true</code> and restart core)</span>
-          {% else %}<span class="badge text-bg-success">MCP is on</span>{% endif %}
-          Clients may reach
-          {% if mcp.all %}<strong>every workspace</strong>{% else %}only the workspaces ticked below{% endif %}.
+  {# ---- Reference ---- #}
+  <section class="pane" id="p-ref" aria-label="Reference">
+    <div class="card" id="mcp-workspaces">
+      <div class="card-head">MCP workspaces</div>
+      <form class="card-body" method="post" action="/ui/mcp-workspaces">
+        {{ m.guard("/stats?tab=ref") }}
+        <p>
+          {% if not mcp.mounted %}<span class="badge badge-muted">MCP is off</span>
+            <span class="muted">(set <code>[api] mcp = true</code> and restart core)</span>
+          {% else %}<span class="badge badge-ok">MCP is on</span>{% endif %}
+          Clients may reach {% if mcp.all %}<strong>every workspace</strong>{% else %}only the workspaces ticked below{% endif %}.
           Mail text returned to an AI client leaves this process.
         </p>
-        {% if mcp.all %}<p class="text-warning-emphasis mb-2">Every workspace is reachable, secure ones included.</p>{% endif %}
-        <div class="d-flex flex-wrap gap-3 mb-2">
+        {% if mcp.all %}<p class="alert alert-warn">Every workspace is reachable, secure ones included.</p>{% endif %}
+        <div class="row">
         {% for w in mcp.workspaces %}
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" data-mcp-workspace="{{ w.name }}"
-                   id="mcpw-{{ w.name }}"{% if w.linked %} checked{% endif %}{% if mcp.all %} disabled{% endif %}>
-            <label class="form-check-label" for="mcpw-{{ w.name }}">
-              <span class="mono">{{ w.name }}</span>
-              <span class="badge {{ 'text-bg-success' if w.trust == 'secure' else 'badge-oaken-warn' }}">{{ w.trust }}</span>
-            </label>
-          </div>
+          <label class="check"><input type="checkbox" name="workspace" value="{{ w.name }}"{% if w.linked and not mcp.all %} checked{% endif %}>
+            <span class="mono">{{ w.name }}</span> <span class="badge {{ 'badge-ok' if w.trust == 'secure' else 'badge-warn' }}">{{ w.trust }}</span></label>
         {% endfor %}
         </div>
-        <div class="form-check form-switch">
-          <input class="form-check-input" type="checkbox" role="switch" id="mcpw-all"{% if mcp.all %} checked{% endif %}>
-          <label class="form-check-label" for="mcpw-all">All workspaces (writes <code>workspaces = []</code>)</label>
-        </div>
-      </div>
+        <p><label class="check"><input type="checkbox" name="all" value="1"{% if mcp.all %} checked{% endif %}> All workspaces (writes <code>workspaces = []</code>)</label></p>
+        <button class="btn btn-primary" type="submit">Save workspaces</button>
+      </form>
     </div>
-    <div class="card mb-3">
-      <div class="card-header text-secondary small text-uppercase fw-semibold">Operations reference</div>
-      <table class="table table-sm mb-0">
+    <div class="card">
+      <div class="card-head">Operations reference</div>
+      <div class="table-wrap"><table class="table">
         <thead><tr><th>Operation</th><th>Permission</th><th>MCP</th><th>Summary</th></tr></thead>
         <tbody>
         {% for o in operations %}
           <tr>
             <td class="mono">{{ o.name }}</td>
-            <td>{% if o.permission == "mutate" %}<span class="badge badge-oaken-warn">mutate</span>
-                {%- elif o.permission == "send" %}<span class="badge text-bg-danger">send</span>
-                {%- else %}<span class="badge text-bg-success">read</span>{% endif %}</td>
-            <td>{% if not o.mcp_allowed %}
-                  <div class="form-check form-switch mb-0" title="This operation can never be offered over MCP ({{ o.mcp_locked_reason or 'ceiling' }})">
-                    <input class="form-check-input" type="checkbox" role="switch" disabled
-                           aria-label="{{ o.name }} is never exposable"></div>
-                {%- else %}
-                  <div class="form-check form-switch mb-0">
-                    <input class="form-check-input" type="checkbox" role="switch"
-                           data-op-switch="{{ o.name }}" aria-label="Expose {{ o.name }} over MCP"{% if o.mcp_enabled %} checked{% endif %}>
-                  </div>{% endif %}</td>
-            <td class="text-secondary">{{ o.summary }}</td>
+            <td>{% if o.permission == "mutate" %}<span class="badge badge-warn">mutate</span>
+                {%- elif o.permission == "send" %}<span class="badge badge-danger">send</span>
+                {%- else %}<span class="badge badge-ok">read</span>{% endif %}</td>
+            <td>{{ m.switch("expose", "/stats?tab=ref", o.mcp_enabled, "Expose " ~ o.name ~ " over MCP", {"name": o.name}, "mcp", "on", "off", not o.mcp_allowed, "Never offered over MCP (" ~ (o.mcp_locked_reason or "ceiling") ~ ")") }}</td>
+            <td class="muted">{{ o.summary }}</td>
           </tr>
         {% else %}
-          <tr><td colspan="4" class="text-secondary">No operations.</td></tr>
+          <tr><td colspan="4" class="muted">No operations.</td></tr>
         {% endfor %}
         </tbody>
-      </table>
+      </table></div>
     </div>
-    <p class="text-secondary small">Generated from the operation registry — what this core can do, and what MCP clients may call.</p>
+    <p class="muted small">Generated from the operation registry: what this core can do, and what MCP clients may call.</p>
   </section>
 </div>
-</main>
-
-<footer class="container pb-5 text-secondary small" style="max-width: 68rem;">
-  Served on loopback only, without a token — like <code>/v1/health</code>. Counts and health only;
-  no message content, addresses or tokens are shown. The MCP switches on the Reference tab, and the
-  enricher and agent controls, write <code>config.toml</code> and take effect at once; the model
-  picker writes it too and reloads the backend to apply.
-</footer>
-<script src="/stats.js"></script>
-</body>
-</html>
+{% endblock %}
+{% block scripts %}<script src="/refresh.js"></script>{% endblock %}

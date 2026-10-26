@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The core-served config editor (/config): the page renders and the loopback /config/* routes
-actually read, validate, and SAVE config.toml to disk. These drive the real Api over ASGI, like
-the /stats tests, so they prove the whole browser path, not just the operation in isolation."""
+"""The core-served config editor (/config): the page renders and its forms read, validate and SAVE
+config.toml on disk. These drive the real Api over ASGI, so they prove the whole browser path."""
 
 from pathlib import Path
 
@@ -9,64 +8,57 @@ from oaken.api.tests.conftest import Rig
 from oaken.core import paths
 
 
+def saved() -> str | None:
+    target = paths.config_dir() / "config.toml"
+    return target.read_text(encoding="utf-8") if target.is_file() else None
+
+
 async def test_config_page_renders_without_a_token(rig: Rig) -> None:
     resp = await rig.http.get("/config")  # loopback, no Authorization header
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
-    assert "Configuration" in resp.text
-    # the shared nav is present
-    assert "/stats" in resp.text and "/config" in resp.text
+    assert "Configuration" in resp.text and "<textarea" in resp.text
+    assert 'formaction="/ui/config-test"' in resp.text and 'action="/ui/config-save"' in resp.text
 
 
 async def test_save_writes_the_file_to_disk(rig: Rig) -> None:
-    target = paths.config_dir() / "config.toml"
-    # Save through the real loopback route the browser uses.
-    resp = await rig.http.post("/config/save", json={"text": "[api]\nport = 8123\n"})
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert body["ok"] is True, body
-    # The file is actually on disk with the content we sent.
-    assert target.is_file(), "config.toml was not written"
-    assert "8123" in target.read_text(encoding="utf-8")
+    page = await rig.seen("config-save", "/config", text="[api]\nport = 8123\n")
+    assert "Saved." in page
+    assert "8123" in (saved() or "")
 
 
-async def test_save_then_get_roundtrips_through_routes(rig: Rig) -> None:
+async def test_the_editor_shows_what_was_saved(rig: Rig) -> None:
     text = "[api]\nport = 8123\n"
-    save = await rig.http.post("/config/save", json={"text": text})
-    assert save.json()["ok"] is True, save.text
-    got = await rig.http.get("/config/get")
-    assert got.status_code == 200
-    data = got.json()
-    assert data["exists"] is True
-    assert data["text"] == text
+    await rig.ui("config-save", "/config", text=text)
+    assert text in (await rig.http.get("/config")).text
 
 
 async def test_save_backs_up_the_previous_file(rig: Rig) -> None:
-    await rig.http.post("/config/save", json={"text": "[api]\nport = 8123\n"})
-    second = await rig.http.post("/config/save", json={"text": "[api]\nport = 9000\n"})
-    body = second.json()
-    assert body["ok"] is True
-    assert body["backup"], "expected a backup path on the second save"
-    assert Path(body["backup"]).is_file()
-    assert "8123" in Path(body["backup"]).read_text(encoding="utf-8")  # old content kept
-    assert "9000" in (paths.config_dir() / "config.toml").read_text(encoding="utf-8")
+    await rig.ui("config-save", "/config", text="[api]\nport = 8123\n")
+    page = await rig.seen("config-save", "/config", text="[api]\nport = 9000\n")
+    backup = next(line for line in page.splitlines() if "Backup:" in line)
+    path = Path(backup.split("Backup:")[1].split("<")[0].strip())
+    assert "8123" in path.read_text(encoding="utf-8")  # the old content is kept
+    assert "9000" in (saved() or "")
 
 
 async def test_save_refuses_invalid_config_and_writes_nothing(rig: Rig) -> None:
-    target = paths.config_dir() / "config.toml"
-    before = target.read_text(encoding="utf-8") if target.is_file() else None
-    resp = await rig.http.post("/config/save", json={"text": "[api]\nbogus_key = 1\n"})
-    body = resp.json()
-    assert body["ok"] is False
-    assert body["error"]
-    after = target.read_text(encoding="utf-8") if target.is_file() else None
-    assert after == before, "an invalid save must not change the file on disk"
+    before = saved()
+    page = await rig.seen("config-save", "/config", text="[api]\nbogus_key = 1\n")
+    assert "Not saved" in page
+    assert saved() == before
 
 
-async def test_validate_route_does_not_write(rig: Rig) -> None:
-    target = paths.config_dir() / "config.toml"
-    existed = target.is_file()
-    resp = await rig.http.post("/config/test", json={"text": "[api]\nport = 8123\n"})
-    assert resp.json()["ok"] is True
-    # Testing must never create or modify the file.
-    assert target.is_file() == existed
+async def test_test_checks_and_keeps_the_text_without_writing(rig: Rig) -> None:
+    from oaken.api.console import csrf_token
+
+    before = saved()
+    ok = await rig.http.post(
+        "/ui/config-test", data={"csrf": csrf_token(), "text": "[api]\nport = 8123\n"}
+    )
+    assert ok.status_code == 200 and "Valid." in ok.text and "port = 8123" in ok.text
+    bad = await rig.http.post(
+        "/ui/config-test", data={"csrf": csrf_token(), "text": "[api]\nbogus_key = 1\n"}
+    )
+    assert "Invalid:" in bad.text and "bogus_key = 1" in bad.text  # the typed text survives
+    assert saved() == before  # testing never creates or changes the file

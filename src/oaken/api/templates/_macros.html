@@ -1,0 +1,37 @@
+{# Form helpers for the console. Import with context so they can see the form token:
+   {% import "_macros.html" as m with context %} #}
+{% macro guard(back) -%}
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="back" value="{{ back }}">
+{%- endmacro %}
+
+{# A form that posts to /ui/<action> and comes back to <back>. Its fields are the caller's. #}
+{% macro post(action, back, cls="inline") -%}
+  <form class="{{ cls }}" method="post" action="/ui/{{ action }}">{{ guard(back) }}{{ caller() }}</form>
+{%- endmacro %}
+
+{# An on/off switch that is its own small form: pressing it posts the opposite value. #}
+{% macro switch(action, back, on, label, fields, value_name="mcp", on_value="on", off_value="off", disabled=False, reason="") -%}
+  <form class="inline" method="post" action="/ui/{{ action }}">{{ guard(back) }}
+    {%- for k, v in fields.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor -%}
+    <input type="hidden" name="{{ value_name }}" value="{{ off_value if on else on_value }}">
+    <button class="switch" type="submit" role="switch" aria-checked="{{ 'true' if on else 'false' }}"
+            aria-label="{{ label }}"{% if disabled %} disabled title="{{ reason }}"{% endif %}><span class="knob"></span></button>
+    <span class="switch-text">{{ "on" if on else "off" }}</span>
+  </form>
+{%- endmacro %}
+
+{# A destructive button that asks first, with no script: a details element opens a small panel. #}
+{% macro confirm(action, back, label, question, yes, fields) -%}
+  <details class="menu">
+    <summary class="btn btn-danger btn-sm">{{ label }}</summary>
+    <div class="confirm-pop">
+      <p>{{ question }}</p>
+      <form class="inline" method="post" action="/ui/{{ action }}">{{ guard(back) }}
+        {%- for k, v in fields.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor -%}
+        <button class="btn btn-danger btn-sm" type="submit">{{ yes }}</button>
+      </form>
+    </div>
+  </details>
+{%- endmacro %}
+
+{% macro icon(name) -%}<svg class="icon" aria-hidden="true"><use href="#i-{{ name }}"/></svg>{%- endmacro %}

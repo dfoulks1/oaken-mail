@@ -2,39 +2,18 @@
 """The data behind the read-only ``/stats`` page (ADR 0013).
 
 Gathers the same counts and health the ``status``, ``pipeline_status``, ``usage_summary``,
-``list_accounts`` and ``list_plugins`` operations expose, into one plain dict a Jinja2 template
-renders. **Counts and health only**: no message text, no addresses, no tokens, no log lines. The
+``list_accounts`` and ``list_plugins`` operations expose, into one plain dict the console templates
+render. **Counts and health only**: no message text, no addresses, no tokens, no log lines. The
 page is served on loopback without a token (like ``/v1/health``), so the discipline that keeps
 mail content out of it lives here, in what this collector is allowed to read.
 """
 
 from dataclasses import asdict
 from datetime import datetime
-from pathlib import Path
 from typing import Any
-
-from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from oaken.core.clock import Clock
 from oaken.core.operations.services import Services
-
-_TEMPLATES = Path(__file__).resolve().parent / "templates"
-_env = Environment(
-    loader=FileSystemLoader(str(_TEMPLATES)),
-    autoescape=select_autoescape(["html", "xml"]),  # escape everything: data may hold odd chars
-)
-
-# The one small, same-origin script for the stats page's live refresh (served at /stats.js).
-STATS_JS = (_TEMPLATES / "stats.js").read_text(encoding="utf-8")
-
-# The Oaken Mail logo, packaged with core and served at /stats-logo.png (same-origin, offline).
-STATS_LOGO = (_TEMPLATES / "oaken-logo.png").read_bytes()
-
-
-def render_stats(data: dict[str, Any]) -> str:
-    """Render ``stats.html`` with the collected context. Autoescaped, so nothing in the data can
-    inject markup even though the collector already keeps mail content out."""
-    return _env.get_template("stats.html").render(**data)
 
 
 class StatsCollector:

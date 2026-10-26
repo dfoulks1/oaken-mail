@@ -56,6 +56,24 @@ class Rig:
             headers["X-Oaken-Client"] = client
         return await self.http.post(path, json={} if body is None else body, headers=headers, **kw)
 
+    async def ui(
+        self, action: str, back: str = "/stats", *, token: str | None = None, **fields: str
+    ) -> httpx2.Response:
+        """A console form post, as the browser sends it: urlencoded, with the page's token. The
+        reply is the 303 back to the page; ``seen`` follows it to read the message."""
+        from oaken.api.console import csrf_token
+
+        data = {"csrf": csrf_token() if token is None else token, "back": back, **fields}
+        return await self.http.post(f"/ui/{action}", data=data)
+
+    async def seen(self, action: str, back: str = "/stats", **fields: str) -> str:
+        """The page text after a form post, with its one-time message on it."""
+        resp = await self.ui(action, back, **fields)
+        assert resp.status_code == 303, resp.text
+        page = await self.http.get(resp.headers["location"])
+        assert page.status_code == 200
+        return page.text
+
     async def call(self, name: str, input_: dict[str, Any] | None = None, **kw: Any) -> Any:
         """A confirmed call as the CLI; returns the parsed body."""
         r = await self.post(
@@ -110,3 +128,23 @@ def make_rig(tmp_path: Path) -> Callable[..., Any]:
 
 
 __all__ = ["ORIGIN", "PORT", "TOKEN", "OakenError", "Rig"]
+
+
+@pytest.fixture(autouse=True)
+def reloads(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """``config_reload`` signals this very process (SIGHUP), which would end the test run. Record
+    that signal instead of sending it; any other signal goes through."""
+    import os
+    import signal
+
+    sent: list[int] = []
+    real_kill = os.kill
+
+    def kill(pid: int, sig: int) -> None:
+        if sig == signal.SIGHUP:
+            sent.append(sig)
+        else:
+            real_kill(pid, sig)
+
+    monkeypatch.setattr("oaken.core.operations.builtin.config.os.kill", kill)
+    return sent

@@ -1,294 +1,33 @@
-<!doctype html>
-<html lang="en" data-bs-theme="light">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Welcome · OakenMail</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <style>
-    /* Embedded styles fallback in case assets/oaken.css is missing or partial */
-    :root {
-      --ok-oak-green: #527e61;
-      --ok-oak-dark: #3a5a45;
-      --ok-acorn-brown: #8b5a2b;
-    }
-    
-    .ok-welcome-hero {
-      background: linear-gradient(135deg, rgba(82, 126, 97, 0.08) 0%, rgba(58, 90, 69, 0.03) 100%);
-      border: 1px solid rgba(82, 126, 97, 0.2);
-      border-radius: 12px;
-      padding: 2.5rem;
-      margin-bottom: 2rem;
-    }
-    /* Dark: the box leads with acorn (brown/orange) instead of green. */
-    [data-bs-theme="dark"] .ok-welcome-hero {
-      background: linear-gradient(135deg, rgba(198, 121, 46, 0.10) 0%, rgba(92, 58, 33, 0.05) 100%);
-      border-color: rgba(198, 121, 46, 0.30);
-    }
-
-    .ok-logo-graphic {
-      max-width: 180px;
-      height: auto;
-      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.08));
-    }
-
-    .ok-card-link {
-      transition: all 0.2s ease-in-out;
-      border: 1px solid var(--bs-border-color);
-      border-radius: 10px;
-      text-decoration: none;
-      color: inherit;
-    }
-
-    .ok-card-link:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08);
-      border-color: var(--oaken-accent);
-      color: inherit;
-    }
-
-    .ok-icon-box {
-      width: 42px;
-      height: 42px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.25rem;
-      background-color: rgba(82, 126, 97, 0.12);
-      color: var(--oaken-accent);
-    }
-    [data-bs-theme="dark"] .ok-icon-box { background-color: rgba(198, 121, 46, 0.14); }
-
-    /* The primary call-to-action, themed: oak green in light, acorn orange in dark. */
-    .btn-oaken {
-      background-color: var(--oaken-accent);
-      border-color: var(--oaken-accent);
-      color: #fff;
-    }
-    .btn-oaken:hover { filter: brightness(1.08); color: #fff; }
-
-    .ok-badge-status {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.375rem;
-      font-family: var(--bs-font-monospace);
-      font-size: 0.75rem;
-      padding: 0.25rem 0.6rem;
-      border-radius: 50rem;
-      background-color: rgba(82, 126, 97, 0.15);
-      color: var(--oaken-oak);
-      border: 1px solid rgba(82, 126, 97, 0.35);
-    }
-    [data-bs-theme="dark"] .ok-badge-status { color: #8fc5a1; }
-
-    /* The version badge: a sibling of the status pill — same shape, size, mono font — in the
-       acorn tone so the pair reads as one two-tone unit (green "active" + brown "version"). */
-    .ok-badge-version {
-      display: inline-flex;
-      align-items: center;
-      font-family: var(--bs-font-monospace);
-      font-size: 0.75rem;
-      padding: 0.25rem 0.6rem;
-      border-radius: 50rem;
-      background-color: rgba(139, 90, 43, 0.15);
-      color: var(--oaken-acorn);
-      border: 1px solid rgba(139, 90, 43, 0.35);
-    }
-    [data-bs-theme="dark"] .ok-badge-version { color: var(--oaken-acorn-2); }
-
-    .ok-status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background-color: var(--oaken-oak);
-      box-shadow: 0 0 6px var(--oaken-oak);
-    }
-  </style>
-</head>
-<body>
-<div class="ok-app">
-  <!-- Top Navigation Bar -->
-  {% include "_nav.html" with context %}
-
-  <div class="ok-body">
-    <!-- Main Content Area -->
-    <main class="ok-main p-4 overflow-auto">
-      <div class="container-max-lg mx-auto" style="max-width: 920px;">
-
-        <!-- Hero Section -->
-        <div class="ok-welcome-hero d-flex flex-column flex-md-row align-items-center gap-4">
-          <div class="text-center text-md-start flex-grow-1">
-            <div class="d-inline-flex align-items-center gap-2 mb-2">
-              <span class="ok-badge-status"><span class="ok-status-dot"></span> Local Server Active</span>
-              <span class="ok-badge-version">v{{ version }}</span>
-            </div>
-            <h1 class="display-6 fw-bold mb-2">Welcome to OakenMail</h1>
-            <p class="text-muted fs-6 mb-4">
-              Fast, privacy-respecting internal mail daemon and web interface. Managing your messages on localhost made simple.
-            </p>
-            <div class="d-flex flex-wrap align-items-center justify-content-center justify-content-md-start gap-2">
-              <a href="/getting_started" class="btn btn-oaken px-3"><i class="bi bi-rocket-takeoff me-1"></i> Getting Started</a>
-              <a href="stats/" class="btn btn-outline-secondary px-3"><i class="bi bi-activity me-1"></i> System Status</a>
-              <a href="https://dfoulks1.github.io/oaken-mail" target="_blank" rel="noopener" class="btn btn-ghost text-muted"><i class="bi bi-book me-1"></i> Documentation <i class="bi bi-box-arrow-up-right small ms-1"></i></a>
-            </div>
-          </div>
-
-          <!-- Official Leaf + Acorn Envelope Logo SVG -->
-          <div class="text-center">
-            <svg class="ok-logo-graphic" viewBox="0 0 320 220" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <!-- Leaf Body -->
-              <path d="M160 20 C85 10, 20 65, 10 120 C45 110, 75 130, 85 165 C130 195, 220 185, 250 150 C300 130, 310 65, 265 30 C210 10, 180 35, 160 20 Z" fill="#527e61" stroke="#233529" stroke-width="7" stroke-linejoin="round"/>
-              <!-- Leaf Stem / Vein -->
-              <path d="M20 135 C90 105, 190 80, 280 55" stroke="#233529" stroke-width="9" stroke-linecap="round"/>
-              <!-- Acorn Cap -->
-              <path d="M110 85 C95 50, 130 25, 165 35 C195 45, 180 85, 110 85 Z" fill="#5c3a21" stroke="#233529" stroke-width="6"/>
-              <!-- Cap Hatching/Texture -->
-              <path d="M125 45 L155 70 M140 40 L170 65" stroke="#3d2616" stroke-width="3"/>
-              <!-- Acorn Body (Envelope shape) -->
-              <path d="M110 85 C98 135, 130 160, 165 155 C195 150, 200 115, 180 85 Z" fill="#8b5a2b" stroke="#233529" stroke-width="6"/>
-              <!-- Envelope Flap Lines -->
-              <path d="M115 92 L148 118 L180 92" stroke="#233529" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M118 135 L138 110 M178 135 L158 110" stroke="#233529" stroke-width="4" stroke-linecap="round"/>
-            </svg>
-          </div>
-        </div>
-
-        <!-- Section Title -->
-        <h2 class="h6 text-uppercase tracking-wider text-muted fw-bold mb-3">Quick Navigation</h2>
-
-        <!-- Cards Grid -->
-        <div class="row g-3 mb-4">
-          <!-- Card: Getting Started -->
-          <div class="col-md-6">
-            <a href="/getting_started" class="ok-card-link card h-100 p-3">
-              <div class="card-body p-0 d-flex gap-3 align-items-start">
-                <div class="ok-icon-box flex-shrink-0">
-                  <i class="bi bi-compass"></i>
-                </div>
-                <div>
-                  <h3 class="h6 fw-bold mb-1">Getting Started Guide</h3>
-                  <p class="small text-muted mb-0">Learn how to configure your mailbox, connect client protocols, and send your first message.</p>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- Card: Status Page -->
-          <div class="col-md-6">
-            <a href="/stats" class="ok-card-link card h-100 p-3">
-              <div class="card-body p-0 d-flex gap-3 align-items-start">
-                <div class="ok-icon-box flex-shrink-0">
-                  <i class="bi bi-speedometer2"></i>
-                </div>
-                <div>
-                  <h3 class="h6 fw-bold mb-1">System Status &amp; Stats</h3>
-                  <p class="small text-muted mb-0">Monitor queue states, daemon memory consumption, active connections, and latency telemetry.</p>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- Card: Online Documentation -->
-          <div class="col-md-6">
-            <a href="https://dfoulks1.github.io/oaken-mail" target="_blank" rel="noopener" class="ok-card-link card h-100 p-3">
-              <div class="card-body p-0 d-flex gap-3 align-items-start">
-                <div class="ok-icon-box flex-shrink-0">
-                  <i class="bi bi-journal-text"></i>
-                </div>
-                <div>
-                  <div class="d-flex align-items-center gap-1">
-                    <h3 class="h6 fw-bold mb-1">Documentation</h3>
-                    <i class="bi bi-box-arrow-up-right small text-muted"></i>
-                  </div>
-                  <p class="small text-muted mb-0">Explore full REST API specs, CLI command references, and architecture guides hosted online.</p>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- Card: Configuration -->
-          <div class="col-md-6">
-            <a href="/config" class="ok-card-link card h-100 p-3">
-              <div class="card-body p-0 d-flex gap-3 align-items-start">
-                <div class="ok-icon-box flex-shrink-0">
-                  <i class="bi bi-sliders"></i>
-                </div>
-                <div>
-                  <h3 class="h6 fw-bold mb-1">Configuration</h3>
-                  <p class="small text-muted mb-0">Edit <code>config.toml</code> in the browser: test, save with a backup, and reload core in place.</p>
-                </div>
-              </div>
-            </a>
-          </div>
-        </div>
-
-        <!-- Local Server Info Box -->
-        <div class="card border mb-4">
-          <div class="card-header bg-transparent py-2.5 px-3 border-bottom d-flex align-items-center justify-content-between">
-            <span class="fw-semibold small"><i class="bi bi-server me-1.5 text-muted"></i> Daemon Environment</span>
-            <span class="ok-badge-status"><span class="ok-status-dot"></span> OK</span>
-          </div>
-          <div class="card-body p-0">
-            <div class="table-responsive">
-              <table class="table table-sm table-borderless mb-0 small">
-                <tbody>
-                  <tr class="border-bottom">
-                    <td class="ps-3 text-muted" style="width: 35%;">Listen Address</td>
-                    <td class="pe-3 text-end font-monospace">127.0.0.1:{{ env.port if env.port else "—" }}</td>
-                  </tr>
-                  <tr class="border-bottom">
-                    <td class="ps-3 text-muted">OAKEN_HOME</td>
-                    <td class="pe-3 text-end font-monospace">{{ env.oaken_home if env.oaken_home else "(unset — platform defaults)" }}</td>
-                  </tr>
-                  <tr class="border-bottom">
-                    <td class="ps-3 text-muted">Health Endpoint</td>
-                    <td class="pe-3 text-end font-monospace"><a href="/v1/health" class="text-decoration-none">/v1/health</a></td>
-                  </tr>
-                  <tr class="border-bottom">
-                    <td class="ps-3 text-muted">Configuration File</td>
-                    <td class="pe-3 text-end font-monospace"><a href="/config" class="text-decoration-none">{{ env.config_dir }}/config.toml</a></td>
-                  </tr>
-                  <tr>
-                    <td class="ps-3 text-muted">Data Directory</td>
-                    <td class="pe-3 text-end font-monospace">{{ env.data_dir }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </main>
-  </div>
+{#- SPDX-License-Identifier: Apache-2.0 -#}
+{#- The home page. Version, paths and a status flag only: no mail content. -#}
+{% extends "_base.html" %}
+{% block title %}Welcome · Oaken Mail{% endblock %}
+{% block mast_class %} hero{% endblock %}
+{% block tagline %}<p class="tagline">Mail that stays yours. Local first, and quiet about it.</p>
+  <p class="row hero-actions">
+    <span class="badge badge-ok">Local server active</span><span class="badge badge-muted">v{{ version }}</span>
+  </p>{% endblock %}
+{% block main %}
+<p class="row hero-actions">
+  <a class="btn btn-primary" href="/getting_started">Getting started</a>
+  <a class="btn" href="/stats">System status</a>
+  <a class="btn btn-ghost" href="{{ docs_url }}" target="_blank" rel="noopener">Documentation</a>
+</p>
+<h2 class="eyebrow">Where to go</h2>
+<div class="grid-2">
+  <a class="card tile-link" href="/getting_started"><div class="card-body"><h3>Getting started</h3><p class="muted">Walk the <code>config.toml</code> settings, top to bottom, and connect your first account.</p></div></a>
+  <a class="card tile-link" href="/stats"><div class="card-body"><h3>Status</h3><p class="muted">Queue, models, plugins, agents and the audit log. Counts and health only.</p></div></a>
+  <a class="card tile-link" href="/config"><div class="card-body"><h3>Configuration</h3><p class="muted">Edit <code>config.toml</code> here: test it, save with a backup, reload core in place.</p></div></a>
+  <a class="card tile-link" href="{{ docs_url }}" target="_blank" rel="noopener"><div class="card-body"><h3>Documentation</h3><p class="muted">API specs, the CLI, and the architecture, published online.</p></div></a>
 </div>
-
-<!-- Keyboard Shortcuts Modal -->
-<div class="modal fade" id="shortcutsModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Keyboard shortcuts</h5>
-        <button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <table class="table table-sm mb-0 bg-transparent">
-          <tr><td><kbd>c</kbd></td><td>Compose</td></tr>
-          <tr><td><kbd>/</kbd></td><td>Search</td></tr>
-          <tr><td><kbd>j</kbd> / <kbd>k</kbd></td><td>Next / previous message</td></tr>
-          <tr><td><kbd>r</kbd></td><td>Reply</td></tr>
-          <tr><td><kbd>a</kbd></td><td>Reply all</td></tr>
-          <tr><td><kbd>e</kbd></td><td>Archive</td></tr>
-          <tr><td><kbd>?</kbd></td><td>This help</td></tr>
-        </table>
-      </div>
-    </div>
-  </div>
+<div class="card">
+  <div class="card-head"><span>Daemon environment</span><span class="badge badge-ok">OK</span></div>
+  <div class="table-wrap"><table class="table"><tbody>
+    <tr><td class="muted">Listen address</td><td class="mono right">127.0.0.1:{{ env.port if env.port else "—" }}</td></tr>
+    <tr><td class="muted">OAKEN_HOME</td><td class="mono right">{{ env.oaken_home if env.oaken_home else "(unset: platform defaults)" }}</td></tr>
+    <tr><td class="muted">Health endpoint</td><td class="mono right"><a href="/v1/health">/v1/health</a></td></tr>
+    <tr><td class="muted">Configuration file</td><td class="mono right"><a href="/config">{{ env.config_dir }}/config.toml</a></td></tr>
+    <tr><td class="muted">Data directory</td><td class="mono right">{{ env.data_dir }}</td></tr>
+  </tbody></table></div>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/welcome.js"></script>
-</body>
-</html>
+{% endblock %}

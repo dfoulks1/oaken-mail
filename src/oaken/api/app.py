@@ -23,16 +23,17 @@ from starlette.staticfiles import StaticFiles
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from oaken.api import models
+from oaken.api.console import CSS, LOGO, REFRESH_JS, Console
 from oaken.api.errors import INTERNAL, ApiError, body, status_for
 from oaken.api.guard import Guard, Policy, Surface
 from oaken.api.openapi import build_api_openapi
 from oaken.api.ratelimit import RateLimiter
 from oaken.api.ring import EventRing
 from oaken.api.runtime import same_secret
-from oaken.api.stats import STATS_JS, STATS_LOGO, StatsCollector, render_stats
-from oaken.api.welcome import CONFIG_JS, JOBS_JS, WELCOME_JS, render_welcome, welcome_context
+from oaken.api.stats import StatsCollector
+from oaken.api.welcome import welcome_context
 from oaken.core.agents import TOKEN_PREFIX, Agent
-from oaken.core.errors import Conflict, InvalidInput, OakenError, PermissionDenied
+from oaken.core.errors import Conflict, OakenError, PermissionDenied
 from oaken.core.ids import JobId
 from oaken.core.logging import get_logger
 from oaken.core.operations.caller import CallerContext
@@ -175,6 +176,7 @@ class Api:
         self.ring = EventRing(cfg.event_ring_size)
         self._detach: Callable[[], None] | None = None
         self._port: int | None = None
+        self.console = Console(client, started_at=started_at)
         self.routes: list[BaseRoute] = self._routes()
         self.starlette = Starlette(
             routes=self.routes,
@@ -239,36 +241,15 @@ class Api:
             Route("/v1/agent/jobs/{job_id}/fail", safe(self.fail), methods=["POST"]),
             Route("/stats", safe(self.stats), methods=["GET"]),
             Route("/stats.json", safe(self.stats_json), methods=["GET"]),
-            Route("/stats.js", safe(self.stats_js), methods=["GET"]),
-            Route("/stats-logo.png", safe(self.stats_logo), methods=["GET"]),
             Route("/config", safe(self.config_editor), methods=["GET"]),
             Route("/getting_started", safe(self.getting_started), methods=["GET"]),
-            Route("/config.js", safe(self.config_js), methods=["GET"]),
-            Route("/welcome.js", safe(self.welcome_js), methods=["GET"]),
-            Route("/config/get", safe(self.config_get), methods=["GET"]),
-            Route("/config/test", safe(self.config_test), methods=["POST"]),
-            Route("/config/save", safe(self.config_save_route), methods=["POST"]),
-            Route("/config/reload", safe(self.config_reload_route), methods=["POST"]),
             Route("/jobs", safe(self.jobs_page), methods=["GET"]),
-            Route("/jobs.js", safe(self.jobs_js), methods=["GET"]),
-            Route("/jobs/list", safe(self.jobs_list), methods=["GET"]),
             Route("/jobs/pipeline", safe(self.jobs_pipeline), methods=["GET"]),
-            Route("/jobs/pause", safe(self.jobs_pause), methods=["POST"]),
-            Route("/jobs/resume", safe(self.jobs_resume), methods=["POST"]),
-            Route("/jobs/limit", safe(self.jobs_limit), methods=["POST"]),
-            Route("/jobs/retry-parked", safe(self.jobs_retry_parked), methods=["POST"]),
-            Route("/jobs/cancel", safe(self.jobs_cancel), methods=["POST"]),
-            Route("/jobs/retry", safe(self.jobs_retry), methods=["POST"]),
-            Route("/plugins/enable", safe(self.plugins_enable), methods=["POST"]),
-            Route("/plugins/disable", safe(self.plugins_disable), methods=["POST"]),
-            Route("/plugins/reload", safe(self.plugins_reload), methods=["POST"]),
-            Route("/stats/reset-usage", safe(self.stats_reset_usage), methods=["POST"]),
-            Route("/stats/revoke-agent", safe(self.stats_revoke_agent), methods=["POST"]),
-            Route("/stats/expose", safe(self.stats_expose), methods=["POST"]),
-            Route("/stats/mcp-workspaces", safe(self.stats_mcp_workspaces), methods=["POST"]),
-            Route("/stats/enricher-config", safe(self.stats_enricher_config), methods=["POST"]),
-            Route("/stats/model", safe(self.stats_model_save), methods=["POST"]),
-            Route("/stats/ask-model", safe(self.stats_ask_model), methods=["POST"]),
+            Route("/oaken.css", safe(self.asset_css), methods=["GET"]),
+            Route("/oaken-logo.png", safe(self.asset_logo), methods=["GET"]),
+            Route("/refresh.js", safe(self.asset_refresh), methods=["GET"]),
+            Route("/ui/config-test", safe(self.ui_config_test), methods=["POST"]),
+            Route("/ui/{action}", safe(self.ui_action), methods=["POST"]),
         ]
         static = Path(self.cfg.static_dir).expanduser() if self.cfg.static_dir else None
         if static is not None and static.is_dir():
@@ -286,124 +267,67 @@ class Api:
     async def health(self, request: Request) -> Response:
         return _json(models.Health().model_dump())
 
+    # -- the console (prompt 50) ---------------------------------------------------------------
+    # Core's own pages. Each is server-rendered HTML with one stylesheet and no script (the one
+    # optional exception, /refresh.js, only updates numbers). Every control is a form posting to
+    # /ui/<action>; see ``oaken.api.console``. Loopback-only and token-free like /stats, and the
+    # actions run the real operations as the internal caller with confirm=True, so each still lands
+    # in the audit log.
+    async def _op(self, name: str, payload: dict[str, Any]) -> dict[str, Any]:
+        out = await self.client.call(name, payload, CallerContext.internal(), confirm=True)
+        return out.output.model_dump(mode="json") if out.output is not None else {}
+
     async def placeholder(self, request: Request) -> Response:
-        """Core's home page (``/``). Renders the friendly ``welcome.html`` with the version, the
-        daemon's paths and port, and a short live status. If the template cannot be rendered (a
-        trimmed build, say) it falls back to the plain text placeholder so ``/`` always answers.
-        Loopback-only and unauthenticated like ``/stats``; version, paths and counts only."""
+        """Core's home page (``/``): the version, the daemon's paths and port, and a short live
+        status. If it cannot be rendered it falls back to plain text so ``/`` always answers."""
         try:
             status: dict[str, Any] = {}
             try:
-                out = await self.client.call("status", {}, CallerContext.internal())
-                if out.output is not None:
-                    status = out.output.model_dump(mode="json")
+                status = await self._op("status", {})
             except OakenError:
                 status = {}  # a status hiccup must not take the home page down
-            html = render_welcome(
-                welcome_context(version=self.client.svc.version, port=self._port, status=status)
+            context = welcome_context(
+                version=self.client.svc.version, port=self._port, status=status
             )
+            return self.console.render(request, "welcome.html", "home", context)
         except Exception:  # noqa: BLE001 - the home page must never 500; fall back to plain text
             log.error("welcome render failed; serving placeholder")
             return HTMLResponse(PLACEHOLDER)
-        csp = (
-            "default-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
-            "https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com "
-            "https://cdn.jsdelivr.net; img-src 'self' data:; "
-            "script-src 'self' https://cdn.jsdelivr.net; "
-            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
-        )
-        return HTMLResponse(html, headers={"content-security-policy": csp})
+
+    async def _config_page(self, request: Request, **extra: Any) -> Response:
+        info = await self._op("config_get", {})
+        context = {"text": info.get("text", ""), "path": info.get("path", "config.toml"),
+                   "exists": info.get("exists", False), **extra}  # fmt: skip
+        return self.console.render(request, "config.html", "config", context)
 
     async def config_editor(self, request: Request) -> Response:
-        """The core-served config.toml editor (``/config``): a textarea with Test, Save and Reload,
-        backed by the ``config_*`` operations. Loopback-only like ``/stats``; the page holds no
-        token (the browser calls ``/v1/operations/{name}`` through the same origin)."""
-        from oaken.api.welcome import _env  # same templates dir, same autoescaped environment
+        """The config.toml editor: a textarea with Test, Save and Reload, over the ``config_*``
+        operations."""
+        return await self._config_page(request)
 
-        html = _env.get_template("config.html").render(
-            version=self.client.svc.version,
-            active="config",
-            docs_url="https://dfoulks1.github.io/oaken-mail/",
-        )
-        csp = (
-            "default-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
-            "https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com "
-            "https://cdn.jsdelivr.net; img-src 'self' data:; script-src 'self'; "
-            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
-        )
-        return HTMLResponse(html, headers={"content-security-policy": csp})
+    async def ui_config_test(self, request: Request) -> Response:
+        """Test the text in the editor and answer on the same page with the text intact."""
 
-    # The config editor's data endpoints: loopback-only (the Host guard), token-free like
-    # /stats.json. Each delegates to the real config_* operation as the internal caller, so the
-    # operations stay the single source of truth and every save/reload still lands in the audit log.
-    async def _config_op(self, name: str, payload: dict[str, Any]) -> Response:
-        # confirm=True: these routes are driven by a person clicking a button on the loopback
-        # editor page, the same intent the CLI/UI expresses. Without it a mutate op (save, reload)
-        # returns a proposal and changes nothing.
-        out = await self.client.call(name, payload, CallerContext.internal(), confirm=True)
-        data = out.output.model_dump(mode="json") if out.output is not None else {}
-        return _json(data)
+        async def render(text: str, flash: Any) -> Response:
+            return await self._config_page(request, text=text, flash=flash)
 
-    async def config_get(self, request: Request) -> Response:
-        return await self._config_op("config_get", {})
+        form_text = await request.body()
+        return await self.console.config_test(request, form_text, render)
 
-    async def config_js(self, request: Request) -> Response:
-        """The config editor's one same-origin script, vendored with the package."""
-        return Response(
-            CONFIG_JS,
-            media_type="application/javascript",
-            headers={"cache-control": "no-store"},
-        )
-
-    async def welcome_js(self, request: Request) -> Response:
-        """The welcome page's one same-origin script (theme toggle), vendored with the package."""
-        return Response(
-            WELCOME_JS,
-            media_type="application/javascript",
-            headers={"cache-control": "no-store"},
-        )
-
-    async def config_test(self, request: Request) -> Response:
-        body = await read_json(request)
-        return await self._config_op("config_validate", {"text": body.get("text", "")})
-
-    async def config_save_route(self, request: Request) -> Response:
-        body = await read_json(request)
-        return await self._config_op("config_save", {"text": body.get("text", "")})
-
-    async def config_reload_route(self, request: Request) -> Response:
-        return await self._config_op("config_reload", {})
-
-    # -- the jobs & pipeline console (/jobs) --------------------------------------------------
-    # A core debugging surface: inspect the durable queue and control the ingest pipeline. Like
-    # /config it is loopback-only (the Host guard) and token-free; the mutating routes delegate to
-    # the real mutate operations with confirm=True, so every action still lands in the audit log.
     async def jobs_page(self, request: Request) -> Response:
-        from oaken.api.welcome import _env
-
-        html = _env.get_template("jobs.html").render(
-            version=self.client.svc.version,
-            active="jobs",
-            docs_url="https://dfoulks1.github.io/oaken-mail/",
-        )
-        csp = (
-            "default-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
-            "https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com "
-            "https://cdn.jsdelivr.net; img-src 'self' data:; script-src 'self'; "
-            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
-        )
-        return HTMLResponse(html, headers={"content-security-policy": csp})
-
-    async def jobs_js(self, request: Request) -> Response:
-        return Response(
-            JOBS_JS, media_type="application/javascript", headers={"cache-control": "no-store"}
-        )
+        """The jobs & pipeline console: inspect the durable queue and steer the ingest pipeline."""
+        status = request.query_params.get("status", "")
+        known = ("queued", "running", "failed", "cancelled", "succeeded")
+        payload: dict[str, Any] = {"limit": 100}
+        if status in known:
+            payload["status"] = status
+        jobs = (await self._op("list_jobs", payload)).get("jobs", [])
+        pipeline = await self._op("pipeline_status", {})
+        context = {"jobs": jobs, "pipeline": pipeline, "status": status, "statuses": known}
+        return self.console.render(request, "jobs.html", "jobs", context)
 
     async def getting_started(self, request: Request) -> Response:
-        """A short, in-app walkthrough of the config.toml settings, served by core at
-        /getting_started. Loopback-only like the other core pages."""
-        from oaken.api.welcome import _env
-
+        """A short in-app walkthrough of the config.toml settings."""
         host = self.client.svc.plugins
         providers = (
             [
@@ -415,153 +339,14 @@ class Api:
             if host is not None
             else []
         )
-        html = _env.get_template("getting_started.html").render(
-            version=self.client.svc.version,
-            providers=providers,
-            active="",
-            docs_url="https://dfoulks1.github.io/oaken-mail/",
-        )
-        csp = (
-            "default-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
-            "https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com "
-            "https://cdn.jsdelivr.net; img-src 'self' data:; script-src 'self'; "
-            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
-        )
-        return HTMLResponse(html, headers={"content-security-policy": csp})
-
-    async def jobs_list(self, request: Request) -> Response:
-        status = request.query_params.get("status") or None
-        payload: dict[str, Any] = {"limit": 100}
-        if status:
-            payload["status"] = status
-        return await self._config_op("list_jobs", payload)
+        return self.console.render(request, "getting_started.html", "", {"providers": providers})
 
     async def jobs_pipeline(self, request: Request) -> Response:
-        return await self._config_op("pipeline_status", {})
+        """The pipeline numbers as JSON, for the optional refresh script."""
+        return _json(await self._op("pipeline_status", {}))
 
-    # -- plugin control on the stats page ----------------------------------------------------
-    # The Plugins tab's switch and Reload button. Loopback-only and token-free like the rest of the
-    # console; each delegates to core's own plugin_enable / plugin_disable / plugin_reload with
-    # confirm=True, so the audit log records it and the CLI (`oaken plugins ...`) does the same.
-    async def _plugin_control(self, request: Request, op: str) -> Response:
-        body = await read_json(request)
-        name = body.get("name")
-        if not isinstance(name, str) or not name:
-            raise InvalidInput("name the plugin")
-        return await self._config_op(op, {"name": name})
-
-    async def plugins_enable(self, request: Request) -> Response:
-        return await self._plugin_control(request, "plugin_enable")
-
-    async def plugins_disable(self, request: Request) -> Response:
-        return await self._plugin_control(request, "plugin_disable")
-
-    async def plugins_reload(self, request: Request) -> Response:
-        return await self._plugin_control(request, "plugin_reload")
-
-    # -- the stats page's mutating buttons (loopback, audited via _config_op) --------------------
-    async def stats_reset_usage(self, request: Request) -> Response:
-        return await self._config_op("reset_usage", {})
-
-    async def stats_revoke_agent(self, request: Request) -> Response:
-        body = await read_json(request)
-        return await self._config_op("revoke_agent", {"agent_id": body["agent_id"]})
-
-    async def stats_expose(self, request: Request) -> Response:
-        body = await read_json(request)
-        return await self._config_op(
-            "set_operation_exposure",
-            {"scope": "operation", "name": body["name"], "mcp": bool(body["mcp"])},
-        )
-
-    async def stats_mcp_workspaces(self, request: Request) -> Response:
-        # Save `[mcp] workspaces` through the same settings operation the CLI uses, then reload so
-        # the running MCP server applies it (core re-reads settings; no restart).
-        body = await read_json(request)
-        names = body.get("workspaces")
-        if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
-            raise InvalidInput("workspaces must be a list of workspace names")
-        saved = await self.client.call(
-            "set_settings",
-            {"section": "mcp", "values": {"workspaces": names}},
-            CallerContext.internal(),
-            confirm=True,
-        )
-        result = saved.output
-        if result is None or not getattr(result, "ok", False):
-            return _json(result.model_dump(mode="json") if result is not None else {"ok": False})
-        return await self._config_op("config_reload", {})
-
-    async def stats_ask_model(self, request: Request) -> Response:
-        # `ask`'s model is a core setting ([ai] ask_model): save it through the settings operation
-        # the CLI uses, then reload so the running core reads it.
-        body = await read_json(request)
-        model = body.get("model")
-        if not isinstance(model, str):
-            raise InvalidInput("model must be a string (empty means the backend's own)")
-        saved = await self.client.call(
-            "set_settings",
-            {"section": "ai", "values": {"ask_model": model}},
-            CallerContext.internal(),
-            confirm=True,
-        )
-        result = saved.output
-        if result is None or not getattr(result, "ok", False):
-            return _json(result.model_dump(mode="json") if result is not None else {"ok": False})
-        return await self._config_op("config_reload", {})
-
-    async def stats_enricher_config(self, request: Request) -> Response:
-        body = await read_json(request)
-        return await self._config_op(
-            "set_plugin_config",
-            {"plugin": body["plugin"], "config": body.get("config", {})},
-        )
-
-    async def stats_model_save(self, request: Request) -> Response:
-        # Save the backend's model, then reload: the backend pins its model at start(), so a plain
-        # config write alone would not take effect until the next restart.
-        body = await read_json(request)
-        saved = await self.client.call(
-            "set_plugin_config",
-            {"plugin": body["plugin"], "config": {"model": body["model"]}},
-            CallerContext.internal(),
-            confirm=True,
-        )
-        result = saved.output
-        if result is None or not getattr(result, "ok", False):
-            return _json(result.model_dump(mode="json") if result is not None else {"ok": False})
-        return await self._config_op("config_reload", {})
-
-    async def jobs_pause(self, request: Request) -> Response:
-        body = await read_json(request)
-        payload: dict[str, Any] = {"why": "paused from the jobs console"}
-        if body.get("stage"):
-            payload["stage"] = body["stage"]
-        return await self._config_op("pause_backfill", payload)
-
-    async def jobs_resume(self, request: Request) -> Response:
-        body = await read_json(request)
-        return await self._config_op(
-            "resume_backfill", {"stage": body["stage"]} if body.get("stage") else {}
-        )
-
-    async def jobs_limit(self, request: Request) -> Response:
-        body = await read_json(request)
-        return await self._config_op(
-            "set_pipeline_limits",
-            {"stage": body.get("stage"), "concurrency": body.get("concurrency")},
-        )
-
-    async def jobs_retry_parked(self, request: Request) -> Response:
-        return await self._config_op("retry_parked", {"all": True})
-
-    async def jobs_cancel(self, request: Request) -> Response:
-        body = await read_json(request)
-        return await self._config_op("cancel_job", {"job_id": body.get("job_id", "")})
-
-    async def jobs_retry(self, request: Request) -> Response:
-        body = await read_json(request)
-        return await self._config_op("retry_job", {"job_id": body.get("job_id", "")})
+    async def ui_action(self, request: Request) -> Response:
+        return await self.console.act(request)
 
     def _stats_collector(self) -> StatsCollector:
         return StatsCollector(
@@ -572,46 +357,32 @@ class Api:
         )
 
     async def stats(self, request: Request) -> Response:
-        """The read-only status page (ADR 0013). Loopback-only (the Host guard) and
-        unauthenticated like ``/v1/health``; counts and health only, never mail content."""
+        """The status page (ADR 0013). Loopback-only (the Host guard) and unauthenticated like
+        ``/v1/health``; counts and health only, never mail content."""
         data = await self._stats_collector().collect()
-        data["active"] = "stats"
-        data["docs_url"] = "https://dfoulks1.github.io/oaken-mail/"
-        html = render_stats(data)
-        # Bootstrap (CDN) for a look consistent with / and /config, plus the one same-origin
-        # script (stats.js) for live in-place updates. The guard only adds a CSP when the
-        # response lacks one, so this header stands.
-        csp = (
-            "default-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
-            "https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com "
-            "https://cdn.jsdelivr.net; img-src 'self' data:; script-src 'self'; "
-            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
-        )
-        return HTMLResponse(html, headers={"content-security-policy": csp})
+        return self.console.render(request, "stats.html", "stats", data)
 
     async def stats_json(self, request: Request) -> Response:
-        """The same stats as the page, as JSON, for the page's in-place refresh (stats.js).
-        Loopback-only and unauthenticated like `/stats`; counts and health only."""
+        """The same stats as the page, as JSON, for the optional refresh script. Loopback-only and
+        unauthenticated like `/stats`; counts and health only."""
         data = await self._stats_collector().collect()
         return _json(data)
 
-    async def stats_js(self, request: Request) -> Response:
-        """The one small, same-origin script for the stats page's in-place refresh. Vendored with
-        the package, served here so the page's `script-src 'self'` allows exactly it and nothing
-        else. The page works fully without it; this only updates numbers so the tab never jumps."""
+    # The stylesheet, the logo and the optional script are served from the package, so the pages
+    # load nothing from another origin.
+    async def asset_css(self, request: Request) -> Response:
         return Response(
-            STATS_JS,
-            media_type="application/javascript",
-            headers={"cache-control": "no-store"},
+            CSS,
+            media_type="text/css",
+            headers={"cache-control": "public, max-age=31536000, immutable"},
         )
 
-    async def stats_logo(self, request: Request) -> Response:
-        """The Oaken Mail logo for the stats page, served same-origin from the packaged asset so
-        the page stays offline (no CDN) under `img-src 'self'`."""
+    async def asset_logo(self, request: Request) -> Response:
+        return Response(LOGO, media_type="image/png", headers={"cache-control": "max-age=86400"})
+
+    async def asset_refresh(self, request: Request) -> Response:
         return Response(
-            STATS_LOGO,
-            media_type="image/png",
-            headers={"cache-control": "max-age=86400"},
+            REFRESH_JS, media_type="text/javascript", headers={"cache-control": "no-store"}
         )
 
     async def list_operations(self, request: Request) -> Response:
