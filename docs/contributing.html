@@ -147,7 +147,7 @@ expires refresh tokens after ~7 days.</p>
 <div class="code"><pre class="highlight"><code class="language-text">src/oaken/           core: the daemon, API, operations, storage, ingest (the `oaken` package)
 src/oaken_*/         first-party plugins (providers, embedder, enrichers, vector store)
 apps/cli/            the `oaken` command, a separate package (`oaken-cli`, import `oaken_cli`)
-apps/webui/          the web UI (templates today; its own app later)
+apps/core/           the `oaken-core` bundle and Oaken Core's console templates
 docs/                the documentation site sources and generators
 </code></pre></div>
 <p>Core knows nothing about the apps. An app is a client of core's HTTP API and lives in its own
@@ -191,9 +191,8 @@ labeled as AI-generated (EU AI Act). Reviewing it as you would any other contrib
 acceptance criteria and a report-back. You can run one with an AI coding tool or follow it by hand
 as a checklist; either way the <strong>tests and acceptance criteria are the contract</strong>, not the exact
 code any one run produces.</p>
-<p>Files are named <code>TRACK_NN-name.md</code> (<code>CORE_</code>, <code>CLI_</code>, <code>MCP_</code>, <code>PLUGIN_</code>, <code>ENRICHER_</code>, <code>WEBUI_</code>,
-<code>DOCS_</code>). The number is the prompt's permanent ID and the track says what it builds. The web UI
-(<code>WEBUI_</code>) is its own product and is never folded into a core prompt.</p>
+<p>Files are named <code>TRACK_NN-name.md</code> (<code>CORE_</code>, <code>CLI_</code>, <code>MCP_</code>, <code>PLUGIN_</code>, <code>ENRICHER_</code>,
+<code>DOCS_</code>). The number is the prompt's permanent ID and the track says what it builds.</p>
 <p><strong>Not everything needs a prompt.</strong> A bug fix, a typo, a small refactor or a docs correction is an
 ordinary pull request: say what and why, add a test, run the checks. A prompt is for a new feature,
 a new plugin, or a change to an architectural decision.</p>
@@ -425,18 +424,6 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <td>README, <code>ROADMAP.md</code>, issue and PR templates, the site, the architecture and provider pages, and <code>docs/tools/check_commands.py</code> (runs the docs' <code>&lt;!-- check --&gt;</code> commands) are in. Not verified: the Gmail walkthrough on a clean Google account, and <code>docs/evals/latest.md</code> (both need real services)</td>
 </tr>
 <tr>
-<td>21</td>
-<td>WEBUI_21-webui-server</td>
-<td>Built</td>
-<td><code>oaken-webui</code> start, stop, restart and status</td>
-</tr>
-<tr>
-<td>21b</td>
-<td>WEBUI_21b-webui-client-foundation</td>
-<td><strong>In progress</strong></td>
-<td>Server items D1–D4, the shared sidebar and the API seam are in. Check the prompt's C list before starting; another session is on it</td>
-</tr>
-<tr>
 <td>22</td>
 <td>CORE_22-api-parity</td>
 <td>Built</td>
@@ -467,12 +454,6 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <td>Read/test ops plus the write path (<code>sieve_save</code>/<code>sieve_delete</code>/<code>sieve_get</code>, compile-first, atomic owner-only, never over MCP — ADR 0009), the <code>oaken sieve get|save|delete</code> CLI verbs with <code>--suggest-name</code>, and the Sieve editor UI (<code>sieve.html</code>)</td>
 </tr>
 <tr>
-<td>27</td>
-<td>CORE_27-contacts-people</td>
-<td><strong>Open</strong></td>
-<td><code>contacts.html</code> is still a mockup</td>
-</tr>
-<tr>
 <td>28</td>
 <td>CORE_28-compose-and-send</td>
 <td><strong>Open</strong></td>
@@ -482,13 +463,13 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <td>29</td>
 <td>CORE_29-system-settings</td>
 <td><strong>Partly built</strong></td>
-<td>Operations and CLI: <code>get/check/set_settings</code> (<code>oaken settings</code>), <code>storage_info</code> and <code>vacuum</code> (<code>oaken storage</code>, <code>oaken vacuum</code>), <code>cache_stats</code>/<code>clear_cache</code> (<code>oaken cache</code>), <code>events_tail</code> over a persisted event log (<code>oaken events</code>), and a paged <code>list_audit</code>. Not built: the Settings panes in the web UI</td>
+<td>Operations and CLI: <code>get/check/set_settings</code> (<code>oaken settings</code>), <code>storage_info</code> and <code>vacuum</code> (<code>oaken storage</code>, <code>oaken vacuum</code>), <code>cache_stats</code>/<code>clear_cache</code> (<code>oaken cache</code>), <code>events_tail</code> over a persisted event log (<code>oaken events</code>), and a paged <code>list_audit</code>. Not built: the Settings panes in a client UI</td>
 </tr>
 <tr>
 <td>30</td>
 <td>CORE_30-pipeline-management</td>
 <td>Built</td>
-<td>Per-stage pause (<code>pause_backfill</code>/<code>resume_backfill</code> take a <code>stage</code>, stored in the database), live concurrency (<code>set_pipeline_limits</code>), <code>reprocess --since/--limit</code>, <code>pipeline_status</code> shows <code>paused</code>, <code>concurrency</code> and the running jobs, interactive model calls go ahead of background enrich, and the <code>/jobs</code> console and <code>oaken pipeline</code> drive it. The existing operation names were kept instead of the prompt's new ones; bulk <code>cancel_jobs</code>/<code>retry_jobs</code> by stage and the web UI's Pipeline pane are not built</td>
+<td>Per-stage pause (<code>pause_backfill</code>/<code>resume_backfill</code> take a <code>stage</code>, stored in the database), live concurrency (<code>set_pipeline_limits</code>), <code>reprocess --since/--limit</code>, <code>pipeline_status</code> shows <code>paused</code>, <code>concurrency</code> and the running jobs, interactive model calls go ahead of background enrich, and the <code>/jobs</code> console and <code>oaken pipeline</code> drive it. The existing operation names were kept instead of the prompt's new ones; bulk <code>cancel_jobs</code>/<code>retry_jobs</code> by stage and a Pipeline settings pane are not built</td>
 </tr>
 <tr>
 <td>31</td>

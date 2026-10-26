@@ -145,11 +145,6 @@ mcp = true
 Then follow [Connect an AI client](mcp.html) to point Claude Desktop or another client at
 `oaken mcp`. Changes made through it always ask for confirmation first.
 
-## 9. Optional: the web UI
-
-With core running, `uv run oaken-webui` serves the web UI on port 47813 of `127.0.0.1`. It is a
-separate client that proxies to core and keeps the API token on the server side.
-
 ## If something fails
 
 | Message | Likely cause |

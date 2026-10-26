@@ -1,7 +1,6 @@
 # 25 — Mailbox chrome: folders, labels and unread counts
 
-**Read first:** `docs/prompts/00-context.md`, `docs/prompts/WEBUI_21b-webui-client-foundation.md` and
-`docs/adr/0008-location-and-enrichment-attrs.md`. **Depends on:** 07, 12, 13, 16, 17, 21, 21b, 22
+**Read first:** `docs/prompts/00-context.md` and `docs/adr/0008-location-and-enrichment-attrs.md`. **Depends on:** 07, 12, 13, 16, 17, 22
 (22 adds the `location`/`starred` filters and `offset`/`total`; do not duplicate them here).
 
 ## Decisions already taken (the user's answers)
@@ -36,7 +35,7 @@ operation and wires the chrome in both clients.
    unless asked" rule as search, and never mark anything read. Decide whether counts are per-account
    or merged, and whether the UI can request a subset; keep it one round-trip for a sidebar render.
 
-   **Output shape the UI is built against (21b A3):**
+   **Output shape the UI is built against:**
    `{inbox:{total,unread}, starred:{total,unread}, discarded:{total,unread},
    locations:{<name>:{total,unread}}, labels:{<name>:{total,unread}}, accounts?:{<id>:{…}}}`.
    `locations` is the folder list (distinct `location` values), so the sidebar needs no other call
@@ -58,7 +57,7 @@ operation and wires the chrome in both clients.
    `audit_ids`). `undo` must restore it. `starred` appears on `MessageItem`/`GetMessageOutput` (22).
 4. **Selection → filter.** Selecting a label/folder drives `list_messages`/`search` with the right
    filter (`label`, `location`, `starred`, `disposition`, `unread_only`); no new logic in the
-   client. URL state is `?view=inbox|starred|discarded`, `?folder=<name>`, `?label=<name>` (21b C4). Unread badges update
+   client. URL state is `?view=inbox|starred|discarded`, `?folder=<name>`, `?label=<name>`. Unread badges update
    from `mailbox_counts` after actions that change read state (mark read/unread), via a refresh or
    the event stream.
 5. **Live updates (optional but preferred).** If feasible, counts and the list update from the SSE
@@ -66,11 +65,8 @@ operation and wires the chrome in both clients.
    resilient: a dropped stream falls back to a re-fetch.
 6. **CLI** parity: a `oaken counts [--account …]` verb (or the generic `op`) returns the same
    numbers the UI badges show; `oaken star|unstar ID…` calls `set_flagged`; update 17's table.
-7. **UI** wiring, built on `Oaken.sidebar`/`Oaken.nav`/`Oaken.list` from 21b C4/C6: sidebar entries
-   and badges from `mailbox_counts` + `list_labels`; clicking filters the list; the per-view empty
-   state shows when a view is genuinely empty ("Your inbox is empty.", "No starred messages.",
-   "No messages in <folder>."); the star toggle (row and reader) calls `set_flagged` with an Undo
-   toast. Delete the static folder/label markup and the two "new" modals from every template.
+7. **Operations only.** The pages that consume them live in each client.
+
 8. **MCP ceiling.** Counts are `read`, `mcp="on"` is reasonable (no mail content leaves).
    `set_flagged` is `mcp="off"` as above.
 

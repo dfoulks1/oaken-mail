@@ -17,13 +17,13 @@
 >   (`oaken pipeline pause|resume [STAGE]`, `oaken pipeline limits STAGE N`, `oaken reprocess
 >   --since --limit`) and the per-stage table on the core `/jobs` console.
 > - **Not built:** bulk `retry`/`cancel` by stage or state, `pipeline.paused|resumed` events on the
->   stream, and the web UI's Settings → Pipeline pane (the core `/jobs` console covers it for now).
+>   stream, and a pipeline settings pane (the core `/jobs` console covers it for now).
 > - **How priority works:** the model service counts interactive calls (anything whose caller is
 >   not `internal`). A background call holds its *next* call while one runs, up to the yield time.
 >   It cannot interrupt a background call already running, so a question waits for at most one.
 
-**Read first:** `docs/prompts/00-context.md` and `docs/prompts/WEBUI_21b-webui-client-foundation.md`.
-**Depends on:** 05, 13, 16, 17, 21b, 22.
+**Read first:** `docs/prompts/00-context.md`.
+**Depends on:** 05, 13, 16, 17, 22.
 
 ## Why
 
@@ -109,8 +109,8 @@ All new operations are `mutate`, confirm-gated where they discard or reorder wor
      **Retry** (parked/retrying) and **Cancel** (pending/retrying/parked); bulk "Retry all parked"
      and "Cancel selected" with the confirm modal showing counts.
    - A **Concurrency** control per stage (`set_pipeline_limits`).
-   - Live updates from the SSE stream with a polling fallback (21b `Oaken.events`, `Oaken.job.watch`);
-     elements carry `data-oaken-requires="…"` (21b C5).
+   - Live updates from the SSE stream with a polling fallback;
+     elements carry `data-oaken-requires="…"`.
    - The "Re-enrich" and "Rebuild index" buttons already map to `reprocess`/`rebuild_index`; add
      the only-missing / newest-N options to Re-enrich.
 

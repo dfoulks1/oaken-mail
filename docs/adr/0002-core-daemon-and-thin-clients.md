@@ -6,12 +6,12 @@
 ## Context
 
 Oaken Mail needs durable background work (sync, embedding, enrichment) and several
-front ends (CLI, web UI, MCP). Duplicating logic in each client would be fragile.
+front ends (CLI, MCP). Duplicating logic in each client would be fragile.
 
 ## Decision
 
 A single long-running asyncio core process owns storage, the job queue, the ingest
-pipeline and the plugin host. The CLI, web UI and an MCP stdio shim are thin clients of a
+pipeline and the plugin host. The CLI and an MCP stdio shim are thin clients of a
 local HTTP + SSE API bound to `127.0.0.1` with token authentication. Storage is two
 SQLite files: `raw.db` (source of truth: raw messages, cursors, jobs, audit log) and
 `index.db` (everything derived, rebuildable from `raw.db`). Providers, embedders, LLM

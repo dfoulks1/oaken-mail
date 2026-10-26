@@ -7,8 +7,8 @@
 > `check_account`, `start_authorization` and `authorization_status` are gone; the provider's
 > `<provider>.auth` and `<provider>.auth_status` replace them. See [35](CORE_35-onboarding-0-1-1.md).
 
-**Read first:** `docs/prompts/00-context.md` and `docs/prompts/WEBUI_21b-webui-client-foundation.md`.
-**Depends on:** 11, 11b, 11c, 12b, 13, 17, 21, 21b, 22, 23.
+**Read first:** `docs/prompts/00-context.md`.
+**Depends on:** 11, 11b, 11c, 12b, 13, 17, 22, 23.
 
 ## Goal
 
@@ -51,7 +51,7 @@ and preventing a send capability from being enabled for that account.
    per-account options (display name, receive-only, sync defaults), and land in an (empty) mailbox.
    Plugin-level settings reuse prompt 23's TOML textarea section; account-level settings are their own ops.
 7. **MCP ceiling.** Account mutations are `mcp="never"`; reads may be `mcp="off"`.
-8. **The Settings → Accounts pane, mapped (from 21b A8).** Build exactly this:
+8. **The Settings → Accounts pane, mapped.** Build exactly this:
    - **List:** `list_accounts` for the rows, `get_account` per row for provider settings and
      `problem`, `list_schedules` for "synced N min ago", state and cadence. The status dot is derived
      from `problem` and the schedule's `paused`/`last_result`, in one client function. The
@@ -67,8 +67,7 @@ and preventing a send capability from being enabled for that account.
      request.
    - **Pause / Resume / Sync now:** `pause_schedule` / `resume_schedule` / `sync_now` (exist).
    - **Re-authenticate:** `start_authorization`, shown for an `invalid_grant`/`needs-auth` state.
-   - **Manage:** a panel with `get_account.config_schema` rendered by `Oaken.form.fromSchema`
-     (21b C7), the receive-only switch, display name, `send_via` and `signature` (28 reads these),
+   - **Manage:** a panel with `get_account.config_schema` rendered by `Oaken.form.fromSchema`, the receive-only switch, display name, `send_via` and `signature` (28 reads these),
      and **Remove**.
    - **SMTP (send only)** has no mailbox: no sync button, no schedule, shown as "Ready" from
      `check_account`.

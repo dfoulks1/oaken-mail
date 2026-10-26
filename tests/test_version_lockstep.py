@@ -18,7 +18,7 @@ def _oaken_version() -> str:
     raise AssertionError("oaken.__version__ not found")
 
 
-APPS = ("apps/cli/pyproject.toml", "apps/webui/pyproject.toml", "apps/core/pyproject.toml")
+APPS = ("apps/cli/pyproject.toml", "apps/core/pyproject.toml")
 
 
 def test_the_apps_source_their_version_from_the_one_place() -> None:

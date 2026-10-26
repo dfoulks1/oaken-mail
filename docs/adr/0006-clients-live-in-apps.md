@@ -5,8 +5,8 @@
 
 ## Context
 
-ADR 0002 made the CLI and the web UI thin clients of one core daemon. The repository had them
-split in practice (the web UI mockups in `apps/webui`, an empty `apps/cli`) but the first CLI
+ADR 0002 made the CLI a thin client of one core daemon. The repository had them
+split in practice (an empty `apps/cli`) but the first CLI
 implementation was put inside the core package as `oaken.cli`. That let a client import core
 internals by accident, put the client's dependencies (such as `rich`) on core's, and made the CLI
 impossible to version or ship without core.
@@ -25,7 +25,7 @@ impossible to version or ship without core.
 - The repository root is a uv workspace: `members = ["apps/cli"]`, with `oaken-cli` in the `dev`
   group so `uv sync` installs it and `uv run oaken` works from a checkout. Root `pytest`, `mypy`
   and `ruff` cover `apps/cli`; `uv run pytest apps/cli` runs only the CLI.
-- The web UI follows the same shape when it becomes a served application (`apps/webui`).
+- Any further client follows the same shape.
 
 ## Consequences
 

@@ -352,7 +352,7 @@ your confirmation.</p>
 <p>One call returns at most <code>[operations] mcp_max_results</code> items (20) and <code>mcp_max_chars</code> of mail text
 (8000). A whole result over <code>[api] mcp_max_result_bytes</code> (64 KiB) is an error, not a cut-off answer.
 Requests over <code>mcp_max_body_bytes</code> are refused, and at most <code>mcp_max_concurrent</code> (8) calls run at
-once, so a busy model cannot starve the web UI or the CLI.</p>
+once, so a busy model cannot starve the CLI or the API.</p>
 </section>
 <section id="for-workers-the-swarm-door" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>For workers: the swarm door</h2></div>
 <p>If you have turned the <a href="architecture/swarm.html">swarm</a> on, an external agent can take jobs through

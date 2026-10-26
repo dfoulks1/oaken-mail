@@ -20,9 +20,7 @@ Installing this bundle gives you the whole non-UI product:
 pip install oaken-core
 ```
 
-The web UI is a **separate product**, built on the same API and CLI framework — install it on its
-own with `pip install oaken-webui`. Other front-ends (desktop, mobile) are anticipated and are
-likewise separate products that build on Oaken Core's HTTP API and MCP surfaces. See
+Front-ends (web, desktop, mobile) are separate products that build on Oaken Core's HTTP API and MCP surfaces. See
 [ADR 0014](../../docs/adr/0014-product-family-and-ui-surfaces.md) for the product family and the
 surfaces a UI builds on.
 

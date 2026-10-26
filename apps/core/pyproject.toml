@@ -19,8 +19,7 @@ classifiers = [
 ]
 # A bundle, not code: it pulls together the product (ADR 0014). `oaken` is the engine (pipeline,
 # API daemon, MCP server, first-party plugins); `oaken-cli` is the management surface and the stdio
-# MCP bridge; `oaken[vec]` adds the sqlite-vec native library for embeddings. The web UI is a
-# separate product (`oaken-webui`) and is deliberately NOT included.
+# MCP bridge; `oaken[vec]` adds the sqlite-vec native library for embeddings.
 # The pins below are the one spot that restates the version (a dependency string can't be dynamic);
 # tests/test_version_lockstep.py asserts they match the shared version so they cannot drift.
 dependencies = [

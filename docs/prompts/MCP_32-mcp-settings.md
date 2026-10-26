@@ -1,9 +1,9 @@
 # 32 — MCP settings: what AI clients may do, and in which workspaces
 
-**Read first:** `docs/prompts/00-context.md`, `docs/prompts/WEBUI_21b-webui-client-foundation.md`,
+**Read first:** `docs/prompts/00-context.md`,
 `docs/prompts/CORE_23-plugin-settings.md` (the section writer, live reload) and
 `docs/prompts/CORE_31-workspace-management.md`.
-**Depends on:** 13, 16, 17, 18, 21b, 22, 23, 29, 31.
+**Depends on:** 13, 16, 17, 18, 22, 23, 29, 31.
 **Related:** 28 makes `send_message` an ordinary operation and amends ADR 0004; this prompt is
 where a person decides whether the MCP may use it.
 
@@ -101,7 +101,7 @@ never be enabled; `send` additionally needs `allow_send = true`), then an `op` e
      "Custom". Toggling rewrites the textarea text so what you see is the file.
    - A **workspace picker** that adds or removes names in `workspaces = [...]` (with a "All
      workspaces" choice that writes `[]`), listing workspaces from `list_workspaces`.
-   - Elements carry `data-oaken-requires="list_operations"` (21b C5).
+   - Elements carry `data-oaken-requires="list_operations"`.
 
 ## Open questions (defaults in bold)
 

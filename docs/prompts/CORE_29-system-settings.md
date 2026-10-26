@@ -26,8 +26,8 @@
 > - **Not built:** the Settings panes (AI & Models, Schedule, Storage & Data, Logs) and
 >   `Oaken.form.fromSchema` rendering; `ui-contract.json` entries for the new operations.
 
-**Read first:** `docs/prompts/00-context.md`, `docs/prompts/WEBUI_21b-webui-client-foundation.md`.
-**Depends on:** 13, 21b, 22, 23.
+**Read first:** `docs/prompts/00-context.md`.
+**Depends on:** 13, 22, 23.
 
 ## Goal
 
@@ -44,7 +44,7 @@ sections, with the same load → check → save shape.
 - Only an **allow-listed** set of core keys is editable from a client. Anything that changes where
   data lives, binds a port, or touches security (`api.*`, paths, token files) is not editable here.
   The one exception is the `[mcp]` section, added to the allow-list by prompt 32 (which owns it).
-- Presentation prefs (theme, density, layout, composing prefs) stay in `localStorage` (21b).
+- Presentation prefs (theme, density, layout, composing prefs) stay in `localStorage`.
 - MCP policy is **not** decided here: it is prompt 32 (the `[mcp]` section edited through these
   same generic `get/check/set_settings` operations). Workspaces are 31.
 
@@ -79,11 +79,11 @@ sections, with the same load → check → save shape.
 ## UI
 
 - Settings → AI & Models: the Ollama endpoint/models form is **23** (plugin config); the token-thrift
-  toggles and top-k are `get/check/set_settings("ai")` rendered by `Oaken.form.fromSchema` (21b C7),
+  toggles and top-k are `get/check/set_settings("ai")` rendered by `Oaken.form.fromSchema`,
   each section with its own **Test/Save** (the single global "Save changes" button is removed).
 - Schedule pane: the "Default interval / Max concurrent / Min interval" rows are `get_settings("sync")`
   (read-only for `min_interval`, which is a floor).
-- Storage & Data and Logs panes load lazily (21b C7); streaming maintenance shows `Oaken.job.watch`.
+- Storage & Data and Logs panes load lazily; streaming maintenance shows `Oaken.job.watch`.
 - Security pane: **hidden** (no backing); the MCP exposure pane replaces its purpose.
 
 ## Acceptance criteria

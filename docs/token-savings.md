@@ -61,7 +61,7 @@ A search returns 5 hits as snippets. The reply is 842 tokens. The five messages 
 2,067 tokens. The saving is 1,225 tokens, 59 percent.
 
 `get_message` is the honest case: it returns the whole cleaned text, so it saves little or
-nothing. The web UI's `get_message` rows show exactly that.
+nothing. A client's `get_message` rows show exactly that.
 
 ## Who is credited
 

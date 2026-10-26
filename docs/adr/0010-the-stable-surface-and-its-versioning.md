@@ -14,8 +14,7 @@ An audit (`docs/prompts/CORE_34-stabilize-core.md`, Stage 1) found the surface m
 **unprotected in shape**: a field renamed on a plugin contract dataclass, a retyped operation
 output, a bumped `PLUGIN_API_VERSION` or a changed streamed event all break out-of-tree code with
 no failing test. Operation *routes* and the OpenAPI document are generated from the registry (so
-they cannot drift from it), and `test_ui_contract.py` pins the fields the web UI reads — but that is
-a subset. Nothing pins the rest.
+they cannot drift from it), but the rest of the contract is not pinned.
 
 ## Decision
 
@@ -67,7 +66,7 @@ the *stable* surface, so they do not fire on internal refactors.
   typo in a file that controls someone's mail. A new **core** section is a deliberate core change
   with (if weighty) its own ADR. A *plugin* validates only its own `[plugins.<name>]` table, via
   `config_model`, and that validation is additive (a plugin without one keeps the free-form dict).
-- **`oaken.api.runtime` is a sanctioned client seam.** A client (the web UI) may read the runtime
+- **`oaken.api.runtime` is a sanctioned client seam.** A client may read the runtime
   file to find and check the running core (`read_runtime`, `pid_alive`, path helpers), alongside
   `oaken.__version__`, `oaken.core.paths` and `oaken.core.operations.caller.CallerContext`
   (ADR 0006). The import-boundary contracts encode exactly this allow-list. This slightly widens

@@ -108,9 +108,8 @@
 
 
 # --- Local HTTP API (loopback only) ---------------------------------------------------
-# The CLI and the web UI server reach core here. Binds 127.0.0.1 unless you say otherwise; the
-# token is a file in the config dir (mode 0600). The web UI is served by the separate
-# `oaken-webui` app, not by core. The console pages (/, /config, /jobs, /stats) carry no token and
+# The CLI and other local clients reach core here. Binds 127.0.0.1 unless you say otherwise; the
+# token is a file in the config dir (mode 0600). The console pages (/, /config, /jobs, /stats) carry no token and
 # are only ever served to this machine, even on a remote bind.
 # [api]
 # port = 0                     # 0 = pick a free port (a reload keeps it); set one to pin it

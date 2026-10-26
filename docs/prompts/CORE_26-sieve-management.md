@@ -1,9 +1,9 @@
 # 26 — Sieve management in the UI (and a write path)
 
-**Read first:** `docs/prompts/00-context.md` and `docs/prompts/WEBUI_21b-webui-client-foundation.md`.
-**Depends on:** 06c, 13, 16, 17, 21, 21b, 22.
+**Read first:** `docs/prompts/00-context.md`.
+**Depends on:** 06c, 13, 16, 17, 22.
 
-## What the mockup shows versus what Sieve is (from 21b A8)
+## What the mockup shows versus what Sieve is
 
 The Settings → Sieve pane in the template is a **rule list**: "List-Id contains …, Move to
 dev@lists", with an on/off switch per rule and a "New filter" button. Oaken's Sieve is **script
@@ -17,7 +17,7 @@ Decisions for this phase, to avoid a redesign:
 - A friendly rule builder over Sieve is **out of scope**; the editor is a plain textarea with line
   numbers and the compile error marked at its line. (A builder can be a later prompt that emits
   Sieve through the same `sieve_save`.)
-- The search page's "Save as filter" stays hidden until a builder exists (21b A4).
+- The search page's "Save as filter" stays hidden until a builder exists.
 - Folders created by `fileinto` appear in the sidebar after the next filter run (25, ADR 0008);
   say so in the editor's Save confirmation ("takes effect on the next filter run; Refilter now
   re-runs it on stored mail").
@@ -74,7 +74,7 @@ there is **no write path**. This prompt adds one, carefully, honoring the standi
    - Dirty-state guard: leaving the editor with unsaved changes asks first; the text is not kept
      in `localStorage` (a script may name people or lists).
    - Elements carry `data-oaken-requires="sieve_save"` so a core without the write path shows the
-     read-only list (21b C5).
+     read-only list.
 8. **Open questions (defaults in bold):**
    - Q1: per-script enable/disable: **not built**; delete or empty a script instead.
    - Q2: new script name: **`NN-name.sieve`**, with the UI suggesting the next free `NN` since run

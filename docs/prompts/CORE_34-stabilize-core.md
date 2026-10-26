@@ -28,11 +28,10 @@ All line numbers are at the time of writing; treat them as pointers, not contrac
 | Seam | Where | Shape | Protected against accidental change? |
 |---|---|---|---|
 | Plugin contracts | `src/oaken/plugins/contracts.py` | `PLUGIN_API_VERSION = 1` (:37), `PLUGIN_KINDS`, `ENTRY_POINT_GROUPS`, `CAPABILITIES`, `REQUIRED_MEMBERS`, the five `Protocol`s and the frozen dataclasses that cross the boundary (`RawMessage`, `PullBatch`, `EnrichInput`, `VectorItem`, `Hit`, `PluginOperation`, `PluginContext`, `PluginOpContext`) | **Partly.** `check_plugin`/`check_started` (`validate.py`) enforce *a plugin's* conformance, and the contract suites (`src/oaken/testing/contracts.py`) exercise behaviour. **Nothing pins the contract shapes themselves**: a field renamed or dropped on `EnrichInput`, or a bumped `PLUGIN_API_VERSION`, breaks every out-of-tree plugin and no test fails. |
-| Operation registry | `src/oaken/core/operations/registry.py` | `Operation` (name, summary, permission `read\|mutate\|send`, input/output pydantic models, `mcp` ceiling `never\|off\|on`, `marks_read`), `operation()` decorator, `OperationRegistry` | **Partly.** `Operation.__post_init__` (:88–:120) enforces the safety rules at import (a `send` reachable over MCP, a `read` that marks mail read, an agent-reachable `mutate` with no preview all raise). The **input/output JSON Schemas are not snapshotted** — only `test_ui_contract.py` checks the subset of fields the web UI reads. A renamed field on an operation the CLI/MCP use, but the UI does not, passes. |
+| Operation registry | `src/oaken/core/operations/registry.py` | `Operation` (name, summary, permission `read\|mutate\|send`, input/output pydantic models, `mcp` ceiling `never\|off\|on`, `marks_read`), `operation()` decorator, `OperationRegistry` | **Partly.** `Operation.__post_init__` (:88–:120) enforces the safety rules at import (a `send` reachable over MCP, a `read` that marks mail read, an agent-reachable `mutate` with no preview all raise). The **input/output JSON Schemas are not snapshotted** — only the registry tests check the fields. A renamed field on an operation the CLI/MCP use, but the UI does not, passes. |
 | HTTP + MCP API | `src/oaken/api/app.py` | `/v1/operations`, `/v1/operations/{name}`, `/v1/openapi.json`, `/v1/events`, `/v1/agent/jobs/*` (:214–:224); surfaces/tokens in `guard.py`; MCP mount in `mcp_server.py` | **Yes, structurally.** Operation routes are generated from the registry, and OpenAPI is derived from the same models, so they cannot drift from the registry. The small hand-written routes are covered by `api/tests`. |
 | `[plugins.*]` config | `src/oaken/core/settings.py` (`Settings.plugins: dict[str, dict[str, Any]]`) → `ctx.config` in `host._start_one` | Free-form per-plugin table, merged `{**settings.plugins.get(base),  **overlay}` | **No typing to protect.** It is deliberately free-form; a plugin validates it itself (via `config_model`, read only by `host.config_schema`). |
 | Events | `src/oaken/core/events.py` (`Event`, `PluginEvent`, `EventBus`); `ctx.publish`/`ctx.subscribe` in `contracts.py` | Frozen event dataclasses; `PluginEvent` subclasses for plugin-defined events | **Partly.** Shapes are not snapshotted; a renamed field on a streamed event changes the SSE payload with no failing test. |
-| `ui-contract.json` | `apps/webui/ui-contract.json`, checked by `src/oaken/core/operations/tests/test_ui_contract.py` | Capabilities + dotted output fields the UI reads | **Yes**, for exactly the fields the UI lists. |
 
 **What is internal** (free to change): everything in `src/oaken/core/*` except the registry and
 events types; `Services` (`operations/services.py`); the composition root (`daemon/core.py`); the
@@ -133,10 +132,10 @@ without widening `Settings`:
 Scan results (non-test code):
 - **Core never imports a feature plugin** at runtime. The only `from oaken_* import` in
   `src/oaken` is in a **test** (`plugins/tests/test_account_names.py`). ✅ (ADR 0002)
-- **Core never imports a client** (`oaken_cli`, `oaken_webui`): no matches anywhere in `src/oaken`. ✅
+- **Core never imports a client** (`oaken_cli`): no matches anywhere in `src/oaken`. ✅
 - **Clients reach only sanctioned core seams** in non-test code:
-  `oaken.__version__` (`cli/main.py:30`, `webui/main.py:31`), `oaken.core.paths`
-  (`cli/discovery.py:51`, `webui/main.py:33`), `oaken.api.runtime.pid_alive` (`webui/main.py:32`),
+  `oaken.__version__` (`cli/main.py:30`), `oaken.core.paths`
+  (`cli/discovery.py:51`),
   and `oaken.core.operations.caller.CallerContext` (`cli/inprocess.py:20` — the one exception ADR
   0006 names).
 - **Deep imports into core internals are confined to client test suites**:
@@ -145,17 +144,13 @@ Scan results (non-test code):
   `oaken.api.ApiServer` — all under `apps/*/tests` (e.g. `cli/tests/test_cli_http.py`,
   `cli/tests/conftest.py`). These are test rigs, not shipped client code.
 
-So the directions are **correct today but unenforced**. One item to flag for the user:
-`webui/main.py:32` imports `oaken.api.runtime.pid_alive`, which is slightly beyond ADR 0007's
-"version and path helpers" wording (though `runtime.py` is a runtime-file locator). Decide in the
-ADR whether `oaken.api.runtime` (the runtime-file reader) is a sanctioned client seam or whether the
-webui should get it via `oaken.core.paths`.
+So the directions are **correct today but unenforced**.
 
 **Proposed enforceable rules (step 2), as `import-linter` contracts in `pyproject.toml`:**
 1. **Core is independent of feature plugins and clients.** `oaken` (excluding its own `*/tests/`)
    may not import `oaken_gmail`, `oaken_imap`, `oaken_smtp`, `oaken_ollama`, `oaken_vec_sqlite`,
-   `oaken_enrichers`, `oaken_cli`, `oaken_webui`.
-2. **Clients reach core only through the allow-list.** `oaken_cli` and `oaken_webui`
+   `oaken_enrichers`, `oaken_cli`.
+2. **Clients reach core only through the allow-list.** `oaken_cli`
    (excluding `*/tests/`) may import core only from `oaken` (version), `oaken.core.paths`,
    `oaken.api.runtime`, and `oaken.core.operations.caller` — forbidden everywhere else.
 3. **Feature plugins depend only on the contract layer.** `oaken_*` plugins may import
@@ -250,8 +245,7 @@ version bump; a new optional field is not).
   `oaken.core.rawstore`) fails the linter and the new test.
 - CI and pre-commit run the check; `ruff`/`mypy`/`pytest` stay green.
 
-**Out of scope:** moving any import (the tree already complies); the webui `oaken.api.runtime`
-question — record it in the ADR and, if the user wants it tightened, it is a separate follow-up.
+**Out of scope:** moving any import (the tree already complies).
 
 ### Step 34.3 — convert `Core.open()` into service units (behaviour-neutral)
 
@@ -359,7 +353,7 @@ redesign.
 ## Proposed ADR titles
 
 - **0010 — The stable surface and the versioning/deprecation rule** (step 34.1; also records the
-  `Settings extra="forbid"` boundary for 34.4, and the webui `oaken.api.runtime` seam decision).
+  `Settings extra="forbid"` boundary for 34.4).
 - **0011 — Service units: a dependency-ordered build/start/stop for the composition root** (step 34.3).
 - **0012 — Plugin extension hooks: job kinds, pipeline stages and scheduled tasks** (step 34.5).
 

@@ -62,7 +62,7 @@ Plugins own their functionality; core owns plugin control:
 - **Starting, stopping and configuring a plugin is core's**, under `oaken plugins`: `enable`,
   `disable`, `reload`, `config`, `check`, `set`. A plugin does not offer these itself (it would
   leave a verb on every plugin in the CLI tree). The same operations back the stats page's switch
-  and Reload button and, later, the web UI's settings page.
+  and Reload button.
 - `capabilities = [...]` in a plugin's table narrows what it may do; `enabled_default = False` lets
   a plugin ship switched off. Settings are edited one table at a time with `tomlkit`
   (`oaken.core.config_edit`): comments and every other table are kept, secrets are refused.
@@ -74,7 +74,7 @@ and the docs' commands run by `docs/tools/check_commands.py`.
 
 ## Future direction (noted by Drew)
 - `/getting_started` is **temporary scaffolding** — to be replaced by a leaner guide + a proper
-  **webui**, while **keeping the web config editor** (core owns config; editing it where config
+  console, while **keeping the web config editor** (core owns config; editing it where config
   lives is the model worth keeping).
 - Bootstrap **offline/vendoring** is parked (not a contradiction: you need the network to install
   Oaken anyway, so CDN-for-first-paint is acceptable for now).
@@ -107,17 +107,16 @@ Changed in this commit:
       is caught before release
 
 ## Core home page: welcome.html (DONE this session)
-`welcome.html` is **oaken-core's** home page (not a webui page — the inbox stays in oaken-webui).
+`welcome.html` is **oaken-core's** home page (the inbox is not part of core).
 Shipped: it is now a live Jinja template rendered by `Api.placeholder` via `oaken.api.welcome`,
 receiving the real version, status (from the `status` op), and daemon env (`OAKEN_HOME`, config/
-data dirs, bound port). The `data-oaken-demo` marker and webui asset/script refs were stripped;
+data dirs, bound port). The `data-oaken-demo` marker and the demo asset/script refs were stripped;
 it is Bootstrap + the shared nav, themed via `--oaken-accent`. See `src/oaken/api/templates/
 welcome.html` and `src/oaken/api/welcome.py`.
 
 
 - `/home/dfoulks/local/oaken-mail/src/oaken/core/paths.py` — path resolution logic
 - `/home/dfoulks/local/oaken-mail/src/oaken/daemon/core.py` — daemon startup
-- `/home/dfoulks/local/oaken-mail/apps/webui/src/oaken_webui/` — web server
 - `/home/dfoulks/local/oaken-mail/config.example.toml` — example config to base defaults on
 - `/home/dfoulks/local/oaken-mail/src/oaken_vec_sqlite/store.py` — default vector store plugin
 

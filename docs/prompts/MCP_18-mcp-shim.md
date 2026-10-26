@@ -6,7 +6,7 @@
 ## Goal
 
 The product's headline feature: a local, data-only MCP server for sensitive mail, **hosted
-by core** (not a separate client) and runnable whether or not the web UI is. Its tool list is
+by core** (not a separate client) and runnable whether or not any other client is. Its tool list is
 **generated from the operation registry**. A small `oaken mcp` stdio bridge lets stdio-only
 MCP clients reach it. This replaces the legacy `mailmind_mcp` package; nothing from it is
 carried over.
@@ -16,7 +16,7 @@ carried over.
 1. **In-core server:** the official `mcp` Python SDK, streamable HTTP transport, mounted at
    `/mcp` on the API listener (prompt 16). Its own token (mode `0600`), narrower than the
    general API token; Host and Origin checks apply; own concurrency and result-size limits.
-   Enabled by `[api] mcp = true`; independent of the web UI. Calls go straight to the
+   Enabled by `[api] mcp = true`; independent of any other client. Calls go straight to the
    registry with the caller class `mcp` set by the mount.
 1b. **`oaken mcp` stdio bridge:** locates core exactly like the CLI (runtime file + token),
    speaks stdio to the client and forwards to `/mcp`. If core isn't running, every tool call
@@ -48,7 +48,7 @@ carried over.
 ## Acceptance criteria
 
 - Tests drive the server with the SDK's in-memory client against a core booted in-process
-  with fakes (web UI not running): tool list equals the exposed subset of the registry; a mutate call returns a
+  with fakes (no other client running): tool list equals the exposed subset of the registry; a mutate call returns a
   proposal, then succeeds only with a valid token for the exact same input.
 - Search through MCP leaves read state untouched; `summarize_message` marks read once.
 - The bridge, spawned as a subprocess, lists and calls tools through to the in-core server;

@@ -355,7 +355,7 @@
 <li><code>--no-kill</code> — Report an error if core does not stop in time, instead of killing it.</li>
 </ul>
 <h3 id="reload"><code>reload</code></h3>
-<p>Signals the running core (SIGHUP) to re-read its configuration and rebuild itself in the same process. An invalid file changes nothing. The web UI follows by itself.</p>
+<p>Signals the running core (SIGHUP) to re-read its configuration and rebuild itself in the same process. An invalid file changes nothing.</p>
 <p>No arguments.</p>
 <h3 id="operation"><code>operation</code></h3>
 <p>Call a registry operation directly. The input is JSON on --json-input or stdin. This reaches every operation the daemon offers, including ones added after this CLI was released. 'oaken operation' with no name lists the operations. The operation's own fields can be given as flags built from its input schema (see --describe), e.g. 'oaken operation list_messages --limit 5'; 'oaken PLUGIN VERB' is a shorthand for 'oaken operation PLUGIN.VERB'.</p>

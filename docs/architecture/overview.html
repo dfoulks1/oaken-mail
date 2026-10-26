@@ -101,7 +101,6 @@ the MCP server runs whether or not the web interface does. See
 <a href="https://github.com/dfoulks1/oaken-mail/blob/main/docs/adr/0004-mcp-server-in-core.md">ADR 0004</a>.</p>
 <pre class="mermaid">flowchart TD
     CLI[CLI] --&gt; API
-    WEB[Web UI] --&gt; API
     HOSTAPP["MCP clients (Claude Desktop, ollmcp, ...)"] --&gt;|streamable HTTP| MCP
     STDIO[stdio-only MCP clients] --&gt; BRIDGE["oaken mcp bridge"] --&gt; MCP
     subgraph CORE[Core process]
@@ -116,7 +115,6 @@ the MCP server runs whether or not the web interface does. See
     HOST --&gt; PLUG["Plugins: provider, embedder, LLM, enricher, vector store"]
 </pre><noscript><pre><code>flowchart TD
     CLI[CLI] --&gt; API
-    WEB[Web UI] --&gt; API
     HOSTAPP["MCP clients (Claude Desktop, ollmcp, ...)"] --&gt;|streamable HTTP| MCP
     STDIO[stdio-only MCP clients] --&gt; BRIDGE["oaken mcp bridge"] --&gt; MCP
     subgraph CORE[Core process]

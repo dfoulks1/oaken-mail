@@ -112,7 +112,7 @@ write), and removes a deleted message from the index instead. Wire it like this:
   vector is skipped when `(content_hash, model_id)` already has one. Chunks are never reordered
   by an edit that leaves their text alone.
 - Pipeline status can read `IndexStore.stats()` (documents, chunks, stale) for the index stage.
-- `IndexRebuildProgress` is published during a rebuild; the web UI and CLI can show it.
+- `IndexRebuildProgress` is published during a rebuild; the CLI can show it.
 
 ## Note from prompt 08
 

@@ -1,7 +1,7 @@
 +++
 title = "The daemon and the local API"
 subtitle = "One process, one loopback port, three ways in"
-lead = "Core runs as one process that owns the databases, the plugins and the job queue, and serves a small HTTP API on 127.0.0.1. The CLI and the web UI are clients of it; the MCP server is on the same port. This page covers how it starts and stops, and how it keeps a web page or another program from using it."
+lead = "Core runs as one process that owns the databases, the plugins and the job queue, and serves a small HTTP API on 127.0.0.1. The CLI and other local clients are clients of it; the MCP server is on the same port. This page covers how it starts and stops, and how it keeps a web page or another program from using it."
 badges = [["text-bg-warning", "Pre-alpha"]]
 group = "concepts"
 order = 27
@@ -105,7 +105,7 @@ The registry has a caller class, which decides whether a person's `confirm` is a
 [operations](operations.md)). Over HTTP:
 
 - a request is `cli` unless it says otherwise;
-- `X-Oaken-Client: ui` is the web UI, the same privileges;
+- `X-Oaken-Client: ui` is a browser UI, the same privileges;
 - `X-Oaken-Client: mcp` makes the request an agent's: it cannot confirm by saying so, only with the
   token from its own proposal, and operations closed to MCP are hidden and refused;
 - anything else, including `internal`, is a 400. A header can lower privilege and never raise it.
@@ -129,7 +129,7 @@ Operations are not routed by hand. `GET /v1/operations` lists the registry with 
   older than the ring, or from before core restarted, gets a `gap` event, which means "fetch again".
   A quiet stream sends a `: heartbeat` comment.
 - `/v1/agent/jobs/...`: claim, heartbeat, complete and fail, for the swarm.
-- `/`: files from `[api] static_dir` when set, otherwise a placeholder page. The web UI will live here.
+- `/`: files from `[api] static_dir` when set, otherwise a placeholder page.
 - `GET /stats`: a read-only status page, HTML (see below). Like `/v1/health` it needs no token —
   it is loopback-only and shows counts and health, never mail.
 

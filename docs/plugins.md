@@ -170,8 +170,8 @@ in the CLI). A person turns a plugin on and off, restarts it and edits its setti
 | `oaken plugins set NAME KEY=VALUE ...` | Change settings (`--unset KEY`, `--replace`, or `--file FILE` with TOML). Comments and every other table in `config.toml` are kept; a secret is refused. Run `reload` to apply. |
 | `oaken plugins check NAME [KEY=VALUE ...]` | Try the saved settings, or a change, on a throwaway instance and report its health. Nothing is written and the running plugin is untouched. |
 
-The stats page (`/stats`, Plugins tab) has the same switch and a Reload button, and the web UI's
-settings page will call the same operations (`plugin_enable`, `plugin_disable`, `plugin_reload`,
+The stats page (`/stats`, Plugins tab) has the same switch and a Reload button, and the same
+operations are available to any client (`plugin_enable`, `plugin_disable`, `plugin_reload`,
 `get_plugin_config`, `check_plugin_config`, `set_plugin_config`).
 
 ## What a person can say about your plugin
@@ -418,7 +418,7 @@ await self.ctx.publish(QuotaLow(ts=self.ctx.clock.now(), remaining=12))
 
 The host fills in `plugin` with your plugin's name, so a listener can tell who sent it, and
 `publish` accepts only `PluginEvent` subclasses, so a plugin can't forge a core event. Clients that
-stream events (the web UI, an MCP client) receive yours alongside core's.
+stream events (an MCP client) receive yours alongside core's.
 
 ### Listening
 

@@ -25,8 +25,8 @@
 >   became `get_plugin_config`/`check_plugin_config`/`set_plugin_config`, matching `config_get` and
 >   friends. `set_plugin_config` does not restart the plugin; call `plugin_reload`.
 
-**Read first:** `docs/prompts/00-context.md` and `docs/prompts/WEBUI_21b-webui-client-foundation.md`.
-**Depends on:** 04, 13, 16, 17, 21, 21b, 22.
+**Read first:** `docs/prompts/00-context.md`.
+**Depends on:** 04, 13, 16, 17, 22.
 **Related, split out on purpose:** workspaces are **31**, MCP settings are **32**. This prompt is
 plugins only. It also builds the **shared config-section writer** that 29, 31 and 32 reuse.
 
@@ -178,7 +178,7 @@ taking away, the same restriction-first idea as 32.
      settings belong to 24.
    - The `ollama` plugin's section lives under **Settings → AI & Models** with the same widgets;
      the token-thrift toggles and top-k are core settings built in 29.
-   - Elements carry `data-oaken-requires="…"` (21b C5).
+   - Elements carry `data-oaken-requires="…"`.
 8. A comment-preserving TOML writer is allowed as a new dependency (Apache-compatible, non-GPL;
    `tomlkit` is MIT); justify it in the report.
 

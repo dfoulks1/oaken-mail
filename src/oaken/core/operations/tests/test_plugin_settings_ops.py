@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Plugin control is core's: ``plugin_enable``/``plugin_disable``/``plugin_reload`` and the settings
-operations the ``plugins`` command and the web UI call. A plugin offers none of them itself."""
+operations the ``plugins`` command calls. A plugin offers none of them itself."""
 
 from pathlib import Path
 

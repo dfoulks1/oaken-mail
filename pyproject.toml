@@ -100,7 +100,6 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "oaken-cli",
-    "oaken-webui",
     "ruff",
     "sqlite-vec>=0.1.9",
     "import-linter>=2.15",
@@ -116,16 +115,15 @@ docs = [
 default-groups = ["dev", "docs"]
 
 [tool.uv.workspace]
-members = ["apps/cli", "apps/webui", "apps/core"]
+members = ["apps/cli", "apps/core"]
 
 [tool.uv.sources]
 oaken-cli = { workspace = true }
-oaken-webui = { workspace = true }
 oaken-core = { workspace = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["src", "apps/cli", "apps/webui", "docs", "tests"]
+testpaths = ["src", "apps/cli", "docs", "tests"]
 addopts = ["--import-mode=importlib", "-m", "not slow and not live_ollama and not live_gmail and not live_smtp and not live_imap"]
 markers = [
     "slow: heavy measurements, off by default (run with -m slow)",
@@ -142,7 +140,7 @@ filterwarnings = [
 
 [tool.ruff]
 line-length = 100
-src = ["src", "apps/cli/src", "apps/webui/src", "tests"]
+src = ["src", "apps/cli/src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "CPY"]
@@ -163,8 +161,8 @@ min-file-size = 0
 
 [tool.mypy]
 strict = true
-files = ["src", "apps/cli/src", "apps/webui/src", "tests", "docs/tools"]
-mypy_path = "docs/tools:apps/cli/src:apps/webui/src"
+files = ["src", "apps/cli/src", "tests", "docs/tools"]
+mypy_path = "docs/tools:apps/cli/src"
 
 # Import boundaries (ADR 0002, 0006, 0007, 0010). Enforced by import-linter: `uv run lint-imports`.
 # The rules encode the *intended* seams the code already relies on: core never imports a feature
@@ -176,7 +174,6 @@ mypy_path = "docs/tools:apps/cli/src:apps/webui/src"
 root_packages = [
     "oaken",
     "oaken_cli",
-    "oaken_webui",
     "oaken_gmail",
     "oaken_imap",
     "oaken_smtp",
@@ -192,7 +189,6 @@ type = "forbidden"
 source_modules = ["oaken"]
 forbidden_modules = [
     "oaken_cli",
-    "oaken_webui",
     "oaken_gmail",
     "oaken_imap",
     "oaken_smtp",
@@ -239,33 +235,6 @@ forbidden_modules = [
     "oaken.core.agents",
 ]
 ignore_imports = ["oaken_cli.tests.** -> **"]
-
-[[tool.importlinter.contracts]]
-name = "The web UI does not reach into core internals"
-type = "forbidden"
-source_modules = ["oaken_webui"]
-allow_indirect_imports = "true"
-forbidden_modules = [
-    "oaken.api.app",
-    "oaken.api.server",
-    "oaken.api.guard",
-    "oaken.api.mcp_server",
-    "oaken.plugins",
-    "oaken.ai",
-    "oaken.ingest",
-    "oaken.index",
-    "oaken.mail",
-    "oaken.readstate",
-    "oaken.core.rawstore",
-    "oaken.core.attrs",
-    "oaken.core.db",
-    "oaken.core.jobs",
-    "oaken.core.scheduler",
-    "oaken.core.mailbox",
-    "oaken.core.agents",
-    "oaken.daemon",
-]
-ignore_imports = ["oaken_webui.tests.** -> **"]
 
 # 3. Feature plugins depend on the contract layer and shared leaf utilities, never the stores'
 #    orchestration, the registry, the sync/ingest pipeline, the API or the daemon. First-party

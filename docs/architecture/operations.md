@@ -1,7 +1,7 @@
 +++
 title = "Operations"
 subtitle = "Every capability is one typed operation, with a permission class and a confirm gate"
-lead = "The CLI, the web UI and the MCP server do not each decide what is safe. They all call one registry of typed operations, and the rules live in code: a permission class on every operation, a confirm gate on every change, and a ceiling on what an agent may ever be offered."
+lead = "The CLI and the MCP server do not each decide what is safe. They all call one registry of typed operations, and the rules live in code: a permission class on every operation, a confirm gate on every change, and a ceiling on what an agent may ever be offered."
 badges = [["text-bg-warning", "Pre-alpha"]]
 group = "concepts"
 order = 50

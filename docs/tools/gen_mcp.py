@@ -133,7 +133,7 @@ your confirmation.
 One call returns at most `[operations] mcp_max_results` items (20) and `mcp_max_chars` of mail text
 (8000). A whole result over `[api] mcp_max_result_bytes` (64 KiB) is an error, not a cut-off answer.
 Requests over `mcp_max_body_bytes` are refused, and at most `mcp_max_concurrent` (8) calls run at
-once, so a busy model cannot starve the web UI or the CLI.
+once, so a busy model cannot starve the CLI or the API.
 
 ## For workers: the swarm door
 

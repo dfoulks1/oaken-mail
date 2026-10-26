@@ -223,7 +223,7 @@ def _register_daemon(
         parents=[g],
         description=(
             "Signals the running core (SIGHUP) to re-read its configuration and rebuild itself "
-            "in the same process. An invalid file changes nothing. The web UI follows by itself."
+            "in the same process. An invalid file changes nothing."
         ),
     )
     reload.set_defaults(func=_lazy("daemon_cmd", "cmd_reload"))

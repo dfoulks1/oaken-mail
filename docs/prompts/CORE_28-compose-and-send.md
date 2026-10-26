@@ -1,7 +1,7 @@
 # 28 — Compose and send
 
-**Read first:** `docs/prompts/00-context.md`, `docs/prompts/WEBUI_21b-webui-client-foundation.md`.
-**Depends on:** 11, 11b, 12b, 13, 21b, 22, 24, 27.
+**Read first:** `docs/prompts/00-context.md`.
+**Depends on:** 11, 11b, 12b, 13, 22, 24.
 
 ## Goal
 
@@ -12,7 +12,7 @@ handling. This prompt adds all of it, and wires the three compose surfaces (floa
 one controller.
 
 Per the user: **send is one operation in the registry, implemented once, and every surface just
-calls it**: the CLI, the web UI (through the `oaken-webui` proxy to `/v1/operations/send_message`)
+calls it**: the CLI, any client over `/v1/operations/send_message`
 and MCP. There is no second send path for any client. This **reverses the old rule** that `send`
 can never be offered over MCP (the registry rejected it at import; ADR 0004 said "sending is never
 exposed"). The reversal is deliberate and lands here, with an ADR that amends 0004: the ceiling
@@ -63,7 +63,7 @@ changes from `never` to `off`, never `on` (see "MCP exposure of send").
 3. **Sent copy.** After acceptance, either (a) do nothing and let sync pull a Sent folder where the
    provider keeps one (Gmail does; SMTP does not), or (b) store the sent message locally as a
    `location = Sent` attr. Recommended: **(a) for Gmail, (b) for SMTP-only routes**, and say so in
-   the UI. Sent is **not** in the sidebar this phase (21b); a stored copy is searchable.
+   the UI. Sent is **not** in the sidebar this phase; a stored copy is searchable.
 4. **Reply and forward.** The operation takes `in_reply_to` (a `message_id` in Oaken's store); core
    builds `In-Reply-To`/`References`, the `Re:`/`Fwd:` subject and the quoted text from stored data,
    so the client never assembles headers. Quote style (bottom/top-post, wrap at 72) is applied by
@@ -109,34 +109,6 @@ changes from `never` to `off`, never `on` (see "MCP exposure of send").
    extra MCP-only limit**: an MCP send is the same `send_message` call, same
    job and queue priority, same audit as a UI or CLI send. Record this in the ADR.
 
-## The UI (extensions from 21b C8)
-
-Build `Oaken.compose` and make every entry point use it:
-
-- `Oaken.compose.open({mode, to, cc, subject, inReplyTo})` is the only entry. Modes: `new`,
-  `reply`, `reply-all`, `forward`. The float, modal and `compose.html` page are three *views* of one
-  state object; expanding or popping out moves the state, not a copy of field values. Pop-out passes
-  the state through `sessionStorage` handoff (not the URL) and clears it on read.
-- On open: `list_identities`; preselect the identity that received the replied-to message; disable
-  and explain an identity with `can_send=false`. If **no** identity can send, the Compose button and
-  Reply buttons stay but open a short "Add a sending account" message linking to Settings → Accounts
-  (never silently fail).
-- Recipient chips validate, accept paste of many addresses, and autocomplete from `list_people`
-  (27). Cc/Bcc collapse stays.
-- **Send** → recipient summary modal ("Send to 3 recipients, 1 attachment?") → `send_message` with
-  `confirm:true` and a fresh `idempotency_key` → toast "Sending…" with a link → `send_status`
-  (SSE or poll) → "Sent" or an error that distinguishes *will retry* from *failed*. A failed send
-  keeps the compose open with the text intact.
-- Attachments: file input and drag-drop, size shown, read to base64 only on Send, rejected over the
-  cap with a message.
-- Hide: formatting toolbar (Bold/Italic/Link/List/Quote), "Plain text" toggle (always plain), Send
-  later, Sign (PGP), "Draft saved". The unsent-text recovery is `localStorage` for the single open
-  compose, cleared on send or discard, and never includes attachments.
-- Settings → Identities lists `list_identities`; editing writes the account's non-secret
-  `display_name`/`signature`/`send_via` through `set_account_config`. The signature is appended by
-  core on send, shown in the editor on open.
-- The elements carry `data-oaken-requires="send_message"`, so a core without the operation shows no
-  compose UI (21b C5).
 
 ## Acceptance criteria
 
@@ -153,7 +125,7 @@ Build `Oaken.compose` and make every entry point use it:
 - With exposure at its default, `send_message`, `send_status` and `list_identities` are absent from
   every MCP surface; after the user enables them they appear on `/mcp` (never on `/mcp/agent`); an
   MCP caller cannot send without the two-step confirmation; the registry still refuses `send` with
-  `mcp="on"`; and the web UI, CLI and MCP all reach the same handler (a test calls it three ways and
+  `mcp="on"`; and the CLI and MCP both reach the same handler (a test calls it three ways and
   checks one send, one audit row each).
 - The parity test from 22 covers `list_identities`, `send_message`, `send_status` for CLI and UI.
 - `ruff`, `ruff format --check`, `mypy`, `pytest` and the docs check are green; ADR added.

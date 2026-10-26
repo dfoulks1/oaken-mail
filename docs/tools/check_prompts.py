@@ -20,7 +20,7 @@ from pathlib import Path
 
 from model import Config
 
-TRACKS = ("CORE", "CLI", "MCP", "PLUGIN", "ENRICHER", "WEBUI", "DOCS")
+TRACKS = ("CORE", "CLI", "MCP", "PLUGIN", "ENRICHER", "DOCS")
 NOT_PROMPTS = {"00-context.md", "README.md", "TEMPLATE.md"}
 NAME = re.compile(rf"^({'|'.join(TRACKS)})_(\d+[a-z]?)-([a-z0-9]+(?:-[a-z0-9]+)*)\.md$")
 # A mention of a prompt file: by its path, or by its bare name (anywhere in the repository).

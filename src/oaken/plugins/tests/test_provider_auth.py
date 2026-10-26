@@ -32,7 +32,7 @@ def test_a_provider_offers_auth_by_what_it_implements() -> None:
 
 def test_the_fields_the_accounts_page_reads_from_a_sign_in_exist() -> None:
     """The web page decides how a provider signs in from list_plugins and reads these fields from
-    ``<provider>.auth`` and ``<provider>.auth_status`` (apps/webui accounts.html)."""
+    ``<provider>.auth`` and ``<provider>.auth_status``."""
     from oaken.plugins.provider_auth import AuthOut, AuthStatusOut
 
     assert {"state", "detail", "open_url", "poll", "poll_input"} <= set(AuthOut.model_fields)

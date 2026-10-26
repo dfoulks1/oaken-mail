@@ -30,7 +30,6 @@ starts from) and this index have no track.
 | `MCP_` | The MCP server and its settings. |
 | `PLUGIN_` | A plugin: a provider, an embedder, an LLM backend, a vector store. A plugin prompt must not change core beyond the touch points it lists. |
 | `ENRICHER_` | The enrichers that run at ingest. |
-| `WEBUI_` | The web UI, `oaken-webui`: its own product and its own thin client. It never lives inside a core prompt. |
 | `DOCS_` | The documentation site and the public docs. |
 
 **Which prompts are built, partly built or open is kept in
@@ -65,17 +64,14 @@ in the same change that builds a prompt.
 | 18 | [mcp-server](MCP_18-mcp-shim.md) | Built | MCP server hosted by core (+ `oaken mcp` stdio bridge), generated from registry | 16 |
 | 19 | [security-hardening](CORE_19-security-hardening.md) | **Open** | Injection suite, localhost threat tests, audit review | 16–18 |
 | 20 | [oss-docs](DOCS_20-oss-docs.md) | Built | README, site content, plugin guide, ADRs, roadmap; site verified | all |
-| 21 | [webui-server](WEBUI_21-webui-server.md) | Built | `oaken-webui`: a thin client that serves the UI and proxies `/v1/*` to core (core stays headless) | 16, 17 |
-| 21b | [webui-client-foundation](WEBUI_21b-webui-client-foundation.md) | **In progress** | The UI function ⇄ operation map, the contract gaps, and the shared client JS (api seam, safe text renderer, sidebar/list/reader, capability gate, sync button) | 13, 16, 21 |
 | 22 | [api-parity](CORE_22-api-parity.md) | Built | Expand the API for the UI; audit registry ⇄ CLI ⇄ UI; enforce 1:1 CLI/UI parity (one backend) | 13, 16, 17, 21 |
 | 23 | [plugin-settings](CORE_23-plugin-settings.md) | **Partly built** | Plugins only: per-plugin TOML textarea load/test/save, enable/disable, a `capabilities` allow-list, write-only secret rows, the shared config-section writer and live settings reload. Control is core's (`oaken plugins`), not the plugin's | 04, 13, 21, 22 |
 | 24 | [accounts-onboarding](CORE_24-accounts-onboarding.md) | Built | Add/auth/test/configure accounts; Gmail "listen but not send" (receive-only) | 11–12b, 23 |
 | 25 | [folders-labels-counts](CORE_25-folders-labels-counts.md) | Built | Sidebar chrome: folders, labels and unread counts (new `mailbox_counts` op) | 07, 12, 22 |
 | 26 | [sieve-management](CORE_26-sieve-management.md) | Built | Manage Sieve in the UI: list/check/test + a write path (`sieve_save`/`delete`, never over MCP) | 06c, 22 |
-| 27 | [contacts-people](CORE_27-contacts-people.md) | **Open** | People view derived from mail (`list_people`/`get_person`); derive-vs-store ADR | 06, 07, 22 |
-| 28 | [compose-and-send](CORE_28-compose-and-send.md) | **Open** | Identities, `send_message` (permission `send`, never MCP), outbox job, the one compose controller in the UI | 11, 11b, 21b, 22, 24, 27 |
-| 29 | [system-settings](CORE_29-system-settings.md) | **Partly built** | Core settings, storage figures, vacuum, cache stats/clear, event tail, MCP exposure link | 13, 21b, 22, 23 |
-| 30 | [pipeline-management](CORE_30-pipeline-management.md) | Built | Manage the queue: job list with ids, pause/resume, retry, cancel, live concurrency, interactive-over-background priority | 05, 13, 17, 21b, 22 |
+| 28 | [compose-and-send](CORE_28-compose-and-send.md) | **Open** | Identities, `send_message` (permission `send`, never MCP), outbox job, the one compose path | 11, 11b, 22, 24 |
+| 29 | [system-settings](CORE_29-system-settings.md) | **Partly built** | Core settings, storage figures, vacuum, cache stats/clear, event tail, MCP exposure link | 13, 22, 23 |
+| 30 | [pipeline-management](CORE_30-pipeline-management.md) | Built | Manage the queue: job list with ids, pause/resume, retry, cancel, live concurrency, interactive-over-background priority | 05, 13, 17, 22 |
 | 31 | [workspace-management](CORE_31-workspace-management.md) | **Open** | List/get/check/set/remove workspaces (Oaken's confidentiality levels) from the UI and CLI; `[workspaces.*]` stays the one source of truth | 10, 13, 22, 23 |
 | 32 | [mcp-settings](MCP_32-mcp-settings.md) | **Open** | Settings → MCP: the `[mcp]` section in a textarea (`allow_send`, `workspaces=[]`, enable/disable), operation list with presets, workspace scoping, live reload | 13, 18, 22, 23, 29, 31 |
 | 33 | [agent-enrichment](CORE_33-agent-enrichment.md) | **Written** | Let an external model (LM Studio, 27B) enrich a message through `/mcp/agent`: claimable payload with text and instructions, a real result type, storage, cache and workspace rules | 03b, 05, 13, 18, 31, 32 |
@@ -91,9 +87,6 @@ in the same change that builds a prompt.
   (systemd/launchd, installers), **at-rest encryption**, **plugin sandboxing**,
   **embedding-throughput tuning on CPU**.
 
-The **Web UI** is its own track (`WEBUI_21`, `WEBUI_21b`; start with 21b, the map). The UI halves of 23–29 are to be written as `WEBUI_` prompts, not inside the core ones: its own thin-client app (`oaken-webui`)
-that serves the UI and proxies the general API, plus the registry operations each UI feature needs,
-built with 1:1 CLI/UI parity (one backend).
 
 ## Decisions recorded while planning
 

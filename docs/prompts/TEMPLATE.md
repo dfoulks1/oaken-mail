@@ -1,13 +1,13 @@
 # NN — Short title: what this builds
 
-<!-- Copy this file to docs/prompts/TRACK_NN-name.md (CORE_, CLI_, MCP_, PLUGIN_, ENRICHER_, WEBUI_,
+<!-- Copy this file to docs/prompts/TRACK_NN-name.md (CORE_, CLI_, MCP_, PLUGIN_, ENRICHER_,
 DOCS_; NN is the next free number; a maintainer assigns it when the prompt is approved). Write for
 someone, or an AI, who has read 00-context.md and nothing else. Plain words. Delete these comments. -->
 
 **Read first:** `docs/prompts/00-context.md`, then the prompts and ADRs this builds on.
 **Depends on:** the numbers of prompts that must be built first, or "nothing unbuilt".
 **Track:** which track this is, and what it must not touch (a `PLUGIN_` prompt lists its core touch
-points; a `WEBUI_` prompt never changes core).
+points).
 
 ## Goal
 
@@ -24,7 +24,7 @@ What a reader might assume is included and is not, and where it is planned inste
 ## Requirements
 
 Numbered, each one a thing that can be checked. Operations come first: a feature is a registry
-operation before it is a command or a page, so the CLI, the web UI and MCP stay in step.
+operation before it is a command or a page, so the CLI and MCP stay in step.
 
 ## Acceptance criteria
 

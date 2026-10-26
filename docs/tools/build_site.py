@@ -44,10 +44,8 @@ TODO_MARKER = "TODO(user)"
 MANIFEST = ".site-manifest"
 
 
-# Two demos, two products (ADR 0014). The WebUI mockup lives beside the webui app; the Core
-# console mockup lives beside the core app. Each is copied under docs/ with its CDN tags pinned.
-WEBUI_DEMO_SRC = Path("apps/webui/oakenmail-templates")
-WEBUI_DEMO_OUT = "demo"
+# The Core console mockup lives beside the core app. It is copied under docs/ with its CDN tags
+# pinned.
 CORE_DEMO_SRC = Path("apps/core/oakencore-templates")
 CORE_DEMO_OUT = "demo-core"
 _FONT_LINK = re.compile(r"[ \t]*<link[^>]*(?:fonts\.googleapis|fonts\.gstatic)[^>]*>\n")
@@ -87,16 +85,8 @@ def _demo_tree(cfg: Config, src_rel: Path, out_prefix: str) -> dict[str, bytes]:
 
 
 def demo_files(cfg: Config) -> dict[str, bytes]:
-    """Both clickable demos, published under docs/: the OakenMail web client mockup (demo/) and
-    the Oaken Core console mockup (demo-core/). The chooser that differentiates them is added by
-    build()."""
-    out = _demo_tree(cfg, WEBUI_DEMO_SRC, WEBUI_DEMO_OUT)
-    out.update(_demo_tree(cfg, CORE_DEMO_SRC, CORE_DEMO_OUT))
-    return out
-
-
-def has_webui_demo(cfg: Config) -> bool:
-    return (cfg.repo_root / WEBUI_DEMO_SRC).is_dir()
+    """The clickable Oaken Core console demo, published under docs/demo-core/."""
+    return _demo_tree(cfg, CORE_DEMO_SRC, CORE_DEMO_OUT)
 
 
 def make_env() -> Environment:
@@ -232,11 +222,6 @@ def build(cfg: Config, out: Path, strict: bool = False) -> list[str]:
     home_rendered.intro_html = home_rendered.intro_html.replace(CARDS_MARKER, cards_html)
     subtitle = home.subtitle if home.subtitle != home.title else ""
     demo = demo_files(cfg)
-    if demo:
-        # The chooser that differentiates the two product demos (Core console vs web client). Its
-        # CDN tags are pinned the same way the mockups' are.
-        chooser = env.get_template("demo-chooser.html").render(**common, prefix="")
-        written["demo-chooser.html"] = _pin_cdn(chooser).encode("utf-8")
     written["index.html"] = (
         env.get_template("home.html")
         .render(

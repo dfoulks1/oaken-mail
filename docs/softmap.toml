@@ -91,22 +91,6 @@ uses = ["mcp"]
 funcs = [["Bridge.handle(line) -> str | None", "Forwards one JSON-RPC message to /mcp (or /mcp/agent) and returns core's answer, or a structured MCP error."]]
 notes = ["Does not start core and never opens the databases; it imports no core code beyond discovery.", "Core down: a tool call is an isError result {code: core_not_running} with the start hint, other requests a JSON-RPC error, and initialize is answered locally so a client that starts first still connects. It finds core again on every message.", "`--agent` speaks to the swarm door with OAKEN_AGENT_TOKEN."]
 
-[[components]]
-id = "webui"
-name = "Web UI"
-layer = "clients"
-status = "partial"
-prompt = "later"
-path = "apps/webui/src/oaken_webui"
-summary = "Browser client in its own app (oaken-webui), parallel to oaken-cli: it serves the static UI and reverse-proxies /v1/* to the running core over loopback — the general API bridge, never MCP. Core stays headless (ADR 0007)."
-uses = ["api"]
-notes = [
-  "Holds the API token server-side and adds X-Oaken-Client: ui; the token never reaches the browser, which sees one same-origin server.",
-  "Serves the oakenmail-templates UI (demo marker stripped so it calls the API); the published demo under docs/ keeps the marker and its dummy fixtures.",
-  "Partial: the server, the proxy and the static serving are built and tested; the UI pages themselves are only partly wired, and core's vestigial static_dir mount is not yet removed.",
-  "Loopback only; does not start core. Core down -> 503 core_unavailable, like the CLI.",
-]
-
 # --- Local API ---------------------------------------------------------------------------
 [[components]]
 id = "api"
@@ -115,7 +99,7 @@ layer = "api"
 status = "built"
 prompt = "16"
 path = "src/oaken/api"
-summary = "General local API for the CLI and web UI: HTTP and server-sent events on 127.0.0.1 with token auth. Routes are generated from the operation registry; a guard checks Host, Origin, content type, token, rate and size before any route runs."
+summary = "General local API for the CLI and other local clients: HTTP and server-sent events on 127.0.0.1 with token auth. Routes are generated from the operation registry; a guard checks Host, Origin, content type, token, rate and size before any route runs."
 uses = ["operations", "swarm"]
 untrusted = true
 types = [
@@ -158,7 +142,7 @@ types = [
 funcs = [
   ["McpServer._call_tool", "Calls the registry as the caller class mcp; a mutation returns a proposal and needs the token; mail-derived results are fenced as untrusted; results are compact and bounded."],
 ]
-notes = ["Runs whether or not the web UI does. Its own token (mcp_token), caller class and limits (ADR 0004).", "Mounted at /mcp on the loopback listener; `[api] mcp = false` removes it. A door is exactly its own path.", "With the swarm on, a second door at /mcp/agent takes agent tokens and offers claim_job, heartbeat_job, complete_job and fail_job from an agent-only registry; the registry audits each claim, completion and failure with the agent named."]
+notes = ["Runs whether or not other clients do. Its own token (mcp_token), caller class and limits (ADR 0004).", "Mounted at /mcp on the loopback listener; `[api] mcp = false` removes it. A door is exactly its own path.", "With the swarm on, a second door at /mcp/agent takes agent tokens and offers claim_job, heartbeat_job, complete_job and fail_job from an agent-only registry; the registry audits each claim, completion and failure with the agent named."]
 
 # --- Operations and services -------------------------------------------------------------
 [[components]]
@@ -819,10 +803,6 @@ text = "Prompt 08 starts with a spike to confirm it loads on Linux, macOS and Wi
 [[open]]
 title = "Embedding throughput on CPU"
 text = "Not yet measured. Tuning is deliberately out of scope until there is real mail to ingest."
-
-[[open]]
-title = "Web UI framework"
-text = "The web UI is its own app (oaken-webui) that serves the UI and proxies to core; core stays headless (ADR 0007). The client-side framework for the pages themselves is still deferred — they are plain HTML/CSS/JS for now."
 
 [[open]]
 title = "Plugin sandboxing"

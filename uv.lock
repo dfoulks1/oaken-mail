@@ -14,7 +14,6 @@ members = [
     "oaken",
     "oaken-cli",
     "oaken-core",
-    "oaken-webui",
 ]
 
 [[package]]
@@ -1607,7 +1606,6 @@ dev = [
     { name = "import-linter" },
     { name = "mypy" },
     { name = "oaken-cli" },
-    { name = "oaken-webui" },
     { name = "openapi-spec-validator" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -1655,7 +1653,6 @@ dev = [
     { name = "import-linter", specifier = ">=2.15" },
     { name = "mypy" },
     { name = "oaken-cli", editable = "apps/cli" },
-    { name = "oaken-webui", editable = "apps/webui" },
     { name = "openapi-spec-validator", specifier = ">=0.9.0" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -1694,26 +1691,6 @@ dependencies = [
 requires-dist = [
     { name = "oaken", extras = ["vec"], editable = "." },
     { name = "oaken-cli", editable = "apps/cli" },
-]
-
-[[package]]
-name = "oaken-webui"
-source = { editable = "apps/webui" }
-dependencies = [
-    { name = "httpx2" },
-    { name = "oaken" },
-    { name = "oaken-cli" },
-    { name = "starlette" },
-    { name = "uvicorn" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "httpx2" },
-    { name = "oaken", editable = "." },
-    { name = "oaken-cli", editable = "apps/cli" },
-    { name = "starlette" },
-    { name = "uvicorn" },
 ]
 
 [[package]]

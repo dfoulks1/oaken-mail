@@ -128,7 +128,7 @@ async def serve(
     """Run until told to stop. ``Conflict`` at once if another core is running.
 
     Setting ``reload`` (SIGHUP does) rebuilds core on ``load_settings()`` without leaving the
-    process: same pid and runtime file, so the web UI, which reads the runtime file on every
+    process: same pid and runtime file, so a client, which reads the runtime file on every
     request, simply finds the new port.
     """
     runtime = runtime or RuntimeFile(paths.runtime_file(), core.clock, oaken.__version__)

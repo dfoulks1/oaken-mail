@@ -2,8 +2,8 @@
 
 All notable changes to Oaken are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
-[Semantic Versioning](https://semver.org/). All four distributions (`oaken`, `oaken-cli`,
-`oaken-webui`, `oaken-core`) release in lockstep at one version (ADR 0014).
+[Semantic Versioning](https://semver.org/). All three distributions (`oaken`, `oaken-cli`,
+`oaken-core`) release in lockstep at one version (ADR 0014).
 
 ## [0.1.1] — Unreleased
 
@@ -68,8 +68,7 @@ Makes a fresh install usable without reading the docs.
 
 - **Oaken Core** — a local-first, AI-native mail engine: the ingestion & enrichment pipeline, the
   CLI, and the MCP server, so an AI can work with your mail while the mail stays on your machine.
-  `pip install oaken-core` installs the whole non-UI product (ADR 0014).
-- **Oaken WebUI** — a separate product built on the same API and CLI framework (`oaken-webui`).
+  `pip install oaken-core` installs the whole product (ADR 0014).
 
 ### Added
 

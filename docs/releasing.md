@@ -1,13 +1,12 @@
 # Releasing Oaken
 
-Oaken ships as four distributions that release **in lockstep at one version** (ADR 0014):
+Oaken ships as three distributions that release **in lockstep at one version** (ADR 0014):
 
 | Distribution | What it is |
 |---|---|
 | `oaken` | the engine: pipeline, API daemon, MCP server, first-party plugins |
 | `oaken-cli` | the `oaken` command line (and the stdio MCP bridge) |
 | `oaken-core` | the product bundle: `pip install oaken-core` → `oaken[vec]` + `oaken-cli` |
-| `oaken-webui` | the web UI (a separate product on the API/CLI) |
 
 The version is declared **once**, in `src/oaken/__init__.py` (`__version__`); the three apps read
 it dynamically, and `oaken-core` pins its members to it. `tests/test_version_lockstep.py` fails if
@@ -38,12 +37,12 @@ Then update `oaken-core`'s pins in `apps/core/pyproject.toml` to the same versio
 (`oaken[vec]==X`, `oaken-cli==X`) — the lockstep test enforces this — and add a `CHANGELOG.md`
 entry for the version. Re-run `uv run pytest tests/test_version_lockstep.py`.
 
-## 3. Build all four
+## 3. Build all three
 
 ```bash
 rm -rf dist
-for pkg in oaken oaken-cli oaken-webui oaken-core; do uv build --package "$pkg"; done
-ls dist/   # sdists (.tar.gz) and wheels (.whl) for all four, all at the same version
+for pkg in oaken oaken-cli oaken-core; do uv build --package "$pkg"; done
+ls dist/   # sdists (.tar.gz) and wheels (.whl) for all three, all at the same version
 ```
 
 ## 4. Verify the artifacts
@@ -67,7 +66,7 @@ Upload to TestPyPI and install from it in a throwaway environment, publishing in
 ```bash
 # needs a TestPyPI token in ~/.pypirc or UV_PUBLISH_TOKEN
 uv publish --publish-url https://test.pypi.org/legacy/ dist/oaken-*
-uv publish --publish-url https://test.pypi.org/legacy/ dist/oaken_cli-* dist/oaken_webui-*
+uv publish --publish-url https://test.pypi.org/legacy/ dist/oaken_cli-*
 uv publish --publish-url https://test.pypi.org/legacy/ dist/oaken_core-*
 
 # verify a clean install of the product bundle (deps come from real PyPI, package from TestPyPI)
@@ -91,7 +90,7 @@ Only after the TestPyPI dry run looks right. Same dependency order:
 ```bash
 # needs a PyPI token (UV_PUBLISH_TOKEN or ~/.pypirc); never commit it
 uv publish dist/oaken-*
-uv publish dist/oaken_cli-* dist/oaken_webui-*
+uv publish dist/oaken_cli-*
 uv publish dist/oaken_core-*
 ```
 
@@ -106,8 +105,8 @@ Check the project pages render (README, classifiers, keywords) on
 
 ## 9. After publishing (bookkeeping)
 
-- Confirm all four projects are live and at the same version:
-  `oaken`, `oaken-cli`, `oaken-webui`, `oaken-core` on PyPI.
+- Confirm all three projects are live and at the same version:
+  `oaken`, `oaken-cli`, `oaken-core` on PyPI.
 - Make sure the `CHANGELOG.md` entry for this version carries the release date (it is the record
   that the version is out), and that the GitHub Release (`gh release view v<version>`) points at
   the tag.
@@ -116,11 +115,11 @@ Check the project pages render (README, classifiers, keywords) on
 
 ## Notes
 
-- **Dependency order matters** both on TestPyPI and PyPI: `oaken` must exist before `oaken-cli`,
-  `oaken-webui` and `oaken-core` can resolve. Upload `oaken` first and confirm it is live before
+- **Dependency order matters** both on TestPyPI and PyPI: `oaken` must exist before `oaken-cli`
+  and `oaken-core` can resolve. Upload `oaken` first and confirm it is live before
   the rest, so no one can catch a half-published set.
 - **The first upload creates the project** on PyPI under the uploading account — that account owns
-  the four names. Use the account or organization that should own them long-term, and a
+  the three names. Use the account or organization that should own them long-term, and a
   project-scoped token where possible.
 - **Credentials never live in the repo.** Use `UV_PUBLISH_TOKEN` or `~/.pypirc`; the token is the
   releaser's, not the project's. It is never committed, logged, or pasted into a transcript.

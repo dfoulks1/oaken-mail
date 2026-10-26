@@ -59,11 +59,11 @@ def test_demo_is_published_with_pinned_cdn_tags_and_no_google_fonts(tree: Tree) 
         '<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"'
         ' rel="stylesheet">\n'
     )
-    tree.write("apps/webui/oakenmail-templates/login.html", f"<html><head>{head}</head></html>")
-    tree.write("apps/webui/oakenmail-templates/assets/x.css", "a{}")
+    tree.write("apps/core/oakencore-templates/login.html", f"<html><head>{head}</head></html>")
+    tree.write("apps/core/oakencore-templates/assets/x.css", "a{}")
     publish(tree)
-    login = (tree.docs / "demo" / "login.html").read_text()
+    login = (tree.docs / "demo-core" / "login.html").read_text()
     assert "googleapis" not in login
     assert 'integrity="sha384-' in login and 'crossorigin="anonymous"' in login
-    assert (tree.docs / "demo" / "assets" / "x.css").read_text() == "a{}"
-    assert "demo/login.html" in (tree.docs / "index.html").read_text()
+    assert (tree.docs / "demo-core" / "assets" / "x.css").read_text() == "a{}"
+    assert "demo-core/index.html" in (tree.docs / "index.html").read_text()

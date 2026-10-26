@@ -51,7 +51,7 @@ expires refresh tokens after ~7 days.
 src/oaken/           core: the daemon, API, operations, storage, ingest (the `oaken` package)
 src/oaken_*/         first-party plugins (providers, embedder, enrichers, vector store)
 apps/cli/            the `oaken` command, a separate package (`oaken-cli`, import `oaken_cli`)
-apps/webui/          the web UI (templates today; its own app later)
+apps/core/           the `oaken-core` bundle and Oaken Core's console templates
 docs/                the documentation site sources and generators
 ```
 
@@ -97,9 +97,8 @@ acceptance criteria and a report-back. You can run one with an AI coding tool or
 as a checklist; either way the **tests and acceptance criteria are the contract**, not the exact
 code any one run produces.
 
-Files are named `TRACK_NN-name.md` (`CORE_`, `CLI_`, `MCP_`, `PLUGIN_`, `ENRICHER_`, `WEBUI_`,
-`DOCS_`). The number is the prompt's permanent ID and the track says what it builds. The web UI
-(`WEBUI_`) is its own product and is never folded into a core prompt.
+Files are named `TRACK_NN-name.md` (`CORE_`, `CLI_`, `MCP_`, `PLUGIN_`, `ENRICHER_`,
+`DOCS_`). The number is the prompt's permanent ID and the track says what it builds.
 
 **Not everything needs a prompt.** A bug fix, a typo, a small refactor or a docs correction is an
 ordinary pull request: say what and why, add a test, run the checks. A prompt is for a new feature,
@@ -199,17 +198,14 @@ tests. **Partly** says what is done and what is left. A **Written** prompt has a
 | 18 | MCP_18-mcp-shim | Built | Both doors: `/mcp` and `/mcp/agent` |
 | 19 | CORE_19-security-hardening | **Open** | The dedicated pass (injection suite across all surfaces, localhost threat tests, audit review) has not been run. Enricher injection tests and ADR 0005 exist |
 | 20 | DOCS_20-oss-docs | Built | README, `ROADMAP.md`, issue and PR templates, the site, the architecture and provider pages, and `docs/tools/check_commands.py` (runs the docs' `<!-- check -->` commands) are in. Not verified: the Gmail walkthrough on a clean Google account, and `docs/evals/latest.md` (both need real services) |
-| 21 | WEBUI_21-webui-server | Built | `oaken-webui` start, stop, restart and status |
-| 21b | WEBUI_21b-webui-client-foundation | **In progress** | Server items D1–D4, the shared sidebar and the API seam are in. Check the prompt's C list before starting; another session is on it |
 | 22 | CORE_22-api-parity | Built | Paging, totals, sort, stars, thread tree, query operators |
 | 23 | CORE_23-plugin-settings | **Partly built** | In: the `capabilities` allow-list, `enabled` and a plugin's own `enabled_default`, and plugin control under core's `oaken plugins` (`enable`, `disable`, `reload`, `config`, `check`, `set`; `check` tries settings on a throwaway instance). The same operations back the stats page's switch and Reload button. `oaken.core.config_edit` (`tomlkit`) edits one table and keeps comments. A plugin does not offer these itself. Not built: the Settings → Plugins page and the secrets rows |
 | 24 | CORE_24-accounts-onboarding | Built | Account ops plus the receive-only ("listen but not send") interlock in `oaken.mail.sendpolicy` (one key, one reader; surfaced by `get_account`/`list_accounts`), the `oaken admin account set\|remove` CLI verbs, and the Settings → Accounts onboarding UI (`accounts.html`) |
 | 25 | CORE_25-folders-labels-counts | Built | Nested folders, labels, unread counts, stars |
 | 26 | CORE_26-sieve-management | Built | Read/test ops plus the write path (`sieve_save`/`sieve_delete`/`sieve_get`, compile-first, atomic owner-only, never over MCP — ADR 0009), the `oaken sieve get\|save\|delete` CLI verbs with `--suggest-name`, and the Sieve editor UI (`sieve.html`) |
-| 27 | CORE_27-contacts-people | **Open** | `contacts.html` is still a mockup |
 | 28 | CORE_28-compose-and-send | **Open** | There is no `send_message` operation yet. When it lands, the outbox is a `send` job on the job queue, and a sync also runs any send waiting out a retry delay |
-| 29 | CORE_29-system-settings | **Partly built** | Operations and CLI: `get/check/set_settings` (`oaken settings`), `storage_info` and `vacuum` (`oaken storage`, `oaken vacuum`), `cache_stats`/`clear_cache` (`oaken cache`), `events_tail` over a persisted event log (`oaken events`), and a paged `list_audit`. Not built: the Settings panes in the web UI |
-| 30 | CORE_30-pipeline-management | Built | Per-stage pause (`pause_backfill`/`resume_backfill` take a `stage`, stored in the database), live concurrency (`set_pipeline_limits`), `reprocess --since/--limit`, `pipeline_status` shows `paused`, `concurrency` and the running jobs, interactive model calls go ahead of background enrich, and the `/jobs` console and `oaken pipeline` drive it. The existing operation names were kept instead of the prompt's new ones; bulk `cancel_jobs`/`retry_jobs` by stage and the web UI's Pipeline pane are not built |
+| 29 | CORE_29-system-settings | **Partly built** | Operations and CLI: `get/check/set_settings` (`oaken settings`), `storage_info` and `vacuum` (`oaken storage`, `oaken vacuum`), `cache_stats`/`clear_cache` (`oaken cache`), `events_tail` over a persisted event log (`oaken events`), and a paged `list_audit`. Not built: the Settings panes in a client UI |
+| 30 | CORE_30-pipeline-management | Built | Per-stage pause (`pause_backfill`/`resume_backfill` take a `stage`, stored in the database), live concurrency (`set_pipeline_limits`), `reprocess --since/--limit`, `pipeline_status` shows `paused`, `concurrency` and the running jobs, interactive model calls go ahead of background enrich, and the `/jobs` console and `oaken pipeline` drive it. The existing operation names were kept instead of the prompt's new ones; bulk `cancel_jobs`/`retry_jobs` by stage and a Pipeline settings pane are not built |
 | 31 | CORE_31-workspace-management | **Open** | |
 | 32 | MCP_32-mcp-settings | **Open** | |
 | 33 | CORE_33-agent-enrichment | **Written** | Not built. The `/mcp/agent` door works but a claimed `ingest.enrich` job carries only ids and cannot store an answer |

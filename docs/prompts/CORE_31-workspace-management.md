@@ -1,8 +1,8 @@
 # 31 — Workspace management
 
-**Read first:** `docs/prompts/00-context.md`, `docs/prompts/WEBUI_21b-webui-client-foundation.md` and
+**Read first:** `docs/prompts/00-context.md` and
 `docs/prompts/CORE_23-plugin-settings.md` (the section writer and live settings reload).
-**Depends on:** 10, 13, 16, 17, 21b, 22, 23.
+**Depends on:** 10, 13, 16, 17, 22, 23.
 **Used by:** 32 (MCP settings), which links the MCP to existing workspaces by name.
 
 ## Why
@@ -53,7 +53,7 @@ prompt makes them manageable from the UI and CLI, so 32 can tie MCP access to th
    `list_workspaces` (name, trust badge, backend, usage numbers, "used by MCP"); **New workspace**
    and **Edit** open the same **TOML textarea** widget as plugins (23) with Test / Save / Revert;
    **Remove** opens a confirm modal that names anything that links to it. `default` shows no Remove.
-   Elements carry `data-oaken-requires="set_workspace"` (21b C5).
+   Elements carry `data-oaken-requires="set_workspace"`.
 
 ## Open questions (defaults in bold)
 

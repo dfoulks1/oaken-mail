@@ -595,7 +595,7 @@ class Pipeline:
         return {r["enricher"]: json.loads(r["data_json"]) for r in rows}
 
     async def enrichment(self, message_id: MessageId, enricher: str) -> dict[str, object] | None:
-        """The stored result of one enricher for a message (for operations and the web UI)."""
+        """The stored result of one enricher for a message (for operations)."""
         row = await self.raw.db.fetchone(
             "SELECT data_json FROM enrichments WHERE message_id = ? AND enricher = ?",
             (message_id, enricher),

@@ -21,7 +21,6 @@ the MCP server runs whether or not the web interface does. See
 ```mermaid
 flowchart TD
     CLI[CLI] --> API
-    WEB[Web UI] --> API
     HOSTAPP["MCP clients (Claude Desktop, ollmcp, ...)"] -->|streamable HTTP| MCP
     STDIO[stdio-only MCP clients] --> BRIDGE["oaken mcp bridge"] --> MCP
     subgraph CORE[Core process]

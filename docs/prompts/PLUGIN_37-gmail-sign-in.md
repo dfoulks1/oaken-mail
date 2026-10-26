@@ -24,7 +24,7 @@ what to do next, and the client file is easier to live with.
 ## Decisions already taken (Drew, 2026-10-24; do not re-litigate)
 
 - **The standard flow**, as above. Not a paste-a-code flow, and not a web-console modal in this
-  prompt (the web UI is a separate product and does not exist as code yet).
+  prompt.
 - **Bring-your-own OAuth client stays the default.** The consent screen shows the *app name given in
   the person's own Google Cloud project*, so the setup steps must say to name it **Oaken Mail**. A
   vendor-owned, verified client (so there is no Cloud Console step at all) is a plugin-level

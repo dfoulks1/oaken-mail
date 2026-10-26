@@ -152,7 +152,7 @@ OpenAI API documentation in `tests/fixtures/openai_compat/`.
 - `ai.llm_backend = "lmstudio"` runs the full ingest, enrich and ask path against a mocked LM
   Studio with no change outside the plugin and the listed touch points.
 - `import-linter` passes, with core still unable to import the plugin.
-- `oaken plugins` lists the new backends and embedders; the web UI's plugin settings page
+- `oaken plugins` lists the new backends and embedders; the plugin settings operations
   (prompt 23) shows the `[plugins.lmstudio]` table with `api_key` as a write-only row.
 - Switching embedders never mixes vectors from two models in one partition.
 - `uv run pytest`, `ruff`, `mypy` and the docs checks are green.

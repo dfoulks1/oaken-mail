@@ -35,7 +35,7 @@ endpoint. License: **Apache-2.0**.
 ## Architecture (decided)
 
 ```
- clients (thin)     CLI    Web UI          MCP clients (Claude Desktop, ollmcp, ...)
+ clients (thin)     CLI             MCP clients (Claude Desktop, ollmcp, ...)
                      \      /                  |  streamable HTTP      |  stdio
                       \    /                   |                  `oaken mcp` bridge
                  general API (HTTP + SSE)     MCP server (/mcp)  <------+
@@ -72,8 +72,8 @@ Key rules:
 1. **Core never imports provider code**, and a provider plugin never touches the
    databases. Plugins talk to core through the contract (return values and events).
 2. **Core is one process, with two API surfaces.** The general API serves the CLI and
-   web UI; the MCP server (the AI-enabled surface, and the heart of the product, see ADR 0004)
-   is hosted by core itself and runs whether or not the web UI does. `oaken mcp` is only a
+   other local clients; the MCP server (the AI-enabled surface, and the heart of the product, see ADR 0004)
+   is hosted by core itself and runs whether or not other clients do. `oaken mcp` is only a
    stdio bridge to it. For tests, core also runs in-process with fakes (no daemon, no network).
 3. **Raw bytes are kept.** `index.db` can be deleted and rebuilt from `raw.db`.
    Changing the embedding model means re-running a job, never re-downloading mail.

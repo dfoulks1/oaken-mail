@@ -308,8 +308,8 @@ in the CLI). A person turns a plugin on and off, restarts it and edits its setti
 </tr>
 </tbody>
 </table></div>
-<p>The stats page (<code>/stats</code>, Plugins tab) has the same switch and a Reload button, and the web UI's
-settings page will call the same operations (<code>plugin_enable</code>, <code>plugin_disable</code>, <code>plugin_reload</code>,
+<p>The stats page (<code>/stats</code>, Plugins tab) has the same switch and a Reload button, and the same
+operations are available to any client (<code>plugin_enable</code>, <code>plugin_disable</code>, <code>plugin_reload</code>,
 <code>get_plugin_config</code>, <code>check_plugin_config</code>, <code>set_plugin_config</code>).</p>
 </section>
 <section id="what-a-person-can-say-about-your-plugin" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>What a person can say about your plugin</h2></div>
@@ -517,7 +517,7 @@ not encrypted. See <a href="providers/imap.html">Connect any IMAP server</a>.</p
 </code></pre></div>
 <p>The host fills in <code>plugin</code> with your plugin's name, so a listener can tell who sent it, and
 <code>publish</code> accepts only <code>PluginEvent</code> subclasses, so a plugin can't forge a core event. Clients that
-stream events (the web UI, an MCP client) receive yours alongside core's.</p>
+stream events (an MCP client) receive yours alongside core's.</p>
 <h3 id="listening">Listening</h3>
 <p>A plugin can also listen. <code>ctx.subscribe(event_type, handler)</code> calls <code>handler(event)</code> for every core
 or plugin event of that type (<code>Event</code> for all of them) and returns a function that ends the
