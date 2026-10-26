@@ -101,6 +101,7 @@
 # cache = ""                   # an LLM answer cache plugin by name; empty keeps core's SQLite cache
 # enrich_max_input_tokens = 3000
 # ask_context_tokens = 3000
+# ask_model = ""               # the model ask uses; empty means the backend's own
 # chunk_tokens = 256
 # chunk_overlap = 32           # cannot exceed half of chunk_tokens
 

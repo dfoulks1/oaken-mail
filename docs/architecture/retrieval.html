@@ -229,6 +229,8 @@ with no core change (see <a href="../plugins.html">Plugins</a>). The model's sys
 plus that menu, which is plugin code checked when it loads, so mail text never reaches it. If the
 model is missing or wrong, plain words decide: &quot;summarize&quot;, &quot;urgent&quot;, &quot;to-do&quot;, &quot;spam&quot; pick an
 intent, a question picks <code>qa</code>, and anything else is a listing. Routing never fails an <code>ask</code>.</p>
+<p><code>ask</code> has its own model: <code>[ai] ask_model</code> (empty means the backend's own), used for both the
+routing call and the cited answer, and chosen from a dropdown on the AI &amp; Models tab of <code>/stats</code>.</p>
 <p><code>find</code> and the enricher intents search every account and make no model call to answer. Only <code>qa</code>
 asks the model about mail, one account at a time.</p>
 <h3 id="cited-answers-qa">Cited answers (<code>qa</code>)</h3>

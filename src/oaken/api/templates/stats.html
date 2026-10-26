@@ -186,7 +186,7 @@
             <td>{{ "{:,}".format(u.tokens_in) }}</td><td>{{ "{:,}".format(u.tokens_out) }}</td>
             <td class="text-success">{{ "{:,}".format(u.tokens_saved) }}</td>
             <td class="text-end">
-              {% if m %}
+              {% if m and m.kind != "ask" %}  {# ask is a core setting, not a plugin: no settings dialog or reload #}
               <div class="position-relative d-inline-block">
                 <button type="button" class="btn btn-sm btn-link text-secondary px-2 kebab" data-kebab
                         aria-haspopup="menu" aria-expanded="false" aria-label="Actions for {{ m.label }}">&#8942;</button>

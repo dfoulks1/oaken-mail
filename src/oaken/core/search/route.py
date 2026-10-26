@@ -108,7 +108,9 @@ def rule_route(question: str, menu: list[AskIntent]) -> Route:
     )
 
 
-async def route(llm: Any, question: str, menu: list[AskIntent]) -> Route:
+async def route(
+    llm: Any, question: str, menu: list[AskIntent], *, model: str | None = None
+) -> Route:
     """Ask the model; on any failure or an intent that is not on the menu, use the plain words."""
     builder = ROUTE.extended([(i.name, i.description) for i in menu])
     try:
@@ -116,6 +118,7 @@ async def route(llm: Any, question: str, menu: list[AskIntent]) -> Route:
             builder,
             UntrustedText(question, "question"),
             content_hash=hashlib.sha256(question.encode()).hexdigest(),
+            model=model,
         )
     except Exception as exc:  # noqa: BLE001 - routing must never fail an ask
         log.warning("ask router failed; using plain words", error=type(exc).__name__)

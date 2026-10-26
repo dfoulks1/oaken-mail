@@ -268,6 +268,7 @@ class Api:
             Route("/stats/mcp-workspaces", safe(self.stats_mcp_workspaces), methods=["POST"]),
             Route("/stats/enricher-config", safe(self.stats_enricher_config), methods=["POST"]),
             Route("/stats/model", safe(self.stats_model_save), methods=["POST"]),
+            Route("/stats/ask-model", safe(self.stats_ask_model), methods=["POST"]),
         ]
         static = Path(self.cfg.static_dir).expanduser() if self.cfg.static_dir else None
         if static is not None and static.is_dir():
@@ -483,6 +484,24 @@ class Api:
         saved = await self.client.call(
             "set_settings",
             {"section": "mcp", "values": {"workspaces": names}},
+            CallerContext.internal(),
+            confirm=True,
+        )
+        result = saved.output
+        if result is None or not getattr(result, "ok", False):
+            return _json(result.model_dump(mode="json") if result is not None else {"ok": False})
+        return await self._config_op("config_reload", {})
+
+    async def stats_ask_model(self, request: Request) -> Response:
+        # `ask`'s model is a core setting ([ai] ask_model): save it through the settings operation
+        # the CLI uses, then reload so the running core reads it.
+        body = await read_json(request)
+        model = body.get("model")
+        if not isinstance(model, str):
+            raise InvalidInput("model must be a string (empty means the backend's own)")
+        saved = await self.client.call(
+            "set_settings",
+            {"section": "ai", "values": {"ask_model": model}},
             CallerContext.internal(),
             confirm=True,
         )

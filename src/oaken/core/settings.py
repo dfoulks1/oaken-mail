@@ -74,6 +74,9 @@ class AISettings(_Section):
     embed_model: str = "nomic-embed-text"
     llm_backend: str = "ollama"
     llm_model: str = "qwen2.5:3b"  # small on purpose; set a larger model for better analysis
+    # The model ``ask`` uses (working out what was asked, and a cited answer). Empty means the
+    # backend's own model. A question a person is waiting on may deserve a better one than enrich.
+    ask_model: str = ""
     # While a question a person is waiting on uses the model, background work (enrich) holds its
     # next model call for at most this many seconds, then goes ahead. 0 means it never holds back.
     background_yield_seconds: float = Field(default=120.0, ge=0)

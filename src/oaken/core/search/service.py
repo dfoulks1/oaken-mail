@@ -81,7 +81,9 @@ class Retrieval:
         )
         return found, await self.context.build(found.hits, self.settings.ai.ask_context_tokens)
 
-    async def ask(self, question: str, filters: HybridFilters | None = None) -> AskResult:
+    async def ask(
+        self, question: str, filters: HybridFilters | None = None, *, model: str | None = None
+    ) -> AskResult:
         """A cited answer from the mail, or ``insufficient_evidence``. Only mail from one account
         is ever put in one prompt (an account decides its workspace, and so which models may see
         it); a question that finds mail in several asks for an account."""
@@ -109,6 +111,7 @@ class Retrieval:
             *parts(question, evidence),
             content_hash=content_hash(question, evidence),
             account_id=next(iter(accounts)),
+            model=model,
         )
         return dataclasses.replace(
             resolve(answer, evidence),

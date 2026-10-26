@@ -182,6 +182,20 @@ class StatsCollector:
                     "enabled": True,
                 }  # fmt: skip
             )
+        if llm and self._client is not None:  # ask has its own model: a core setting, not a plugin
+            rows.append(
+                {
+                    "kind": "ask",
+                    "label": "ask",
+                    "name": "ask",
+                    "model": self._client.svc.settings.ai.ask_model,
+                    "choices": llm["available"],
+                    "default": llm["model_id"],
+                    "config": {},
+                    "config_schema": None,
+                    "enabled": True,
+                }  # fmt: skip
+            )
         for e in await self._enrichers():
             props = (e["config_schema"] or {}).get("properties", {})
             if "model" not in props:
@@ -212,8 +226,11 @@ class StatsCollector:
         by_name = {m["name"]: m for m in models if m["kind"] == "enricher"}
         backend = next((m for m in models if m["kind"] == "llm_backend"), None)
         embedder = next((m for m in models if m["kind"] == "embedder"), None)
+        ask = next((m for m in models if m["kind"] == "ask"), None)
 
         def owner(stage: str) -> dict[str, Any] | None:
+            if stage == "llm.ask" or stage.startswith("llm.ask."):
+                return ask
             if stage.startswith("llm.enrich."):
                 return by_name.get(stage.removeprefix("llm.enrich."))
             if stage.startswith("llm."):
@@ -231,9 +248,11 @@ class StatsCollector:
         for comp in models:
             if (comp["kind"], comp["name"]) in seen:
                 continue
-            stage = {"enricher": f"llm.enrich.{comp['name']}", "embedder": "embed"}.get(
-                comp["kind"], "llm"
-            )
+            stage = {
+                "enricher": f"llm.enrich.{comp['name']}",
+                "embedder": "embed",
+                "ask": "llm.ask",
+            }.get(comp["kind"], "llm")
             rows.append(
                 {"workspace": "—", "stage": stage, "model_id": comp["model"], "calls": 0,
                  "cached_calls": 0, "tokens_in": 0, "tokens_out": 0, "tokens_saved": 0,

@@ -416,14 +416,15 @@ async def ask(ctx: OpContext, inp: AskInput) -> AskOutput:
         )
     enrichers = ctx.svc.pipeline.backends.enrichers() if ctx.svc.pipeline is not None else {}
     menu = routing.catalog(enrichers)
+    model = ctx.svc.settings.ai.ask_model or None  # its own model, else the backend's
     picked = (
-        await routing.route(ctx.svc.llm, inp.question, menu)
+        await routing.route(ctx.svc.llm, inp.question, menu, model=model)
         if ctx.svc.llm is not None
         else routing.rule_route(inp.question, menu)
     )
     if picked.intent != "qa":
         return await _routed(ctx, inp, picked, routing.sources(enrichers))
-    result = await retrieval.ask(inp.question, filters)
+    result = await retrieval.ask(inp.question, filters, model=model)
     return AskOutput(
         intent="qa",
         interpreted="read as: a factual question, answered from the mail with quotes",

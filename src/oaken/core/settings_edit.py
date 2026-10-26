@@ -103,6 +103,7 @@ SECTIONS: tuple[Section, ...] = (
             **_keys(
                 "enrich_max_input_tokens",
                 "ask_context_tokens",
+                "ask_model",
                 "background_yield_seconds",
                 "max_output_chars",
             ),

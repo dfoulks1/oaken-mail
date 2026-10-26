@@ -168,3 +168,22 @@ def test_plain_words_pick_the_intent() -> None:
     assert route.rule_route("What did Sam say about lunch?", menu).intent == "qa"
     assert route.rule_route("show me unread mail from last week", menu).intent == "find"
     assert route.rule_route("show me unread mail from last week", menu).days == 7
+
+
+async def test_ask_uses_its_own_model_for_the_router_and_the_answer(ops: Ops) -> None:
+    await ops.add(1)
+    ops.svc.settings = ops.svc.settings.model_copy(
+        update={"ai": ops.svc.settings.ai.model_copy(update={"ask_model": "big-model"})}
+    )
+    ops.rig.llm._available = ["big-model", "fake-llm"]  # the backend has it installed
+    ops.rig.llm.reply({"intent": "qa"}, {"claims": [], "insufficient_evidence": True})
+    await asked(ops, "What is the invoice number?")
+    assert ops.rig.llm.requested_models == ["big-model", "big-model"]  # the router, then the answer
+
+
+async def test_ask_model_is_a_setting_the_console_can_change(ops: Ops) -> None:
+    from oaken.core.settings import Settings
+
+    assert Settings().ai.ask_model == ""  # the backend's own model unless chosen
+    out = await ops.out("check_settings", {"section": "ai", "values": {"ask_model": "big-model"}})
+    assert out.ok and out.changed == ["ask_model"]

@@ -211,3 +211,26 @@ def test_the_dropdown_and_menu_sit_on_the_first_row_of_each_component_and_none_i
         ("llm.enrich.summary", "summary"),
     ]
     assert rows[3]["calls"] == 0 and rows[3]["workspace"] == "—"
+
+
+def test_ask_has_its_own_model_row_and_its_usage_lands_on_it() -> None:
+    from oaken.api.stats import StatsCollector
+
+    ask: dict[str, Any] = {"kind": "ask", "label": "ask", "name": "ask", "model": "big",
+                           "choices": ["big"], "default": "", "config": {}, "config_schema": None,
+                           "enabled": True}  # fmt: skip
+    backend = {**ask, "kind": "llm_backend", "label": "Language model", "name": "ollama"}
+
+    def use(stage: str) -> dict[str, Any]:
+        return {"workspace": "default", "stage": stage, "model_id": "m", "calls": 1,
+                "cached_calls": 0, "tokens_in": 1, "tokens_out": 1, "tokens_saved": 0}  # fmt: skip
+
+    rows = StatsCollector._usage_view(
+        [use("llm.ask"), use("llm.ask.route"), use("llm.other")], [backend, ask]
+    )
+    owners = [(r["stage"], (r["component"] or {}).get("label")) for r in rows]
+    assert owners == [("llm.ask", "ask"), ("llm.ask.route", None), ("llm.other", "Language model")]
+
+
+async def test_the_ask_model_endpoint_refuses_a_non_string(rig: Rig) -> None:
+    assert (await rig.http.post("/stats/ask-model", json={"model": 3})).status_code == 422

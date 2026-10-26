@@ -199,13 +199,17 @@
     aiSay("secondary", "setting " + plugin + " model to " + (sel.value || "the backend default") + "…");
     var request = kind === "llm_backend"
       ? post("/stats/model", { plugin: plugin, model: sel.value })
-      : saveConfig(plugin, { model: sel.value });
+      : kind === "ask"
+        ? post("/stats/ask-model", { model: sel.value })
+        : saveConfig(plugin, { model: sel.value });
     request.then(function (res) {
       if (failed(res)) { sel.value = prev; aiSay("danger", why(res, "could not set the model")); return; }
       sel.setAttribute("data-prev", sel.value);
       aiSay("success", kind === "llm_backend"
         ? "model set to " + sel.value + "; core is reloading (watch /v1/health, the port may change)."
-        : plugin + " will use " + (sel.value || "the backend default") + " from its next job.");
+        : kind === "ask"
+          ? "ask will use " + (sel.value || "the backend default") + "; core is reloading."
+          : plugin + " will use " + (sel.value || "the backend default") + " from its next job.");
     }).catch(function () { sel.value = prev; aiSay("danger", "core did not answer"); });
   });
 
