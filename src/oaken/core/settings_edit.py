@@ -77,7 +77,12 @@ SECTIONS: tuple[Section, ...] = (
         "Marking mail read: automatic marking, and how audit rows are batched.",
         _keys("auto_mark", "audit_chunk"),
     ),
-    Section("ui", "ui", "Reading in a client.", _keys("mark_read_delay_ms")),
+    Section(
+        "ui",
+        "ui",
+        "Reading in a client, and how core's console pages look.",
+        _keys("mark_read_delay_ms", "palette", "mode"),
+    ),
     Section(
         "sync",
         "sync",

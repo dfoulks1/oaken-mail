@@ -159,6 +159,9 @@
 
 # [ui]
 # mark_read_delay_ms = 2000    # how long a message must stay open before core marks it read
+# palette = "auto"             # the console's colors: oak maple birch acorn moss stone sky stream
+#                              # contrast, or auto (oak; contrast when the system asks for more)
+# mode = "auto"                # light, dark, or auto (follow the system)
 
 
 # --- MCP ------------------------------------------------------------------------------

@@ -391,6 +391,13 @@ class UISettings(_Section):
     # How long a message must stay presented before core marks it read. Core owns the timer, so
     # every client behaves the same.
     mark_read_delay_ms: int = Field(default=2000, ge=0, le=600_000)
+    # How core's own console pages look: a palette and a mode (see ``api/static/oaken.css``).
+    # ``auto`` palette is oak, or contrast when the system asks for more contrast; ``auto`` mode
+    # follows the system's light or dark setting.
+    palette: Literal[
+        "auto", "oak", "maple", "birch", "acorn", "moss", "stone", "sky", "stream", "contrast"
+    ] = "auto"
+    mode: Literal["auto", "light", "dark"] = "auto"
 
 
 # Spells OAKEN on a phone keypad, and is above Linux's ephemeral range (32768 to 60999).
