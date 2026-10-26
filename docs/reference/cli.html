@@ -188,7 +188,7 @@
 </tr>
 <tr>
 <td><a href="#ask"><code>ask</code></a></td>
-<td>Answer a question from the mail, citing the messages.</td>
+<td>Ask about your mail: a summary, what needs you, actions, or a cited answer.</td>
 </tr>
 <tr>
 <td><a href="#pipeline"><code>pipeline</code></a></td>
@@ -559,10 +559,10 @@
 <li><code>--offset</code> — Skip this many.</li>
 </ul>
 <h3 id="ask"><code>ask</code></h3>
-<p>Answer a question from the mail, citing the messages.</p>
+<p>Ask about your mail: a summary, what needs you, actions, or a cited answer.</p>
 <p>Arguments:</p>
 <ul>
-<li><code>question</code> — The question to answer.</li>
+<li><code>question</code> — What you want to know or see, in plain words.</li>
 </ul>
 <p>Options:</p>
 <ul>
@@ -819,6 +819,7 @@
 <ul>
 <li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--kind</code> — Only this kind.</li>
+<li><code>--max-chars</code> — For ingest.enrich: the most text to send.</li>
 </ul>
 <h4 id="jobs-heartbeat"><code>jobs heartbeat</code></h4>
 <p>Extend a lease.</p>
@@ -853,6 +854,7 @@
 <li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--error</code> — What went wrong (no mail).</li>
 <li><code>--permanent</code> — Do not retry it.</li>
+<li><code>--retry</code> — Hand it back without spending an attempt.</li>
 </ul>
 <h3 id="mcp"><code>mcp</code></h3>
 <p>Reads MCP messages on stdin and forwards them to the MCP server inside the running core, writing its answers to stdout. It adds nothing: the tools, the confirmation step and the limits are core's. If core is not running, tool calls answer with a core_not_running error. It never starts core. Point a stdio-only client (Claude Desktop) at 'oaken mcp'. 'oaken mcp expose' lists which operations MCP clients may call; 'oaken mcp expose NAME on|off|default' (--plugin for a plugin's operations) changes it.</p>

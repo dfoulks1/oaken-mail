@@ -341,6 +341,23 @@ lint test fails a module that builds a request any other way. The first-party en
 (<code>oaken_enrichers</code>: <code>summary</code>, <code>triage</code>, <code>actions</code>, <code>inspector</code>) are the worked examples. Turn one
 off with <code>[plugins.&lt;name&gt;] enabled = false</code>; <code>summary</code> and <code>actions</code> skip bulk mail unless you set
 <code>skip_bulk = false</code>.</p>
+<h3 id="teaching-ask-what-an-enricher-knows">Teaching <code>ask</code> what an enricher knows</h3>
+<p>An enricher can declare an <code>ask_intent</code>, so a person's question like &quot;any deadlines this week?&quot; or
+&quot;how upbeat was that thread?&quot; is understood and answered from what the enricher has stored:</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">oaken.plugins.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseEnricher</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">oaken.plugins.contracts</span><span class="w"> </span><span class="kn">import</span> <span class="n">AskIntent</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Sentiment</span><span class="p">(</span><span class="n">BaseEnricher</span><span class="p">):</span>
+    <span class="n">ask_intent</span> <span class="o">=</span> <span class="n">AskIntent</span><span class="p">(</span>
+        <span class="s2">"sentiment"</span><span class="p">,</span>  <span class="c1"># the name the router may choose: lowercase letters and _</span>
+        <span class="s2">"The reader asks how upbeat or upset a message is."</span><span class="p">,</span>  <span class="c1"># one plain sentence, 120 characters</span>
+        <span class="p">(</span><span class="s2">"score"</span><span class="p">,),</span>  <span class="c1"># the keys of your stored result worth showing; empty means all of it</span>
+    <span class="p">)</span>
+</code></pre></div>
+<p>The description is written into the router's prompt, so keep it plain and about what a person would
+say. It is checked when your class is defined (a bad name or a long description is an error naming
+the field). It must never contain mail text.</p>
 </section>
 <section id="a-cache" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>A cache</h2></div>
 <p>The cache holds validated model answers. Core hands it the facts of a question and the cache builds

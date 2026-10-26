@@ -262,7 +262,9 @@ refreshes only that enricher's rows.</p>
 <p>The model-backed ones cut a long message to <code>ai.enrich_max_input_tokens</code> by keeping its head and
 tail with a marker between, and say <code>truncated</code>. <code>summary</code> and <code>actions</code> do not ask a model about
 bulk or automated mail (<code>skip_bulk</code>, on by default): nobody wrote it to the reader, and it is the
-largest saving there is. Every model call goes through <code>generate_cached</code>, so mail is only ever
+largest saving there is. <code>triage</code> runs first on every message, and <code>[plugins.summary] min_priority</code>
+or <code>[plugins.actions] min_priority</code> (0 ignore, 1 low, 2 normal, 3 soon) skips a message triage
+rated below that number. With no triage result, or no bar set, nothing is skipped. Every model call goes through <code>generate_cached</code>, so mail is only ever
 fenced <code>UntrustedText</code>, answers are validated against a schema, and a rerun is a cache hit.
 Enrichment never marks a message read.</p>
 <p>To check a model against the enrichers' fixtures by hand (not in CI):
@@ -341,6 +343,11 @@ store can sit behind it later.</p>
 <td><code>plugins.summary.skip_bulk</code> / <code>plugins.actions.skip_bulk</code></td>
 <td>true</td>
 <td>Do not ask a model about bulk mail</td>
+</tr>
+<tr>
+<td><code>plugins.summary.min_priority</code> / <code>plugins.actions.min_priority</code></td>
+<td>unset</td>
+<td>Skip mail triage rated below this (0 to 3)</td>
 </tr>
 <tr>
 <td><code>ingest.throughput_window_seconds</code></td>

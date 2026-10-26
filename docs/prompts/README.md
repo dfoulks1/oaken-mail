@@ -75,6 +75,7 @@ all tables (a `CLI_` prompt and a `CORE_` prompt do not restart the count).
 | 41 | [stats-controls](CORE_41-stats-controls.md) | **Built** | Configure AI from `/stats`: enable/disable, clear-usage, agent list/revoke, enricher `config_model` forms, a backend model picker and a per-enricher model field, both fed by `available_models()` (CORE_42 honors the per-enricher model). All controls `mcp="never"` | 13, 16, 23, 29, 40 |
 | 42 | [per-enricher-models](CORE_42-per-enricher-models.md) | **Built** | Each enricher on its own model: `generate(request, *, model=…)` on `BaseLLMBackend` (bumped `PLUGIN_API_VERSION` 1→2, ADR 0010), the effective model carried into the cache key + usage (no `backend.model_id` reach-back, two models cache apart), `EnricherConfig.model` in the `/stats` form fed by `available_models()`. Unknown model warns + falls back. Per-model `context_window` is the documented follow-on. Carries the effective model to PLUGIN_43's cache slot | 41, 10, 43 |
 | 44 | [workspace-ops-fixes](CORE_44-workspace-ops-fixes.md) | **Built** | Close the save-path confidentiality gap in `set_workspace` (one validator, refuses a secure workspace on a remote backend); honest `cache_entries`; two dead branches cut | 31 |
+| 48 | [ask-router](CORE_48-ask-router.md) | **Built** | `ask` works out what was asked (summary, what needs me, actions, find, factual) with a small model that never sees mail, then runs the right read path. Enrichers extend its menu with an `AskIntent` | 13, 14, 15 |
 
 ### CLI — the command line
 

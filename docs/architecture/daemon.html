@@ -145,8 +145,13 @@ exclusively, with port 0 meaning &quot;starting&quot;, before anything is opened
 process is alive, the second start stops with &quot;core is already running&quot;. If that process is gone the
 file is stale and is replaced. A clean shutdown removes it, and only the process that wrote it
 removes it.</p>
-<p>The API port defaults to 0, a free port the kernel chooses, and the file is how clients find it.
-Set <code>[api] port</code> for a fixed one.</p>
+<p>The API port defaults to 62536, so clients can find core even when the runtime file is missing:
+the CLI reads the file first and, if there is none, tries that port. A pinned port in
+<code>[api] port</code> is found through the file as before, and <code>port = 0</code> asks the kernel for a free port
+(a reload keeps it). If the port is taken, core refuses to start and says why. The fallback sends
+the API token to whatever answers on that loopback port, so on a machine shared with people you
+do not trust, pin a port or use <code>port = 0</code>, where the runtime file (mode 0700 directory) is the
+only way in.</p>
 </section>
 <section id="the-token" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>The token</h2></div>
 <p>On first start core makes a random 256-bit token and stores it in <code>api_token</code> in the config

@@ -238,7 +238,7 @@
 <td>read</td>
 <td>on by default</td>
 <td>no</td>
-<td>One message: cleaned text and metadata. Never marks it read.</td>
+<td>One message: its summary and triage when stored, the cleaned text and metadata. Prefer include_text=false and read the summary first; open the text only when you need it. Never marks it read.</td>
 </tr>
 <tr>
 <td><code>get_message_rules</code></td>
@@ -710,8 +710,8 @@
 <h3 id="ask"><code>ask</code></h3>
 <p>Every quote is checked against the message it cites; claims that fail are dropped, and with none left the answer is <code>insufficient_evidence</code>. Never marks anything read. With <code>raw</code> the model is not called: the matching messages come back with their stored enrichments verbatim, so a person sees the data without AI rewriting it.</p>
 <ul>
-<li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>unread_only</code>?, <code>starred</code>?, <code>has_attachment</code>?, <code>thread_key</code>?, <code>question</code>, <code>raw</code>?</li>
-<li>Output: <code>answer</code>, <code>message_ids</code>?, <code>citations</code>?, <code>confidence</code>?, <code>insufficient_evidence</code>?, <code>dropped_claims</code>?, <code>degraded</code>?, <code>degraded_reason</code>?, <code>evidence_tokens</code>?, <code>full_body_tokens</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?, <code>evidence</code>?</li>
+<li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>unread_only</code>?, <code>starred</code>?, <code>has_attachment</code>?, <code>thread_key</code>?, <code>question</code>, <code>limit</code>?, <code>raw</code>?</li>
+<li>Output: <code>intent</code>?, <code>interpreted</code>?, <code>results</code>?, <code>answer</code>, <code>message_ids</code>?, <code>citations</code>?, <code>confidence</code>?, <code>insufficient_evidence</code>?, <code>dropped_claims</code>?, <code>degraded</code>?, <code>degraded_reason</code>?, <code>evidence_tokens</code>?, <code>full_body_tokens</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?, <code>evidence</code>?</li>
 </ul>
 <h3 id="cache-stats"><code>cache_stats</code></h3>
 <p>The enrichment cache: how many answers it holds, how big, from which prompt versions, and how often it saved a model call.</p>
@@ -825,7 +825,7 @@
 <p>The cleaned text (quotes and signatures removed), cut to the caller's limit. Reading a message here does not change read state: only opening or summarizing it, by the user, does.</p>
 <ul>
 <li>Input: <code>message_id</code>, <code>include_text</code>?, <code>text_chars</code>?</li>
-<li>Output: <code>message_id</code>, <code>account_id</code>, <code>thread_key</code>?, <code>subject</code>?, <code>from_addr</code>?, <code>from_name</code>?, <code>date</code>?, <code>labels</code>?, <code>disposition</code>?, <code>location</code>?, <code>is_read</code>?, <code>starred</code>?, <code>to_addrs</code>?, <code>cc_addrs</code>?, <code>message_id_header</code>?, <code>in_reply_to</code>?, <code>references</code>?, <code>indexed</code>?, <code>text</code>?, <code>truncated</code>?, <code>attachments</code>?, <code>content_is_untrusted</code>?</li>
+<li>Output: <code>message_id</code>, <code>account_id</code>, <code>thread_key</code>?, <code>subject</code>?, <code>from_addr</code>?, <code>from_name</code>?, <code>date</code>?, <code>labels</code>?, <code>disposition</code>?, <code>location</code>?, <code>is_read</code>?, <code>starred</code>?, <code>to_addrs</code>?, <code>cc_addrs</code>?, <code>message_id_header</code>?, <code>in_reply_to</code>?, <code>references</code>?, <code>indexed</code>?, <code>text</code>?, <code>truncated</code>?, <code>attachments</code>?, <code>summary</code>?, <code>key_points</code>?, <code>category</code>?, <code>priority</code>?, <code>needs_reply</code>?, <code>content_is_untrusted</code>?</li>
 </ul>
 <h3 id="get-message-rules"><code>get_message_rules</code></h3>
 <p>How a message was filed: its labels, flags and disposition, and the rule behind each.</p>

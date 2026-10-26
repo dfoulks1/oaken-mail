@@ -416,8 +416,8 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <tr>
 <td>33</td>
 <td>CORE_33-agent-enrichment</td>
-<td><strong>Written</strong></td>
-<td>Not built. The <code>/mcp/agent</code> door works but a claimed <code>ingest.enrich</code> job carries only ids and cannot store an answer</td>
+<td><strong>Built</strong></td>
+<td>An external model enriches through the agent door: <code>claim_job</code> carries the fenced message, the owed enrichers and their schemas; <code>complete_job</code> validates and stores <code>{enrichments}</code> as <code>agent:&lt;label&gt;</code> (partial answers allowed); an agent row satisfies the native cache. Mail offered follows <code>[mcp] workspaces</code>. HTTP routes and CLI share the operations. Not done: the live LM Studio demonstration</td>
 </tr>
 <tr>
 <td>34</td>
@@ -460,6 +460,12 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <td>CORE_44-workspace-ops-fixes</td>
 <td><strong>Built</strong></td>
 <td><code>set_workspace</code> runs the same check as <code>check_workspace</code> (name, shape, and a secure workspace needs a local backend) and refuses on failure, with the field in <code>errors</code>; one validator for both. <code>cache_entries</code> is the real count or <code>None</code>, never a false 0. Two dead branches cut</td>
+</tr>
+<tr>
+<td>48</td>
+<td>CORE_48-ask-router</td>
+<td><strong>Built</strong></td>
+<td><code>ask</code> works out what was asked with a small model that sees only the question, then runs the matching read path: <code>find</code>, <code>qa</code>, and one intent per enricher that declares an <code>AskIntent</code> (<code>summary</code>, <code>triage</code>, <code>actions</code>, <code>inspector</code> ship with one). Shows how it read the request. Rules decide if the model fails. Not built: running an enricher on demand from <code>ask</code>, account-name resolution</td>
 </tr>
 </tbody>
 </table></div>

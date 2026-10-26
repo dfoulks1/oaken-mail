@@ -924,6 +924,34 @@
 </tr>
 </tbody>
 </table></div>
+<h3 id="askintent"><code>AskIntent</code></h3>
+<p>What an enricher lets <code>ask</code> understand: <code>name</code> is the intent a router may choose, <code>description</code> says in one plain sentence what a person asking for it wants, and <code>fields</code> are the keys of the stored result worth showing (empty: all of it). It is written in the enricher's code, never taken from mail, and is checked when the class is defined.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>fields</code></td>
+<td><code>tuple[str, ...]</code></td>
+<td><code>()</code></td>
+</tr>
+</tbody>
+</table></div>
 <h3 id="enrichoutput"><code>EnrichOutput</code></h3>
 <p>A JSON-serializable result, which must match the enricher's <code>output_schema</code>.</p>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
@@ -1259,6 +1287,7 @@
 <li><code>version: ClassVar[str] = '1'</code></li>
 <li><code>needs_llm: bool = False</code></li>
 <li><code>output_model: ClassVar[type[BaseModel] | None] = None</code></li>
+<li><code>ask_intent: ClassVar[AskIntent | None] = None</code></li>
 </ul>
 <p>Override:</p>
 <ul>

@@ -216,6 +216,22 @@ treated like a missing one rather than mixed in.</p>
 user-initiated operation.</p>
 </section>
 <section id="ask" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Ask</h2></div>
+<h3 id="what-an-ask-is-asking-for">What an <code>ask</code> is asking for</h3>
+<p><code>ask</code> first works out the intent. A small model reads only the question, never any mail, and picks
+from a menu: <code>find</code> (show messages), <code>qa</code> (a factual question, below) and one intent for each
+installed enricher that declares one, so out of the box <code>summary</code>, <code>triage</code> (what needs me, most
+important first), <code>actions</code> (to-dos and deadlines) and <code>inspector</code> (is this suspicious). It also
+picks a sender, a period in days and unread-only when the question names them, and core does the
+dates and the lookups. The result begins with how it was read (&quot;read as: ...&quot;), and a message
+with no stored result for that enricher is listed as <code>not enriched</code> rather than dropped.</p>
+<p>The menu is built from the enrichers that are running, so a new enricher teaches <code>ask</code> a new skill
+with no core change (see <a href="../plugins.html">Plugins</a>). The model's system prompt is a fixed template
+plus that menu, which is plugin code checked when it loads, so mail text never reaches it. If the
+model is missing or wrong, plain words decide: &quot;summarize&quot;, &quot;urgent&quot;, &quot;to-do&quot;, &quot;spam&quot; pick an
+intent, a question picks <code>qa</code>, and anything else is a listing. Routing never fails an <code>ask</code>.</p>
+<p><code>find</code> and the enricher intents search every account and make no model call to answer. Only <code>qa</code>
+asks the model about mail, one account at a time.</p>
+<h3 id="cited-answers-qa">Cited answers (<code>qa</code>)</h3>
 <p><code>ask(question, filters)</code> retrieves, builds a context, and asks the model to answer in <strong>claims</strong>.
 Each claim has the excerpt it rests on and the exact words it quotes.</p>
 <ol>

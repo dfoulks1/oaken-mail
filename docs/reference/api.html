@@ -841,7 +841,7 @@ resume from the in-memory ring. If that id is older than the ring, or from befor
 <h3 id="post-v1agentjobsclaim"><code>POST /v1/agent/jobs/claim</code></h3>
 <p>Lease the best runnable job of the agent's kinds, or none.</p>
 <ul>
-<li>Request: <code>kinds</code>?</li>
+<li>Request: <code>kinds</code>?, <code>max_chars</code>?</li>
 <li>Response: <code>job</code></li>
 </ul>
 <h3 id="post-v1agentjobsjob-idheartbeat"><code>POST /v1/agent/jobs/{job_id}/heartbeat</code></h3>
@@ -859,7 +859,7 @@ resume from the in-memory ring. If that id is older than the ring, or from befor
 <h3 id="post-v1agentjobsjob-idfail"><code>POST /v1/agent/jobs/{job_id}/fail</code></h3>
 <p>Give the job back with an error; core decides whether to retry.</p>
 <ul>
-<li>Request: <code>error</code>, <code>permanent</code>?</li>
+<li>Request: <code>error</code>, <code>permanent</code>?, <code>retry</code>?</li>
 <li>Response: <code>status</code></li>
 </ul>
 </section>

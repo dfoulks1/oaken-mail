@@ -87,6 +87,14 @@
           "default": null,
           "title": "Label"
         },
+        "limit": {
+          "default": 10,
+          "description": "Most messages a listing returns.",
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
         "location": {
           "anyOf": [
             {
@@ -244,6 +252,53 @@
           ],
           "title": "EnrichedMessage",
           "type": "object"
+        },
+        "RoutedMessage": {
+          "description": "A message an ``ask`` listing found, with the stored enrichment it was asked about.",
+          "properties": {
+            "date": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Date"
+            },
+            "message_id": {
+              "title": "Message Id",
+              "type": "string"
+            },
+            "not_enriched": {
+              "default": false,
+              "title": "Not Enriched",
+              "type": "boolean"
+            },
+            "sender": {
+              "default": "",
+              "title": "Sender",
+              "type": "string"
+            },
+            "subject": {
+              "default": "",
+              "title": "Subject",
+              "type": "string"
+            },
+            "view": {
+              "additionalProperties": true,
+              "title": "View",
+              "type": "object"
+            }
+          },
+          "required": [
+            "message_id"
+          ],
+          "title": "RoutedMessage",
+          "type": "object"
         }
       },
       "properties": {
@@ -310,11 +365,28 @@
           "title": "Insufficient Evidence",
           "type": "boolean"
         },
+        "intent": {
+          "default": "qa",
+          "title": "Intent",
+          "type": "string"
+        },
+        "interpreted": {
+          "default": "",
+          "title": "Interpreted",
+          "type": "string"
+        },
         "message_ids": {
           "items": {
             "type": "string"
           },
           "title": "Message Ids",
+          "type": "array"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/$defs/RoutedMessage"
+          },
+          "title": "Results",
           "type": "array"
         },
         "warnings": {
@@ -1729,6 +1801,18 @@
           "title": "Attachments",
           "type": "array"
         },
+        "category": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category"
+        },
         "cc_addrs": {
           "items": {
             "$ref": "#/$defs/AddressInfo"
@@ -1793,6 +1877,13 @@
           "default": null,
           "title": "Is Read"
         },
+        "key_points": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Key Points",
+          "type": "array"
+        },
         "labels": {
           "items": {
             "type": "string"
@@ -1821,6 +1912,30 @@
           "title": "Message Id Header",
           "type": "string"
         },
+        "needs_reply": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Needs Reply"
+        },
+        "priority": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Priority"
+        },
         "references": {
           "items": {
             "type": "string"
@@ -1844,6 +1959,18 @@
           "default": "",
           "title": "Subject",
           "type": "string"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
         },
         "text": {
           "default": "",
@@ -2318,6 +2445,18 @@
               "title": "Account Id",
               "type": "string"
             },
+            "category": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Category"
+            },
             "date": {
               "anyOf": [
                 {
@@ -2389,6 +2528,18 @@
               "title": "Message Id",
               "type": "string"
             },
+            "needs_reply": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Needs Reply"
+            },
             "parent_id": {
               "anyOf": [
                 {
@@ -2400,6 +2551,18 @@
               ],
               "default": null,
               "title": "Parent Id"
+            },
+            "priority": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Priority"
             },
             "score": {
               "default": 0.0,
@@ -2426,6 +2589,18 @@
             "subject": {
               "title": "Subject",
               "type": "string"
+            },
+            "summary": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Summary"
             },
             "text": {
               "anyOf": [
@@ -3463,6 +3638,18 @@
               "title": "Account Id",
               "type": "string"
             },
+            "category": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Category"
+            },
             "date": {
               "anyOf": [
                 {
@@ -3529,6 +3716,30 @@
               "title": "Message Id",
               "type": "string"
             },
+            "needs_reply": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Needs Reply"
+            },
+            "priority": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Priority"
+            },
             "score": {
               "default": 0.0,
               "title": "Score",
@@ -3554,6 +3765,18 @@
             "subject": {
               "title": "Subject",
               "type": "string"
+            },
+            "summary": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Summary"
             },
             "text": {
               "anyOf": [
@@ -6719,6 +6942,18 @@
               "title": "Account Id",
               "type": "string"
             },
+            "category": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Category"
+            },
             "date": {
               "anyOf": [
                 {
@@ -6785,6 +7020,30 @@
               "title": "Message Id",
               "type": "string"
             },
+            "needs_reply": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Needs Reply"
+            },
+            "priority": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Priority"
+            },
             "score": {
               "default": 0.0,
               "title": "Score",
@@ -6810,6 +7069,18 @@
             "subject": {
               "title": "Subject",
               "type": "string"
+            },
+            "summary": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Summary"
             },
             "text": {
               "anyOf": [
@@ -7099,6 +7370,18 @@
               "title": "Account Id",
               "type": "string"
             },
+            "category": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Category"
+            },
             "date": {
               "anyOf": [
                 {
@@ -7165,6 +7448,30 @@
               "title": "Message Id",
               "type": "string"
             },
+            "needs_reply": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Needs Reply"
+            },
+            "priority": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Priority"
+            },
             "score": {
               "default": 0.0,
               "title": "Score",
@@ -7190,6 +7497,18 @@
             "subject": {
               "title": "Subject",
               "type": "string"
+            },
+            "summary": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Summary"
             },
             "text": {
               "anyOf": [
