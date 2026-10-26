@@ -52,6 +52,9 @@ class Gister(BaseEnricher):
         self.native_runs += 1
         return EnrichOutput({"gist": "", "skipped": "bulk"})
 
+    def from_answer(self, msg: EnrichInput, answer: Gist) -> EnrichOutput:
+        return EnrichOutput({"gist": answer.gist})
+
 
 class Toner(BaseEnricher):
     version = "1"
@@ -61,6 +64,9 @@ class Toner(BaseEnricher):
 
     async def enrich(self, msg: EnrichInput) -> EnrichOutput:
         raise AssertionError("an agent should have been asked")
+
+    def from_answer(self, msg: EnrichInput, answer: Tone) -> EnrichOutput:
+        return EnrichOutput({"tone": answer.tone})
 
 
 class Swarm:
@@ -214,6 +220,9 @@ async def test_work_that_needs_no_model_is_settled_in_core_and_not_offered(
         async def enrich(self, msg: EnrichInput) -> EnrichOutput:
             return EnrichOutput({"tone": "n/a"})
 
+        def from_answer(self, msg: EnrichInput, answer: Tone) -> EnrichOutput:
+            return EnrichOutput({"tone": answer.tone})
+
     swarm.use({"gist": swarm.gister, "tone": NoToner()})
     assert (await swarm.call("claim_job")).job is None
     job = await ops.svc.queue.get(job_id)  # type: ignore[arg-type]
@@ -262,3 +271,40 @@ async def test_fail_with_retry_hands_the_job_back_unharmed(ops: Ops, swarm: Swar
     assert out.status == "queued"
     job = await ops.svc.queue.get(job_id)  # type: ignore[arg-type]
     assert job is not None and job.attempts == 0
+
+
+class RatedResult(ToneResult):
+    priority: int = 0
+
+
+class Rater(BaseEnricher):
+    """Stands in for triage: its ``priority`` can rule the other enrichers out."""
+
+    version = "1"
+    needs_llm = True
+    prompt = PromptBuilder("enrich.rate", "1", "Rate it.", Gist)
+    output_model = RatedResult
+
+    async def enrich(self, msg: EnrichInput) -> EnrichOutput:
+        raise AssertionError("an agent should have been asked")
+
+    def from_answer(self, msg: EnrichInput, answer: Gist) -> EnrichOutput:
+        return EnrichOutput({"tone": answer.gist, "priority": int(answer.gist)})
+
+
+async def test_a_triage_below_an_enrichers_bar_rules_it_out_for_the_agent_too(
+    ops: Ops, swarm: Swarm
+) -> None:
+    mid, _ = await swarm.message()
+
+    swarm.use({"triage": Rater(), "gist": swarm.gister})
+    ops.svc.need_pipeline().settings.plugins["gist"] = {"min_priority": 2}
+    job_id = await swarm.job(mid)
+    job = (await swarm.call("claim_job")).job
+    owed = {o["enricher"]: o for o in job.payload["owed"]}
+    assert owed["gist"]["min_priority"] == 2 and "triage first" in job.payload["order"].lower()
+    done = await swarm.call(
+        "complete_job", job_id=job_id, result={"enrichments": {"triage": {"gist": "1"}}}
+    )
+    assert (done.stored, done.still_owed) == (1, 0)  # priority 1 is under the bar: gist is not owed
+    assert (await ops.svc.queue.get(job_id)).status == "succeeded"  # type: ignore[union-attr,arg-type]

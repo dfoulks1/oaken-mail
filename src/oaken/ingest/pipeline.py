@@ -25,9 +25,10 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from oaken.ai.fresh import FRESH
+from oaken.ai.prompts import describe_errors
 from oaken.core.actors import SYSTEM, Actor
 from oaken.core.attrs import AttrStore
 from oaken.core.clock import Clock, fmt_ts, parse_ts
@@ -501,10 +502,15 @@ class Pipeline:
         """The enrichers an agent could still supply for this message: model-backed, switched on,
         able to say what they ask a model, needing one for this message, and not stored yet."""
         owed: dict[str, Enricher] = {}
+        triage = await self.enrichment(message_id, GATE)  # what its priority already rules out
+        priority = triage.get("priority") if triage else None
         for name, enricher in self.backends.enrichers().items():
             if not enricher.needs_llm or getattr(enricher, "prompt", None) is None:
                 continue
-            if self.settings.plugins.get(name, {}).get("enabled") is False:
+            if getattr(enricher, "from_answer", None) is None:
+                continue  # it cannot turn an agent's answer into its stored result
+            table = self.settings.plugins.get(name, {})
+            if table.get("enabled") is False:
                 continue
             bar = self._bar(name, enricher)
             if name != GATE and bar is not None and isinstance(priority, int) and priority < bar:
@@ -565,6 +571,8 @@ class Pipeline:
                 ],
                 "truncated": cut,
             },
+            "order": "Answer triage first. An enricher whose min_priority is above the priority "
+            "you give triage is not owed: leave it out.",
             "owed": [
                 {
                     "enricher": n,
@@ -588,16 +596,27 @@ class Pipeline:
         doc = await self.index.get_doc(message_id)
         if doc is None:
             raise InvalidResult("that message is no longer indexed")
-        owed = await self._owed_to_agent(message_id, doc, await self._enrich_input(message_id, doc))
+        msg_input = await self._enrich_input(message_id, doc)
+        owed = await self._owed_to_agent(message_id, doc, msg_input)
         checked: dict[str, str] = {}
         for name, data in answers.items():
             if name not in owed:
                 raise InvalidResult(
                     f"enricher {name!r} is not owed for this message (owed: {sorted(owed) or 'none'})"
                 )
+            enricher = owed[name]
+            try:  # the shape offered in the claim, then the enricher's own post-processing
+                answer = enricher.prompt.output.model_validate(data)  # type: ignore[attr-defined]
+            except ValidationError as exc:
+                fields = describe_errors(exc.errors(include_input=False, include_url=False))
+                raise InvalidResult(
+                    f"{name}: the answer does not match the schema ({fields})"
+                ) from exc
             try:
                 result = to_enrich_output(
-                    data, f"enricher {name}", getattr(owed[name], "output_model", None)
+                    enricher.from_answer(msg_input, answer),  # type: ignore[attr-defined]
+                    f"enricher {name}",
+                    getattr(enricher, "output_model", None),
                 )
             except PluginError as exc:
                 raise InvalidResult(f"{name}: {exc}") from exc

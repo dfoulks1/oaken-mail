@@ -144,6 +144,15 @@ class TriageEnricher(LLMEnricher):
             message_id=msg.message_id,
             model=self.model_for(),
         )
+        return self.finish(answer, truncated)
+
+    def from_answer(self, msg: EnrichInput, answer: TriageAnswer) -> EnrichOutput:
+        """The stored result for an answer a model (or an external agent) gave: what ``enrich``
+        does after the model call, so every answer is held to the same rules."""
+        _, truncated = fit(msg.body.unwrap(), self.budget(), self.tokenizer)
+        return self.finish(answer, truncated)
+
+    def finish(self, answer: TriageAnswer, truncated: bool) -> EnrichOutput:
         return EnrichOutput(
             TriageResult(
                 category=answer.category,

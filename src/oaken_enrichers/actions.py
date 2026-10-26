@@ -133,6 +133,17 @@ class ActionsEnricher(LLMEnricher):
             message_id=msg.message_id,
             model=self.model_for(),
         )
+        return self.finish(msg, answer, body, truncated)
+
+    def from_answer(self, msg: EnrichInput, answer: ActionsAnswer) -> EnrichOutput:
+        """The stored result for an answer a model (or an external agent) gave: what ``enrich``
+        does after the model call, so every quote is checked against the message."""
+        body, truncated = fit(msg.body.unwrap(), self.budget(), self.tokenizer)
+        return self.finish(msg, answer, body, truncated)
+
+    def finish(
+        self, msg: EnrichInput, answer: ActionsAnswer, body: str, truncated: bool
+    ) -> EnrichOutput:
         full = msg.body.unwrap()
         dropped = 0
         items: list[ActionItem] = []
