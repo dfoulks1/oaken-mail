@@ -462,6 +462,12 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <td><code>set_workspace</code> runs the same check as <code>check_workspace</code> (name, shape, and a secure workspace needs a local backend) and refuses on failure, with the field in <code>errors</code>; one validator for both. <code>cache_entries</code> is the real count or <code>None</code>, never a false 0. Two dead branches cut</td>
 </tr>
 <tr>
+<td>47</td>
+<td>CORE_47-split-enrich</td>
+<td><strong>Written</strong></td>
+<td>One job kind per enricher (<code>ingest.enrich.&lt;name&gt;</code>): triage runs first and only the enrichers whose <code>min_priority</code> it meets are queued; the old <code>ingest.enrich</code> job becomes a converter that drains the backlog cheaply. An agent's payload carries one enricher, not three. Plan only</td>
+</tr>
+<tr>
 <td>48</td>
 <td>CORE_48-ask-router</td>
 <td><strong>Built</strong></td>
@@ -577,6 +583,12 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <td>PLUGIN_43-pluggable-llm-cache</td>
 <td><strong>Built</strong></td>
 <td>A <code>cache_store</code> plugin kind and <code>BaseCache</code> (<code>key</code>, <code>get</code>, <code>put</code>, <code>stats</code>, <code>clear</code>); <code>[ai] cache</code> names one. Core keeps its SQLite cache as the default, inline. The caller passes the effective model and the cache builds the key. Built after CORE_42. Not built: any non-SQLite cache</td>
+</tr>
+<tr>
+<td>49</td>
+<td>PLUGIN_49-specialist-models</td>
+<td><strong>Written</strong></td>
+<td>Small, fast specialist enrichers on ONNX models (language, junk, sentiment) as an optional extra, plus a recipe for workers that claim just that enricher's jobs. Needs 47. Plan only</td>
 </tr>
 </tbody>
 </table></div>

@@ -75,6 +75,7 @@ all tables (a `CLI_` prompt and a `CORE_` prompt do not restart the count).
 | 41 | [stats-controls](CORE_41-stats-controls.md) | **Built** | Configure AI from `/stats`: enable/disable, clear-usage, agent list/revoke, enricher `config_model` forms, a backend model picker and a per-enricher model field, both fed by `available_models()` (CORE_42 honors the per-enricher model). All controls `mcp="never"` | 13, 16, 23, 29, 40 |
 | 42 | [per-enricher-models](CORE_42-per-enricher-models.md) | **Built** | Each enricher on its own model: `generate(request, *, model=…)` on `BaseLLMBackend` (bumped `PLUGIN_API_VERSION` 1→2, ADR 0010), the effective model carried into the cache key + usage (no `backend.model_id` reach-back, two models cache apart), `EnricherConfig.model` in the `/stats` form fed by `available_models()`. Unknown model warns + falls back. Per-model `context_window` is the documented follow-on. Carries the effective model to PLUGIN_43's cache slot | 41, 10, 43 |
 | 44 | [workspace-ops-fixes](CORE_44-workspace-ops-fixes.md) | **Built** | Close the save-path confidentiality gap in `set_workspace` (one validator, refuses a secure workspace on a remote backend); honest `cache_entries`; two dead branches cut | 31 |
+| 47 | [split-enrich](CORE_47-split-enrich.md) | **Written** | One job per enricher: triage first, then only the enrichers it earns; the old job drains as a converter; an agent's payload carries one enricher | 09, 14, 33, 42 |
 | 48 | [ask-router](CORE_48-ask-router.md) | **Built** | `ask` works out what was asked (summary, what needs me, actions, find, factual) with a small model that never sees mail, then runs the right read path. Enrichers extend its menu with an `AskIntent` | 13, 14, 15 |
 
 ### CLI — the command line
@@ -103,6 +104,7 @@ all tables (a `CLI_` prompt and a `CORE_` prompt do not restart the count).
 | 37 | [gmail-sign-in](PLUGIN_37-gmail-sign-in.md) | **Written** | Gmail sign-in as the standard consent flow: permissions that follow capabilities, `oaken gmail doctor`, a clearer consent experience, and a private copy of the client JSON. Written, not built | 11, 23, 24, 35 |
 | 38 | [openai-compat-lmstudio](PLUGIN_38-openai-compat-lmstudio.md) | **Written** | `oaken_openai_compat`: an LLM backend and embedder over any OpenAI-compatible server, with LM Studio as the preset; plus a docs page for using Oaken from ollmcp or LM Studio as MCP clients. Written, not built | 04, 08, 10, 31 |
 | 43 | [pluggable-llm-cache](PLUGIN_43-pluggable-llm-cache.md) | **Built** | A pluggable LLM answer cache: `cache_store` kind + `BaseCache`, key built by the cache from the effective model. Default stays core's SQLite, inline. No second cache yet | 15, 42 |
+| 49 | [specialist-models](PLUGIN_49-specialist-models.md) | **Written** | Small ONNX specialist enrichers (language, junk, sentiment) as an optional extra, and a recipe for workers that farm their jobs. Needs 47 | 14, 33, 47, 48 |
 
 ### ENRICHER — the enrichers
 
