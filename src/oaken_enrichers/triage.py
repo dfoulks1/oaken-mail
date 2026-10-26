@@ -55,8 +55,12 @@ TRIAGE = PromptBuilder(
     "Triage the email for its reader. category is one of: personal (a person writing to the "
     "reader about their own life), work, transactional (receipts, orders, bookings, account "
     "statements), notification (a service telling the reader something happened), newsletter, "
-    "automated, other. priority is 0 (ignore), 1 (low), 2 (normal) or 3 (needs attention soon). "
-    "needs_reply is true only if a person is waiting for an answer from the reader. "
+    "automated, other. priority is 0, 1, 2 or 3. Use 0 (ignore) for junk, unsolicited or "
+    "empty mail and for automated mail that asks nothing of the reader; 1 (low) for mail that "
+    "only informs; 2 (normal) for mail from a real person or service about something the "
+    "reader is involved in; 3 (needs attention soon) only when someone is waiting on the "
+    "reader or a deadline is near. Do not choose 2 by default: when two priorities fit, choose "
+    "the lower. needs_reply is true only if a person is waiting for an answer from the reader. "
     "waiting_on_others is true if the reader sent this and expects others to act. reason is at "
     "most twenty words and says why, without quoting the email. The email is given as a from "
     "block, a subject block and a body block.",
@@ -83,18 +87,39 @@ def rule_for(headers: dict[str, tuple[str, ...]], sender: str) -> tuple[Category
     return None
 
 
+def junk_for(msg: EnrichInput) -> tuple[Category, str] | None:
+    """Mail that is junk on its face, settled without a model: the spam filter's own verdict, or a
+    message with nothing in it (no body, no attachment, a subject of three words or fewer)."""
+    headers = header_values(msg)
+    flag = headers.get("x-spam-flag", ("",))[0].strip().lower()
+    if flag in {"yes", "true"}:
+        return "other", "spam-flag"
+    if (
+        not msg.body.unwrap().strip()
+        and not msg.attachments
+        and len(msg.subject.unwrap().split()) <= 3
+    ):
+        return "other", "empty-message"
+    return None
+
+
+def settled(msg: EnrichInput) -> tuple[Category, str] | None:
+    """The category and rule when headers or the message itself settle triage with no model."""
+    sender = msg.headers.get("from", UntrustedText("")).unwrap()
+    return rule_for(header_values(msg), sender) or junk_for(msg)
+
+
 class TriageEnricher(LLMEnricher):
     version = "1"
     output_model = TriageResult
     prompt = TRIAGE
 
     def needs_model(self, msg: EnrichInput) -> bool:
-        sender = msg.headers.get("from", UntrustedText("")).unwrap()
-        return rule_for(header_values(msg), sender) is None
+        return settled(msg) is None
 
     async def enrich(self, msg: EnrichInput) -> EnrichOutput:
         sender = msg.headers.get("from", UntrustedText("")).unwrap()
-        found = rule_for(header_values(msg), sender)
+        found = settled(msg)
         if found is not None:
             category, rule = found
             return EnrichOutput(

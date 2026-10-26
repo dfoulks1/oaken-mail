@@ -22,7 +22,7 @@ class Rater(BaseEnricher):
         return EnrichOutput({"category": "personal", "priority": self.priority})
 
 
-async def run(rig: Any, priority: int, bar: int | None) -> tuple[Rater, int]:
+async def run(rig: Any, priority: int, bar: int | str | None) -> tuple[Rater, int]:
     rater = Rater(priority)
     # sorted by name "triage" would come after "words"; the gate must run it first anyway
     rig.pipeline.backends.enrichers = lambda: {
@@ -62,3 +62,10 @@ async def test_without_a_triage_result_nothing_is_gated(make_rig: Any) -> None:
         await rig.run_sync()
         await rig.drain(rounds=3)
         assert len(rig.enricher.seen) == 1  # no triage enricher: the bar is not applied on a guess
+
+
+async def test_a_bar_written_as_a_string_still_gates(make_rig: Any) -> None:
+    # The console form writes ``min_priority = "2"``; a bar that is silently ignored is the worst bug.
+    async with make_rig(Options(embedder=False)) as rig:
+        rater, words = await run(rig, priority=1, bar="2")
+        assert rater.calls == 1 and words == 0

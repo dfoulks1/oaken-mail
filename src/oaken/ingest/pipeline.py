@@ -440,8 +440,8 @@ class Pipeline:
             table = self.settings.plugins.get(name, {})
             if table.get("enabled") is False:
                 continue  # switched off with [plugins.<name>] enabled = false
-            bar = table.get("min_priority")
-            if name != GATE and isinstance(bar, int) and await self._rated_below(message_id, bar):
+            bar = self._bar(name, enricher)
+            if name != GATE and bar is not None and await self._rated_below(message_id, bar):
                 out.gated += 1
                 continue
             if enricher.needs_llm and llm is None:
@@ -506,6 +506,9 @@ class Pipeline:
                 continue
             if self.settings.plugins.get(name, {}).get("enabled") is False:
                 continue
+            bar = self._bar(name, enricher)
+            if name != GATE and bar is not None and isinstance(priority, int) and priority < bar:
+                continue  # triage rated it below this enricher's bar: nothing is owed
             needs = getattr(enricher, "needs_model", None)
             if needs is not None and not needs(msg):
                 continue
@@ -566,6 +569,7 @@ class Pipeline:
                 {
                     "enricher": n,
                     "version": e.version,
+                    "min_priority": self._bar(n, e),
                     "instructions": e.prompt.system,  # type: ignore[attr-defined]
                     "schema": e.prompt.schema,  # type: ignore[attr-defined]
                 }
@@ -618,7 +622,21 @@ class Pipeline:
                         enricher=name,
                     )
                 )
-        return len(checked), len(owed) - len(checked)
+        # What is still owed once these are stored: triage's priority may rule out the rest.
+        left = await self._owed_to_agent(message_id, doc, msg_input)
+        return len(checked), len(left)
+
+    def _bar(self, name: str, enricher: Any = None) -> int | None:
+        """The ``min_priority`` of an enricher, or None. It is read from the enricher's validated
+        config when it has one, which turns ``"2"`` (a form writes strings) into 2 and refuses
+        anything outside 0 to 3; otherwise from the raw table, coerced the same way."""
+        value = getattr(getattr(enricher, "config", None), "min_priority", None)
+        if value is None:
+            value = self.settings.plugins.get(name, {}).get("min_priority")
+        try:
+            return None if value is None or isinstance(value, bool) else int(value)
+        except (TypeError, ValueError):
+            return None
 
     async def _rated_below(self, message_id: MessageId, bar: int) -> bool:
         """True when triage has rated this message under ``bar``. With no triage result (it is off,

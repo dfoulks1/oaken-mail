@@ -88,3 +88,28 @@ async def test_an_unchanged_message_is_answered_from_the_cache(rig: Rig) -> None
     assert first == second and len(rig.llm.requests) == 1
     rows = {r.stage: r for r in await rig.usage.usage_summary(None)}
     assert rows["llm.enrich.triage"].cached_calls == 1
+
+
+async def test_a_spam_flagged_message_is_settled_by_rule_with_no_model_call(rig: Rig) -> None:
+    enricher = await rig.start(TriageEnricher())
+    msg = message(body="Win a prize now, click here.", subject="You won", x_spam_flag="YES")
+    out = (await enricher.enrich(msg)).data
+    assert out["source"] == "rules" and out["rule"] == "spam-flag" and out["priority"] == 0
+    assert (
+        out["category"] == "other" and not rig.llm.requests and enricher.needs_model(msg) is False
+    )
+
+
+async def test_an_empty_message_with_a_short_subject_is_settled_by_rule(rig: Rig) -> None:
+    enricher = await rig.start(TriageEnricher())
+    msg = message(body="", subject="delete")
+    out = (await enricher.enrich(msg)).data
+    assert out["rule"] == "empty-message" and out["priority"] == 0 and not rig.llm.requests
+
+
+async def test_a_short_message_with_a_real_subject_or_an_attachment_still_goes_to_the_model(
+    rig: Rig,
+) -> None:
+    enricher = await rig.start(TriageEnricher())
+    assert enricher.needs_model(message(body="", subject="Quarterly report is attached for review"))
+    assert enricher.needs_model(message(body="Thanks", subject="Re: lunch"))

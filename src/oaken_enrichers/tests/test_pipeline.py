@@ -146,11 +146,15 @@ async def test_a_reply_is_summarized_with_its_parents_stored_summary(rig: Rig) -
             f"Message-ID: <t{n}@example.com>\r\n{extra}\r\n{body}\r\n"
         ).encode()
 
-    rig.llm.responder = lambda r: (
-        {"summary": "Alex proposes lunch.", "key_points": []}
-        if "key_points" in (r.json_schema or {}).get("properties", {}) and len(rig.llm.requests) < 2
-        else answer(r)
-    )
+    summaries: list[object] = []  # the first summary asked for is the parent's
+
+    def responder(r: Any) -> Any:
+        if "key_points" in (r.json_schema or {}).get("properties", {}) and not summaries:
+            summaries.append(r)
+            return {"summary": "Alex proposes lunch.", "key_points": []}
+        return answer(r)
+
+    rig.llm.responder = responder
     first = rig.provider.add_message(thread(1, 1, "Lunch on Tuesday?", ""))
     await rig.run_sync()
     await rig.drain()
