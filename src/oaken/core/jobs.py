@@ -15,6 +15,7 @@ by up to ``backoff_jitter`` (a fraction) at random so retries do not arrive in l
 
 import asyncio
 import contextlib
+import logging
 import random
 import re
 from collections.abc import Awaitable, Callable, Collection, Mapping
@@ -331,11 +332,13 @@ class JobQueue:
             else:
                 marks = ",".join("?" * len(allowed))
                 row = await tx.fetchone(
-                    "SELECT id FROM jobs WHERE status = 'queued' AND run_after <= ?"  # noqa: S608
-                    f" AND kind IN ({marks}){extra}"  # only "?" placeholders are interpolated
+                    "SELECT id, kind, priority FROM jobs WHERE status = 'queued'"  # noqa: S608
+                    f" AND run_after <= ? AND kind IN ({marks}){extra}"  # only "?" are interpolated
                     " ORDER BY priority DESC, run_after, id LIMIT 1",
                     (fmt_ts(now), *allowed, *extra_args),
                 )
+            if log.is_enabled_for(logging.DEBUG):  # runtime claim trace (set OAKEN_LOG=debug)
+                await self._log_claim(tx, worker, allowed, sorted(blocked), limits or {}, row)
             job: Job | None = None
             if row:
                 lease = now + timedelta(seconds=self._lease(row["kind"], agent is not None))
@@ -359,6 +362,36 @@ class JobQueue:
                 changes.append(_Change(job.id, job.kind, "running", job.account_id))
         await self.announce(*changes)
         return job
+
+    @staticmethod
+    async def _log_claim(
+        tx: Tx,
+        worker: str,
+        allowed: list[str],
+        blocked: list[str],
+        limits: Mapping[str, int],
+        row: Row | None,
+    ) -> None:
+        """Debug trace for one claim cycle: the runnable backlog by kind (count and top priority)
+        next to what this worker took. A stage whose ``queued`` stays high while ``claimed`` is
+        always something else is being starved. Only runs when DEBUG is on."""
+        backlog = {
+            r["kind"]: (r["n"], r["top"])
+            for r in await tx.fetchall(
+                "SELECT kind, COUNT(*) AS n, MAX(priority) AS top FROM jobs"
+                " WHERE status = 'queued' GROUP BY kind ORDER BY top DESC"
+            )
+        }
+        claimed = f"{row['kind']}@p{row['priority']}" if row else "none"
+        log.debug(
+            "claim",
+            worker=worker,
+            claimed=claimed,
+            allowed=allowed,
+            blocked_by_cap=blocked,
+            limits=dict(limits),
+            queued=backlog,
+        )
 
     async def _agent_scope(self, tx: Tx, agent: Agent, now: datetime) -> Agent:
         """The agent as stored right now, after checking it may claim at all."""
@@ -673,6 +706,7 @@ class _Registration:
     model: type[BaseModel]
     handler: Handler
     concurrency: int | None
+    timeout: float | None = None  # seconds; None uses jobs.handler_timeout_seconds
 
 
 @dataclass
@@ -715,15 +749,17 @@ class JobRunner:
         *,
         concurrency: int | None = None,
         result_model: type[BaseModel] | None = None,
+        timeout: float | None = None,
     ) -> None:
         """Run ``handler(payload, job)`` for jobs of ``kind``. The payload is validated against
         ``model``; a job that does not validate fails at once. ``concurrency`` caps how many of
         this kind run at once (``[jobs] kind_limits`` in config takes precedence). With
         ``result_model`` the handler must return a result of that shape, which is stored on the
-        job; external agents completing the same kind are held to the same schema."""
+        job; external agents completing the same kind are held to the same schema. ``timeout``
+        (seconds) bounds one run of this kind; None uses ``[jobs] handler_timeout_seconds``."""
         if kind in self._registry:
             raise ValueError(f"a handler for {kind!r} is already registered")
-        self._registry[kind] = _Registration(model, handler, concurrency)
+        self._registry[kind] = _Registration(model, handler, concurrency, timeout)
         if result_model is not None:
             self.queue.register_result(kind, result_model)
 
@@ -821,10 +857,16 @@ class JobRunner:
         entry = _Running(task)
         self._running[job.id] = entry
         beat = asyncio.create_task(self._heartbeat(job, worker, entry))
+        timeout = reg.timeout
+        if timeout is None:
+            timeout = self.queue.settings.handler_timeout_seconds
         try:
-            result = await task
+            result = await (asyncio.wait_for(task, timeout) if timeout else task)
             if not await q.complete(job.id, worker, result):
                 log.warning("job finished after losing its lease", job_id=job.id, kind=job.kind)
+        except TimeoutError:  # a wedged handler (e.g. a hung model call) must not hold the worker
+            log.warning("job timed out", job_id=job.id, kind=job.kind, timeout=timeout)
+            await q.fail(job.id, worker, f"handler exceeded {timeout:g}s")  # retried with backoff
         except asyncio.CancelledError:
             if entry.user_cancelled:
                 await q.mark_cancelled(job.id, worker)

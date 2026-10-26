@@ -152,6 +152,12 @@ def _globals(on_subcommand: bool) -> argparse.ArgumentParser:
         default=argparse.SUPPRESS if on_subcommand else 0,
         help="Show core log output on stderr (-v for INFO, -vv for DEBUG).",
     )
+    parent.add_argument(
+        "--debug",
+        action="store_true",
+        default=argparse.SUPPRESS if on_subcommand else False,
+        help="DEBUG logging for this command, to the terminal and the configured logfile.",
+    )
     return parent
 
 
@@ -1100,7 +1106,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     parser = build_parser()
     args = _parse(parser, list(sys.argv[1:] if argv is None else argv))
-    _configure_logging(getattr(args, "verbose", 0))
+    _configure_logging(getattr(args, "verbose", 0), getattr(args, "debug", False))
     from oaken_cli.exits import CliError, ExitCode
 
     # `oaken help [COMMAND]`: print top-level help, or defer to the command's own --help.
@@ -1171,23 +1177,29 @@ def _command_names(parser: argparse.ArgumentParser) -> set[str]:
     return set()
 
 
-def _configure_logging(verbose: int) -> None:
+def _configure_logging(verbose: int, debug: bool = False) -> None:
     """Send core's structured logs to **stderr**, so stdout stays the machine channel ``--json``
     relies on. Quiet by default (only warnings and errors); ``-v`` raises it to INFO, ``-vv`` to
-    DEBUG. Without this the CLI inherits structlog's unconfigured default, which prints to stdout
-    and corrupts JSON output."""
+    DEBUG. ``--debug`` forces DEBUG and also writes to the configured logfile (the daemon's
+    ``log.file``), so a one-off command's trace is both on screen and on disk. Without this the CLI
+    inherits structlog's unconfigured default, which prints to stdout and corrupts JSON output."""
     import sys
 
     from oaken.core.logging import configure_logging
-    from oaken.core.settings import LogSettings
+    from oaken.core.settings import LogSettings, Settings
 
-    settings = (
-        LogSettings(level="DEBUG")
-        if verbose >= 2
-        else LogSettings(level="INFO")
-        if verbose == 1
-        else LogSettings(level="WARNING")
-    )
+    if debug:
+        # Keep the real logfile and format from config; only force the level up.
+        log = Settings.load().log
+        settings = log.model_copy(update={"level": "DEBUG"})
+    else:
+        settings = (
+            LogSettings(level="DEBUG")
+            if verbose >= 2
+            else LogSettings(level="INFO")
+            if verbose == 1
+            else LogSettings(level="WARNING")
+        )
     configure_logging(settings, stream=sys.stderr)
 
 

@@ -311,6 +311,11 @@ async def search(ctx: OpContext, inp: SearchInput) -> SearchOutput:
 class AskInput(MessageFilter):
     question: str = Field(max_length=2000)
     thread_key: str | None = None
+    raw: bool = Field(
+        default=False,
+        description="Skip the model: return the matching messages and their stored enrichments "
+        "(summary, triage, actions, inspector) verbatim, so you see the data without AI rewriting.",
+    )
 
 
 class CitationInfo(BaseModel):
@@ -321,6 +326,14 @@ class CitationInfo(BaseModel):
     subject: str = ""
     sender: str = ""
     date: datetime | None = None
+
+
+class EnrichedMessage(BaseModel):
+    message_id: str
+    subject: str = ""
+    sender: str = ""
+    date: datetime | None = None
+    enrichments: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 class AskOutput(BaseModel):
@@ -336,6 +349,8 @@ class AskOutput(BaseModel):
     full_body_tokens: int = 0
     content_is_untrusted: bool = True  # the answer is model text built from mail
     warnings: list[str] = Field(default_factory=list)
+    # raw mode only: the matched messages with their stored enrichments, no model involved
+    evidence: list[EnrichedMessage] = Field(default_factory=list)
 
 
 @operation(
@@ -348,10 +363,36 @@ class AskOutput(BaseModel):
 )
 async def ask(ctx: OpContext, inp: AskInput) -> AskOutput:
     """Every quote is checked against the message it cites; claims that fail are dropped, and
-    with none left the answer is ``insufficient_evidence``. Never marks anything read."""
-    result = await ctx.svc.need_retrieval().ask(
-        inp.question, hybrid_filters(inp, thread_key=inp.thread_key)
-    )
+    with none left the answer is ``insufficient_evidence``. Never marks anything read.
+
+    With ``raw`` the model is not called: the matching messages come back with their stored
+    enrichments verbatim, so a person sees the data without AI rewriting it."""
+    retrieval = ctx.svc.need_retrieval()
+    filters = hybrid_filters(inp, thread_key=inp.thread_key)
+    if inp.raw:
+        found, evidence = await retrieval.evidence(inp.question, filters)
+        pipeline = ctx.svc.need_pipeline()
+        gathered = [
+            EnrichedMessage(
+                message_id=str(m.message_id),
+                subject=m.subject,
+                sender=m.sender,
+                date=m.date,
+                enrichments=await pipeline.enrichments(m.message_id),
+            )
+            for m in evidence.messages
+        ]
+        return AskOutput(
+            answer="",
+            message_ids=[str(m.message_id) for m in evidence.messages],
+            degraded=found.degraded,
+            degraded_reason=found.degraded_reason,
+            evidence_tokens=evidence.tokens_used,
+            full_body_tokens=evidence.tokens_full_bodies,
+            warnings=list(found.warnings),
+            evidence=gathered,
+        )
+    result = await retrieval.ask(inp.question, filters)
     return AskOutput(
         answer=result.answer,
         message_ids=list(result.references),
