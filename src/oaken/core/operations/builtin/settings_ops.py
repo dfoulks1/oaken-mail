@@ -129,6 +129,20 @@ class _Plan:
     result: SettingsCheck
 
 
+def _check_mcp_workspaces(
+    text: str, listed: list[str], errors: list[FieldError], warnings: list[str]
+) -> None:
+    """``[mcp] workspaces`` names workspaces that exist; an empty list is every one of them."""
+    known = {"default", *(config_edit.get_table(text, ["workspaces"]) or {})}
+    for name in listed:
+        if name not in known:
+            errors.append(FieldError(key="workspaces", message=f"no workspace named {name!r}"))
+    if not listed:
+        warnings.append(
+            "workspaces = [] lets MCP clients reach every workspace, secure ones included"
+        )
+
+
 def _plan(inp: SettingsChange) -> _Plan:
     sec = settings_edit.section(inp.section)
     errors: list[FieldError] = []
@@ -158,6 +172,9 @@ def _plan(inp: SettingsChange) -> _Plan:
             key = str(e["loc"][0]) if e["loc"] else sec.name
             if not any(f.key == key for f in errors):
                 errors.append(FieldError(key=key, message=e["msg"]))
+    extra_warnings: list[str] = []
+    if sec.name == "mcp" and after is not None:
+        _check_mcp_workspaces(text, after["workspaces"], errors, extra_warnings)
     changed: list[str] = []
     if after is not None:
         touched = [k for k in [*inp.values, *inp.unset] if k in sec.keys]
@@ -170,6 +187,7 @@ def _plan(inp: SettingsChange) -> _Plan:
         "environment value until the variable is removed"
         for k in overridden
     ]
+    warnings += extra_warnings
     restart = [k for k, e in effects.items() if e == "restart"]
     reindex = [k for k, e in effects.items() if e == "reindex"]
     warnings += [

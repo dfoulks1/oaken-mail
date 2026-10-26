@@ -26,6 +26,7 @@ async def test_stats_shows_counts_and_health(rig: Rig) -> None:
         "Connected accounts",
         "Recent audit log",
         "Operations reference",
+        "MCP workspaces",
     ):
         assert marker in body, f"missing section: {marker}"
 
@@ -70,7 +71,7 @@ async def test_stats_json_is_the_same_data_without_a_token(rig: Rig) -> None:
     assert resp.status_code == 200
     data = resp.json()
     # the same counts/health shape the page renders, as JSON
-    for key in ("core", "mail", "pipeline", "accounts", "plugins", "operations", "audit"):
+    for key in ("core", "mail", "pipeline", "accounts", "plugins", "operations", "audit", "mcp"):
         assert key in data, f"missing {key}"
 
 
@@ -130,3 +131,16 @@ async def test_uptime_and_the_clock_move_with_the_live_refresh(rig: Rig) -> None
     later = (await rig.http.get("/stats.json")).json()
     assert later["generated_at"] > first["generated_at"]
     assert (first["core"]["uptime_minutes"], later["core"]["uptime_minutes"]) == (0, 2)
+
+
+async def test_stats_says_which_workspaces_an_mcp_client_may_reach(rig: Rig) -> None:
+    mcp = (await rig.http.get("/stats.json")).json()["mcp"]
+    assert mcp["listed"] == ["default"] and mcp["all"] is False
+    assert [(w["name"], w["linked"]) for w in mcp["workspaces"]] == [("default", True)]
+
+
+async def test_the_workspace_picker_refuses_a_bad_list_and_an_unknown_workspace(rig: Rig) -> None:
+    bad = await rig.http.post("/stats/mcp-workspaces", json={"workspaces": "default"})
+    assert bad.status_code == 422  # InvalidInput
+    unknown = await rig.http.post("/stats/mcp-workspaces", json={"workspaces": ["nope"]})
+    assert unknown.json()["ok"] is False  # check_settings: no workspace named 'nope'

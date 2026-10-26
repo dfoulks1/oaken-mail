@@ -315,3 +315,13 @@ async def test_calls_over_the_surface_limit_are_busy_not_queued(mcp: McpRig) -> 
     tasks = [asyncio.create_task(mcp.rpc("tools/call", call)) for _ in range(6)]
     codes = sorted(r.status_code for r in await asyncio.gather(*tasks))
     assert 429 in codes and 200 in codes
+
+
+def test_the_instructions_name_the_workspaces_a_client_may_reach() -> None:
+    from oaken.api.mcp_server import _instructions
+    from oaken.core.settings import McpSettings, Settings
+
+    assert "may reach these workspaces: default." in _instructions(Settings())
+    both = Settings(mcp=McpSettings(workspaces=["a", "b"]))
+    assert "these workspaces: a, b." in _instructions(both)
+    assert "every workspace." in _instructions(Settings(mcp=McpSettings(workspaces=[])))

@@ -265,6 +265,7 @@ class Api:
             Route("/stats/reset-usage", safe(self.stats_reset_usage), methods=["POST"]),
             Route("/stats/revoke-agent", safe(self.stats_revoke_agent), methods=["POST"]),
             Route("/stats/expose", safe(self.stats_expose), methods=["POST"]),
+            Route("/stats/mcp-workspaces", safe(self.stats_mcp_workspaces), methods=["POST"]),
             Route("/stats/enricher-config", safe(self.stats_enricher_config), methods=["POST"]),
             Route("/stats/model", safe(self.stats_model_save), methods=["POST"]),
         ]
@@ -471,6 +472,24 @@ class Api:
             "set_operation_exposure",
             {"scope": "operation", "name": body["name"], "mcp": bool(body["mcp"])},
         )
+
+    async def stats_mcp_workspaces(self, request: Request) -> Response:
+        # Save `[mcp] workspaces` through the same settings operation the CLI uses, then reload so
+        # the running MCP server applies it (core re-reads settings; no restart).
+        body = await read_json(request)
+        names = body.get("workspaces")
+        if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+            raise InvalidInput("workspaces must be a list of workspace names")
+        saved = await self.client.call(
+            "set_settings",
+            {"section": "mcp", "values": {"workspaces": names}},
+            CallerContext.internal(),
+            confirm=True,
+        )
+        result = saved.output
+        if result is None or not getattr(result, "ok", False):
+            return _json(result.model_dump(mode="json") if result is not None else {"ok": False})
+        return await self._config_op("config_reload", {})
 
     async def stats_enricher_config(self, request: Request) -> Response:
         body = await read_json(request)

@@ -327,6 +327,36 @@
   {# ---- Reference (the operation registry) ---- #}
   <section class="pane" id="p-ref">
     <div id="expose-result" class="alert d-none mb-3 rounded small" role="status" aria-live="polite"></div>
+    <div class="card mb-3" id="mcp-workspaces">
+      <div class="card-header text-secondary small text-uppercase fw-semibold">MCP workspaces</div>
+      <div class="card-body small">
+        <p class="mb-2">
+          {% if not mcp.mounted %}<span class="badge text-bg-secondary">MCP is off</span>
+            <span class="text-secondary">(set <code>[api] mcp = true</code> and restart core)</span>
+          {% else %}<span class="badge text-bg-success">MCP is on</span>{% endif %}
+          Clients may reach
+          {% if mcp.all %}<strong>every workspace</strong>{% else %}only the workspaces ticked below{% endif %}.
+          Mail text returned to an AI client leaves this process.
+        </p>
+        {% if mcp.all %}<p class="text-warning-emphasis mb-2">Every workspace is reachable, secure ones included.</p>{% endif %}
+        <div class="d-flex flex-wrap gap-3 mb-2">
+        {% for w in mcp.workspaces %}
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" data-mcp-workspace="{{ w.name }}"
+                   id="mcpw-{{ w.name }}"{% if w.linked %} checked{% endif %}{% if mcp.all %} disabled{% endif %}>
+            <label class="form-check-label" for="mcpw-{{ w.name }}">
+              <span class="mono">{{ w.name }}</span>
+              <span class="badge {{ 'text-bg-success' if w.trust == 'secure' else 'badge-oaken-warn' }}">{{ w.trust }}</span>
+            </label>
+          </div>
+        {% endfor %}
+        </div>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" role="switch" id="mcpw-all"{% if mcp.all %} checked{% endif %}>
+          <label class="form-check-label" for="mcpw-all">All workspaces (writes <code>workspaces = []</code>)</label>
+        </div>
+      </div>
+    </div>
     <div class="card mb-3">
       <div class="card-header text-secondary small text-uppercase fw-semibold">Operations reference</div>
       <table class="table table-sm mb-0">
@@ -339,7 +369,7 @@
                 {%- elif o.permission == "send" %}<span class="badge text-bg-danger">send</span>
                 {%- else %}<span class="badge text-bg-success">read</span>{% endif %}</td>
             <td>{% if not o.mcp_allowed %}
-                  <div class="form-check form-switch mb-0" title="This operation can never be offered over MCP">
+                  <div class="form-check form-switch mb-0" title="This operation can never be offered over MCP ({{ o.mcp_locked_reason or 'ceiling' }})">
                     <input class="form-check-input" type="checkbox" role="switch" disabled
                            aria-label="{{ o.name }} is never exposable"></div>
                 {%- else %}

@@ -375,6 +375,10 @@ class McpSettings(_Section):
     """
 
     allowed: dict[str, bool] = Field(default_factory=dict)
+    # Which workspaces an MCP client may reach: only mail whose account is in one of these. An empty
+    # list means every workspace. A name that is not a workspace matches nothing (a typo hides mail,
+    # it never exposes it). A fresh install lists only ``default``. See ``oaken.core.operations.scope``.
+    workspaces: list[str] = Field(default_factory=lambda: ["default"])
 
 
 class UISettings(_Section):

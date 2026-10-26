@@ -19,6 +19,7 @@ from oaken.core.operations import savings
 from oaken.core.operations.caller import CallerContext
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.exposure import ExposureStore
+from oaken.core.operations.scope import McpScope
 from oaken.core.operations.gate import (
     Binding,
     InMemoryProposals,
@@ -102,6 +103,8 @@ class CoreClient:
             # nothing about what the user has not offered.
             raise NotExposed(f"operation {name!r} is not available to MCP clients")
         inp = self._parse(op, payload)
+        if caller.client == "mcp":
+            await McpScope(self.svc).check(op, inp)  # only the workspaces [mcp] lists
         if op.permission == "send":
             raise SendDisabled("sending is disabled in this version")
         ctx = self.context(caller)
@@ -122,6 +125,8 @@ class CoreClient:
             CALLER.reset(token)
         if not isinstance(output, op.output):
             output = op.output.model_validate(output)
+        if caller.client == "mcp":
+            output = await McpScope(self.svc).trim(op, output)
         await savings.record(self.svc, op.name, output, caller)
         if op.audit == "always" or (op.permission == "mutate" and op.audit == "registry"):
             await self._audit(op, inp, caller)

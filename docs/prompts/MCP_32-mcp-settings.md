@@ -1,139 +1,188 @@
-# 32 — MCP settings: what AI clients may do, and in which workspaces
+# 32 — MCP settings: which workspaces AI clients may reach
 
-**Read first:** `docs/prompts/00-context.md`,
-`docs/prompts/CORE_23-plugin-settings.md` (the section writer, live reload) and
-`docs/prompts/CORE_31-workspace-management.md`.
-**Depends on:** 13, 16, 17, 18, 22, 23, 29, 31.
-**Related:** 28 makes `send_message` an ordinary operation and amends ADR 0004; this prompt is
-where a person decides whether the MCP may use it.
+> **Status: built (the scoping slice).** `[mcp] workspaces` (default `["default"]`; `[]` = all) is
+> enforced in `CoreClient.call` for MCP callers by `McpScope` (`core/operations/scope.py`);
+> `workspace_of` is the one message-to-workspace function. `mcp` is an editable settings section
+> (`workspaces` only; `allowed` stays with the exposure switches), `check_settings("mcp")` rejects an
+> unknown workspace and warns on `[]`, `list_operations` gained `mcp_locked_reason`, `status` gained
+> `mcp_workspaces`, the MCP instructions name the workspaces, and `/stats` → Reference has a status
+> line and a workspace picker (`POST /stats/mcp-workspaces`, then reload).
+> Deviations: no new CLI verbs (`oaken mcp expose` and `oaken settings get|check|set mcp` already
+> cover them); the bridge already says "the MCP server is off in core"; the secure-workspace warning
+> fires on `[]` only, because `default` is secure and would warn on every install (Q3). Search,
+> list, ask and the label and count calls are **refused, not filtered**, when a restricted scope
+> cannot cover every account (name an account in scope); filtering them by a set of accounts needs
+> `account_ids` through the index, vector and ask paths and is left for a later prompt. Live reload
+> goes through core's config reload; `tools/list_changed` was not spiked.
+
+**Read first:** `docs/prompts/00-context.md`, `CORE_40-mcp-allowed-config.md` (the `[mcp.allowed]`
+exposure this builds on), `CORE_31-workspace-management.md` and `CORE_44-workspace-ops-fixes.md`
+(workspaces, and the one validator both `check` and `set` obey), `CORE_23-plugin-settings.md` (the
+comment-preserving writer, live reload) and ADR 0004.
+**Depends on:** 13, 16, 17, 18, 22, 29, 31, 40 (all built). Nothing unbuilt.
+**Track:** MCP. Touches `McpSettings` (`src/oaken/core/settings.py`), the MCP layer, the exposure
+resolver, `list_operations`, the `bridge` message, and Core's `/stats` console page.
+**Not here:** sending. See "Split out".
 
 ## Why
 
-The MCP is a thing on its own: a second surface of the same registry (ADR 0004) that a person
-points an AI client at. Today its policy is split: a code **ceiling** per operation, a database
-table of per-operation / per-plugin on-off rows (`operation_settings`), a global `[api] mcp` flag,
-and nothing about **which workspaces** it may work in or whether it may **send**. The user wants
-all of it managed from the UI, in one place, and wants the MCP tied to workspaces, which are
-Oaken's confidentiality levels (31).
+The MCP is a surface of the same registry (ADR 0004) that a person points an AI client at. Today
+its policy is *which operations* (the code ceiling, plus `[mcp.allowed]` from 40). It has nothing
+about *which mail*. Mail text returned to an AI client leaves the core process, and workspaces are
+Oaken's confidentiality levels (31). So the next control is: **which workspaces an MCP client may
+see.**
 
-## Decisions already taken (the user's answers)
+## What changed from the first draft
 
-- **The policy lives in `config.toml` under `[mcp]`** and Settings → MCP shows that section in a
-  **TOML textarea** (Load / Test / Save), exactly like a plugin (23). The UI toggles and the CLI
-  verbs edit the same section through the same API operations, so there is **one source of truth
-  and no second store**.
-- **`[mcp] allow_send = false`** is the send ceiling, in that section. Send is off over MCP until
-  it is `true` *and* the operation is enabled. Because the UI edits `config.toml`, the person can
-  change it in the textarea; it is the person's call (the user accepted this).
-- **`[mcp] workspaces = []`** links the MCP to workspaces by name. **An empty list means all
-  workspaces.** A non-empty list restricts the MCP to those; every name must be an existing
-  workspace (`check` rejects an unknown one). Workspaces are managed in 31.
-- **MCP token management is internal** to core. This prompt exposes no token UI or operations; keep
-  today's single `mcp_token` file unless a workspace binding needs more, and decide that inside the
-  ADR.
-- **The MCP, the UI and the CLI all use the API.** There is no MCP-only path to anything.
-- Extensibility: the section is plain TOML with defaulted keys, so a later key (a new limit, a new
-  list) is added without a migration or a new store.
+The first draft of this prompt predates 40 and 44. Three of its decisions no longer hold:
+
+- **Exposure lives in `[mcp.allowed]`, not in `[mcp] enable` / `disable`.** 40 built it
+  (`McpSettings.allowed`, `ExposureStore.seed`, `write_mcp_allowed`). There is one store and one
+  shape. No `enable`/`disable` lists, no migration, and `operation_settings` stays the live-read
+  cache 40 made it.
+- **A call does not name its workspace; its account does.** `Workspaces.for_account` resolves a
+  message's workspace from its account's `workspace` setting. So scoping filters by the account of
+  the mail a call touches. There is no `workspace` input and no "first listed workspace" rule.
+- **The UI is Core's console, not a separate product's.** The pane extends `/stats` (its Reference
+  tab already has a switch per operation). It does not add a "Settings → MCP" page.
+
+## Decisions already taken
+
+- **The policy lives in `config.toml` under `[mcp]`**, one source of truth. The console and the CLI
+  edit it through the same operations, never a second store.
+- **`[mcp] workspaces` links the MCP to workspaces by name, and ships as `["default"]`.** A fresh
+  install exposes only the `default` workspace; reaching more is an explicit edit. **An empty list
+  means all workspaces.** Every name must be an existing workspace (`check` rejects an unknown one).
+- **An agent never manages capabilities** (40, decision 0). Nothing here is writable over MCP: the
+  setting operations stay `mcp="never"`.
+- **MCP token management is internal.** No token operations here.
+- **The MCP, the console and the CLI all use the API.** No MCP-only path.
 
 ## The `[mcp]` section
 
 ```toml
 [mcp]
-allow_send = false        # true lets the operator switch send_message on for MCP clients
-workspaces = []           # [] = every workspace; otherwise only these (names from [workspaces.*])
-enable  = []              # extra operations to expose, beyond their defaults: "op_name" | "plugin:name"
-disable = []              # operations to hide, even if on by default
+workspaces = ["default"]  # only these (names from [workspaces.*]); [] = every workspace
+
+[mcp.allowed]             # from 40: operation or plugin name -> true | false
 ```
 
-`enable`/`disable` replace the database `operation_settings` rows as the store for per-operation and
-per-plugin exposure (Q1). The effective rule is unchanged: the code ceiling first (`never` can
-never be enabled; `send` additionally needs `allow_send = true`), then an `op` entry, then a
-`plugin:` entry, then the operation's default.
+`allow_send` joins this section when `send_message` exists (CORE_28). It is not added now.
 
-## Requirements (operations first, per prompt 22's rule)
+## Requirements
 
-1. **Reuse 29's generic section operations** for `[mcp]`: `get_settings("mcp")`,
-   `check_settings("mcp", …)`, `set_settings("mcp", …)` (all `mcp="never"` for the writers;
-   `get` `mcp="off"`). 29's rule "ceilings are not editable from a client" is **lifted for `[mcp]`
-   only**, by an explicit entry in its allow-list, recorded in the ADR. Do not add `get/set_mcp_config`:
-   one generic mechanism, many sections.
-2. **`check_settings("mcp")` validates:** TOML syntax with line; `workspaces` entries all exist
-   (error names the unknown one); `enable`/`disable` entries name real operations or plugins; an
-   operation in both lists is an error; `enable` of an operation whose ceiling is `never` is an
-   error with the reason; `allow_send = false` with `send_message` in `enable` is a warning, not an
-   error (it stays Locked).
-3. **`set_operation_exposure`** stays as the convenience the CLI and UI toggles call, but becomes a
-   thin wrapper that edits the `enable`/`disable` lists through the same writer, so the textarea and
-   the toggles can never disagree. Every change is still audited (`set_exposure`). A migration moves
-   existing `operation_settings` rows into `[mcp]` once, then stops reading the table.
-4. **`list_operations`** keeps returning `mcp_allowed`, `mcp_default`, `mcp_enabled`, and gains
-   `mcp_locked_reason` (`"ceiling"`, `"allow_send"`, or `null`) so the UI can explain a Locked row.
-5. **Workspace scoping.** An MCP call that runs in a workspace (anything that reaches the model
-   or the workspace-keyed cache: `summarize_message`, `ask`/`search` with rewrite, enrichers) is
-   refused with `not_exposed` if its workspace is not in `[mcp] workspaces` (when non-empty). The
-   call's workspace comes from an optional `workspace` input, else the first listed workspace,
-   else `default` (Q2). The MCP `initialize` instructions and `status` report the workspaces it can
-   use, never mail. Enforcement is in core's MCP layer, not the client.
-6. **Live reload.** A saved `[mcp]` section applies to the running MCP server without a restart
-   (23's settings reload): the tool list changes, an in-flight call is not cut off, and a client
-   that cached the old list gets the standard MCP `tools/list_changed` notice if the server
-   supports it, else sees it on the next `tools/list`. `[api] mcp` (mounting `/mcp`) is separate
-   and still needs a restart; the pane says so.
-7. **Send.** No send-specific guardrail: no MCP rate limit, no recipient allowlist; an MCP send is
-   the same `send_message` call, job, queue priority and audit row as a UI or CLI send (28). With
-   `allow_send = false` the three send operations are Locked ("allow_send is false").
-8. **CLI.** `oaken settings get|check|set mcp` (29's verbs); `oaken operations enable|disable NAME
-   [--plugin]` and `oaken operations reset NAME` (wrappers over `set_operation_exposure`; **not**
-   `oaken mcp`, which is the stdio bridge). `oaken operations` lists with the locked reason. Fix
-   the bridge's misleading "core is not running" when MCP is simply disabled: say "MCP is not
-   enabled on this core (set `[api] mcp = true`)". Add rows to 17's table.
-9. **UI** (Settings → MCP):
-   - A **status line**: is the MCP mounted, where it listens, which workspaces it may use, and
-     whether send is permitted. A short note that mail text returned to an AI client leaves the core
-     process, with the workspace's trust shown next to each linked workspace.
-   - The **textarea** for `[mcp]` (Test / Save / Revert, `overridden` notice, dirty-state guard),
-     pre-filled with the commented template above when empty.
-   - Below it, the **operation list** from `list_operations`, grouped **Default / Extended /
-     Locked**, each row with its permission class, whether it can change or send mail, whether it
-     returns mail text, and an on/off switch (`set_operation_exposure`); Locked rows show the
-     reason. A plugin group switch per plugin. **Presets** as client-side shortcuts that set rows:
-     **Read only**, **Default**, **Everything allowed**; the pane shows the matching preset or
-     "Custom". Toggling rewrites the textarea text so what you see is the file.
-   - A **workspace picker** that adds or removes names in `workspaces = [...]` (with a "All
-     workspaces" choice that writes `[]`), listing workspaces from `list_workspaces`.
-   - Elements carry `data-oaken-requires="list_operations"`.
+1. **`McpSettings.workspaces: list[str] = ["default"]`.** The first-run config writer (40's
+   generated menu) emits it, commented, with the `[]` meaning explained. Validated on load and by `check_settings("mcp")`
+   (the generic section operations from 29; no `get/set_mcp_config`). An unknown workspace name is
+   an error that names it. On load, an unknown name is a warning and is skipped, as 40 does for
+   `[mcp.allowed]`: a typo must not stop a headless start. The writers stay `mcp="never"`.
+   *Check first:* whether `set_settings` already accepts an `mcp` section. 29 is only partly built.
+2. **Scoping by account.** When `workspaces` is non-empty, an MCP call that returns or reasons over
+   mail text is limited to mail whose account is in a listed workspace:
+   - A single-message call (`get_message`, `get_thread`, `summarize_message`, `get_enrichment`)
+     for a message outside the list is refused `not_exposed`. The error names no mail.
+   - A listing or search call filters out mail from unlisted workspaces. It is never refused, and
+     the totals do not count the hidden mail.
+   - Calls that touch no mail (`status`, `list_plugins`, `list_accounts` without mail text) are
+     unaffected.
+   Enforcement is in core's MCP layer, not the client, and covers `/mcp` and `/mcp/agent`.
+   Resolve a message's workspace through **one function** (`workspace_of(message)`), today a lookup
+   of its account's `workspace` setting (`Workspaces.for_account`). CORE_36 plans routing a message
+   to a workspace by Sieve rule; when that lands, only this function changes and the scoping with
+   it. Do not call `for_account` from the MCP layer directly.
+3. **Q4 is reopened by this.** The first draft gated only model-reaching calls. That leaves
+   `get_message` free to return a secure workspace's mail text to any client. The filter above gates
+   every operation that returns mail text. See the open question.
+4. **Status.** `status` and the MCP `initialize` instructions report which workspaces the MCP can
+   use, never mail. When a listed or implied workspace is `secure`, the status line says so (Q3).
+5. **`list_operations`** keeps `mcp_allowed`, `mcp_default`, `mcp_enabled`, and gains
+   `mcp_locked_reason` (`"ceiling"` or `null`) so the console can explain a locked row.
+6. **Live reload.** A saved `[mcp]` applies to the running MCP server without a restart (23's
+   reload): an in-flight call is not cut off. Whether a client that cached `tools/list` gets
+   `tools/list_changed` depends on what the server supports. Spike that first; otherwise it sees
+   the change on its next `tools/list`. `[api] mcp` (mounting `/mcp`) still needs a restart, and the
+   console says so.
+7. **CLI.** `oaken settings get|check|set mcp` (29's verbs). `oaken operations enable|disable NAME
+   [--plugin]` and `oaken operations reset NAME` wrap `set_operation_exposure` (**not** `oaken
+   mcp`, the stdio bridge). `oaken operations` lists with the locked reason. Fix the bridge's
+   misleading "core is not running" when MCP is simply off: say "MCP is not enabled on this core
+   (set `[api] mcp = true`)". Add rows to 17's table. This item is independent of the rest and may
+   ship alone.
+8. **Console (`/stats`, Reference tab).** Core's console is server-rendered and has no operation of
+   its own; it calls the same operations.
+   - A **status line**: is the MCP mounted, where it listens, which workspaces it may use, with each
+     workspace's trust shown, and a warning on a `secure` one.
+   - A **workspace picker** that adds or removes names in `workspaces`, with an "All workspaces"
+     choice that writes `[]`, listing workspaces from `list_workspaces`. It writes through
+     `set_settings("mcp")`, so the file and the page never disagree.
+   - Locked rows on the existing operation list show their reason.
+   - No textarea, presets or Test/Save/Revert flow: `/stats` has no such pattern. Add them only if a
+     later prompt asks.
+
+## Phase 2: exposure per workspace (decided, not built)
+
+Commands can be turned on and off **per workspace**: `list_messages` in one, not another; send in
+one, not another. Same file, same `[mcp.allowed]` shape, one level down:
+
+```toml
+[mcp.allowed]                     # the default for every workspace
+get_message = true
+send_message = false
+
+[mcp.workspace.work.allowed]      # overrides for one workspace
+send_message = true
+list_messages = false
+```
+
+- **Resolution:** the code ceiling first (`never` cannot be lifted), then the workspace's own line
+  for the operation, then its plugin line, then the global operation line, the global plugin line
+  and the default. A workspace line may widen as well as narrow, up to the ceiling.
+- **Enforcement** is where `McpScope` already sits: a call is checked against the workspace of the
+  mail it names (`workspace_of`). A call that names no mail (`status`, `list_plugins`) uses the
+  global lines only. A call that cannot be narrowed to one workspace is refused if any reachable
+  workspace denies it.
+- **`tools/list`** offers an operation if any reachable workspace allows it.
+- Surfaces: `oaken mcp expose NAME on|off --workspace W`, the `/stats` Reference tab as an
+  operations-by-workspace matrix, and `list_operations` reporting the effective value per workspace.
+- Needs `[mcp] workspaces` (built) and, for send, CORE_28. Open question: whether a workspace may
+  list a plugin's operations as a group (default: yes, as the global table does).
+
+## Split out (not in this prompt)
+
+- **Send.** `send_message` does not exist (CORE_28 is Open). `allow_send`, the Locked
+  "allow_send is false" reason and the send acceptance criteria wait for it. When 28 lands it adds
+  `[mcp] allow_send` and amends ADR 0004. The registry's refusal of `send` with `mcp="on"` is
+  unchanged.
+- **Presets and a textarea for `[mcp]`.** A convenience, not needed for the control.
 
 ## Open questions (defaults in bold)
 
-- Q1: per-operation exposure moves from the database table into `[mcp]` `enable`/`disable`:
-  **yes** (single source of truth); the table is migrated and dropped.
-- Q2: an MCP call that names no workspace: **uses the first listed workspace, else `default`**.
-  (Alternative: the call must name one when the list has more than one.)
-- Q3: an `insecure` workspace linked to the MCP: **show a warning on the status line and the
-  workspace row, do not block**; an operator who links one has chosen it.
-- Q4: should `[mcp] workspaces` also gate **read** operations that touch no model (list, get)?
-  **No**; it gates only workspace-scoped (model-reaching) calls.
+- Q1: per-operation exposure moves into `[mcp] enable`/`disable`: **no.** 40's `[mcp.allowed]` is
+  the one shape; this prompt adds only `workspaces`.
+- Q2: **there is no per-call workspace.** The workspace is the mail's account's. (The first draft's
+  rule is withdrawn.)
+- Q3: a `secure` workspace in scope: **warn only for `[]` (every workspace), on the status line and
+  in `check`; do not block.** `default` is itself `secure`, so warning on every listed secure
+  workspace would warn on every install. An operator who lists one has chosen it.
+- Q4: does `workspaces` gate read operations that return mail text: **yes** (requirement 2). This
+  reverses the first draft's answer.
+- Q5: the default. **`["default"]`, decided.** Not fail-open: `[]` (all workspaces) is an explicit
+  choice, and `check` warns when it or a listed workspace is `secure` (Q3).
 
 ## Acceptance criteria
 
-- `get` → edit → `check` → `set` → `get` round-trips `[mcp]`; unknown workspace, unknown
-  operation, a `never` operation in `enable`, and an operation in both lists are each rejected with
-  a field/line error; nothing is persisted on a failed check.
-- With `workspaces = []` the MCP serves every workspace; with `["a"]`, a model-reaching call in
-  workspace `b` is refused `not_exposed` and one in `a` succeeds; a call with no workspace uses the
-  rule in Q2.
-- Toggling an operation in the UI, `oaken operations disable`, and editing the textarea all change
-  the same `[mcp]` text and `tools/list`; an audit row exists for each change; migrated database
-  rows produce the same exposure as before.
-- Send: absent from `tools/list` with `allow_send = false` (Locked, reason `allow_send`); present
-  only after `allow_send = true` **and** the operation is enabled; never on `/mcp/agent`; the
-  registry still refuses `send` with `mcp="on"`; the MCP, CLI and UI sends reach one handler (28).
+- `get` → edit → `check` → `set` → `get` round-trips `[mcp] workspaces`; an unknown workspace is
+  rejected with a field error and nothing is persisted on a failed check.
+- A fresh config serves only `default`. With `workspaces = []` the MCP serves every workspace. With `["a"]`, `get_message` for mail in
+  workspace `b` is refused `not_exposed`, and one in `a` succeeds. A search returns only `a`'s mail
+  and its totals exclude `b`'s.
+- The scoping holds on `/mcp` and on `/mcp/agent`.
 - A saved `[mcp]` takes effect without a restart; an in-flight call completes.
+- A `secure` workspace in scope shows the warning on the status line and in `check`.
 - The bridge says "MCP is not enabled" instead of "core is not running" when MCP is off.
-- None of `set_settings`, `set_operation_exposure` is in the MCP tool set.
-- The parity test from 22 covers these operations for CLI and UI.
-- `ruff`, `ruff format --check`, `mypy`, `pytest` and the docs check are green; ADR added (amends
-  0004 together with 28).
+- `set_settings` and `set_operation_exposure` are not in the MCP tool set.
+- The parity test from 22 covers the new operations for CLI and console.
+- `ruff`, `ruff format --check`, `mypy`, `pytest` and the docs check are green.
 
 ## Report-back checkpoint
 

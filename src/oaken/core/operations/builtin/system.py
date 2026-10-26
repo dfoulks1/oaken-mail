@@ -34,6 +34,9 @@ class StatusOutput(BaseModel):
     plugins_total: int | None = None
     schedules_paused: int | None = None
     schedules_failing: int | None = None  # last sync failed, whether or not paused
+    mcp_workspaces: list[str] | None = (
+        None  # [mcp] workspaces: what an MCP client may reach; [] = all
+    )
 
 
 @operation(
@@ -53,6 +56,7 @@ async def status(ctx: OpContext, inp: Empty) -> StatusOutput:
         messages=stats.messages - stats.deleted_messages,
         indexed=index.docs,
         index_stale=index.stale,
+        mcp_workspaces=list(ctx.svc.settings.mcp.workspaces),
     )
     if ctx.svc.pipeline is not None:
         out.queue_depth = await ctx.svc.pipeline.depth()
@@ -442,6 +446,7 @@ class OperationInfo(BaseModel):
     mcp_allowed: bool  # the ceiling, fixed in code
     mcp_default: bool  # on or off before the user chooses
     mcp_enabled: bool  # what an MCP client gets now
+    mcp_locked_reason: str | None = None  # why it cannot be switched on: "ceiling", else None
 
 
 class OperationsOutput(BaseModel):
@@ -470,6 +475,7 @@ async def list_operations(ctx: OpContext, inp: Empty) -> OperationsOutput:
                 mcp_allowed=o.mcp_allowed,
                 mcp_default=o.mcp_exposed,
                 mcp_enabled=ctx.exposure.effective(o, chosen),
+                mcp_locked_reason=None if o.mcp_allowed else "ceiling",
             )
             for o in ctx.registry.all()
         ]
@@ -564,6 +570,7 @@ async def set_operation_exposure(ctx: OpContext, inp: ExposureInput) -> Exposure
                 mcp_allowed=o.mcp_allowed,
                 mcp_default=o.mcp_exposed,
                 mcp_enabled=ctx.exposure.effective(o, chosen),
+                mcp_locked_reason=None if o.mcp_allowed else "ceiling",
             )
             for o in ops
         ],

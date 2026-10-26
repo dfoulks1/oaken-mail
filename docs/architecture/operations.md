@@ -62,6 +62,23 @@ setting is one global list in the database, changed through `set_operation_expos
 available to an agent, so an agent cannot widen its own reach. Each change is audited. Per-token
 scoping is left for the MCP server.
 
+### Which mail an agent may reach
+
+Exposure says what an agent may *do*. `[mcp] workspaces` says whose mail it may *see*. It lists
+workspace names, and a fresh install lists only `default`. An empty list means every workspace; a
+name that is not a workspace matches nothing, so a typo hides mail and never exposes it.
+
+A message belongs to the workspace of its account. With a restricted list, an MCP call that names
+mail outside it (a message id, or an `account_id`) is refused, `list_accounts` leaves those accounts
+out, and `status` and the MCP instructions report the listed names, never mail. A call that reads
+across every account and cannot be narrowed (`list_labels`, `list_mailbox`, and `search`,
+`list_messages`, `ask`, `get_thread` or `mailbox_counts` with no account) is refused rather than let
+through: name an account in scope. When the list covers every account, as on a default install, none
+of this changes anything. The CLI and the console are not scoped; the list only limits MCP clients.
+
+Set it with `oaken settings set mcp` or on the **Reference** tab of `/stats`. `check` rejects an
+unknown workspace and warns on `[]`.
+
 ## Read state
 
 Reading never marks mail read. The handler that marks it is the one place that does, after the gate

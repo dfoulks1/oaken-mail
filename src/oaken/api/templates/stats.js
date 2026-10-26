@@ -236,6 +236,35 @@
     });
   });
 
+  // --- Reference tab: which workspaces an MCP client may reach ([mcp] workspaces) ---
+  function saveMcpWorkspaces(names, undo) {
+    exposeSay("secondary", "saving MCP workspaces…");
+    post("/stats/mcp-workspaces", { workspaces: names }).then(function (res) {
+      if (!res.ok || (res.body && res.body.ok === false)) {
+        exposeSay("danger", (res.body && (res.body.error || res.body.message)) || "could not save the workspaces");
+        undo();
+        return;
+      }
+      exposeSay("success", "MCP workspaces saved (config.toml written); core is reloading.");
+    }).catch(function () { exposeSay("danger", "core did not answer"); undo(); });
+  }
+  document.addEventListener("change", function (ev) {
+    var box = ev.target.closest && ev.target.closest("#mcp-workspaces input");
+    if (!box) return;
+    var boxes = document.querySelectorAll("#mcp-workspaces [data-mcp-workspace]");
+    var all = document.getElementById("mcpw-all");
+    var names = box === all
+      ? (all.checked ? [] : ["default"])
+      : Array.prototype.filter.call(boxes, function (b) { return b.checked; })
+          .map(function (b) { return b.getAttribute("data-mcp-workspace"); });
+    if (box !== all && names.length === 0) {  // nothing ticked would mean "all": make that explicit
+      exposeSay("warning", "tick at least one workspace, or switch on All workspaces.");
+      box.checked = true;
+      return;
+    }
+    saveMcpWorkspaces(names, function () { box.checked = !box.checked; });
+  });
+
   function tick() {
     fetch("/stats.json", { headers: { Accept: "application/json" } })
       .then(function (r) { return r.ok ? r.json() : null; })

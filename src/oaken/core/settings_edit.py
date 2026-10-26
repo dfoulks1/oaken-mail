@@ -110,6 +110,16 @@ SECTIONS: tuple[Section, ...] = (
         },
     ),
     Section(
+        "mcp",
+        "mcp",
+        "Which workspaces an MCP client may reach. Which operations it may call is set per "
+        "operation (`oaken operations`).",
+        {
+            "workspaces": Key(),
+            "allowed": Key(editable=False, note="set with `oaken operations enable|disable`"),
+        },
+    ),
+    Section(
         "log",
         "log",
         "What core logs. The log file's place and rotation are set by hand.",

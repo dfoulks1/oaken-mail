@@ -68,6 +68,7 @@ class StatsCollector:
             "plugins": self._plugins(),
             "audit": await self._audit(),
             "operations": await self._operations_via_op(),
+            "mcp": await self._mcp(),
             "agents": await self._agents(),
             "enrichers": await self._enrichers(),
             "llm": await self._llm(),
@@ -206,9 +207,27 @@ class StatsCollector:
                 "mcp_allowed": o.mcp_allowed,
                 "mcp_default": o.mcp_default,
                 "mcp_enabled": o.mcp_enabled,
+                "mcp_locked_reason": o.mcp_locked_reason,
             }
             for o in out.operations
         ]
+
+    async def _mcp(self) -> dict[str, Any]:
+        """Which workspaces an MCP client may reach, each with its trust, for the Reference tab.
+        ``listed`` is ``[mcp] workspaces`` as saved (empty means every workspace)."""
+        listed: list[str] = []
+        mounted = False
+        if self._client is not None:
+            cfg = self._client.svc.settings
+            listed, mounted = list(cfg.mcp.workspaces), cfg.api.mcp
+        out = await self._run_op("list_workspaces", {})
+        known = [] if out is None else [{"name": w.name, "trust": w.trust} for w in out.workspaces]
+        return {
+            "mounted": mounted,
+            "listed": listed,
+            "all": not listed,
+            "workspaces": [{**w, "linked": not listed or w["name"] in listed} for w in known],
+        }
 
     async def _agents(self) -> list[dict[str, Any]]:
         """The registered external agents, via the real ``list_agents`` operation (never tokens).
