@@ -16,7 +16,13 @@ from pydantic import BaseModel, Field
 
 from oaken.core.errors import InvalidInput, NotFound
 from oaken.core.ids import AccountId, MessageId
-from oaken.core.operations.builtin.common import MessageItem, items_from_hits, state_flags
+from oaken.core.operations.builtin.common import (
+    MessageItem,
+    enrichment_fields,
+    items_from_hits,
+    state_flags,
+    stored_enrichments,
+)
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import AnyOperation, operation
 from oaken.core.rawstore import header_block
@@ -419,6 +425,82 @@ async def ask(ctx: OpContext, inp: AskInput) -> AskOutput:
     )
 
 
+async def _routed(
+    ctx: OpContext, inp: AskInput, picked: routing.Route, sources: dict[str, Any]
+) -> AskOutput:
+    """The messages an ``ask`` was about, with the stored result of the enricher it named. Core does
+    the dates and the lookups; the model only chose an intent and some words."""
+    sender = inp.from_ or picked.sender
+    days = picked.days
+    asked: dict[str, Any] = {
+        "query": picked.query,
+        "from": sender,
+        "after": inp.after or (ctx.svc.clock.now() - timedelta(days=days) if days else None),
+        "before": inp.before,
+        "account_id": inp.account_id,
+        "label": inp.label,
+        "location": inp.location,
+        "disposition": inp.disposition,
+        "unread_only": inp.unread_only or bool(picked.unread),
+        "starred": inp.starred,
+        "has_attachment": inp.has_attachment,
+        "thread_key": inp.thread_key,
+        "limit": min(inp.limit * 3, 50),  # room to order by priority before cutting
+        "sort": "relevance" if picked.query else "date_desc",
+    }
+    found = await search.handler(ctx, SearchInput.model_validate(asked))
+    source = sources.get(picked.intent)
+    stored = (
+        await stored_enrichments(ctx.svc.raw, [i.message_id for i in found.items], [source[0]])
+        if source
+        else {}
+    )
+    rows: list[RoutedMessage] = []
+    for item in found.items:
+        if source:
+            result = stored.get(item.message_id, {}).get(source[0])
+            fields = source[1].fields
+            view = {k: v for k, v in (result or {}).items() if not fields or k in fields}
+        else:
+            result = {}
+            view = {
+                k: v
+                for k, v in (
+                    ("summary", item.summary),
+                    ("category", item.category),
+                    ("priority", item.priority),
+                    ("needs_reply", item.needs_reply),
+                )
+                if v is not None
+            }
+        rows.append(
+            RoutedMessage(
+                message_id=item.message_id,
+                subject=item.subject,
+                sender=item.from_name or item.from_addr,
+                date=item.date,
+                view=view,
+                not_enriched=bool(source) and result is None,
+            )
+        )
+    if source and "priority" in source[1].fields:  # most important first, then newest
+        rows.sort(
+            key=lambda r: -(r.view["priority"] if isinstance(r.view.get("priority"), int) else -1)
+        )
+    rows = rows[: inp.limit]
+    wants = source[1].description if source else routing.FIND.description
+    narrowed = [f"from {sender}" if sender else "", f"last {days} day(s)" if days else "",
+                "unread only" if inp.unread_only or picked.unread else ""]  # fmt: skip
+    interpreted = "read as: " + wants.rstrip(".").lower() + "".join(f"; {n}" for n in narrowed if n)
+    return AskOutput(
+        intent=picked.intent,
+        interpreted=interpreted,
+        results=rows,
+        answer="" if rows else "No matching mail.",
+        warnings=list(found.warnings),
+    )
+
+
 class GetMessageInput(BaseModel):
     message_id: str
     include_text: bool = True
@@ -459,12 +541,21 @@ class GetMessageOutput(BaseModel):
     text: str = ""
     truncated: bool = False
     attachments: list[AttachmentInfo] = Field(default_factory=list)  # metadata only, never bytes
+    # From the stored enrichments, when there are any. Read these first: include_text=false returns
+    # them without the body, which is the cheap way to decide whether the text is worth opening.
+    summary: str | None = None
+    key_points: list[str] = Field(default_factory=list)
+    category: str | None = None
+    priority: int | None = None
+    needs_reply: bool | None = None
     content_is_untrusted: bool = True
 
 
 @operation(
     "get_message",
-    "One message: cleaned text and metadata. Never marks it read.",
+    "One message: its summary and triage when stored, the cleaned text and metadata. Prefer "
+    "include_text=false and read the summary first; open the text only when you need it. Never "
+    "marks it read.",
     permission="read",
     input=GetMessageInput,
     output=GetMessageOutput,
@@ -516,6 +607,11 @@ async def get_message(ctx: OpContext, inp: GetMessageInput) -> GetMessageOutput:
                 quarantined=bool(a.get("quarantined")),
             )
         )
+    found = (await stored_enrichments(ctx.svc.raw, [mid], ("summary", "triage"))).get(mid, {})
+    for key, value in enrichment_fields(found).items():
+        setattr(out, key, value)
+    points = (found.get("summary") or {}).get("key_points", [])
+    out.key_points = [p for p in points if isinstance(p, str)]
     if inp.include_text:
         budget = ctx.limits.budget()
         out.text = budget.take(doc["cleaned_text"], inp.text_chars)

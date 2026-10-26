@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Pieces the built-in operations share: the message row they all return, and read-state lookups."""
 
+import json
 from collections.abc import Sequence
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -36,6 +38,12 @@ class MessageItem(BaseModel):
     score: float = 0.0
     why: list[str] = Field(default_factory=list)  # which retrievers found it
     text: str | None = None  # cleaned text, only when asked for and within the budget
+    # From the stored enrichments, when there are any: what the message is about and how much it
+    # matters, so a client can decide without opening it (summary is derived from mail: data).
+    summary: str | None = None
+    category: str | None = None
+    priority: int | None = None  # triage: 0 ignore, 1 low, 2 normal, 3 soon
+    needs_reply: bool | None = None
 
 
 async def state_flags(raw: RawStore, ids: Sequence[str]) -> dict[str, tuple[bool, bool]]:
@@ -53,6 +61,40 @@ async def state_flags(raw: RawStore, ids: Sequence[str]) -> dict[str, tuple[bool
     return out
 
 
+async def stored_enrichments(
+    raw: RawStore, ids: Sequence[str], names: Sequence[str]
+) -> dict[str, dict[str, dict[str, Any]]]:
+    """``{message_id: {enricher: result}}`` for the stored results of the named enrichers."""
+    out: dict[str, dict[str, dict[str, Any]]] = {}
+    for i in range(0, len(ids), IN_LIMIT):
+        part = ids[i : i + IN_LIMIT]
+        marks = ",".join("?" * len(part))
+        want = ",".join("?" * len(names))
+        for r in await raw.db.fetchall(
+            "SELECT message_id, enricher, data_json FROM enrichments"  # noqa: S608
+            f" WHERE message_id IN ({marks}) AND enricher IN ({want})",
+            [*part, *names],
+        ):
+            try:
+                out.setdefault(r["message_id"], {})[r["enricher"]] = json.loads(r["data_json"])
+            except ValueError:
+                continue
+    return out
+
+
+def enrichment_fields(found: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """The summary and triage fields of ``MessageItem``, from one message's stored results."""
+    summary = found.get("summary") or {}
+    triage = found.get("triage") or {}
+    priority = triage.get("priority")
+    return {
+        "summary": summary.get("summary") or None,
+        "category": triage.get("category") or None,
+        "priority": priority if isinstance(priority, int) else None,
+        "needs_reply": triage.get("needs_reply") if "needs_reply" in triage else None,
+    }
+
+
 async def read_flags(raw: RawStore, ids: Sequence[str]) -> dict[str, bool]:
     return {m: read for m, (read, _) in (await state_flags(raw, ids)).items()}
 
@@ -62,6 +104,9 @@ async def items_from_hits(
 ) -> list[MessageItem]:
     """Listing rows for search hits, with read state, snippets cut to the limits."""
     flags = await state_flags(ctx.svc.raw, [h.message_id for h in hits])
+    enriched = await stored_enrichments(
+        ctx.svc.raw, [h.message_id for h in hits], ("summary", "triage")
+    )
     items: list[MessageItem] = []
     for h in hits:
         mark = "**" if markers else ""
@@ -83,6 +128,7 @@ async def items_from_hits(
                 is_read=flags[h.message_id][0] if h.message_id in flags else None,
                 starred=flags[h.message_id][1] if h.message_id in flags else None,
                 score=h.score,
+                **enrichment_fields(enriched.get(h.message_id, {})),
             )
         )
     return items
