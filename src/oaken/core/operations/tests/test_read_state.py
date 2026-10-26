@@ -59,6 +59,9 @@ def examples(a: MessageId, job_id: str = "none") -> dict[str, Any]:
         "get_plugin_config": {"plugin": "no-such-plugin"},
         "check_plugin_config": {"plugin": "no-such-plugin", "config": {}},
         "set_plugin_config": {"plugin": "no-such-plugin", "config": {}},
+        "reset_usage": {}, "list_workspaces": {}, "get_workspace": {"name": "default"},
+        "check_workspace": {"name": "default"}, "set_workspace": {"name": "default"},
+        "remove_workspace": {"name": "no-such-workspace"},  # NotFound
     }  # fmt: skip
 
 
@@ -98,7 +101,7 @@ async def test_no_operation_that_does_not_mark_read_changes_read_state(ops: Ops)
             assert name in {
                 "revoke_agent", "remove_account", "sieve_get",
                 "plugin_disable", "plugin_enable", "plugin_reload",
-                "get_plugin_config", "check_plugin_config", "set_plugin_config",
+                "get_plugin_config", "check_plugin_config", "set_plugin_config", "remove_workspace",
             }  # fmt: skip
         assert await ops.read_count() == 0, f"{name} changed read state"
         assert ops.rs.writes() == [], f"{name} wrote a flag to the server"

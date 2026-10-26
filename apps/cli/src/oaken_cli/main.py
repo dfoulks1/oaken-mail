@@ -558,6 +558,39 @@ def _register_system(
     )
     accounts.set_defaults(func=_lazy("system_cmd", "cmd_accounts"))
 
+    workspaces = sub.add_parser(
+        "workspaces",
+        help="List, inspect, create, edit and remove AI workspaces.",
+        parents=[g],
+        description=(
+            "Workspaces are named confidentiality levels: each has a trust level (secure or "
+            "insecure) and an LLM backend. A secure workspace only uses a local backend. "
+            "Default lists workspaces. 'get NAME' shows one. 'check NAME [TOML...]' validates "
+            "without saving. 'set NAME [TOML...] [--file FILE]' creates or replaces. "
+            "'remove NAME' removes it (default cannot be removed)."
+        ),
+    )
+    workspaces.add_argument(
+        "subcommand",
+        nargs="?",
+        default="list",
+        choices=["list", "get", "check", "set", "remove"],
+        help="list (default), get, check, set, or remove.",
+    )
+    workspaces.add_argument("name", nargs="?", help="The workspace name.")
+    workspaces.add_argument(
+        "lines",
+        nargs="*",
+        metavar="TOML",
+        help="With check/set: TOML lines for the workspace settings (e.g. 'trust = \"insecure\"').",
+    )
+    workspaces.add_argument(
+        "--file",
+        metavar="FILE",
+        help="With check/set: a TOML file for the workspace settings (- for stdin).",
+    )
+    workspaces.set_defaults(func=_lazy("workspace_cmd", "cmd_workspaces"))
+
     audit = sub.add_parser("audit", help="The newest audit-log rows.", parents=[g])
     audit.add_argument(
         "--limit", type=int, default=50, metavar="N", help="How many rows (max 500)."
