@@ -92,7 +92,7 @@
 <p>This page is generated from <code>src/oaken/plugins/contracts.py</code> and
 <code>src/oaken/plugins/base.py</code>, so it always matches the code. For a walkthrough, see
 <a href="../plugins.html">Writing a plugin</a>.</p>
-<p>The plugin API version is <strong>1</strong>. A plugin whose <code>api_version</code> differs is rejected at load.</p>
+<p>The plugin API version is <strong>2</strong>. A plugin whose <code>api_version</code> differs is rejected at load.</p>
 
 <section id="kinds-entry-points-and-capabilities" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>Kinds, entry points and capabilities</h2></div>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
@@ -134,6 +134,12 @@
 <td><code>oaken.vector_stores</code></td>
 <td>none</td>
 <td><code>upsert</code>, <code>delete</code>, <code>query</code>, <code>stats</code></td>
+</tr>
+<tr>
+<td><code>cache_store</code></td>
+<td><code>oaken.cache_stores</code></td>
+<td>none</td>
+<td><code>key</code>, <code>get</code>, <code>put</code>, <code>stats</code>, <code>clear</code></td>
 </tr>
 </tbody>
 </table></div>
@@ -1038,12 +1044,77 @@
 </tr>
 </tbody>
 </table></div>
+<h3 id="cacheentry"><code>CacheEntry</code></h3>
+<p>A validated model answer and what it cost to get, as the LLM answer cache stores it.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>result_json</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>tokens_in</code></td>
+<td><code>int</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>tokens_out</code></td>
+<td><code>int</code></td>
+<td><code>required</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="cachestats"><code>CacheStats</code></h3>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>entries</code></td>
+<td><code>int</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>bytes</code></td>
+<td><code>int</code></td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td><code>by_task</code></td>
+<td><code>dict[str, int]</code></td>
+<td><code>empty</code></td>
+</tr>
+<tr>
+<td><code>prompt_versions</code></td>
+<td><code>tuple[str, ...]</code></td>
+<td><code>()</code></td>
+</tr>
+<tr>
+<td><code>oldest</code></td>
+<td><code>datetime | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
 </section>
 <section id="protocols" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Protocols</h2></div>
 <p>A plugin satisfies a contract by having these members.</p>
 <h3 id="llmaccess"><code>LLMAccess</code></h3>
 <p>The one way a plugin reaches a language model: a <code>PromptBuilder</code> task about mail, as <code>UntrustedText</code> parts. Core picks the workspace from the account, enforces what it allows, answers a repeated question from its cache and validates the answer against the task's schema. A plugin never sees a backend, a database or a workspace.</p>
-<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">generate_cached</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">builder</span><span class="p">:</span> <span class="s1">'PromptBuilder[Any]'</span><span class="p">,</span> <span class="o">*</span><span class="n">parts</span><span class="p">:</span> <span class="n">UntrustedText</span><span class="p">,</span> <span class="n">content_hash</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">account_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">message_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">generate_cached</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">builder</span><span class="p">:</span> <span class="s1">'PromptBuilder[Any]'</span><span class="p">,</span> <span class="o">*</span><span class="n">parts</span><span class="p">:</span> <span class="n">UntrustedText</span><span class="p">,</span> <span class="n">content_hash</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">account_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">message_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span>
 </code></pre></div>
 <h3 id="plugin"><code>Plugin</code></h3>
 <p>Lifecycle, shared by every kind. All three are optional for a plugin to define.</p>
@@ -1088,9 +1159,9 @@
 <li><code>model_id: str</code></li>
 <li><code>context_window: int</code></li>
 </ul>
-<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">generate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">LLMRequest</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LLMResponse</span>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">generate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">LLMRequest</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LLMResponse</span>
 </code></pre></div>
-<p>Answer <code>request</code>. With a <code>json_schema</code>, <code>data</code> carries the parsed result.</p>
+<p>Answer <code>request</code>. With a <code>json_schema</code>, <code>data</code> carries the parsed result. <code>model</code> names which of the backend's models to run; <code>None</code> means the started default (<code>model_id</code>). The response's <code>model_id</code> is the model that actually ran.</p>
 <h3 id="enricher"><code>Enricher</code></h3>
 <p>Derives something from one message. <code>version</code> is part of the cache key: bump it when the output could change.</p>
 <p>Attributes:</p>
@@ -1116,6 +1187,25 @@
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">stats</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">VectorStats</span>
 </code></pre></div>
 <p>How many vectors, and which model and dimensions they use.</p>
+<h3 id="cacheops"><code>CacheOps</code></h3>
+<p>The LLM answer cache's members. Core's built-in SQLite cache has them too (it is not a plugin). Core hands over the facts of a question; the cache owns the key.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">def</span><span class="w"> </span><span class="nf">key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">workspace</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">content_hash</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">prompt_version</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+</code></pre></div>
+<p>The key for this question. <code>model</code> is the model that will answer it, never a backend's default: two models must not share a key.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">CacheEntry</span> <span class="o">|</span> <span class="kc">None</span>
+</code></pre></div>
+<p>The stored answer, or None. A miss costs one model call; raising counts as a miss.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">put</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">entry</span><span class="p">:</span> <span class="n">CacheEntry</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+<p>Store <code>entry</code>. Raising loses the cache write, never the answer.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">stats</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">workspace</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CacheStats</span>
+</code></pre></div>
+<p>What the cache holds (one workspace's, or all).</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">clear</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">workspace</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span>
+</code></pre></div>
+<p>Forget answers (one workspace's and/or one task's, or all). How many were removed.</p>
+<h3 id="cache"><code>Cache</code></h3>
+<p>An LLM answer cache plugin.</p>
 </section>
 <section id="base-classes" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Base classes</h2></div>
 <p>Optional. They supply defaults so a plugin overrides only what it does.</p>
@@ -1156,7 +1246,7 @@
 </ul>
 <p>Override:</p>
 <ul>
-<li><code>async def generate(self, request: LLMRequest) -&gt; LLMResponse</code></li>
+<li><code>async def generate(self, request: LLMRequest, *, model: str | None=None) -&gt; LLMResponse</code></li>
 </ul>
 <h3 id="baseenricher"><code>BaseEnricher</code></h3>
 <p>Set <code>version</code> and, ideally, <code>output_model</code> (a pydantic model): the host then checks the result against it and publishes its JSON schema. Override <code>enrich</code>.</p>
@@ -1182,6 +1272,20 @@
 <li><code>async def delete(self, message_ids: Sequence[str]) -&gt; None</code></li>
 <li><code>async def query(self, vector: Sequence[float], k: int, filters: dict[str, str] | None=None) -&gt; list[Hit]</code></li>
 <li><code>async def stats(self) -&gt; VectorStats</code></li>
+</ul>
+<h3 id="basecache"><code>BaseCache</code></h3>
+<p>The LLM answer cache. Override all five members; <code>key</code> may return any tuple of strings.</p>
+<p>Set:</p>
+<ul>
+<li><code>kind: ClassVar[PluginKind] = 'cache_store'</code></li>
+</ul>
+<p>Override:</p>
+<ul>
+<li><code>def key(self, *, workspace: str, task: str, content_hash: str, model: str, prompt_version: str) -&gt; tuple[str, ...]</code></li>
+<li><code>async def get(self, key: tuple[str, ...]) -&gt; CacheEntry | None</code></li>
+<li><code>async def put(self, key: tuple[str, ...], entry: CacheEntry) -&gt; None</code></li>
+<li><code>async def stats(self, workspace: str | None=None) -&gt; CacheStats</code></li>
+<li><code>async def clear(self, workspace: str | None=None, task: str | None=None) -&gt; int</code></li>
 </ul>
 <h3 id="the-enricher-decorator">The <code>@enricher</code> decorator</h3>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">def</span><span class="w"> </span><span class="nf">enricher</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">version</span><span class="p">:</span> <span class="nb">str</span><span class="o">=</span><span class="s1">'1'</span><span class="p">,</span> <span class="n">needs_llm</span><span class="p">:</span> <span class="nb">bool</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Callable</span><span class="p">[[</span><span class="n">EnrichInput</span><span class="p">],</span> <span class="n">Awaitable</span><span class="p">[</span><span class="nb">object</span><span class="p">]]],</span> <span class="nb">type</span><span class="p">[</span><span class="n">BaseEnricher</span><span class="p">]]</span>

@@ -257,6 +257,8 @@ a check. A reviewer rejects one that does.</li>
 prompt in it, waiting for approval (it is not in this table yet). <strong>Open</strong> is approved and free to
 take. <strong>In progress</strong> has someone on it. <strong>Built</strong> means the prompt's deliverables are in <code>main</code> with
 tests. <strong>Partly</strong> says what is done and what is left. A <strong>Written</strong> prompt has a plan and no code yet.</p>
+<p>Grouped by track; the number is the permanent ID, so it runs across all tables.</p>
+<p><strong>CORE</strong></p>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
 <thead>
 <tr>
@@ -267,18 +269,6 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 </tr>
 </thead>
 <tbody>
-<tr>
-<td>01</td>
-<td>CORE_01-bootstrap</td>
-<td>Built</td>
-<td></td>
-</tr>
-<tr>
-<td>01a</td>
-<td>DOCS_01a-docs-site-scaffold</td>
-<td>Built</td>
-<td></td>
-</tr>
 <tr>
 <td>02</td>
 <td>CORE_02-core-foundation</td>
@@ -328,38 +318,8 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <td></td>
 </tr>
 <tr>
-<td>08</td>
-<td>PLUGIN_08-vector-store</td>
-<td>Built</td>
-<td></td>
-</tr>
-<tr>
 <td>09</td>
 <td>CORE_09-ingest-pipeline</td>
-<td>Built</td>
-<td></td>
-</tr>
-<tr>
-<td>10</td>
-<td>PLUGIN_10-ollama-and-prompt-safety</td>
-<td>Built</td>
-<td></td>
-</tr>
-<tr>
-<td>11</td>
-<td>PLUGIN_11-gmail-plugin</td>
-<td>Built</td>
-<td>New mail now arrives ahead of a long first sync's backlog</td>
-</tr>
-<tr>
-<td>11b</td>
-<td>PLUGIN_11b-smtp-send</td>
-<td>Built</td>
-<td>Provider only; the send operation is 28</td>
-</tr>
-<tr>
-<td>11c</td>
-<td>PLUGIN_11c-imap-provider</td>
 <td>Built</td>
 <td></td>
 </tr>
@@ -382,12 +342,6 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <td></td>
 </tr>
 <tr>
-<td>14</td>
-<td>ENRICHER_14-enrichers</td>
-<td>Built</td>
-<td></td>
-</tr>
-<tr>
 <td>15</td>
 <td>CORE_15-retrieval-and-ask</td>
 <td>Built</td>
@@ -400,28 +354,10 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <td></td>
 </tr>
 <tr>
-<td>17</td>
-<td>CLI_17-cli-client</td>
-<td>Built</td>
-<td></td>
-</tr>
-<tr>
-<td>18</td>
-<td>MCP_18-mcp-shim</td>
-<td>Built</td>
-<td>Both doors: <code>/mcp</code> and <code>/mcp/agent</code></td>
-</tr>
-<tr>
 <td>19</td>
 <td>CORE_19-security-hardening</td>
 <td><strong>Open</strong></td>
 <td>The dedicated pass (injection suite across all surfaces, localhost threat tests, audit review) has not been run. Enricher injection tests and ADR 0005 exist</td>
-</tr>
-<tr>
-<td>20</td>
-<td>DOCS_20-oss-docs</td>
-<td>Built</td>
-<td>README, <code>ROADMAP.md</code>, issue and PR templates, the site, the architecture and provider pages, and <code>docs/tools/check_commands.py</code> (runs the docs' <code>&lt;!-- check --&gt;</code> commands) are in. Not verified: the Gmail walkthrough on a clean Google account, and <code>docs/evals/latest.md</code> (both need real services)</td>
 </tr>
 <tr>
 <td>22</td>
@@ -478,12 +414,6 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <td></td>
 </tr>
 <tr>
-<td>32</td>
-<td>MCP_32-mcp-settings</td>
-<td><strong>Open</strong></td>
-<td></td>
-</tr>
-<tr>
 <td>33</td>
 <td>CORE_33-agent-enrichment</td>
 <td><strong>Written</strong></td>
@@ -508,6 +438,117 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <td>What 0.1.1 left: label/folder write-back, workspace routing by Sieve rule, a datastore per account, send, Gmail sign-in</td>
 </tr>
 <tr>
+<td>40</td>
+<td>CORE_40-mcp-allowed-config</td>
+<td><strong>Written</strong></td>
+<td>The plan only. <code>[mcp.allowed]</code> in config.toml is the source of truth for MCP exposure (seeded to the store on load, file wins on conflict); generated commented menu, op write-back via config_edit, toggle on /stats Reference. DB table stays the live-read cache</td>
+</tr>
+<tr>
+<td>41</td>
+<td>CORE_41-stats-controls</td>
+<td><strong>Partly built</strong></td>
+<td>Configure AI from <code>/stats</code>, companion to 40. Shipped: enable/disable (the <code>[plugins.&lt;name&gt;] enabled</code> flag, switches on the Plugins tab), <code>reset_usage</code>, agent list/revoke, enricher <code>config_model</code> forms (CORE_23 pipe filled), and a backend model picker fed by <code>BaseLLMBackend.available_models()</code> (pick any installed Ollama model; saved to <code>[plugins.&lt;name&gt;] model</code> + reload). Remaining: <strong>per-enricher</strong> models (CORE_42). Invariant: agents never manage capabilities, only the file and UI do</td>
+</tr>
+<tr>
+<td>42</td>
+<td>CORE_42-per-enricher-models</td>
+<td><strong>Written</strong></td>
+<td>Each enricher on its own model. <code>generate(request, *, model=…)</code> on the LLM contract + <code>BaseLLMBackend</code> + Ollama (bumps <code>PLUGIN_API_VERSION</code>, ADR 0010); the effective model threaded through <code>generate_cached</code> into the cache key and usage record (fixes the cross-model cache collision); <code>EnricherConfig.model</code> (held back in 41) lands and shows in the form. Carries the effective model into the cache boundary so PLUGIN_43's slot stays clean. Plan only</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>CLI</strong></p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>#</th>
+<th>Prompt</th>
+<th>Status</th>
+<th>What is left, or where to look</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>17</td>
+<td>CLI_17-cli-client</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>39</td>
+<td>CLI_39-ask-debug</td>
+<td><strong>Written</strong></td>
+<td>The plan only. <code>--debug</code> runs a command in-process with DEBUG to terminal and logfile; plugins obey the one shared logger with no per-plugin change. Scoped to read-only commands first</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>MCP</strong></p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>#</th>
+<th>Prompt</th>
+<th>Status</th>
+<th>What is left, or where to look</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>18</td>
+<td>MCP_18-mcp-shim</td>
+<td>Built</td>
+<td>Both doors: <code>/mcp</code> and <code>/mcp/agent</code></td>
+</tr>
+<tr>
+<td>32</td>
+<td>MCP_32-mcp-settings</td>
+<td><strong>Open</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>PLUGIN</strong></p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>#</th>
+<th>Prompt</th>
+<th>Status</th>
+<th>What is left, or where to look</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>08</td>
+<td>PLUGIN_08-vector-store</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>10</td>
+<td>PLUGIN_10-ollama-and-prompt-safety</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>11</td>
+<td>PLUGIN_11-gmail-plugin</td>
+<td>Built</td>
+<td>New mail now arrives ahead of a long first sync's backlog</td>
+</tr>
+<tr>
+<td>11b</td>
+<td>PLUGIN_11b-smtp-send</td>
+<td>Built</td>
+<td>Provider only; the send operation is 28</td>
+</tr>
+<tr>
+<td>11c</td>
+<td>PLUGIN_11c-imap-provider</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
 <td>37</td>
 <td>PLUGIN_37-gmail-sign-in</td>
 <td><strong>Written</strong></td>
@@ -518,6 +559,62 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <td>PLUGIN_38-openai-compat-lmstudio</td>
 <td><strong>Written</strong></td>
 <td>The plan only; an OpenAI-compatible LLM backend and embedder, LM Studio first</td>
+</tr>
+<tr>
+<td>43</td>
+<td>PLUGIN_43-pluggable-llm-cache</td>
+<td><strong>Built</strong></td>
+<td>A <code>cache_store</code> plugin kind and <code>BaseCache</code> (<code>key</code>, <code>get</code>, <code>put</code>, <code>stats</code>, <code>clear</code>); <code>[ai] cache</code> names one. Core keeps its SQLite cache as the default, inline. The caller passes the effective model and the cache builds the key. Built after CORE_42. Not built: any non-SQLite cache</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>ENRICHER</strong></p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>#</th>
+<th>Prompt</th>
+<th>Status</th>
+<th>What is left, or where to look</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>14</td>
+<td>ENRICHER_14-enrichers</td>
+<td>Built</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>DOCS</strong></p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>#</th>
+<th>Prompt</th>
+<th>Status</th>
+<th>What is left, or where to look</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>01</td>
+<td>CORE_01-bootstrap</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>01a</td>
+<td>DOCS_01a-docs-site-scaffold</td>
+<td>Built</td>
+<td></td>
+</tr>
+<tr>
+<td>20</td>
+<td>DOCS_20-oss-docs</td>
+<td>Built</td>
+<td>README, <code>ROADMAP.md</code>, issue and PR templates, the site, the architecture and provider pages, and <code>docs/tools/check_commands.py</code> (runs the docs' <code>&lt;!-- check --&gt;</code> commands) are in. Not verified: the Gmail walkthrough on a clean Google account, and <code>docs/evals/latest.md</code> (both need real services)</td>
 </tr>
 </tbody>
 </table></div>

@@ -89,6 +89,7 @@
 # llm_model = "qwen2.5:3b"     # small on purpose; set a larger model for better analysis
 # allow_remote = false         # a backend talking to a non-loopback address refuses unless true
 # vector_store = "sqlite-vec"
+# cache = ""                   # an LLM answer cache plugin by name; empty keeps core's SQLite cache
 # enrich_max_input_tokens = 3000
 # ask_context_tokens = 3000
 # chunk_tokens = 256

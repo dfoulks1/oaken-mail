@@ -607,7 +607,7 @@ types = [
   ["PromptBuilder", "class", "One LLM task: constant instructions, answer model, version (plus a hash of the text) and token cap."],
   ["SafeOutput", "pydantic model", "Base of every answer: carries injection_suspected."],
   ["LLMService", "class", "generate_cached(): the only door enrichers use. Cache, backend call, validation, one repair, usage."],
-  ["LLMCache", "class", "llm_cache in raw.db, keyed by workspace, task, content hash, model and prompt version."],
+  ["LLMCache", "class", "Core's default Cache: llm_cache in raw.db, keyed by workspace, task, content hash, model and prompt version. It builds its own key; `[ai] cache` swaps in a cache_store plugin."],
   ["Workspaces", "class", "Named profiles (secure or insecure) that partition the cache and usage and gate the backend."],
 ]
 funcs = [

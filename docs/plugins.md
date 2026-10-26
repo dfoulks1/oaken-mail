@@ -1,14 +1,53 @@
 +++
 title = "Writing a plugin"
-subtitle = "Providers, embedders, models, enrichers and vector stores"
+subtitle = "Providers, embedders, models, enrichers, vector stores and caches"
 lead = "Everything Oaken Mail can be extended with is a plugin: a small class, registered with a Python entry point. Start from a base class, override what your plugin does, and run the contract suite."
 badges = [["text-bg-warning", "Pre-alpha"]]
 group = "concepts"
 order = 30
-description = "How to write a provider, embedder, LLM backend, enricher or vector store plugin, register it, test it, and what the host guarantees."
+description = "How to write a provider, embedder, LLM backend, enricher, vector store or cache plugin, register it, test it, and what the host guarantees."
 +++
 
-## The five kinds
+## Extensibility at a glance
+
+Every AI-powered and mail-transport component in Oaken is a plugin seam. The five base classes in
+`oaken.plugins.base` are the extension points:
+
+| Base class | Entry-point group | Seam it owns |
+|---|---|---|
+| `BaseProvider` | `oaken.providers` | Mail in, flags back, mail out |
+| `BaseEmbedder` | `oaken.embedders` | Text → vectors (feeds search and `ask`) |
+| `BaseLLMBackend` | `oaken.llm_backends` | Language model calls (enrichers, `ask`, workspaces) |
+| `BaseEnricher` | `oaken.enrichers` | Per-message derivation (summary, triage, custom) |
+| `BaseVectorStore` | `oaken.vector_stores` | Vector storage and nearest-neighbor queries |
+| `BaseCache` | `oaken.cache_stores` | The LLM answer cache: which question maps to which stored answer |
+
+A few things worth knowing before you pick one:
+
+**`BaseLLMBackend` is the swap point for the AI harness.** Implement it to replace Ollama with
+LM Studio, vLLM, or any other model server. The one required attribute is `locality`: set it to
+`"local"` (this machine) or `"remote"`. A `secure` workspace refuses any backend not marked
+`"local"`, so forgetting it is treated as remote. Register the class under `oaken.llm_backends`
+and set `ai.llm_backend` in `config.toml` to activate it. No enricher or `ask` logic changes.
+
+**`BaseEmbedder` feeds both search and `ask`.** It is global, not per-workspace. Switching it
+triggers a re-index: the vector partition is keyed to `model_id`, so vectors from the old model
+are never mixed with the new ones. Name `model_id` specifically enough to be unique
+(`lmstudio:nomic-embed-text-v1.5`, not just `nomic-embed-text`).
+
+**Enrichers are additive; backends and embedders are selected.** Every installed enricher runs on
+every message. Only one LLM backend and one embedder are active at a time (chosen by workspace
+and by the `[ai]` config respectively). A `BaseLLMBackend` you install but do not activate in a
+workspace does nothing.
+
+**The base classes are optional.** The contract is structural: any object with the right members
+satisfies it. In `oaken.plugins.contracts` each kind has a parallel `Protocol` class — that is
+what the host validates against. The `Base*` classes just supply safe no-op defaults and
+`_default`-marked placeholders so the host can tell "not overridden" from "explicitly
+implemented". Subclassing a base class is the short path; implementing the protocol directly is
+always valid.
+
+## The six kinds
 
 | Kind | Entry-point group | What it does |
 |---|---|---|
@@ -17,6 +56,7 @@ description = "How to write a provider, embedder, LLM backend, enricher or vecto
 | LLM backend | `oaken.llm_backends` | Runs a language model. |
 | Enricher | `oaken.enrichers` | Derives something from one message (a summary, a category, actions). |
 | Vector store | `oaken.vector_stores` | Stores vectors and finds the nearest ones. |
+| Cache | `oaken.cache_stores` | Keeps validated model answers so a repeated question costs no model call. |
 
 Providers are the most wanted: each one lets Oaken Mail work with another mail service. Enrichers
 are the ones people will most often write for themselves. Both are meant to be short. The exact
@@ -154,6 +194,32 @@ lint test fails a module that builds a request any other way. The first-party en
 (`oaken_enrichers`: `summary`, `triage`, `actions`, `inspector`) are the worked examples. Turn one
 off with `[plugins.<name>] enabled = false`; `summary` and `actions` skip bulk mail unless you set
 `skip_bulk = false`.
+
+## A cache
+
+The cache holds validated model answers. Core hands it the facts of a question and the cache builds
+the key, so a smarter key or a shared store is a plugin, not a core change. Name it in `config.toml`
+(`[ai] cache = "my-cache"`); with nothing named, core keeps its own SQLite cache in `raw.db`, which
+a plugin never sees.
+
+```python
+from oaken.plugins.base import BaseCache
+from oaken.plugins.contracts import CacheEntry, CacheStats
+
+
+class MyCache(BaseCache):
+    def key(self, *, workspace, task, content_hash, model, prompt_version):
+        return (workspace, task, content_hash, model, prompt_version)
+
+    async def get(self, key): ...  # a CacheEntry or None
+    async def put(self, key, entry): ...
+    async def stats(self, workspace=None): ...  # a CacheStats
+    async def clear(self, workspace=None, task=None): ...  # how many were removed
+```
+
+`model` is the model that will answer, never a backend default: two models must not share a key.
+A cache that raises is treated as a miss on `get` and a lost write on `put`; the answer still
+comes back. `cache_stats`, `clear_cache` and the workspace figures read through the same cache.
 
 ## Who controls a plugin
 
@@ -355,7 +421,7 @@ class TestMyEmbedder(EmbedderContract):
 ```
 
 There is a suite for each kind: `ProviderContract`, `EmbedderContract`, `LLMContract`,
-`EnricherContract` and `VectorStoreContract`. A provider test also supplies `mailbox_ids`, the ids
+`EnricherContract`, `VectorStoreContract` and `CacheContract`. A provider test also supplies `mailbox_ids`, the ids
 of the mail in its test mailbox. If you prefer one call, `await verify_embedder(MyEmbedder)` runs
 every rule and raises a single error listing everything that failed.
 
@@ -366,7 +432,7 @@ host does at load.
 
 `oaken.testing.fakes` has an in-memory fake of every kind (`FakeProvider` with a scriptable
 mailbox and failure injection, `FakeEmbedder`, `FakeLLM` that records every request,
-`FakeEnricher`, `InMemoryVectorStore`). Use them to test code that uses a plugin, with no network,
+`FakeEnricher`, `InMemoryVectorStore`, `FakeCache`). Use them to test code that uses a plugin, with no network,
 no model and no real mail.
 
 ## A first-party example: Ollama

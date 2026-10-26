@@ -6,10 +6,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Writing a plugin · Oaken Mail</title>
-<meta name="description" content="How to write a provider, embedder, LLM backend, enricher or vector store plugin, register it, test it, and what the host guarantees.">
+<meta name="description" content="How to write a provider, embedder, LLM backend, enricher, vector store or cache plugin, register it, test it, and what the host guarantees.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Writing a plugin · Oaken Mail">
-<meta property="og:description" content="How to write a provider, embedder, LLM backend, enricher or vector store plugin, register it, test it, and what the host guarantees.">
+<meta property="og:description" content="How to write a provider, embedder, LLM backend, enricher, vector store or cache plugin, register it, test it, and what the host guarantees.">
 <meta property="og:site_name" content="Oaken Mail">
 <link rel="icon" type="image/png" href="assets/brand/favicon.png">
 <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
@@ -32,7 +32,7 @@
   <div class="offcanvas-body"><div class="sidebar-inner">
     <div class="top"><a class="brand" href="index.html"><img src="assets/brand/favicon.png" alt="" aria-hidden="true" width="28" height="28"> OAKENMAIL</a>
       <button class="theme" id="themeToggle" type="button" aria-label="Toggle dark mode">Theme</button></div>
-    <div class="what">Providers, embedders, models, enrichers and vector stores</div>
+    <div class="what">Providers, embedders, models, enrichers, vector stores and caches</div>
     <div class="docnav"><a class="home-link" href="index.html">&#8962; Home</a>
       <div class="label">Start</div>
       <a class="doc-link" href="mcp.html">Connect an AI client</a>
@@ -76,21 +76,23 @@
     <div class="gh"><div class="label">GitHub</div>
       <a href="https://github.com/dfoulks1/oaken-mail">Repository</a><a href="https://github.com/dfoulks1/oaken-mail/issues/new">Report an issue</a><a class="star" href="https://github.com/dfoulks1/oaken-mail">&#9733; Star this repo</a></div>
     <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
-      <a class="nav-link" href="#the-five-kinds"><span class="num">1</span>The five kinds</a>
-      <a class="nav-link" href="#a-provider-in-one-screen"><span class="num">2</span>A provider in one screen</a>
-      <a class="nav-link" href="#be-accepting-in-what-you-return"><span class="num">3</span>Be accepting in what you return</a>
-      <a class="nav-link" href="#an-embedder"><span class="num">4</span>An embedder</a>
-      <a class="nav-link" href="#an-enricher-in-one-function"><span class="num">5</span>An enricher in one function</a>
-      <a class="nav-link" href="#who-controls-a-plugin"><span class="num">6</span>Who controls a plugin</a>
-      <a class="nav-link" href="#what-a-person-can-say-about-your-plugin"><span class="num">7</span>What a person can say about your plugin</a>
-      <a class="nav-link" href="#registering-it"><span class="num">8</span>Registering it</a>
-      <a class="nav-link" href="#what-the-host-does"><span class="num">9</span>What the host does</a>
-      <a class="nav-link" href="#extending-core-operations-job-kinds-pipeline-stages-and-scheduled-tasks"><span class="num">10</span>Extending core: operations, job kinds, pipeline stages and scheduled tasks</a>
-      <a class="nav-link" href="#testing-it"><span class="num">11</span>Testing it</a>
-      <a class="nav-link" href="#a-first-party-example-ollama"><span class="num">12</span>A first-party example: Ollama</a>
-      <a class="nav-link" href="#a-first-party-example-gmail"><span class="num">13</span>A first-party example: Gmail</a>
-      <a class="nav-link" href="#plugin-events"><span class="num">14</span>Plugin events</a>
-      <a class="nav-link" href="#not-sandboxed"><span class="num">15</span>Not sandboxed</a>
+      <a class="nav-link" href="#extensibility-at-a-glance"><span class="num">1</span>Extensibility at a glance</a>
+      <a class="nav-link" href="#the-six-kinds"><span class="num">2</span>The six kinds</a>
+      <a class="nav-link" href="#a-provider-in-one-screen"><span class="num">3</span>A provider in one screen</a>
+      <a class="nav-link" href="#be-accepting-in-what-you-return"><span class="num">4</span>Be accepting in what you return</a>
+      <a class="nav-link" href="#an-embedder"><span class="num">5</span>An embedder</a>
+      <a class="nav-link" href="#an-enricher-in-one-function"><span class="num">6</span>An enricher in one function</a>
+      <a class="nav-link" href="#a-cache"><span class="num">7</span>A cache</a>
+      <a class="nav-link" href="#who-controls-a-plugin"><span class="num">8</span>Who controls a plugin</a>
+      <a class="nav-link" href="#what-a-person-can-say-about-your-plugin"><span class="num">9</span>What a person can say about your plugin</a>
+      <a class="nav-link" href="#registering-it"><span class="num">10</span>Registering it</a>
+      <a class="nav-link" href="#what-the-host-does"><span class="num">11</span>What the host does</a>
+      <a class="nav-link" href="#extending-core-operations-job-kinds-pipeline-stages-and-scheduled-tasks"><span class="num">12</span>Extending core: operations, job kinds, pipeline stages and scheduled tasks</a>
+      <a class="nav-link" href="#testing-it"><span class="num">13</span>Testing it</a>
+      <a class="nav-link" href="#a-first-party-example-ollama"><span class="num">14</span>A first-party example: Ollama</a>
+      <a class="nav-link" href="#a-first-party-example-gmail"><span class="num">15</span>A first-party example: Gmail</a>
+      <a class="nav-link" href="#plugin-events"><span class="num">16</span>Plugin events</a>
+      <a class="nav-link" href="#not-sandboxed"><span class="num">17</span>Not sandboxed</a>
     </nav></div>
   </div></div>
 </nav>
@@ -101,7 +103,72 @@
     <p class="lead">Everything Oaken Mail can be extended with is a plugin: a small class, registered with a Python entry point. Start from a base class, override what your plugin does, and run the contract suite.</p>
   </header>
 
-<section id="the-five-kinds" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>The five kinds</h2></div>
+<section id="extensibility-at-a-glance" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>Extensibility at a glance</h2></div>
+<p>Every AI-powered and mail-transport component in Oaken is a plugin seam. The five base classes in
+<code>oaken.plugins.base</code> are the extension points:</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Base class</th>
+<th>Entry-point group</th>
+<th>Seam it owns</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>BaseProvider</code></td>
+<td><code>oaken.providers</code></td>
+<td>Mail in, flags back, mail out</td>
+</tr>
+<tr>
+<td><code>BaseEmbedder</code></td>
+<td><code>oaken.embedders</code></td>
+<td>Text → vectors (feeds search and <code>ask</code>)</td>
+</tr>
+<tr>
+<td><code>BaseLLMBackend</code></td>
+<td><code>oaken.llm_backends</code></td>
+<td>Language model calls (enrichers, <code>ask</code>, workspaces)</td>
+</tr>
+<tr>
+<td><code>BaseEnricher</code></td>
+<td><code>oaken.enrichers</code></td>
+<td>Per-message derivation (summary, triage, custom)</td>
+</tr>
+<tr>
+<td><code>BaseVectorStore</code></td>
+<td><code>oaken.vector_stores</code></td>
+<td>Vector storage and nearest-neighbor queries</td>
+</tr>
+<tr>
+<td><code>BaseCache</code></td>
+<td><code>oaken.cache_stores</code></td>
+<td>The LLM answer cache: which question maps to which stored answer</td>
+</tr>
+</tbody>
+</table></div>
+<p>A few things worth knowing before you pick one:</p>
+<p><strong><code>BaseLLMBackend</code> is the swap point for the AI harness.</strong> Implement it to replace Ollama with
+LM Studio, vLLM, or any other model server. The one required attribute is <code>locality</code>: set it to
+<code>&quot;local&quot;</code> (this machine) or <code>&quot;remote&quot;</code>. A <code>secure</code> workspace refuses any backend not marked
+<code>&quot;local&quot;</code>, so forgetting it is treated as remote. Register the class under <code>oaken.llm_backends</code>
+and set <code>ai.llm_backend</code> in <code>config.toml</code> to activate it. No enricher or <code>ask</code> logic changes.</p>
+<p><strong><code>BaseEmbedder</code> feeds both search and <code>ask</code>.</strong> It is global, not per-workspace. Switching it
+triggers a re-index: the vector partition is keyed to <code>model_id</code>, so vectors from the old model
+are never mixed with the new ones. Name <code>model_id</code> specifically enough to be unique
+(<code>lmstudio:nomic-embed-text-v1.5</code>, not just <code>nomic-embed-text</code>).</p>
+<p><strong>Enrichers are additive; backends and embedders are selected.</strong> Every installed enricher runs on
+every message. Only one LLM backend and one embedder are active at a time (chosen by workspace
+and by the <code>[ai]</code> config respectively). A <code>BaseLLMBackend</code> you install but do not activate in a
+workspace does nothing.</p>
+<p><strong>The base classes are optional.</strong> The contract is structural: any object with the right members
+satisfies it. In <code>oaken.plugins.contracts</code> each kind has a parallel <code>Protocol</code> class — that is
+what the host validates against. The <code>Base*</code> classes just supply safe no-op defaults and
+<code>_default</code>-marked placeholders so the host can tell &quot;not overridden&quot; from &quot;explicitly
+implemented&quot;. Subclassing a base class is the short path; implementing the protocol directly is
+always valid.</p>
+</section>
+<section id="the-six-kinds" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>The six kinds</h2></div>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
 <thead>
 <tr>
@@ -136,6 +203,11 @@
 <td><code>oaken.vector_stores</code></td>
 <td>Stores vectors and finds the nearest ones.</td>
 </tr>
+<tr>
+<td>Cache</td>
+<td><code>oaken.cache_stores</code></td>
+<td>Keeps validated model answers so a repeated question costs no model call.</td>
+</tr>
 </tbody>
 </table></div>
 <p>Providers are the most wanted: each one lets Oaken Mail work with another mail service. Enrichers
@@ -143,7 +215,7 @@ are the ones people will most often write for themselves. Both are meant to be s
 signatures are on the <a href="reference/plugin-contracts.html">Plugin contracts</a> page, which is generated
 from the code.</p>
 </section>
-<section id="a-provider-in-one-screen" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>A provider in one screen</h2></div>
+<section id="a-provider-in-one-screen" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>A provider in one screen</h2></div>
 <p>Subclass <code>BaseProvider</code> and override <code>pull</code>. That is a working, read-only provider.</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">oaken.plugins.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseProvider</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">oaken.plugins.contracts</span><span class="w"> </span><span class="kn">import</span> <span class="n">PullBatch</span><span class="p">,</span> <span class="n">RawMessage</span>
@@ -198,7 +270,7 @@ instance of your class per account, so <code>ctx.account_id</code> tells you whi
 name for your keyring entry.</p>
 <p>You never touch the databases. You return data and core stores it.</p>
 </section>
-<section id="be-accepting-in-what-you-return" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Be accepting in what you return</h2></div>
+<section id="be-accepting-in-what-you-return" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Be accepting in what you return</h2></div>
 <p>You may return the contract's dataclasses, but you do not have to. A dict, a list, a tuple or a
 plain string is coerced into the right type, and mistakes come back as a readable message:</p>
 <div class="code"><pre class="highlight"><code class="language-text">gmail: pull() returned something invalid (messages.0.raw_bytes: Input should be a valid bytes)
@@ -207,7 +279,7 @@ embedder 'mine': embed() returned 3 vectors for 4 texts
 <p>An error fails that one job and is logged. It never stops core. What core passes on to the rest of
 the system is always the strict, frozen type.</p>
 </section>
-<section id="an-embedder" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>An embedder</h2></div>
+<section id="an-embedder" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>An embedder</h2></div>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">oaken.plugins.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseEmbedder</span>
 
 
@@ -222,7 +294,7 @@ the system is always the strict, frozen type.</p>
 <code>generate(request)</code>. The request carries a system instruction and user parts. Mail content is
 always an <code>UntrustedText</code>, never part of the system text.</p>
 </section>
-<section id="an-enricher-in-one-function" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>An enricher in one function</h2></div>
+<section id="an-enricher-in-one-function" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>An enricher in one function</h2></div>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">oaken.plugins.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">enricher</span>
 
@@ -270,7 +342,29 @@ lint test fails a module that builds a request any other way. The first-party en
 off with <code>[plugins.&lt;name&gt;] enabled = false</code>; <code>summary</code> and <code>actions</code> skip bulk mail unless you set
 <code>skip_bulk = false</code>.</p>
 </section>
-<section id="who-controls-a-plugin" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Who controls a plugin</h2></div>
+<section id="a-cache" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>A cache</h2></div>
+<p>The cache holds validated model answers. Core hands it the facts of a question and the cache builds
+the key, so a smarter key or a shared store is a plugin, not a core change. Name it in <code>config.toml</code>
+(<code>[ai] cache = &quot;my-cache&quot;</code>); with nothing named, core keeps its own SQLite cache in <code>raw.db</code>, which
+a plugin never sees.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">oaken.plugins.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseCache</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">oaken.plugins.contracts</span><span class="w"> </span><span class="kn">import</span> <span class="n">CacheEntry</span><span class="p">,</span> <span class="n">CacheStats</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyCache</span><span class="p">(</span><span class="n">BaseCache</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">workspace</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">content_hash</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">prompt_version</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">workspace</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">content_hash</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">prompt_version</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span> <span class="o">...</span>  <span class="c1"># a CacheEntry or None</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">put</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">entry</span><span class="p">):</span> <span class="o">...</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">stats</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">workspace</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span> <span class="o">...</span>  <span class="c1"># a CacheStats</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">clear</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">workspace</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">task</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span> <span class="o">...</span>  <span class="c1"># how many were removed</span>
+</code></pre></div>
+<p><code>model</code> is the model that will answer, never a backend default: two models must not share a key.
+A cache that raises is treated as a miss on <code>get</code> and a lost write on <code>put</code>; the answer still
+comes back. <code>cache_stats</code>, <code>clear_cache</code> and the workspace figures read through the same cache.</p>
+</section>
+<section id="who-controls-a-plugin" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>Who controls a plugin</h2></div>
 <p>You write the functionality; core controls the plugin. A plugin does not offer <code>enable</code>, <code>disable</code>,
 <code>reload</code> or settings commands of its own, and should not (each would be a dead verb on every plugin
 in the CLI). A person turns a plugin on and off, restarts it and edits its settings through core:</p>
@@ -312,7 +406,7 @@ in the CLI). A person turns a plugin on and off, restarts it and edits its setti
 operations are available to any client (<code>plugin_enable</code>, <code>plugin_disable</code>, <code>plugin_reload</code>,
 <code>get_plugin_config</code>, <code>check_plugin_config</code>, <code>set_plugin_config</code>).</p>
 </section>
-<section id="what-a-person-can-say-about-your-plugin" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>What a person can say about your plugin</h2></div>
+<section id="what-a-person-can-say-about-your-plugin" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>What a person can say about your plugin</h2></div>
 <p>Every plugin's <code>[plugins.&lt;name&gt;]</code> table takes two keys that belong to the host, not to you, so your
 <code>ctx.config</code> never contains them:</p>
 <ul>
@@ -331,7 +425,7 @@ validates them against your <code>config_model</code> and then starts a throwawa
 touches the running plugin, so keep <code>start()</code> free of side effects beyond connecting. A secret is
 never accepted in these settings; it belongs in the keyring.</p>
 </section>
-<section id="registering-it" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>Registering it</h2></div>
+<section id="registering-it" class="doc-section"><div class="section-head"><span class="section-num">10</span><h2>Registering it</h2></div>
 <p>A plugin is found through an entry point in its package's <code>pyproject.toml</code>. First-party plugins
 use exactly the same mechanism. The entry-point name is the plugin's name.</p>
 <div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[project.entry-points.</span><span class="s2">"oaken.providers"</span><span class="k">]</span>
@@ -344,7 +438,7 @@ use exactly the same mechanism. The entry-point name is the plugin's name.</p>
 which plugin fills a slot (<code>[sync] provider = &quot;myservice&quot;</code>, <code>[ai] embedder = &quot;ollama&quot;</code>);
 enrichers are all used.</p>
 </section>
-<section id="what-the-host-does" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>What the host does</h2></div>
+<section id="what-the-host-does" class="doc-section"><div class="section-head"><span class="section-num">11</span><h2>What the host does</h2></div>
 <ul>
 <li><strong>Load.</strong> It imports the plugin and checks it: the <code>api_version</code>, that every capability you
 declare has a real method behind it, and that the members of its kind are present. It reports
@@ -361,7 +455,7 @@ the same confirm gate. They start off over MCP and cannot mark mail read.</li>
 </ul>
 <p>Core never stops because a plugin did. <code>start</code>, <code>stop</code> and <code>health</code> are all optional to define.</p>
 </section>
-<section id="extending-core-operations-job-kinds-pipeline-stages-and-scheduled-tasks" class="doc-section"><div class="section-head"><span class="section-num">10</span><h2>Extending core: operations, job kinds, pipeline stages and scheduled tasks</h2></div>
+<section id="extending-core-operations-job-kinds-pipeline-stages-and-scheduled-tasks" class="doc-section"><div class="section-head"><span class="section-num">12</span><h2>Extending core: operations, job kinds, pipeline stages and scheduled tasks</h2></div>
 <p>Beyond the five kinds, a plugin of <strong>any</strong> kind can add capabilities with four optional methods.
 Each is collected from the healthy plugins at start-up, validated like the rest of the contract,
 and given a plugin-scoped context with <strong>no database handle</strong> — you return data, core stores it.
@@ -451,7 +545,7 @@ your kind needs, and register an entry point. The earlier sections are the worke
 <p>Every hook has a conformance suite (next section): <code>JobHandlerContract</code>, <code>PipelineStageContract</code>
 and <code>ScheduledTaskContract</code>, plus the five kind suites.</p>
 </section>
-<section id="testing-it" class="doc-section"><div class="section-head"><span class="section-num">11</span><h2>Testing it</h2></div>
+<section id="testing-it" class="doc-section"><div class="section-head"><span class="section-num">13</span><h2>Testing it</h2></div>
 <p>Run the contract suite against your plugin. It is a set of pytest tests that check the behavior
 the host and the rest of Oaken rely on.</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
@@ -464,7 +558,7 @@ the host and the rest of Oaken rely on.</p>
         <span class="k">return</span> <span class="n">MyEmbedder</span><span class="p">()</span>
 </code></pre></div>
 <p>There is a suite for each kind: <code>ProviderContract</code>, <code>EmbedderContract</code>, <code>LLMContract</code>,
-<code>EnricherContract</code> and <code>VectorStoreContract</code>. A provider test also supplies <code>mailbox_ids</code>, the ids
+<code>EnricherContract</code>, <code>VectorStoreContract</code> and <code>CacheContract</code>. A provider test also supplies <code>mailbox_ids</code>, the ids
 of the mail in its test mailbox. If you prefer one call, <code>await verify_embedder(MyEmbedder)</code> runs
 every rule and raises a single error listing everything that failed.</p>
 <p>For the extension hooks there are <code>JobHandlerContract</code>, <code>PipelineStageContract</code> and
@@ -473,10 +567,10 @@ every rule and raises a single error listing everything that failed.</p>
 host does at load.</p>
 <p><code>oaken.testing.fakes</code> has an in-memory fake of every kind (<code>FakeProvider</code> with a scriptable
 mailbox and failure injection, <code>FakeEmbedder</code>, <code>FakeLLM</code> that records every request,
-<code>FakeEnricher</code>, <code>InMemoryVectorStore</code>). Use them to test code that uses a plugin, with no network,
+<code>FakeEnricher</code>, <code>InMemoryVectorStore</code>, <code>FakeCache</code>). Use them to test code that uses a plugin, with no network,
 no model and no real mail.</p>
 </section>
-<section id="a-first-party-example-ollama" class="doc-section"><div class="section-head"><span class="section-num">12</span><h2>A first-party example: Ollama</h2></div>
+<section id="a-first-party-example-ollama" class="doc-section"><div class="section-head"><span class="section-num">14</span><h2>A first-party example: Ollama</h2></div>
 <p><code>oaken_ollama</code> (an embedder and an LLM backend) is the reference for anything that talks to a
 model server. It reads its own <code>[plugins.&lt;entry-point-name&gt;]</code> table through <code>ctx.config</code> (here
 <code>base_url</code>, <code>model</code>, <code>keep_alive</code>, <code>timeout</code>, <code>max_retries</code>, <code>backoff</code>, <code>batch_size</code>), sets
@@ -485,7 +579,7 @@ model server. It reads its own <code>[plugins.&lt;entry-point-name&gt;]</code> t
 points to offer two differently configured instances. See <a href="architecture/ai-safety.html">prompt safety and
 workspaces</a>.</p>
 </section>
-<section id="a-first-party-example-gmail" class="doc-section"><div class="section-head"><span class="section-num">13</span><h2>A first-party example: Gmail</h2></div>
+<section id="a-first-party-example-gmail" class="doc-section"><div class="section-head"><span class="section-num">15</span><h2>A first-party example: Gmail</h2></div>
 <p><code>oaken_gmail</code> is the reference for a provider that has its own auth. It keeps its credentials in the
 OS keyring (never in <code>ctx.config</code>), renews them through a <code>TokenManager</code>, reports a dead
 credential as an unhealthy <code>health()</code> plus a plugin event instead of crashing, and overrides
@@ -501,7 +595,7 @@ through your own SMTP server</a>.</p>
 interrupted sync resumes and a renumbered folder is read again, and refuses any connection that is
 not encrypted. See <a href="providers/imap.html">Connect any IMAP server</a>.</p>
 </section>
-<section id="plugin-events" class="doc-section"><div class="section-head"><span class="section-num">14</span><h2>Plugin events</h2></div>
+<section id="plugin-events" class="doc-section"><div class="section-head"><span class="section-num">16</span><h2>Plugin events</h2></div>
 <p>Core announces what happens on an event bus, and a plugin can announce its own. Subclass
 <code>PluginEvent</code>, add plain-data fields, and publish it from <code>start()</code> or anywhere you hold the context:</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
@@ -532,7 +626,7 @@ subscription:</p>
 and skipped without affecting core or other listeners. The host ends every subscription when the
 plugin stops.</p>
 </section>
-<section id="not-sandboxed" class="doc-section"><div class="section-head"><span class="section-num">15</span><h2>Not sandboxed</h2></div>
+<section id="not-sandboxed" class="doc-section"><div class="section-head"><span class="section-num">17</span><h2>Not sandboxed</h2></div>
 <p>Plugins run in the same process as core, with full access to the machine and to whatever core can
 reach. They are not sandboxed in version 1. The contract keeps the code tidy and the data
 boundaries clear; it does not contain a hostile plugin. Only install plugins you trust, as you

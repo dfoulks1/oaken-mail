@@ -39,6 +39,7 @@ from oaken.plugins.adapt import (
     to_vectors,
 )
 from oaken.plugins.contracts import (
+    CacheEntry,
     EnrichInput,
     LLMRequest,
     PluginContext,
@@ -341,6 +342,48 @@ async def verify_vector_store(make: Callable[[], Any]) -> None:
     await _verify(STORE_CHECKS, make, "vector_store")
 
 
+# -- Cache -------------------------------------------------------------------------------------
+def _ckey(cache: Any, model: str = "m-a", task: str = "summarize") -> tuple[str, ...]:
+    return cache.key(workspace="w", task=task, content_hash="h", model=model, prompt_version="v1")  # type: ignore[no-any-return]
+
+
+async def check_cache_valid(cache: Any) -> None:
+    _valid("cache_store", cache)
+
+
+async def check_cache_round_trip(cache: Any) -> None:
+    entry = CacheEntry('{"a": 1}', 3, 4)
+    assert await cache.get(_ckey(cache)) is None, "a new cache held an answer"
+    await cache.put(_ckey(cache), entry)
+    assert await cache.get(_ckey(cache)) == entry, "put then get did not return the entry"
+
+
+async def check_cache_key_carries_the_model(cache: Any) -> None:
+    await cache.put(_ckey(cache, "m-a"), CacheEntry("{}", 1, 1))
+    assert await cache.get(_ckey(cache, "m-b")) is None, "two models share one cache entry"
+
+
+async def check_cache_stats_and_clear(cache: Any) -> None:
+    await cache.put(_ckey(cache, task="summarize"), CacheEntry("{}", 1, 1))
+    await cache.put(_ckey(cache, task="triage"), CacheEntry("{}", 1, 1))
+    assert (await cache.stats()).entries == 2
+    assert await cache.clear(task="triage") == 1
+    assert await cache.clear() == 1
+    assert (await cache.stats()).entries == 0
+
+
+CACHE_CHECKS = (
+    check_cache_valid,
+    check_cache_round_trip,
+    check_cache_key_carries_the_model,
+    check_cache_stats_and_clear,
+)
+
+
+async def verify_cache(make: Callable[[], Any]) -> None:
+    await _verify(CACHE_CHECKS, make, "cache_store")
+
+
 # -- pytest mixins -----------------------------------------------------------------------------
 def _abstract(name: str) -> Any:
     @pytest.fixture
@@ -435,6 +478,28 @@ class EnricherContract:
     async def test_output(self, enricher: Any, sample: EnrichInput) -> None:
         async with running(enricher, "enricher"):
             await check_enricher_output(enricher, sample)
+
+
+class CacheContract:
+    """Override ``cache`` with a fresh, empty cache."""
+
+    cache = _abstract("cache")
+
+    async def test_is_valid(self, cache: Any) -> None:
+        async with running(cache, "cache_store"):
+            await check_cache_valid(cache)
+
+    async def test_round_trip(self, cache: Any) -> None:
+        async with running(cache, "cache_store"):
+            await check_cache_round_trip(cache)
+
+    async def test_key_carries_the_model(self, cache: Any) -> None:
+        async with running(cache, "cache_store"):
+            await check_cache_key_carries_the_model(cache)
+
+    async def test_stats_and_clear(self, cache: Any) -> None:
+        async with running(cache, "cache_store"):
+            await check_cache_stats_and_clear(cache)
 
 
 class VectorStoreContract:

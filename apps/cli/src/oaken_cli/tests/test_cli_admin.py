@@ -153,7 +153,10 @@ async def test_vacuum_queues_one_job_and_a_second_run_joins_it(cli: Cli) -> None
 async def seed(cli: Cli) -> None:
     cache = cli.ops.svc.need_llm().cache
     for i, task in enumerate(("summary", "summary", "triage")):
-        await cache.put("default", task, f"h{i}", "m", "v1", CacheEntry("{}", 1, 1))
+        key = cache.key(
+            workspace="default", task=task, content_hash=f"h{i}", model="m", prompt_version="v1"
+        )
+        await cache.put(key, CacheEntry("{}", 1, 1))
     await cli.ops.svc.need_usage().record("enrich", "m", tokens_in=5, cached=True)
     await cli.ops.svc.need_usage().record("enrich", "m", tokens_in=5, cached=False)
 
