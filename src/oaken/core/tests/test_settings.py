@@ -113,3 +113,15 @@ def test_the_default_config_is_written_once_and_never_over_a_file() -> None:
     first.write_text("[api]\nport = 1234\n", encoding="utf-8")
     assert ensure_default_config() is None
     assert first.read_text(encoding="utf-8") == "[api]\nport = 1234\n"
+
+
+def test_a_group_or_world_writable_config_is_refused(tmp_path: Path) -> None:
+    # config.toml controls capabilities; a file other users can write is a door around mcp="never".
+    # Group-writable is tolerated (umask 002 is common); world-writable is the real hole.
+    cfg = tmp_path / CONFIG_FILE
+    cfg.write_text("[api]\nport = 8123\n", encoding="utf-8")
+    cfg.chmod(0o664)  # group-writable: allowed
+    assert Settings.load(config_file=cfg).api.port == 8123
+    cfg.chmod(0o666)  # world-writable: refused
+    with pytest.raises(ConfigError, match="world-writable"):
+        Settings.load(config_file=cfg)

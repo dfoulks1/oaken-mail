@@ -13,7 +13,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from oaken.core.clock import parse_ts
 from oaken.core.errors import Conflict, StorageError
 from oaken.core.maintenance import check_room, enqueue_vacuum, file_bytes
 from oaken.core.operations.builtin.mail import QueuedOutput
@@ -110,33 +109,18 @@ class CacheStats(BaseModel):
     mcp="never",
 )
 async def cache_stats(ctx: OpContext, inp: Empty) -> CacheStats:
-    db = ctx.svc.raw.db
-    total = await db.fetchone(
-        "SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(result_json)), 0) AS b,"
-        " MIN(created_at) AS oldest FROM llm_cache"
-    )
-    by_task = {
-        r["task"]: int(r["n"])
-        for r in await db.fetchall("SELECT task, COUNT(*) AS n FROM llm_cache GROUP BY task")
-    }
-    versions = [
-        r["prompt_version"]
-        for r in await db.fetchall(
-            "SELECT DISTINCT prompt_version FROM llm_cache ORDER BY prompt_version"
-        )
-    ]
-    calls = await db.fetchone(
+    stats = await ctx.svc.cache().stats()
+    calls = await ctx.svc.raw.db.fetchone(
         "SELECT COALESCE(SUM(cached = 1), 0) AS hits, COALESCE(SUM(cached = 0), 0) AS misses"
         " FROM ai_usage"
     )
     hits, misses = int(calls["hits"]), int(calls["misses"])  # type: ignore[index]
-    oldest = total["oldest"] if total else None
     return CacheStats(
-        entries=int(total["n"]),  # type: ignore[index]
-        bytes=int(total["b"]),  # type: ignore[index]
-        by_task=by_task,
-        prompt_versions=versions,
-        oldest=parse_ts(oldest) if oldest else None,
+        entries=stats.entries,
+        bytes=stats.bytes,
+        by_task=stats.by_task,
+        prompt_versions=list(stats.prompt_versions),
+        oldest=stats.oldest,
         hits=hits,
         misses=misses,
         hit_rate=(hits / (hits + misses)) if hits + misses else None,
@@ -162,11 +146,29 @@ class ClearCacheOutput(BaseModel):
     mcp="never",
 )
 async def clear_cache(ctx: OpContext, inp: ClearCacheInput) -> ClearCacheOutput:
-    if inp.task:
-        deleted = await ctx.svc.raw.db.execute("DELETE FROM llm_cache WHERE task = ?", (inp.task,))
-    else:
-        deleted = await ctx.svc.raw.db.execute("DELETE FROM llm_cache")
-    return ClearCacheOutput(deleted=deleted)
+    return ClearCacheOutput(deleted=await ctx.svc.cache().clear(task=inp.task))
+
+
+# -- the usage record --------------------------------------------------------------------------
+class ResetUsageOutput(BaseModel):
+    deleted: int  # rows cleared across the usage tables
+
+
+@operation(
+    "reset_usage",
+    "Clear the token-usage record (the figures the stats page shows). Model calls and the context "
+    "savings both go; mail, the index and the enrichment cache are untouched. The accounting starts "
+    "fresh from the next call.",
+    permission="mutate",
+    input=Empty,
+    output=ResetUsageOutput,
+    mcp="never",
+)
+async def reset_usage(ctx: OpContext, inp: Empty) -> ResetUsageOutput:
+    db = ctx.svc.raw.db
+    deleted = await db.execute("DELETE FROM ai_usage")
+    deleted += await db.execute("DELETE FROM context_savings")
+    return ResetUsageOutput(deleted=deleted)
 
 
 # -- the event history -------------------------------------------------------------------------
@@ -207,5 +209,6 @@ OPERATIONS: tuple[AnyOperation, ...] = (
     vacuum,
     cache_stats,
     clear_cache,
+    reset_usage,
     events_tail,
 )

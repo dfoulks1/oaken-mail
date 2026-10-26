@@ -128,6 +128,114 @@
     if (btn) act("plugin_reload", btn.getAttribute("data-plugin-reload"), null);
   });
 
+  // --- AI & Models tab: clear usage stats, and revoke an agent (same idiom as the plugin tab) ---
+  function aiSay(kind, msg) {
+    var el = document.getElementById("ai-result");
+    if (!el) return;
+    el.className = "alert alert-" + kind + " mb-3 rounded small";
+    el.textContent = msg;
+  }
+  function post(path, body) {
+    return fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body || {})
+    }).then(function (r) {
+      return r.json().then(function (b) { return { ok: r.ok, body: b }; });
+    });
+  }
+  document.addEventListener("click", function (ev) {
+    var reset = ev.target.closest && ev.target.closest("[data-reset-usage]");
+    if (reset) {
+      if (!window.confirm("Clear all token-usage figures? Mail, the index and the cache are untouched.")) return;
+      aiSay("secondary", "clearing usage…");
+      post("/stats/reset-usage").then(function (res) {
+        if (!res.ok) { aiSay("danger", (res.body && res.body.message) || "could not clear usage"); return; }
+        aiSay("success", "usage cleared (" + (res.body.deleted || 0) + " rows); the table updates on the next refresh.");
+      }).catch(function () { aiSay("danger", "core did not answer"); });
+      return;
+    }
+    var rev = ev.target.closest && ev.target.closest("[data-revoke-agent]");
+    if (rev) {
+      var id = rev.getAttribute("data-revoke-agent");
+      if (!window.confirm("Revoke this agent? The jobs it holds return to the queue.")) return;
+      aiSay("secondary", "revoking…");
+      post("/stats/revoke-agent", { agent_id: id }).then(function (res) {
+        if (!res.ok) { aiSay("danger", (res.body && res.body.message) || "could not revoke"); return; }
+        aiSay(res.body.revoked ? "success" : "warning", res.body.revoked ? "agent revoked; it updates on the next refresh." : "it was already revoked.");
+      }).catch(function () { aiSay("danger", "core did not answer"); });
+    }
+  });
+
+  // --- AI & Models tab: enricher config forms and the model picker (reuse post/aiSay) ---
+  function fieldValue(el) {
+    var t = el.getAttribute("data-field-type");
+    if (t === "boolean") return el.checked;
+    if (t === "number") return el.value === "" ? null : Number(el.value);
+    return el.value;
+  }
+  document.addEventListener("submit", function (ev) {
+    var enr = ev.target.closest && ev.target.closest("[data-enricher-save]");
+    if (enr) {
+      ev.preventDefault();
+      var name = enr.getAttribute("data-enricher-save");
+      var config = {};
+      enr.querySelectorAll("[data-field-type]").forEach(function (el) {
+        config[el.getAttribute("name")] = fieldValue(el);
+      });
+      aiSay("secondary", "saving " + name + "…");
+      post("/stats/enricher-config", { plugin: name, config: config }).then(function (res) {
+        if (!res.ok || (res.body && res.body.ok === false)) {
+          aiSay("danger", (res.body && (res.body.error || res.body.message)) || "could not save " + name);
+          return;
+        }
+        aiSay("success", name + " settings saved to config.toml; they apply on the next enrich job.");
+      }).catch(function () { aiSay("danger", "core did not answer"); });
+      return;
+    }
+    var mdl = ev.target.closest && ev.target.closest("[data-model-save]");
+    if (mdl) {
+      ev.preventDefault();
+      var plugin = mdl.getAttribute("data-model-save");
+      var sel = mdl.querySelector("[name=model]");
+      var model = sel ? sel.value : "";
+      aiSay("secondary", "setting model to " + model + " and reloading…");
+      post("/stats/model", { plugin: plugin, model: model }).then(function (res) {
+        if (!res.ok || (res.body && res.body.ok === false)) {
+          aiSay("danger", (res.body && (res.body.error || res.body.message)) || "could not set the model");
+          return;
+        }
+        aiSay("success", "model set to " + model + "; core is reloading (watch /v1/health, the port may change).");
+      }).catch(function () { aiSay("danger", "core did not answer"); });
+    }
+  });
+
+  // --- Reference tab: the MCP exposure switch (same revert-on-failure idiom as the plugin switch) ---
+  function exposeSay(kind, msg) {
+    var el = document.getElementById("expose-result");
+    if (!el) return;
+    el.className = "alert alert-" + kind + " mb-3 rounded small";
+    el.textContent = msg;
+  }
+  document.addEventListener("change", function (ev) {
+    var box = ev.target.closest && ev.target.closest("[data-op-switch]");
+    if (!box) return;
+    var name = box.getAttribute("data-op-switch");
+    exposeSay("secondary", (box.checked ? "exposing " : "hiding ") + name + "…");
+    post("/stats/expose", { name: name, mcp: box.checked }).then(function (res) {
+      if (!res.ok) {
+        exposeSay("danger", (res.body && res.body.message) || "could not change exposure");
+        box.checked = !box.checked;  // it did not happen: put the switch back
+        return;
+      }
+      exposeSay("success", name + " is now " + (box.checked ? "exposed to" : "hidden from") +
+        " MCP clients (config.toml written); it takes effect on the next tool list.");
+    }).catch(function () {
+      exposeSay("danger", "core did not answer");
+      box.checked = !box.checked;
+    });
+  });
+
   function tick() {
     fetch("/stats.json", { headers: { Accept: "application/json" } })
       .then(function (r) { return r.ok ? r.json() : null; })

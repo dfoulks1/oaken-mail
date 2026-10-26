@@ -37,6 +37,7 @@ from oaken.ingest.quarantine import quarantine_dir
 from oaken.ingest.schedule import SyncService
 from oaken.mail.filtering import FilterEngine, scripts_dir
 from oaken.plugins.accounts import AccountProviders
+from oaken.plugins.contracts import Cache
 from oaken.plugins.host import PluginHost
 from oaken.plugins.jobs import register_plugin_jobs, seed_plugin_schedules
 from oaken.readstate import AuditLog, ReadState
@@ -124,6 +125,7 @@ class Core:
         self.llm = LLMService(
             LLMCache(self.raw_db, clock), self.usage, Workspaces(s),
             lambda name: self.host.llm_backend(name), s,
+            cache_plugin=self._cache_plugin,
         )  # fmt: skip
         self.host.llm_access = WorkspaceLLM(self.llm, self.raw)
         engine = FilterEngine(
@@ -171,6 +173,9 @@ class Core:
         registry.attach_plugins(lambda: plugin_operations(self.host))
         self.registry = registry
         self.client = CoreClient(registry, self.services)
+        # config.toml is the source of truth for MCP exposure: seed the store from [mcp.allowed]
+        # (no audit, config is not an actor). Runs on first start and on every SIGHUP rebuild.
+        await self.client.exposure.seed(s.mcp.allowed, registry)
         self.api = Api(
             self.client,
             token=load_or_create_token(self.token_path),
@@ -196,6 +201,10 @@ class Core:
         self._port = 0
         self._lifecycle = Lifecycle(self._service_units(grace=s.api.shutdown_grace_seconds))
         self._open = True
+
+    def _cache_plugin(self) -> Cache | None:
+        """The cache plugin `[ai] cache` names, or None to keep core's own SQLite cache."""
+        return self.host.cache() if self.host.active_name("cache_store") else None
 
     def _service_units(self, *, grace: float) -> list[ServiceUnit]:
         """The stages, in start order. Stop runs them in reverse. The names are stable (``host``,

@@ -65,7 +65,7 @@ class _Slow:
         self.calls: list[str] = []
         self.hold = asyncio.Event()
 
-    async def generate(self, request: LLMRequest) -> LLMResponse:
+    async def generate(self, request: LLMRequest, *, model: str | None = None) -> LLMResponse:
         self.calls.append(request.system[:1])
         await self.hold.wait()
         return LLMResponse(text="{}", data={})

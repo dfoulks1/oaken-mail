@@ -112,6 +112,7 @@ class TriageEnricher(LLMEnricher):
             content_hash=digest(sender, msg.subject.unwrap(), body),
             account_id=msg.account_id,
             message_id=msg.message_id,
+            model=self.model_for(),
         )
         return EnrichOutput(
             TriageResult(

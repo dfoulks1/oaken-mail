@@ -5,6 +5,8 @@ rule for mail that nobody wrote to the reader."""
 import hashlib
 from typing import ClassVar
 
+from pydantic import BaseModel, ConfigDict
+
 from oaken.core.errors import PluginError
 from oaken.core.untrusted import UntrustedText
 from oaken.mail.clean import bulk_signals
@@ -48,11 +50,26 @@ def fit(text: str, budget: int, tokenizer: Tokenizer) -> tuple[str, bool]:
         keep = int(keep * 0.85)
 
 
+class EnricherConfig(BaseModel):
+    """The ``[plugins.<name>]`` settings every model-backed enricher shares. Each enricher may
+    subclass this to add its own. ``model`` is declared but not yet honored per-enricher (every
+    enricher still uses the one shared backend); that waits on the many-model LLM contract."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # None: use the enricher class's own ``skip_bulk`` default. A value overrides it.
+    skip_bulk: bool | None = None
+    # None: use the backend's default model. A value runs this enricher on that model, if the
+    # backend has it (checked against available_models(); an unknown name warns and falls back).
+    model: str | None = None
+
+
 class LLMEnricher(BaseEnricher):
     """Base of the model-backed enrichers: ``self.llm`` and ``self.tokenizer`` after ``start``."""
 
     needs_llm = True
     skip_bulk: ClassVar[bool] = False  # a default, overridden by [plugins.<name>] skip_bulk
+    config_model = EnricherConfig
 
     llm: LLMAccess
     tokenizer: Tokenizer
@@ -68,7 +85,13 @@ class LLMEnricher(BaseEnricher):
         return llm
 
     def skips_bulk(self) -> bool:
-        return bool(self.ctx.config.get("skip_bulk", self.skip_bulk))
+        chosen = self.config.skip_bulk if self.config is not None else None
+        return self.skip_bulk if chosen is None else chosen
+
+    def model_for(self) -> str | None:
+        """The model this enricher is configured to run, or None for the backend default. Validity
+        is checked in the LLM service (which holds the backend); an unknown model falls back."""
+        return self.config.model if self.config is not None else None
 
     def budget(self) -> int:
         return int(self.ctx.settings.ai.enrich_max_input_tokens)

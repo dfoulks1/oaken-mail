@@ -93,7 +93,7 @@ class NotAnAnswerLLM(BaseLLMBackend):
     model_id = "broken"
     context_window = 10
 
-    async def generate(self, request: LLMRequest) -> Any:
+    async def generate(self, request: LLMRequest, *, model: str | None = None) -> Any:
         return 42
 
 

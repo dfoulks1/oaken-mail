@@ -63,6 +63,23 @@ async def test_nothing_the_user_sets_can_widen_what_code_forbids(ops: Ops) -> No
         await ops.call("get_raw", {"message_id": "x"}, agent())
 
 
+async def test_seed_from_config_sets_exposure_without_audit_and_the_file_wins(ops: Ops) -> None:
+    store = ops.client.exposure
+    audit_before = len(await ops.svc.audit.recent(50))
+    # a known op, a plugin group, an unknown key and a never op all in one file
+    await store.seed({"ask": True, "greeter": True, "nope": True, "get_raw": True}, ops.registry)
+    seen = await names_for(ops)
+    assert "ask" in seen  # the op key took
+    assert {"greeter.hello", "greeter.rename"} <= seen  # the plugin group took
+    assert "greeter.secret" not in seen  # never: the plugin's own ceiling holds
+    assert "get_raw" not in seen  # a never op key is ignored, nothing can expose it
+    assert len(await ops.svc.audit.recent(50)) == audit_before  # seeding is not an action: no audit
+    # the file wins: a re-seed without 'ask' drops it (config rows are replaced, not merged)
+    await store.seed({"greeter": True}, ops.registry)
+    assert "ask" not in await names_for(ops)
+    assert {"greeter.hello"} <= await names_for(ops)
+
+
 async def test_an_agent_cannot_change_what_it_may_call(ops: Ops) -> None:
     for caller in (agent(), agent("another")):
         with pytest.raises(NotExposed):

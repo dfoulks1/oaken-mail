@@ -28,11 +28,11 @@ class Direct:
 
     async def generate_cached(
         self, builder: Any, *parts: UntrustedText, content_hash: str,
-        account_id: str | None = None, message_id: str | None = None,
+        account_id: str | None = None, message_id: str | None = None, model: str | None = None,
     ) -> Any:  # fmt: skip
         return await self.service.generate_cached(
             builder, *parts, content_hash=content_hash, account_id=account_id,  # type: ignore[arg-type]
-            message_id=message_id,  # type: ignore[arg-type]
+            message_id=message_id, model=model,  # type: ignore[arg-type]
         )  # fmt: skip
 
 

@@ -28,6 +28,7 @@ from oaken.plugins.contracts import (
     CAPABILITIES,
     ENTRY_POINT_GROUPS,
     PLUGIN_KINDS,
+    Cache,
     Embedder,
     Enricher,
     Health,
@@ -839,6 +840,7 @@ class PluginHost:
             "embedder": s.ai.embedder,
             "llm_backend": s.ai.llm_backend,
             "vector_store": s.ai.vector_store,
+            "cache_store": s.ai.cache or None,  # empty: core's own SQLite cache
         }.get(kind)
 
     def _usable(self, kind: PluginKind) -> dict[str, _Record]:
@@ -871,6 +873,9 @@ class PluginHost:
 
     def vector_store(self, name: str | None = None) -> VectorStore:
         return cast(VectorStore, self._get("vector_store", name))
+
+    def cache(self, name: str | None = None) -> Cache:
+        return cast(Cache, self._get("cache_store", name))
 
     def enrichers(self) -> list[Enricher]:
         """Every healthy enricher, in name order."""

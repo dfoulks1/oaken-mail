@@ -126,6 +126,7 @@ class ActionsEnricher(LLMEnricher):
             content_hash=digest(msg.subject.unwrap(), body),
             account_id=msg.account_id,
             message_id=msg.message_id,
+            model=self.model_for(),
         )
         full = msg.body.unwrap()
         dropped = 0

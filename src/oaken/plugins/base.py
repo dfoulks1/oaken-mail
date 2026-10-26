@@ -19,14 +19,16 @@ checks the same rules either way (``oaken.plugins.validate``).
 from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Sequence
 from typing import Any, ClassVar, Literal, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
-from oaken.core.errors import InvalidInput, OakenError
+from oaken.core.errors import InvalidInput, OakenError, PluginError
 from oaken.plugins.adapt import to_enrich_output
 from oaken.plugins.authorize import Authorizations
 from oaken.plugins.contracts import (
     CAPABILITIES,
     PLUGIN_API_VERSION,
+    CacheEntry,
+    CacheStats,
     EnrichInput,
     EnrichOutput,
     Health,
@@ -122,13 +124,27 @@ class _Base:
     # knows nothing about any one plugin, so what is specific to it is said here.
     setup_help: ClassVar[str] = ""
     config_example: ClassVar[str] = ""
+    # A pydantic model of this plugin's ``[plugins.<name>]`` settings. Declare it and ``start``
+    # parses the table into ``self.config`` (a typed, validated instance), and the host publishes
+    # its JSON Schema (``host.config_schema``) so the console can render a settings form. Leave it
+    # None and ``self.config`` is None; the plugin reads ``ctx.config`` (a dict) itself.
+    config_model: ClassVar[type[BaseModel] | None] = None
     # Whether the plugin runs when its table does not say ``enabled``. A plugin that should be
     # opt-in (it costs money, or reaches a network) sets this False; ``enabled = true`` turns it on.
     enabled_default: ClassVar[bool] = True
     ctx: PluginContext  # set by start()
+    config: Any = None  # the parsed config_model instance, set by start() when config_model is set
 
     async def start(self, ctx: PluginContext) -> None:
         self.ctx = ctx
+        if self.config_model is not None:
+            try:
+                self.config = self.config_model.model_validate(ctx.config)
+            except ValidationError as exc:
+                fields = ", ".join(str(e["loc"][0]) for e in exc.errors() if e["loc"])
+                raise PluginError(
+                    f"{ctx.name}: invalid [plugins.{ctx.name}] settings ({fields})"
+                ) from None
 
     async def stop(self) -> None:
         return None
@@ -306,8 +322,15 @@ class BaseLLMBackend(_Base):
     locality: str = "remote"
 
     @_default
-    async def generate(self, request: LLMRequest) -> LLMResponse:
+    async def generate(self, request: LLMRequest, *, model: str | None = None) -> LLMResponse:
         raise NotImplementedError
+
+    async def available_models(self) -> list[str]:
+        """The model ids this backend can run right now, for a picker to offer. The default is the
+        one model it was started with; a backend that can enumerate (Ollama's ``/api/tags``)
+        overrides this to list what is installed. Offer only what is available: never a name the
+        backend cannot serve."""
+        return [self.model_id] if self.model_id else []
 
 
 class BaseEnricher(_Base):
@@ -347,6 +370,34 @@ class BaseVectorStore(_Base):
 
     @_default
     async def stats(self) -> VectorStats:
+        raise NotImplementedError
+
+
+class BaseCache(_Base):
+    """The LLM answer cache. Override all five members; ``key`` may return any tuple of strings."""
+
+    kind: ClassVar[PluginKind] = "cache_store"
+
+    @_default
+    def key(
+        self, *, workspace: str, task: str, content_hash: str, model: str, prompt_version: str
+    ) -> tuple[str, ...]:
+        raise NotImplementedError
+
+    @_default
+    async def get(self, key: tuple[str, ...]) -> CacheEntry | None:
+        raise NotImplementedError
+
+    @_default
+    async def put(self, key: tuple[str, ...], entry: CacheEntry) -> None:
+        raise NotImplementedError
+
+    @_default
+    async def stats(self, workspace: str | None = None) -> CacheStats:
+        raise NotImplementedError
+
+    @_default
+    async def clear(self, workspace: str | None = None, task: str | None = None) -> int:
         raise NotImplementedError
 
 

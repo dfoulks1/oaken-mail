@@ -6,7 +6,9 @@ are an error, in the file and in code. No secrets live here: tokens belong in th
 """
 
 import ipaddress
+import os
 import re
+import stat
 from pathlib import Path
 from typing import Any, Literal
 
@@ -23,6 +25,23 @@ from oaken.core import paths
 from oaken.core.errors import ConfigError
 
 CONFIG_FILE = "config.toml"
+
+
+def _refuse_if_writable(path: Path) -> None:
+    """config.toml is the source of truth for capabilities (MCP exposure, enrichers). A file any
+    other user can write is a door around every ``mcp="never"`` control, so refuse a world-writable
+    one. Group-writable is left alone: it is common under a umask of 002 and usually benign (a
+    shared dev group), and refusing it would block normal setups. World-writable is the unambiguous
+    hole. Missing file is fine (defaults, or ensure_default_config writes it 0o600)."""
+    try:
+        mode = os.stat(path).st_mode
+    except OSError:
+        return  # no file: defaults apply, nothing to guard
+    if mode & stat.S_IWOTH:
+        raise ConfigError(
+            f"{path} is world-writable ({stat.filemode(mode)}); it controls what MCP clients may "
+            f"do, so it must not be writable by other users. Fix it with: chmod o-w {path}"
+        )
 
 
 class _Section(BaseModel):
@@ -63,6 +82,8 @@ class AISettings(_Section):
     # Longest model answer, in characters, that is accepted before it counts as invalid output.
     max_output_chars: int = Field(default=64 * 1024, ge=256)
     vector_store: str = "sqlite-vec"
+    # The LLM answer cache plugin (entry-point name). Empty keeps core's own SQLite cache.
+    cache: str = ""
     # Most tokens of one message's cleaned text an LLM enricher sends. A longer message keeps its
     # head and tail with a marker between, and the result says ``truncated``.
     enrich_max_input_tokens: int = Field(default=3000, ge=200)
@@ -118,6 +139,10 @@ class JobsSettings(_Section):
     # Per-kind cap on jobs running at once, e.g. {"embed": 1, "enrich": 1} for one local GPU.
     kind_limits: dict[str, int] = Field(default_factory=dict)
     max_result_bytes: int = Field(default=256 * 1024, ge=1024)
+    # A handler that runs longer than this is cancelled and the job retried, so one wedged call
+    # (a hung model request) never holds its worker forever and freezes the queue. A kind may set
+    # its own in register(); this is the fallback. 0 disables the guard.
+    handler_timeout_seconds: float = Field(default=600.0, ge=0)
 
 
 class SwarmSettings(_Section):
@@ -338,6 +363,20 @@ class OperationsSettings(_Section):
     proposal_changes_shown: int = Field(default=50, ge=1, le=1000)
 
 
+class McpSettings(_Section):
+    """Which operations MCP clients may call, from the file so Oaken runs headless.
+
+    ``allowed`` is the user-choice layer, not the code ceiling. The registry's ``mcp="never"`` is
+    an immovable floor no entry here can lift; a key is an operation name (``get_message``) or a
+    plugin name (``gmail``, every op it offers), mapped to true (allow) or false (deny). An
+    operation's own line beats its plugin's line. A key naming an unknown or ``never`` operation is
+    warned about and ignored on load, a typo must never brick a headless start. The file is the
+    source of truth; the ``operation_settings`` table is the live-read cache seeded from here.
+    """
+
+    allowed: dict[str, bool] = Field(default_factory=dict)
+
+
 class UISettings(_Section):
     # How long a message must stay presented before core marks it read. Core owns the timer, so
     # every client behaves the same.
@@ -440,6 +479,7 @@ class Settings(BaseSettings):
     sync: SyncSettings = SyncSettings()
     read_state: ReadStateSettings = ReadStateSettings()
     operations: OperationsSettings = OperationsSettings()
+    mcp: McpSettings = McpSettings()
     ui: UISettings = UISettings()
     api: APISettings = APISettings()
     log: LogSettings = LogSettings()
@@ -461,6 +501,7 @@ class Settings(BaseSettings):
     def load(cls, config_file: Path | None = None) -> "Settings":
         """Defaults, then ``config.toml`` (in ``config_dir()`` unless given), then ``OAKEN_*``."""
         path = config_file or paths.config_dir() / CONFIG_FILE
+        _refuse_if_writable(path)
 
         class _Loaded(cls):  # type: ignore[valid-type,misc]
             model_config = SettingsConfigDict(
@@ -502,9 +543,13 @@ def _toml_value(value: Any) -> str:
     return str(value)
 
 
-def default_config_text() -> str:
+def default_config_text(mcp_menu: list[tuple[str, str | None, bool]] | None = None) -> str:
     """A ``config.toml`` with every setting at its default, commented out, built from the models
-    so it cannot drift from the code. Uncomment a line to change it."""
+    so it cannot drift from the code. Uncomment a line to change it.
+
+    ``mcp_menu`` (name, plugin, mcp_exposed) for each togglable operation, from the registry, which
+    this module must not import, produces the commented ``[mcp.allowed]`` menu. Each operation and
+    each plugin group is shown at its code default so a reader can uncomment and flip it."""
     lines = [
         "# Oaken Mail configuration. Every line below shows the default and is commented out:",
         "# uncomment and edit what you want to change, then reload (or use the /config page).",
@@ -521,7 +566,43 @@ def default_config_text() -> str:
                 continue
             lines.append(f"# {key} = {_toml_value(value)}")
         lines.append("")
+    if mcp_menu:
+        lines += _mcp_allowed_menu(mcp_menu)
     return "\n".join(lines)
+
+
+def _mcp_allowed_menu(menu: list[tuple[str, str | None, bool]]) -> list[str]:
+    """The commented ``[mcp.allowed]`` block: which operations MCP clients may call. A key is an
+    operation name or a plugin name (every op it offers); an op's own line beats its plugin's.
+    ``mcp="never"`` operations are not listed (no entry can expose them). File wins on reload."""
+    lines = [
+        "# [mcp.allowed]",
+        "# Which operations MCP clients may call, from the file so Oaken runs headless.",
+        "# Key = an operation name, or a plugin name (all its operations). true allows, false denies.",
+        "# An operation's own line beats its plugin's line. Never-exposable operations are omitted.",
+        "# Each line shows the code default; uncomment to override. Regenerate with: oaken mcp scaffold",
+    ]
+    plugins = sorted({p for _, p, _ in menu if p is not None})
+    for plugin in plugins:
+        lines.append(f"# {_toml_value(plugin)[1:-1]} = true  # all of {plugin}")
+    for name, _plugin, exposed in sorted(menu):
+        lines.append(f"# {name} = {_toml_value(exposed)}")
+    lines.append("")
+    return lines
+
+
+def mcp_allowed_menu_from_registry() -> list[tuple[str, str | None, bool]]:
+    """(name, plugin, mcp_exposed) for every togglable operation in the core registry, for the
+    commented ``[mcp.allowed]`` menu. Lazy import: settings must not depend on the registry at
+    module load. Plugin operations are not here (plugins load later); ``oaken mcp scaffold``
+    regenerates the menu against the live registry once plugins are up."""
+    from oaken.core.operations.builtin import core_registry
+
+    return [
+        (op.name, op.plugin, op.mcp_exposed)
+        for op in core_registry().all()
+        if op.mcp_allowed  # omit mcp="never": no entry can expose them
+    ]
 
 
 def ensure_default_config() -> Path | None:
@@ -530,7 +611,7 @@ def ensure_default_config() -> Path | None:
     path = paths.config_dir() / CONFIG_FILE
     try:
         with path.open("x", encoding="utf-8") as fh:
-            fh.write(default_config_text())
+            fh.write(default_config_text(mcp_allowed_menu_from_registry()))
     except FileExistsError:
         return None
     path.chmod(0o600)

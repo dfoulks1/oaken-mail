@@ -546,6 +546,9 @@ async def set_operation_exposure(ctx: OpContext, inp: ExposureInput) -> Exposure
         scope, inp.mcp, actor=ctx.caller.actor, reason=f"{ctx.caller.client}_set_exposure"
     )
     chosen = await ctx.exposure.settings()
+    from oaken.core.operations.builtin.config import write_mcp_allowed
+
+    write_mcp_allowed(ctx, chosen)  # config.toml is the truth: mirror the change to the file
     return ExposureOutput(
         scope=scope,
         before=before,

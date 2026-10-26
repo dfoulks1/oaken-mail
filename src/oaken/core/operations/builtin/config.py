@@ -20,16 +20,17 @@ Safety, in order:
 
 import os
 import signal
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from oaken.core import config_edit, paths
-from oaken.core.errors import ConfigError, NotFound, OakenError
+from oaken.core.errors import ConfigError, NotFound, OakenError, StorageError
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import AnyOperation, operation
-from oaken.core.settings import CONFIG_FILE, Settings
+from oaken.core.settings import CONFIG_FILE, Settings, default_config_text
 
 
 def _config_path() -> Path:
@@ -142,6 +143,22 @@ def _write(ctx: OpContext, text: str) -> SaveResult:
     path.write_text(text, encoding="utf-8")
     path.chmod(0o600)
     return SaveResult(ok=True, path=str(path), backup=backup)
+
+
+def write_mcp_allowed(ctx: OpContext, chosen: Mapping[str, bool]) -> None:
+    """Mirror the live MCP-exposure choices into ``[mcp.allowed]`` in config.toml, so the file and
+    the store never disagree (the file is the source of truth). ``chosen`` is the store's scopes
+    (``op:name``/``plugin:name``); they become the flat bare keys the config table uses. A scope
+    that returned to its code default is simply absent from ``chosen``, so ``set_table`` drops it.
+    Comments and every other table are preserved. A write that cannot land is raised, not swallowed,
+    the caller must not pretend a change reached the file when it did not."""
+    path = _config_path()
+    text = path.read_text(encoding="utf-8") if path.is_file() else default_config_text()
+    values = {scope.split(":", 1)[1]: enabled for scope, enabled in chosen.items()}
+    edited = config_edit.set_table(text, ["mcp", "allowed"], values)
+    result = _write(ctx, edited)
+    if not result.ok:
+        raise StorageError(f"could not write [mcp.allowed] to {result.path}: {result.error}")
 
 
 class PluginName(BaseModel):

@@ -51,6 +51,35 @@ async def test_a_different_content_model_or_prompt_version_is_a_different_questi
     assert len(rig.llm.requests) == 3
 
 
+async def test_a_named_model_is_run_and_billed_when_the_backend_has_it(rig: Rig) -> None:
+    rig.llm._available = ["local-model", "big-model"]  # the backend offers two
+    rig.llm.reply(GOOD)
+    await ask(rig, model="big-model")
+    assert rig.llm.requested_models == ["big-model"]  # the backend was asked for big-model
+    (row,) = await rig.usage.usage_summary()
+    assert row.model_id == "big-model"  # usage billed to the model that ran, not the default
+
+
+async def test_two_models_cache_independently(rig: Rig) -> None:
+    rig.llm._available = ["local-model", "big-model"]
+    rig.llm.reply(GOOD, GOOD)
+    await ask(rig, model="local-model")
+    await ask(rig, model="big-model")  # same content+prompt, different model -> a separate entry
+    assert len(rig.llm.requests) == 2  # no cross-model cache hit
+    await ask(rig, model="big-model")  # now a hit
+    assert len(rig.llm.requests) == 2
+
+
+async def test_an_unknown_model_falls_back_to_the_default_and_does_not_fail(rig: Rig) -> None:
+    rig.llm._available = ["local-model"]  # "nope" is not installed
+    rig.llm.reply(GOOD)
+    await ask(rig, model="nope")
+    # the service warned, reset to the default, and ran it; the backend was asked for local-model
+    assert rig.llm.requested_models == ["local-model"]
+    (row,) = await rig.usage.usage_summary()
+    assert row.model_id == "local-model"  # billed to the default, not to the unknown name
+
+
 async def test_editing_the_prompt_without_bumping_the_version_still_misses_the_cache() -> None:
     a: PromptBuilder[Summary] = PromptBuilder("t", "1", "Be brief.", Summary)
     b: PromptBuilder[Summary] = PromptBuilder("t", "1", "Be very brief.", Summary)
@@ -66,10 +95,11 @@ async def test_invalid_json_gets_exactly_one_repair_retry_then_fails(rig: Rig) -
     assert isinstance(repair, str) and "not valid" in repair and "PWNED" not in repair
     rows = await rig.usage.usage_summary()
     assert rows[0].calls == 2, "both attempts cost tokens and are recorded"
-    assert (
-        await rig.cache.get("default", "summarize", "h1", "local-model", SUMMARIZE.prompt_version)
-        is None
-    )
+    key = rig.cache.key(
+        workspace="default", task="summarize", content_hash="h1", model="local-model",
+        prompt_version=SUMMARIZE.prompt_version,
+    )  # fmt: skip
+    assert await rig.cache.get(key) is None
 
 
 async def test_a_repair_that_works_is_cached_and_not_asked_again(rig: Rig) -> None:

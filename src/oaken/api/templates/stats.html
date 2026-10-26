@@ -148,8 +148,13 @@
 
   {# ---- AI & Models ---- #}
   <section class="pane" id="p-ai">
+    <div id="ai-result" class="alert d-none mb-3 rounded small" role="status" aria-live="polite"></div>
     <div class="card mb-3">
-      <div class="card-header text-secondary small text-uppercase fw-semibold">Model &amp; token usage</div>
+      <div class="card-header d-flex justify-content-between align-items-center text-secondary small text-uppercase fw-semibold">
+        <span>Model &amp; token usage</span>
+        <button class="btn btn-sm btn-outline-danger text-none" data-reset-usage
+                title="Clear the token-usage figures; mail, the index and the cache are untouched">Clear usage stats</button>
+      </div>
       <table class="table table-sm mb-0">
         <thead><tr><th>Workspace</th><th>Stage</th><th>Model</th><th>Calls</th><th>Cached</th><th>Tokens in</th><th>Tokens out</th><th>Saved</th></tr></thead>
         <tbody>
@@ -164,10 +169,99 @@
         </tbody>
       </table>
     </div>
+    <div class="card mb-3">
+      <div class="card-header text-secondary small text-uppercase fw-semibold">Agents</div>
+      <table class="table table-sm mb-0">
+        <thead><tr><th>Agent</th><th>Kinds</th><th>Last seen</th><th>State</th><th class="text-end">Revoke</th></tr></thead>
+        <tbody>
+        {% for a in agents %}
+          <tr>
+            <td>{{ a.label }}</td>
+            <td class="text-secondary mono small">{{ a.kinds | join(", ") or "—" }}</td>
+            <td class="text-secondary mono small">{{ a.last_seen_at or "never" }}</td>
+            <td>{% if a.revoked %}<span class="badge text-bg-secondary">revoked</span>
+                {%- else %}<span class="badge text-bg-success">active</span>{% endif %}</td>
+            <td class="text-end">{% if not a.revoked %}<button class="btn btn-sm btn-outline-danger"
+                data-revoke-agent="{{ a.id }}" title="Revoke {{ a.label }}; the jobs it holds return to the queue">Revoke</button>{% endif %}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="text-secondary">No agents registered.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card mb-3">
+      <div class="card-header text-secondary small text-uppercase fw-semibold">Enrichers</div>
+      <div class="card-body">
+        {% for e in enrichers %}
+          <form class="mb-3 pb-3{% if not loop.last %} border-bottom{% endif %}" data-enricher-save="{{ e.name }}">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="mono fw-semibold">{{ e.name }}</span>
+              {% if not e.enabled %}<span class="badge text-bg-secondary">disabled</span>{% endif %}
+            </div>
+            {% if e.config_schema and e.config_schema.properties %}
+              {% for field, spec in e.config_schema.properties.items() %}
+                {% set val = e.config.get(field, spec.default) %}
+                <div class="row mb-2 align-items-center">
+                  <label class="col-sm-4 col-form-label col-form-label-sm mono small" for="{{ e.name }}-{{ field }}">{{ field }}</label>
+                  <div class="col-sm-8">
+                    {% if field == "model" and llm and llm.available %}
+                      <select class="form-select form-select-sm mono" id="{{ e.name }}-{{ field }}"
+                              name="{{ field }}" data-field-type="string">
+                        <option value=""{% if not val %} selected{% endif %}>— backend default ({{ llm.model_id }}) —</option>
+                        {% for m in llm.available %}
+                          <option value="{{ m }}"{% if m == val %} selected{% endif %}>{{ m }}</option>
+                        {% endfor %}
+                      </select>
+                    {% elif spec.type == "boolean" %}
+                      <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch"
+                               id="{{ e.name }}-{{ field }}" name="{{ field }}" data-field-type="boolean"{% if val %} checked{% endif %}>
+                      </div>
+                    {% elif spec.type == "integer" or spec.type == "number" %}
+                      <input class="form-control form-control-sm" type="number" id="{{ e.name }}-{{ field }}"
+                             name="{{ field }}" data-field-type="number" value="{{ val if val is not none else '' }}">
+                    {% else %}
+                      <input class="form-control form-control-sm" type="text" id="{{ e.name }}-{{ field }}"
+                             name="{{ field }}" data-field-type="string" value="{{ val if val is not none else '' }}">
+                    {% endif %}
+                    {% if spec.description %}<div class="form-text small">{{ spec.description }}</div>{% endif %}
+                  </div>
+                </div>
+              {% endfor %}
+              <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+            {% else %}
+              <p class="text-secondary small mb-0">No settings declared.</p>
+            {% endif %}
+          </form>
+        {% else %}
+          <p class="text-secondary mb-0">No enrichers installed.</p>
+        {% endfor %}
+      </div>
+    </div>
     {% if pipeline %}
     <div class="card mb-3">
       <div class="card-header text-secondary small text-uppercase fw-semibold">Models</div>
       <div class="card-body">
+        {% if llm and llm.name %}
+          <form class="row g-2 align-items-center mb-3" data-model-save="{{ llm.name }}">
+            <label class="col-sm-3 col-form-label col-form-label-sm" for="llm-model">Language model</label>
+            <div class="col-sm-6">
+              {% if llm.available %}
+                <select class="form-select form-select-sm mono" id="llm-model" name="model">
+                  {% for m in llm.available %}
+                    <option value="{{ m }}"{% if m == llm.model_id %} selected{% endif %}>{{ m }}</option>
+                  {% endfor %}
+                </select>
+              {% else %}
+                <input class="form-control form-control-sm mono" id="llm-model" name="model" value="{{ llm.model_id }}">
+              {% endif %}
+            </div>
+            <div class="col-sm-3"><button type="submit" class="btn btn-sm btn-outline-primary">Save &amp; reload</button></div>
+            <div class="col-12"><div class="form-text small">Only models Ollama has pulled are offered. Saving writes
+              <code>[plugins.{{ llm.name }}] model</code> and reloads the backend.</div></div>
+          </form>
+        {% endif %}
         <p class="text-secondary mb-0">Embedder: <code>{{ pipeline.embedder_model or "—" }}</code>
            · Vector model: <code>{{ pipeline.vector_model or "—" }}</code></p>
       </div>
@@ -232,6 +326,7 @@
 
   {# ---- Reference (the operation registry) ---- #}
   <section class="pane" id="p-ref">
+    <div id="expose-result" class="alert d-none mb-3 rounded small" role="status" aria-live="polite"></div>
     <div class="card mb-3">
       <div class="card-header text-secondary small text-uppercase fw-semibold">Operations reference</div>
       <table class="table table-sm mb-0">
@@ -243,9 +338,15 @@
             <td>{% if o.permission == "mutate" %}<span class="badge badge-oaken-warn">mutate</span>
                 {%- elif o.permission == "send" %}<span class="badge text-bg-danger">send</span>
                 {%- else %}<span class="badge text-bg-success">read</span>{% endif %}</td>
-            <td>{% if not o.mcp_allowed %}<span class="badge text-bg-secondary">never</span>
-                {%- elif o.mcp_enabled %}<span class="badge text-bg-success">on</span>
-                {%- else %}<span class="badge text-bg-light text-dark">off</span>{% endif %}</td>
+            <td>{% if not o.mcp_allowed %}
+                  <div class="form-check form-switch mb-0" title="This operation can never be offered over MCP">
+                    <input class="form-check-input" type="checkbox" role="switch" disabled
+                           aria-label="{{ o.name }} is never exposable"></div>
+                {%- else %}
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" role="switch"
+                           data-op-switch="{{ o.name }}" aria-label="Expose {{ o.name }} over MCP"{% if o.mcp_enabled %} checked{% endif %}>
+                  </div>{% endif %}</td>
             <td class="text-secondary">{{ o.summary }}</td>
           </tr>
         {% else %}
@@ -260,8 +361,10 @@
 </main>
 
 <footer class="container pb-5 text-secondary small" style="max-width: 68rem;">
-  Read-only. Served on loopback only, without a token — like <code>/v1/health</code>.
-  Counts and health only; no message content, addresses or tokens are shown.
+  Served on loopback only, without a token — like <code>/v1/health</code>. Counts and health only;
+  no message content, addresses or tokens are shown. The MCP switches on the Reference tab, and the
+  enricher and agent controls, write <code>config.toml</code> and take effect at once; the model
+  picker writes it too and reloads the backend to apply.
 </footer>
 <script src="/stats.js"></script>
 </body>

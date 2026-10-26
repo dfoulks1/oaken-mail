@@ -68,6 +68,9 @@ class StatsCollector:
             "plugins": self._plugins(),
             "audit": await self._audit(),
             "operations": await self._operations_via_op(),
+            "agents": await self._agents(),
+            "enrichers": await self._enrichers(),
+            "llm": await self._llm(),
         }
         return data
 
@@ -103,6 +106,26 @@ class StatsCollector:
         if self._svc.pipeline_control is not None:
             out["llm_paused"] = (await self._svc.pipeline_control.state()).llm_paused
         return out
+
+    async def _llm(self) -> dict[str, Any] | None:
+        """The language-model backend's current model and the models it can run, so the AI tab can
+        offer a picker of only what is available. None when there is no started LLM backend."""
+        if self._svc.plugins is None:
+            return None
+        try:
+            backend = self._svc.plugins.llm_backend()
+        except Exception:  # noqa: BLE001 - no started backend: no picker, not an error
+            return None
+        try:
+            models = await backend.available_models()
+        except Exception:  # noqa: BLE001 - degrade to the current model
+            models = [backend.model_id] if backend.model_id else []
+        ctx = getattr(backend, "ctx", None)
+        return {
+            "name": ctx.name if ctx is not None else None,
+            "model_id": backend.model_id,
+            "available": models,
+        }
 
     async def _usage(self) -> list[dict[str, Any]]:
         if self._svc.usage is None:
@@ -186,6 +209,46 @@ class StatsCollector:
             }
             for o in out.operations
         ]
+
+    async def _agents(self) -> list[dict[str, Any]]:
+        """The registered external agents, via the real ``list_agents`` operation (never tokens).
+        Empty when the swarm is off, so the poll never fails on a disabled registry."""
+        if getattr(self._svc, "agents", None) is None:
+            return []
+        out = await self._run_op("list_agents", {"include_revoked": True})
+        if out is None:
+            return []
+        return [
+            {
+                "id": a.id,
+                "label": a.label,
+                "kinds": a.kinds,
+                "last_seen_at": a.last_seen_at.isoformat() if a.last_seen_at else None,
+                "revoked": a.revoked,
+            }
+            for a in out.agents
+        ]
+
+    async def _enrichers(self) -> list[dict[str, Any]]:
+        """Each enricher with its settings and their JSON Schema, via the real ``get_plugin_config``
+        op (CORE_23) — so the AI tab can render a config form from the schema the plugin declares.
+        No schema (no ``config_model``) means no form, just the on/off switch on the Plugins tab."""
+        if self._svc.plugins is None:
+            return []
+        out: list[dict[str, Any]] = []
+        for s in self._svc.plugins.statuses():
+            if s.kind != "enricher":
+                continue
+            cfg = await self._run_op("get_plugin_config", {"plugin": s.name})
+            out.append(
+                {
+                    "name": s.name,
+                    "enabled": s.enabled,
+                    "config": cfg.config if cfg else {},
+                    "config_schema": cfg.config_schema if cfg else None,
+                }
+            )
+        return out
 
     async def _run_op(self, name: str, payload: dict[str, Any]) -> Any:
         """Invoke a read operation through the CoreClient as the internal caller, returning its

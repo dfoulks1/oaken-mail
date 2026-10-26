@@ -19,13 +19,15 @@ class OllamaLLM(BaseLLMBackend):
     host. ``locality`` is worked out from the address, so a ``secure`` workspace accepts only a
     loopback one."""
 
+    config_model = OllamaConfig
+
     def __init__(self, *, transport: httpx2.AsyncBaseTransport | None = None) -> None:
         self._transport = transport
         self._client: OllamaClient | None = None
 
     async def start(self, ctx: PluginContext) -> None:
         await super().start(ctx)
-        cfg = OllamaConfig.parse(ctx.config, ctx.name)
+        cfg = self.config  # parsed by _Base from config_model (set below)
         local = check_url(cfg.base_url, ctx.settings.ai.allow_remote, ctx.name)
         self.locality = "local" if local else "remote"
         self.model_id = cfg.model or ctx.settings.ai.llm_model
@@ -42,12 +44,23 @@ class OllamaLLM(BaseLLMBackend):
             await self._client.close()
             self._client = None
 
-    async def generate(self, request: LLMRequest) -> LLMResponse:
+    async def available_models(self) -> list[str]:
+        """What Ollama has pulled (``/api/tags``), so a picker offers only models it can run.
+        Falls back to the started model if the list cannot be fetched."""
+        if self._client is None:
+            return [self.model_id] if self.model_id else []
+        try:
+            return sorted(await self._client.installed_models())
+        except Exception:  # noqa: BLE001 - a picker degrades to the current model, never errors
+            return [self.model_id] if self.model_id else []
+
+    async def generate(self, request: LLMRequest, *, model: str | None = None) -> LLMResponse:
         client = self._client
         if client is None:
             raise PluginError("start() was not called")
+        run = model or self.model_id  # the model that actually runs this call
         data = await client.chat(
-            self.model_id,
+            run,
             request.system,
             "\n\n".join(render_user(request)),
             schema=request.json_schema,
@@ -67,7 +80,7 @@ class OllamaLLM(BaseLLMBackend):
             data=parsed,
             input_tokens=int(data.get("prompt_eval_count") or 0),
             output_tokens=int(data.get("eval_count") or 0),
-            model_id=self.model_id,
+            model_id=run,
         )
 
     async def health(self) -> Health:

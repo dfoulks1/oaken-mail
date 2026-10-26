@@ -33,6 +33,18 @@ async def test_summary_and_key_points(rig: Rig) -> None:
     assert out["truncated"] is False and out["skipped"] == ""
 
 
+async def test_skip_bulk_is_read_from_typed_config_and_defaults_to_the_class(rig: Rig) -> None:
+    # SummaryEnricher's class default is skip_bulk=True; an empty config keeps it.
+    enricher = await rig.start(SummaryEnricher())
+    assert enricher.skips_bulk() is True
+    # [plugins.<name>] skip_bulk = false overrides it, read through the typed self.config.
+    enricher = await rig.start(SummaryEnricher(), config={"skip_bulk": False})
+    assert enricher.config.skip_bulk is False and enricher.skips_bulk() is False
+    # the config_model surfaces as a JSON Schema the console can render (the CORE_23 pipe, now filled)
+    schema = SummaryEnricher.config_model.model_json_schema()
+    assert "skip_bulk" in schema["properties"]
+
+
 async def test_more_than_five_key_points_are_cut_to_five(rig: Rig) -> None:
     rig.llm.reply({"summary": "S.", "key_points": [f"p{i}" for i in range(9)]})
     enricher = await rig.start(SummaryEnricher())

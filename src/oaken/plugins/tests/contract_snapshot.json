@@ -1,5 +1,6 @@
 {
   "CAPABILITIES": {
+    "cache_store": {},
     "embedder": {},
     "enricher": {},
     "llm_backend": {},
@@ -12,21 +13,30 @@
     "vector_store": {}
   },
   "ENTRY_POINT_GROUPS": {
+    "cache_store": "oaken.cache_stores",
     "embedder": "oaken.embedders",
     "enricher": "oaken.enrichers",
     "llm_backend": "oaken.llm_backends",
     "provider": "oaken.providers",
     "vector_store": "oaken.vector_stores"
   },
-  "PLUGIN_API_VERSION": 1,
+  "PLUGIN_API_VERSION": 2,
   "PLUGIN_KINDS": [
     "provider",
     "embedder",
     "llm_backend",
     "enricher",
-    "vector_store"
+    "vector_store",
+    "cache_store"
   ],
   "REQUIRED_MEMBERS": {
+    "cache_store": [
+      "clear",
+      "get",
+      "key",
+      "put",
+      "stats"
+    ],
     "embedder": [
       "dimensions",
       "embed",
@@ -53,7 +63,9 @@
   "bases": {
     "BaseEmbedder": [
       "api_version",
+      "config",
       "config_example",
+      "config_model",
       "ctx",
       "dimensions",
       "embed",
@@ -70,7 +82,9 @@
     ],
     "BaseEnricher": [
       "api_version",
+      "config",
       "config_example",
+      "config_model",
       "ctx",
       "enabled_default",
       "enrich",
@@ -87,7 +101,10 @@
     ],
     "BaseLLMBackend": [
       "api_version",
+      "available_models",
+      "config",
       "config_example",
+      "config_model",
       "context_window",
       "ctx",
       "enabled_default",
@@ -106,7 +123,9 @@
       "account_defaults",
       "api_version",
       "authenticate",
+      "config",
       "config_example",
+      "config_model",
       "ctx",
       "enabled_default",
       "health",
@@ -123,7 +142,9 @@
     ],
     "BaseVectorStore": [
       "api_version",
+      "config",
       "config_example",
+      "config_model",
       "ctx",
       "delete",
       "enabled_default",

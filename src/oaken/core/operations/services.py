@@ -9,6 +9,7 @@ and the caller gets ``unavailable`` rather than a crash.
 from dataclasses import dataclass
 from typing import TypeVar
 
+from oaken.ai.cache import LLMCache
 from oaken.ai.generate import LLMService
 from oaken.core.agents import AgentRegistry
 from oaken.core.attrs import AttrStore
@@ -25,6 +26,7 @@ from oaken.index import Indexer, IndexStore
 from oaken.ingest import Pipeline, UsageStore
 from oaken.ingest.pipeline_control import PipelineControl
 from oaken.ingest.schedule import SyncService
+from oaken.plugins.contracts import CacheOps
 from oaken.plugins.host import PluginHost
 from oaken.readstate import AuditLog, ReadState
 
@@ -98,6 +100,13 @@ class Services:
 
     def need_llm(self) -> LLMService:
         return need(self.llm, "the language model service")
+
+    def cache(self) -> CacheOps:
+        """The LLM answer cache in use: the named plugin, or core's own (a rig with no model
+        service still has the table)."""
+        if self.llm is not None:
+            return self.llm.active_cache()
+        return LLMCache(self.raw.db, self.clock)
 
     def need_retrieval(self) -> Retrieval:
         """Search and ask. Built on demand from the pipeline's index, vectors and embedder, and

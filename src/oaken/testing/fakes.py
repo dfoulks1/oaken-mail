@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from oaken.core.errors import Conflict
 from oaken.plugins.base import (
+    BaseCache,
     BaseEmbedder,
     BaseEnricher,
     BaseLLMBackend,
@@ -21,6 +22,8 @@ from oaken.plugins.base import (
     BaseVectorStore,
 )
 from oaken.plugins.contracts import (
+    CacheEntry,
+    CacheStats,
     EnrichInput,
     EnrichOutput,
     FlagChange,
@@ -197,18 +200,28 @@ class FakeLLM(BaseLLMBackend):
         model_id: str = "fake-llm",
         context_window: int = 8192,
         responder: Callable[[LLMRequest], str | dict[str, Any]] | None = None,
+        available: list[str] | None = None,
     ) -> None:
         self.model_id = model_id
         self.context_window = context_window
         self.responder = responder
+        self._available = available  # what available_models() returns; None = just [model_id]
         self.requests: list[LLMRequest] = []
+        self.requested_models: list[str | None] = []  # the model each generate() was asked for
         self._queue: list[str | dict[str, Any]] = []
+
+    async def available_models(self) -> list[str]:
+        if self._available is not None:
+            return self._available
+        return [self.model_id] if self.model_id else []
 
     def reply(self, *answers: str | dict[str, Any]) -> None:
         self._queue.extend(answers)
 
-    async def generate(self, request: LLMRequest) -> LLMResponse:
+    async def generate(self, request: LLMRequest, *, model: str | None = None) -> LLMResponse:
         self.requests.append(request)
+        self.requested_models.append(model)  # what each call asked for (None = the default)
+        run = model or self.model_id
         answer: str | dict[str, Any]
         if self.responder:
             answer = self.responder(request)
@@ -227,13 +240,13 @@ class FakeLLM(BaseLLMBackend):
                 data=answer,
                 input_tokens=words,
                 output_tokens=len(answer),
-                model_id=self.model_id,
+                model_id=run,
             )
         return LLMResponse(
             text=answer,
             input_tokens=words,
             output_tokens=len(answer.split()),
-            model_id=self.model_id,
+            model_id=run,
         )
 
 
@@ -373,3 +386,44 @@ class InMemoryVectorStore(BaseVectorStore):
             return VectorStats(0)
         count = sum(1 for k in self._rows if k[0] == active[0])
         return VectorStats(count, active[0], active[1])
+
+
+# -- Cache -------------------------------------------------------------------------------------
+class FakeCache(BaseCache):
+    """An in-memory answer cache. Set ``fail`` to ``"key"``, ``"get"`` or ``"put"`` to make that
+    call raise, to test that core degrades to a model call."""
+
+    def __init__(self) -> None:
+        self.entries: dict[tuple[str, ...], CacheEntry] = {}
+        self.fail = ""
+
+    def _maybe(self, what: str) -> None:
+        if self.fail == what:
+            raise RuntimeError(f"fake cache {what} failed")
+
+    def key(
+        self, *, workspace: str, task: str, content_hash: str, model: str, prompt_version: str
+    ) -> tuple[str, ...]:
+        self._maybe("key")
+        return (workspace, task, content_hash, model, prompt_version)
+
+    async def get(self, key: tuple[str, ...]) -> CacheEntry | None:
+        self._maybe("get")
+        return self.entries.get(key)
+
+    async def put(self, key: tuple[str, ...], entry: CacheEntry) -> None:
+        self._maybe("put")
+        self.entries[key] = entry
+
+    async def stats(self, workspace: str | None = None) -> CacheStats:
+        keys = [k for k in self.entries if workspace in (None, k[0])]
+        by_task: dict[str, int] = {}
+        for k in keys:
+            by_task[k[1]] = by_task.get(k[1], 0) + 1
+        return CacheStats(entries=len(keys), by_task=by_task)
+
+    async def clear(self, workspace: str | None = None, task: str | None = None) -> int:
+        gone = [k for k in self.entries if workspace in (None, k[0]) and task in (None, k[1])]
+        for k in gone:
+            del self.entries[k]
+        return len(gone)

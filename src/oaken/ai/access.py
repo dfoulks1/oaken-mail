@@ -25,6 +25,7 @@ class WorkspaceLLM:
         content_hash: str,
         account_id: str | None = None,
         message_id: str | None = None,
+        model: str | None = None,
     ) -> Any:
         if account_id is None:
             raise PluginError("generate_cached needs the account_id of the mail it is about")
@@ -37,4 +38,5 @@ class WorkspaceLLM:
             workspace=ws.name,
             account_id=account,
             message_id=MessageId(message_id) if message_id else None,
+            model=model,
         )

@@ -262,6 +262,11 @@ class Api:
             Route("/plugins/enable", safe(self.plugins_enable), methods=["POST"]),
             Route("/plugins/disable", safe(self.plugins_disable), methods=["POST"]),
             Route("/plugins/reload", safe(self.plugins_reload), methods=["POST"]),
+            Route("/stats/reset-usage", safe(self.stats_reset_usage), methods=["POST"]),
+            Route("/stats/revoke-agent", safe(self.stats_revoke_agent), methods=["POST"]),
+            Route("/stats/expose", safe(self.stats_expose), methods=["POST"]),
+            Route("/stats/enricher-config", safe(self.stats_enricher_config), methods=["POST"]),
+            Route("/stats/model", safe(self.stats_model_save), methods=["POST"]),
         ]
         static = Path(self.cfg.static_dir).expanduser() if self.cfg.static_dir else None
         if static is not None and static.is_dir():
@@ -451,6 +456,43 @@ class Api:
 
     async def plugins_reload(self, request: Request) -> Response:
         return await self._plugin_control(request, "plugin_reload")
+
+    # -- the stats page's mutating buttons (loopback, audited via _config_op) --------------------
+    async def stats_reset_usage(self, request: Request) -> Response:
+        return await self._config_op("reset_usage", {})
+
+    async def stats_revoke_agent(self, request: Request) -> Response:
+        body = await read_json(request)
+        return await self._config_op("revoke_agent", {"agent_id": body["agent_id"]})
+
+    async def stats_expose(self, request: Request) -> Response:
+        body = await read_json(request)
+        return await self._config_op(
+            "set_operation_exposure",
+            {"scope": "operation", "name": body["name"], "mcp": bool(body["mcp"])},
+        )
+
+    async def stats_enricher_config(self, request: Request) -> Response:
+        body = await read_json(request)
+        return await self._config_op(
+            "set_plugin_config",
+            {"plugin": body["plugin"], "config": body.get("config", {})},
+        )
+
+    async def stats_model_save(self, request: Request) -> Response:
+        # Save the backend's model, then reload: the backend pins its model at start(), so a plain
+        # config write alone would not take effect until the next restart.
+        body = await read_json(request)
+        saved = await self.client.call(
+            "set_plugin_config",
+            {"plugin": body["plugin"], "config": {"model": body["model"]}},
+            CallerContext.internal(),
+            confirm=True,
+        )
+        result = saved.output
+        if result is None or not getattr(result, "ok", False):
+            return _json(result.model_dump(mode="json") if result is not None else {"ok": False})
+        return await self._config_op("config_reload", {})
 
     async def jobs_pause(self, request: Request) -> Response:
         body = await read_json(request)

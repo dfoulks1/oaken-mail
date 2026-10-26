@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The five plugin contracts: typing Protocols plus the plain-data types that cross them.
+"""The six plugin contracts: typing Protocols plus the plain-data types that cross them.
 
 Everything that crosses the boundary is a frozen dataclass of plain data (strings, bytes,
 numbers, tuples). A plugin never receives a database handle. Plugins are *not* required to
@@ -26,15 +26,19 @@ from oaken.core.untrusted import UntrustedText
 if TYPE_CHECKING:  # ``oaken.ai.prompts`` imports this module
     from oaken.ai.prompts import PromptBuilder
 
-PLUGIN_API_VERSION = 1
+# 2: LLMBackend.generate gained the keyword-only `model` (per-call model selection), CORE_42.
+PLUGIN_API_VERSION = 2
 
-PluginKind = Literal["provider", "embedder", "llm_backend", "enricher", "vector_store"]
+PluginKind = Literal[
+    "provider", "embedder", "llm_backend", "enricher", "vector_store", "cache_store"
+]
 PLUGIN_KINDS: tuple[PluginKind, ...] = (
     "provider",
     "embedder",
     "llm_backend",
     "enricher",
     "vector_store",
+    "cache_store",
 )
 
 # Python entry-point group for each kind. First-party plugins register the same way.
@@ -44,6 +48,7 @@ ENTRY_POINT_GROUPS: dict[str, str] = {
     "llm_backend": "oaken.llm_backends",
     "enricher": "oaken.enrichers",
     "vector_store": "oaken.vector_stores",
+    "cache_store": "oaken.cache_stores",
 }
 
 # Capabilities a kind may declare, and the method that must really exist for each.
@@ -58,6 +63,7 @@ CAPABILITIES: dict[str, dict[str, str]] = {
     "llm_backend": {},
     "enricher": {},
     "vector_store": {},
+    "cache_store": {},
 }
 
 # Members a plugin of each kind must have, besides the methods its capabilities require.
@@ -67,6 +73,7 @@ REQUIRED_MEMBERS: dict[str, list[str]] = {
     "llm_backend": ["model_id", "context_window", "generate"],
     "enricher": ["version", "needs_llm", "enrich"],
     "vector_store": ["upsert", "delete", "query", "stats"],
+    "cache_store": ["key", "get", "put", "stats", "clear"],
 }
 
 
@@ -94,6 +101,7 @@ class LLMAccess(Protocol):
         content_hash: str,
         account_id: str | None = None,
         message_id: str | None = None,
+        model: str | None = None,
     ) -> Any: ...
 
 
@@ -471,8 +479,10 @@ class LLMBackend(Plugin, Protocol):
     model_id: str
     context_window: int
 
-    async def generate(self, request: LLMRequest) -> LLMResponse:
-        """Answer ``request``. With a ``json_schema``, ``data`` carries the parsed result."""
+    async def generate(self, request: LLMRequest, *, model: str | None = None) -> LLMResponse:
+        """Answer ``request``. With a ``json_schema``, ``data`` carries the parsed result. ``model``
+        names which of the backend's models to run; ``None`` means the started default
+        (``model_id``). The response's ``model_id`` is the model that actually ran."""
         ...
 
 
@@ -596,3 +606,54 @@ class VectorStore(Plugin, Protocol):
     async def stats(self) -> VectorStats:
         """How many vectors, and which model and dimensions they use."""
         ...
+
+
+@dataclass(frozen=True)
+class CacheEntry:
+    """A validated model answer and what it cost to get, as the LLM answer cache stores it."""
+
+    result_json: str
+    tokens_in: int
+    tokens_out: int
+
+
+@dataclass(frozen=True)
+class CacheStats:
+    entries: int
+    bytes: int = 0
+    by_task: dict[str, int] = field(default_factory=dict)
+    prompt_versions: tuple[str, ...] = ()
+    oldest: datetime | None = None
+
+
+class CacheOps(Protocol):
+    """The LLM answer cache's members. Core's built-in SQLite cache has them too (it is not a
+    plugin). Core hands over the facts of a question; the cache owns the key."""
+
+    def key(
+        self, *, workspace: str, task: str, content_hash: str, model: str, prompt_version: str
+    ) -> tuple[str, ...]:
+        """The key for this question. ``model`` is the model that will answer it, never a
+        backend's default: two models must not share a key."""
+        ...
+
+    async def get(self, key: tuple[str, ...]) -> CacheEntry | None:
+        """The stored answer, or None. A miss costs one model call; raising counts as a miss."""
+        ...
+
+    async def put(self, key: tuple[str, ...], entry: CacheEntry) -> None:
+        """Store ``entry``. Raising loses the cache write, never the answer."""
+        ...
+
+    async def stats(self, workspace: str | None = None) -> CacheStats:
+        """What the cache holds (one workspace's, or all)."""
+        ...
+
+    async def clear(self, workspace: str | None = None, task: str | None = None) -> int:
+        """Forget answers (one workspace's and/or one task's, or all). How many were removed."""
+        ...
+
+
+@runtime_checkable
+class Cache(Plugin, CacheOps, Protocol):
+    """An LLM answer cache plugin."""

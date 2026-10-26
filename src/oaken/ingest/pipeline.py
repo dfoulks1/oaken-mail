@@ -429,7 +429,15 @@ class Pipeline:
                 continue  # switched off with [plugins.<name>] enabled = false
             if enricher.needs_llm and llm is None:
                 raise PluginError(f"enricher {name} needs a language model, none is available")
-            model = llm.model_id if enricher.needs_llm and llm else ""
+            model = ""
+            if enricher.needs_llm and llm:
+                configured = getattr(enricher, "model_for", lambda: None)()
+                available = await llm.available_models() if configured else []
+                model = (
+                    configured
+                    if (configured and (not available or configured in available))
+                    else llm.model_id
+                )
             key = (doc["content_hash"], name, enricher.version, model)
             tokens = self.tokenizer.count(doc["cleaned_text"])
             if not force and await self._cached_enrichment(message_id, key):

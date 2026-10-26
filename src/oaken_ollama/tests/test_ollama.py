@@ -47,6 +47,11 @@ class TestOllamaLLM(LLMContract):
         return OllamaLLM(transport=ollama.transport)
 
 
+async def test_available_models_lists_what_ollama_has_pulled(ollama: FakeOllama) -> None:
+    llm = await started_llm(ollama)
+    assert await llm.available_models() == ["nomic-embed-text:latest", "qwen2.5:3b"]
+
+
 async def test_the_suites_pass_as_one_call(ollama: FakeOllama) -> None:
     await verify_embedder(lambda: OllamaEmbedder(transport=ollama.transport))
     await verify_llm(lambda: OllamaLLM(transport=ollama.transport))

@@ -170,10 +170,12 @@ prompt in it, waiting for approval (it is not in this table yet). **Open** is ap
 take. **In progress** has someone on it. **Built** means the prompt's deliverables are in `main` with
 tests. **Partly** says what is done and what is left. A **Written** prompt has a plan and no code yet.
 
+Grouped by track; the number is the permanent ID, so it runs across all tables.
+
+**CORE**
+
 | # | Prompt | Status | What is left, or where to look |
 |---|---|---|---|
-| 01 | CORE_01-bootstrap | Built | |
-| 01a | DOCS_01a-docs-site-scaffold | Built | |
 | 02 | CORE_02-core-foundation | Built | |
 | 03 | CORE_03-events-and-jobs | Built | |
 | 03b | CORE_03b-swarm-foundations | Built | External agents; see 33 for enrichment through them |
@@ -182,22 +184,13 @@ tests. **Partly** says what is done and what is left. A **Written** prompt has a
 | 06 | CORE_06-parsing-and-cleaning | Built | |
 | 06c | CORE_06c-sieve-filtering | Built | |
 | 07 | CORE_07-index-and-fts | Built | |
-| 08 | PLUGIN_08-vector-store | Built | |
 | 09 | CORE_09-ingest-pipeline | Built | |
-| 10 | PLUGIN_10-ollama-and-prompt-safety | Built | |
-| 11 | PLUGIN_11-gmail-plugin | Built | New mail now arrives ahead of a long first sync's backlog |
-| 11b | PLUGIN_11b-smtp-send | Built | Provider only; the send operation is 28 |
-| 11c | PLUGIN_11c-imap-provider | Built | |
 | 12 | CORE_12-read-state | Built | |
 | 12b | CORE_12b-sync-scheduling | Built | |
 | 13 | CORE_13-operation-registry | Built | |
-| 14 | ENRICHER_14-enrichers | Built | |
 | 15 | CORE_15-retrieval-and-ask | Built | |
 | 16 | CORE_16-api-daemon | Built | |
-| 17 | CLI_17-cli-client | Built | |
-| 18 | MCP_18-mcp-shim | Built | Both doors: `/mcp` and `/mcp/agent` |
 | 19 | CORE_19-security-hardening | **Open** | The dedicated pass (injection suite across all surfaces, localhost threat tests, audit review) has not been run. Enricher injection tests and ADR 0005 exist |
-| 20 | DOCS_20-oss-docs | Built | README, `ROADMAP.md`, issue and PR templates, the site, the architecture and provider pages, and `docs/tools/check_commands.py` (runs the docs' `<!-- check -->` commands) are in. Not verified: the Gmail walkthrough on a clean Google account, and `docs/evals/latest.md` (both need real services) |
 | 22 | CORE_22-api-parity | Built | Paging, totals, sort, stars, thread tree, query operators |
 | 23 | CORE_23-plugin-settings | **Partly built** | In: the `capabilities` allow-list, `enabled` and a plugin's own `enabled_default`, and plugin control under core's `oaken plugins` (`enable`, `disable`, `reload`, `config`, `check`, `set`; `check` tries settings on a throwaway instance). The same operations back the stats page's switch and Reload button. `oaken.core.config_edit` (`tomlkit`) edits one table and keeps comments. A plugin does not offer these itself. Not built: the Settings → Plugins page and the secrets rows |
 | 24 | CORE_24-accounts-onboarding | Built | Account ops plus the receive-only ("listen but not send") interlock in `oaken.mail.sendpolicy` (one key, one reader; surfaced by `get_account`/`list_accounts`), the `oaken admin account set\|remove` CLI verbs, and the Settings → Accounts onboarding UI (`accounts.html`) |
@@ -207,13 +200,54 @@ tests. **Partly** says what is done and what is left. A **Written** prompt has a
 | 29 | CORE_29-system-settings | **Partly built** | Operations and CLI: `get/check/set_settings` (`oaken settings`), `storage_info` and `vacuum` (`oaken storage`, `oaken vacuum`), `cache_stats`/`clear_cache` (`oaken cache`), `events_tail` over a persisted event log (`oaken events`), and a paged `list_audit`. Not built: the Settings panes in a client UI |
 | 30 | CORE_30-pipeline-management | Built | Per-stage pause (`pause_backfill`/`resume_backfill` take a `stage`, stored in the database), live concurrency (`set_pipeline_limits`), `reprocess --since/--limit`, `pipeline_status` shows `paused`, `concurrency` and the running jobs, interactive model calls go ahead of background enrich, and the `/jobs` console and `oaken pipeline` drive it. The existing operation names were kept instead of the prompt's new ones; bulk `cancel_jobs`/`retry_jobs` by stage and a Pipeline settings pane are not built |
 | 31 | CORE_31-workspace-management | **Open** | |
-| 32 | MCP_32-mcp-settings | **Open** | |
 | 33 | CORE_33-agent-enrichment | **Written** | Not built. The `/mcp/agent` door works but a claimed `ingest.enrich` job carries only ids and cannot store an answer |
 | 34 | CORE_34-stabilize-core | Built | Snapshot tests for operations, plugin contracts and events, import-linter boundaries, service units and plugin extension hooks (job kinds, pipeline stages, scheduled tasks) |
 | 35 | CORE_35-onboarding-0-1-1 | Built | The record of the 0.1.1 work: first-run defaults, core's console pages, plugin-first commands |
 | 36 | CORE_36-after-0-1-1 | **Open** | What 0.1.1 left: label/folder write-back, workspace routing by Sieve rule, a datastore per account, send, Gmail sign-in |
+| 40 | CORE_40-mcp-allowed-config | **Written** | The plan only. `[mcp.allowed]` in config.toml is the source of truth for MCP exposure (seeded to the store on load, file wins on conflict); generated commented menu, op write-back via config_edit, toggle on /stats Reference. DB table stays the live-read cache |
+| 41 | CORE_41-stats-controls | **Built** | Configure AI from `/stats`, companion to 40. enable/disable (the `[plugins.<name>] enabled` flag, switches on the Plugins tab), `reset_usage`, agent list/revoke, enricher `config_model` forms (CORE_23 pipe filled), a backend model picker and a per-enricher model field, both fed by `BaseLLMBackend.available_models()` (saved to `[plugins.<name>] model`; CORE_42 honors the per-enricher one). Invariant: agents never manage capabilities, only the file and UI do |
+| 42 | CORE_42-per-enricher-models | **Built** | Each enricher on its own model. `generate(request, *, model=…)` on the LLM contract + `BaseLLMBackend` + Ollama (bumped `PLUGIN_API_VERSION` 1→2, ADR 0010); the effective model threaded through `generate_cached` into the cache key and usage record (no `backend.model_id` reach-back, so two models cache apart); `EnricherConfig.model` surfaced in the `/stats` form, fed by `available_models()`; unknown model warns and falls back. Per-model `context_window` is a documented follow-on. Carries the effective model to PLUGIN_43's cache slot |
+
+**CLI**
+
+| # | Prompt | Status | What is left, or where to look |
+|---|---|---|---|
+| 17 | CLI_17-cli-client | Built | |
+| 39 | CLI_39-ask-debug | **Written** | The plan only. `--debug` runs a command in-process with DEBUG to terminal and logfile; plugins obey the one shared logger with no per-plugin change. Scoped to read-only commands first |
+
+**MCP**
+
+| # | Prompt | Status | What is left, or where to look |
+|---|---|---|---|
+| 18 | MCP_18-mcp-shim | Built | Both doors: `/mcp` and `/mcp/agent` |
+| 32 | MCP_32-mcp-settings | **Open** | |
+
+**PLUGIN**
+
+| # | Prompt | Status | What is left, or where to look |
+|---|---|---|---|
+| 08 | PLUGIN_08-vector-store | Built | |
+| 10 | PLUGIN_10-ollama-and-prompt-safety | Built | |
+| 11 | PLUGIN_11-gmail-plugin | Built | New mail now arrives ahead of a long first sync's backlog |
+| 11b | PLUGIN_11b-smtp-send | Built | Provider only; the send operation is 28 |
+| 11c | PLUGIN_11c-imap-provider | Built | |
 | 37 | PLUGIN_37-gmail-sign-in | **Written** | The plan only; nothing built. Least-privilege permissions that follow capabilities, `oaken gmail doctor`, a clearer consent flow, and a private copy of the client JSON |
 | 38 | PLUGIN_38-openai-compat-lmstudio | **Written** | The plan only; an OpenAI-compatible LLM backend and embedder, LM Studio first |
+| 43 | PLUGIN_43-pluggable-llm-cache | **Built** | A `cache_store` plugin kind and `BaseCache` (`key`, `get`, `put`, `stats`, `clear`); `[ai] cache` names one. Core keeps its SQLite cache as the default, inline. The caller passes the effective model and the cache builds the key. Built after CORE_42. Not built: any non-SQLite cache |
+
+**ENRICHER**
+
+| # | Prompt | Status | What is left, or where to look |
+|---|---|---|---|
+| 14 | ENRICHER_14-enrichers | Built | |
+
+**DOCS**
+
+| # | Prompt | Status | What is left, or where to look |
+|---|---|---|---|
+| 01 | CORE_01-bootstrap | Built | |
+| 01a | DOCS_01a-docs-site-scaffold | Built | |
+| 20 | DOCS_20-oss-docs | Built | README, `ROADMAP.md`, issue and PR templates, the site, the architecture and provider pages, and `docs/tools/check_commands.py` (runs the docs' `<!-- check -->` commands) are in. Not verified: the Gmail walkthrough on a clean Google account, and `docs/evals/latest.md` (both need real services) |
 
 Not written yet, on purpose: a legacy-database importer, packaging (systemd, launchd,
 installers), at-rest encryption, plugin sandboxing, and embedding-throughput tuning on CPU.

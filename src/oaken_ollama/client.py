@@ -127,10 +127,18 @@ class OllamaClient:
         raise AssertionError("unreachable")
 
     # -- endpoints -----------------------------------------------------------------------------
+    async def installed_models(self) -> list[str]:
+        """The model ids Ollama has pulled, from ``/api/tags``. Never pulls."""
+        tags = await self._call("GET", "/api/tags")
+        return [
+            m.get("name", "")
+            for m in tags.get("models", [])
+            if isinstance(m, dict) and m.get("name")
+        ]
+
     async def require_model(self, name: str) -> None:
         """Fail with the exact command to run when ``name`` is not installed. Never pulls."""
-        tags = await self._call("GET", "/api/tags")
-        installed = [m.get("name", "") for m in tags.get("models", []) if isinstance(m, dict)]
+        installed = await self.installed_models()
         if not _has_model(installed, name):
             raise PluginError(
                 f"{self.who}: model {name!r} is not installed in Ollama. Run: ollama pull {name}"

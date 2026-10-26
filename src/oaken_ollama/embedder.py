@@ -16,13 +16,15 @@ class OllamaEmbedder(BaseEmbedder):
     ``[plugins.ollama] model`` overrides it. ``start`` confirms the model is installed, reads its
     context length and embeds one probe text to learn the vector size."""
 
+    config_model = OllamaConfig
+
     def __init__(self, *, transport: httpx2.AsyncBaseTransport | None = None) -> None:
         self._transport = transport
         self._client: OllamaClient | None = None
 
     async def start(self, ctx: PluginContext) -> None:
         await super().start(ctx)
-        cfg = OllamaConfig.parse(ctx.config, ctx.name)
+        cfg = self.config  # parsed by _Base from config_model
         check_url(cfg.base_url, ctx.settings.ai.allow_remote, ctx.name)
         self.model_id = cfg.model or ctx.settings.ai.embed_model
         self._client = OllamaClient(cfg, ctx.name, transport=self._transport)

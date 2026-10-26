@@ -85,9 +85,24 @@ async def test_vacuum_gives_back_the_space_deleted_rows_left(ops: Ops) -> None:
 async def seed_cache(ops: Ops) -> None:
     cache = ops.svc.need_llm().cache
     entry = CacheEntry('{"a": 1}', 10, 5)
-    await cache.put("default", "summary", "h1", "m", "v1", entry)
-    await cache.put("default", "summary", "h2", "m", "v1", entry)
-    await cache.put("default", "triage", "h3", "m", "v2", entry)
+    await cache.put(
+        cache.key(
+            workspace="default", task="summary", content_hash="h1", model="m", prompt_version="v1"
+        ),
+        entry,
+    )
+    await cache.put(
+        cache.key(
+            workspace="default", task="summary", content_hash="h2", model="m", prompt_version="v1"
+        ),
+        entry,
+    )
+    await cache.put(
+        cache.key(
+            workspace="default", task="triage", content_hash="h3", model="m", prompt_version="v2"
+        ),
+        entry,
+    )
     usage = ops.svc.need_usage()
     await usage.record("enrich", "m", tokens_in=10, cached=False)
     await usage.record("enrich", "m", tokens_in=10, cached=True)
@@ -119,6 +134,28 @@ async def test_clear_cache_touches_only_the_cache(ops: Ops) -> None:
     assert (await ops.svc.index.db.fetchone("SELECT COUNT(*) AS n FROM docs")) == docs
     assert (await ops.svc.raw.db.fetchone("SELECT COUNT(*) AS n FROM ai_usage")) == usage
     assert mail["n"] >= 3  # type: ignore[index]
+
+
+async def test_reset_usage_clears_the_record_and_nothing_else(ops: Ops) -> None:
+    await ops.add(3)
+    await seed_cache(ops)  # also records ai_usage rows via usage.record
+    usage = ops.svc.need_usage()
+    await usage.record("enrich", "m", tokens_in=10, cached=False)
+    await usage.record_context("get_message", "mcp", messages=1, tokens_returned=5, tokens_full=50)
+    before = await ops.svc.raw.db.fetchone("SELECT COUNT(*) AS n FROM ai_usage")
+    assert before["n"] > 0  # type: ignore[index]
+    mail = await ops.svc.raw.db.fetchone("SELECT COUNT(*) AS n FROM messages")
+    cache = (await ops.out("cache_stats", {})).entries
+
+    out = await ops.out("reset_usage", {})
+
+    assert out.deleted >= 1
+    assert (await ops.svc.raw.db.fetchone("SELECT COUNT(*) AS n FROM ai_usage"))["n"] == 0  # type: ignore[index]
+    assert (await ops.svc.raw.db.fetchone("SELECT COUNT(*) AS n FROM context_savings"))["n"] == 0  # type: ignore[index]
+    assert (
+        await ops.svc.raw.db.fetchone("SELECT COUNT(*) AS n FROM messages")
+    ) == mail  # mail untouched
+    assert (await ops.out("cache_stats", {})).entries == cache  # the cache untouched
 
 
 # -- the event history ----------------------------------------------------------------------
