@@ -83,7 +83,7 @@ def _assert_exit_codes_match() -> None:
 
 def build(cfg: Config) -> Page:
     try:
-        from oaken_cli.main import build_parser
+        from oaken_cli.main import ALIASES, build_parser
     except ImportError as exc:
         raise BuildError(f"CLI generator: cannot import the parser: {exc}") from exc
     _assert_exit_codes_match()
@@ -121,6 +121,19 @@ def build(cfg: Config) -> Page:
     ]
     for name in commands:
         lines.append(f"| [`{name}`](#{name}) | {help_of.get(name, '')} |")
+    lines += [
+        "",
+        "## Shortcuts",
+        "",
+        "Three more commands each take a slice of the ones above: `mill sync` is not a command,"
+        " `sawyer sync` is. `oaken` always takes them all.",
+        "",
+        "| Shortcut | What it covers | Commands |",
+        "|---|---|---|",
+    ]
+    for prog, (blurb, keep) in ALIASES.items():
+        names = " · ".join(f"`{name}`" for name in commands if name in keep)
+        lines.append(f"| `{prog}` | {blurb} | {names} |")
     lines += ["", "## Exit codes", "", "| Code | Meaning | When |", "|---|---|---|"]
     for code, meaning, when in EXIT_CODES:
         lines.append(f"| {code} | {meaning} | {when} |")

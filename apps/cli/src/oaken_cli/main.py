@@ -66,6 +66,14 @@ command groups:
   agents        agents · jobs (claim/heartbeat/complete/fail)
   tools         operation · mcp · completion · help
 
+shortcuts (each takes only its slice of the commands above; oaken takes them all):
+  mill          the daemon: start · stop · restart · reload · status · config · settings ·
+                plugins · mcp · storage · vacuum · cache · events
+  sawyer        the flow: sync · pipeline · watch · reprocess · rebuild-index · enrich · jobs ·
+                schedule
+  cubby         the mailbox: search · ask · show · thread · summarize · read · unread · undo ·
+                mailbox · label · folder · star · unstar · sieve
+
 anything else:
   Every capability the daemon offers is reachable without a dedicated verb via the generic
   fallback:  oaken operation NAME --json '{...}'   (and 'oaken operation' lists them all).
@@ -78,16 +86,42 @@ docs: https://dfoulks1.github.io/oaken-mail/   ·   'oaken help COMMAND' or 'oak
 """
 
 
-def build_parser() -> argparse.ArgumentParser:
-    """Construct the full parser. Kept import-light so ``--help`` is cheap."""
+# Convenience commands, each a slice of oaken's verbs. ``oaken`` itself is always the full set.
+ALIASES: dict[str, tuple[str, frozenset[str]]] = {
+    "mill": (
+        "The Oaken core daemon: run it, configure it, look after its storage.",
+        frozenset(
+            "start stop restart reload status config settings plugins mcp storage vacuum cache "
+            "events help".split()
+        ),
+    ),
+    "sawyer": (
+        "The Oaken mail flow: sync, the ingest pipeline, its jobs and schedules.",
+        frozenset(
+            "sync pipeline watch reprocess rebuild-index enrich jobs schedule help".split()
+        ),
+    ),
+    "cubby": (
+        "The Oaken mailbox: search, read and file your mail.",
+        frozenset(
+            "search ask show thread summarize read unread undo mailbox label folder star unstar "
+            "sieve help".split()
+        ),
+    ),
+}
+
+
+def build_parser(prog: str = PROG) -> argparse.ArgumentParser:
+    """Construct the parser for ``prog``: every command for ``oaken``, an alias's slice otherwise.
+    Kept import-light so ``--help`` is cheap."""
     parser = argparse.ArgumentParser(
-        prog=PROG,
+        prog=prog,
         description=DESCRIPTION,
         epilog=EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
         parents=[_globals(False)],
     )
-    parser.add_argument("--version", action="version", version=f"{PROG} {__version__}")
+    parser.add_argument("--version", action="version", version=f"{prog} {__version__}")
 
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
     sub.required = True
@@ -117,6 +151,12 @@ def build_parser() -> argparse.ArgumentParser:
     helpp.set_defaults(_help=True)
     # Any registry operation without its own verb above is still reachable through the generic
     # ``oaken operation NAME --json '{...}'`` fallback, so a registry change never needs a release.
+    if prog in ALIASES:
+        blurb, keep = ALIASES[prog]
+        parser.description = blurb
+        parser.epilog = "Every command, and the full guide: oaken --help."
+        sub.choices = {name: p for name, p in sub.choices.items() if name in keep}
+        sub._choices_actions = [a for a in sub._choices_actions if a.dest in keep]
     return parser
 
 
@@ -1100,13 +1140,13 @@ def _lazy(module: str, func: str) -> Handler:
 # --- dispatch --------------------------------------------------------------------------------
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None, prog: str = PROG) -> int:
     """Parse ``argv`` and run a command. Returns the process exit code.
 
     All expected failures are turned into a clean message on stderr and a stable exit code; an
     unexpected exception is allowed to propagate so it is visible in development.
     """
-    parser = build_parser()
+    parser = build_parser(prog)
     args = _parse(parser, list(sys.argv[1:] if argv is None else argv))
     _configure_logging(getattr(args, "verbose", 0), getattr(args, "debug", False))
     from oaken_cli.exits import CliError, ExitCode
@@ -1127,7 +1167,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         return int(args.func(args))
     except CliError as exc:
-        print(f"{PROG}: {exc.message}", file=sys.stderr)
+        print(f"{prog}: {exc.message}", file=sys.stderr)
         return int(exc.code)
     except KeyboardInterrupt:
         return int(ExitCode.ERROR)
@@ -1140,7 +1180,13 @@ def _parse(parser: argparse.ArgumentParser, argv: list[str]) -> argparse.Namespa
     commands = _command_names(parser)
     original = list(argv)
     first = _command_index(argv)
-    if first is not None and argv[first] not in commands and first + 1 < len(argv):
+    # Only where ``operation`` exists: an alias has no plugin fallback, just a usage error.
+    if (
+        "operation" in commands
+        and first is not None
+        and argv[first] not in commands
+        and first + 1 < len(argv)
+    ):
         verb = argv[first + 1]
         if not verb.startswith("-"):
             argv = [*argv[:first], "operation", f"{argv[first]}.{verb.replace('-', '_')}"] + argv[
@@ -1208,6 +1254,18 @@ def _configure_logging(verbose: int, debug: bool = False) -> None:
 def _console_main() -> None:
     """Console-script shim: run :func:`main` and exit with its code."""
     raise SystemExit(main())
+
+
+def mill() -> int:
+    return main(prog="mill")
+
+
+def sawyer() -> int:
+    return main(prog="sawyer")
+
+
+def cubby() -> int:
+    return main(prog="cubby")
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -78,8 +78,9 @@
     <div class="sections"><div class="label">On this page</div><nav class="nav flex-column" aria-label="On this page">
       <a class="nav-link" href="#global-options"><span class="num">1</span>Global options</a>
       <a class="nav-link" href="#commands"><span class="num">2</span>Commands</a>
-      <a class="nav-link" href="#exit-codes"><span class="num">3</span>Exit codes</a>
-      <a class="nav-link" href="#command-details"><span class="num">4</span>Command details</a>
+      <a class="nav-link" href="#shortcuts"><span class="num">3</span>Shortcuts</a>
+      <a class="nav-link" href="#exit-codes"><span class="num">4</span>Exit codes</a>
+      <a class="nav-link" href="#command-details"><span class="num">5</span>Command details</a>
     </nav></div>
   </div></div>
 </nav>
@@ -293,7 +294,36 @@
 </tbody>
 </table></div>
 </section>
-<section id="exit-codes" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Exit codes</h2></div>
+<section id="shortcuts" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Shortcuts</h2></div>
+<p>Three more commands each take a slice of the ones above: <code>mill sync</code> is not a command, <code>sawyer sync</code> is. <code>oaken</code> always takes them all.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Shortcut</th>
+<th>What it covers</th>
+<th>Commands</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mill</code></td>
+<td>The Oaken core daemon: run it, configure it, look after its storage.</td>
+<td><code>start</code> · <code>stop</code> · <code>restart</code> · <code>reload</code> · <code>status</code> · <code>plugins</code> · <code>config</code> · <code>settings</code> · <code>storage</code> · <code>vacuum</code> · <code>cache</code> · <code>events</code> · <code>mcp</code> · <code>help</code></td>
+</tr>
+<tr>
+<td><code>sawyer</code></td>
+<td>The Oaken mail flow: sync, the ingest pipeline, its jobs and schedules.</td>
+<td><code>sync</code> · <code>pipeline</code> · <code>reprocess</code> · <code>rebuild-index</code> · <code>watch</code> · <code>jobs</code> · <code>enrich</code> · <code>schedule</code> · <code>help</code></td>
+</tr>
+<tr>
+<td><code>cubby</code></td>
+<td>The Oaken mailbox: search, read and file your mail.</td>
+<td><code>search</code> · <code>show</code> · <code>thread</code> · <code>summarize</code> · <code>read</code> · <code>unread</code> · <code>undo</code> · <code>label</code> · <code>folder</code> · <code>star</code> · <code>unstar</code> · <code>mailbox</code> · <code>ask</code> · <code>sieve</code> · <code>help</code></td>
+</tr>
+</tbody>
+</table></div>
+</section>
+<section id="exit-codes" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Exit codes</h2></div>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
 <thead>
 <tr>
@@ -336,7 +366,7 @@
 </tbody>
 </table></div>
 </section>
-<section id="command-details" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Command details</h2></div>
+<section id="command-details" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Command details</h2></div>
 <h3 id="start"><code>start</code></h3>
 <p>Start the core daemon (in the background; --fg to stay attached).</p>
 <p>Options:</p>

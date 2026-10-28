@@ -23,6 +23,9 @@ dependencies = [
 
 [project.scripts]
 oaken = "oaken_cli:main"
+mill = "oaken_cli.main:mill"
+sawyer = "oaken_cli.main:sawyer"
+cubby = "oaken_cli.main:cubby"
 
 [tool.uv.sources]
 oaken = { workspace = true }

@@ -100,3 +100,25 @@ def test_help_verb_on_an_unknown_command_is_a_usage_error() -> None:
     from oaken_cli.main import main
 
     assert main(["help", "not-a-command"]) == int(ExitCode.USAGE)
+
+
+def test_aliases_take_only_their_slice(capsys: pytest.CaptureFixture[str]) -> None:
+    from oaken_cli.main import ALIASES, build_parser, main
+
+    full = _choices(build_parser())
+    for prog, (_, keep) in ALIASES.items():
+        assert keep <= full, f"{prog} names a command oaken does not have"
+        assert _choices(build_parser(prog)) == keep
+    for prog, argv in (("mill", ["sync"]), ("cubby", ["gmail", "auth"])):  # no plugin fallback
+        with pytest.raises(SystemExit) as exit_:
+            main(argv, prog=prog)
+        assert exit_.value.code == int(ExitCode.USAGE)
+    assert main(["help", "search"], prog="cubby") == int(ExitCode.OK)
+    assert "usage: cubby search" in capsys.readouterr().out
+
+
+def _choices(parser) -> set[str]:  # type: ignore[no-untyped-def]
+    import argparse
+
+    sub = next(a for a in parser._actions if isinstance(a, argparse._SubParsersAction))
+    return set(sub.choices)

@@ -59,7 +59,8 @@ oaken mcp                              # point a stdio MCP client (Claude Deskto
 Set `OAKEN_HOME=~/.oaken` in your shell profile to keep everything under one folder; core warns
 and tells you the line to add if it is unset. A commented `config.toml` is written on first start;
 edit it at `/config`. The full walkthrough is in
-[Set up Oaken from scratch](docs/getting-started.md), and `oaken help` lists every command.
+[Set up Oaken from scratch](docs/getting-started.md), and `oaken help` lists every command. Three shortcuts take a slice each: `mill` (the daemon),
+`sawyer` (the mail flow) and `cubby` (the mailbox).
 
 ## Go further
 

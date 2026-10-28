@@ -16,6 +16,8 @@ Makes a fresh install usable without reading the docs.
   same Bootstrap look. Four new operations back the editor: `config_get`, `config_validate`,
   `config_save` and `config_reload`.
 - `oaken start` prints where the console is.
+- Three shortcut commands, each a slice of `oaken`: `mill` (the daemon), `sawyer` (sync, the
+  pipeline, jobs and schedules) and `cubby` (search, reading and filing mail).
 - A commented default `config.toml` is written on first start (never over an existing file).
 - Core remembers the last `OAKEN_HOME` it ran under. If the variable is unset it uses that home
   and logs a warning with the line to add to your shell profile.
