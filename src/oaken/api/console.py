@@ -51,7 +51,7 @@ DOCS_URL = "https://dfoulks1.github.io/oaken-mail/"
 
 # Nothing is loaded from another origin; forms may only post back here.
 CONSOLE_CSP = (
-    "default-src 'none'; style-src 'self'; img-src 'self'; script-src 'self'; connect-src 'self'; "
+    "default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self'; script-src 'self'; connect-src 'self'; "
     "form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
 )
 PALETTES = ("auto", "oak", "maple", "birch", "acorn", "moss", "stone", "sky", "stream", "contrast")

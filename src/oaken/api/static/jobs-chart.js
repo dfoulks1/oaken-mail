@@ -7,9 +7,22 @@
   if (!canvas || typeof Chart === "undefined") return;
 
   var ctx = canvas.getContext("2d");
-  var history = {};  // stage -> array of {time, throughput}
   var maxPoints = 40; // ~10 min at 15-sec intervals
   var chart = null;
+
+  // Load history from localStorage or start fresh
+  var history = {};
+  try {
+    var saved = localStorage.getItem("trends-history");
+    if (saved) {
+      history = JSON.parse(saved);
+      // Clean up old data (older than 15 min)
+      var cutoff = Date.now() - (15 * 60 * 1000);
+      Object.keys(history).forEach(function (stage) {
+        history[stage] = history[stage].filter(function (p) { return p.time > cutoff; });
+      });
+    }
+  } catch (e) { /* localStorage unavailable, continue with empty history */ }
 
   var colors = {
     parse: "#8b7355",
@@ -86,6 +99,11 @@
             history[stage].shift();
           }
         });
+
+        // Save history to localStorage
+        try {
+          localStorage.setItem("trends-history", JSON.stringify(history));
+        } catch (e) { /* localStorage full or unavailable */ }
 
         if (!chart) initChart();
         updateChart();
