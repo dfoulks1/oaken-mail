@@ -216,13 +216,18 @@ small, .small { font-size: .85rem; }
 .tabbar label:hover { color: var(--text); }
 .pane { display: none; }
 #t-general:checked ~ #p-general, #t-ingest:checked ~ #p-ingest, #t-ai:checked ~ #p-ai,
-#t-plugins:checked ~ #p-plugins, #t-audit:checked ~ #p-audit, #t-ref:checked ~ #p-ref { display: block; }
+#t-plugins:checked ~ #p-plugins, #t-audit:checked ~ #p-audit, #t-ref:checked ~ #p-ref,
+#t-pipeline:checked ~ #p-pipeline, #t-queue:checked ~ #p-queue, #t-trends:checked ~ #p-trends { display: block; }
 #t-general:checked ~ .tabbar [for="t-general"], #t-ingest:checked ~ .tabbar [for="t-ingest"],
 #t-ai:checked ~ .tabbar [for="t-ai"], #t-plugins:checked ~ .tabbar [for="t-plugins"],
-#t-audit:checked ~ .tabbar [for="t-audit"], #t-ref:checked ~ .tabbar [for="t-ref"] { color: var(--text); border-bottom-color: var(--brand); }
+#t-audit:checked ~ .tabbar [for="t-audit"], #t-ref:checked ~ .tabbar [for="t-ref"],
+#t-pipeline:checked ~ .tabbar [for="t-pipeline"], #t-queue:checked ~ .tabbar [for="t-queue"],
+#t-trends:checked ~ .tabbar [for="t-trends"] { color: var(--text); border-bottom-color: var(--brand); }
 #t-general:focus-visible ~ .tabbar [for="t-general"], #t-ingest:focus-visible ~ .tabbar [for="t-ingest"],
 #t-ai:focus-visible ~ .tabbar [for="t-ai"], #t-plugins:focus-visible ~ .tabbar [for="t-plugins"],
-#t-audit:focus-visible ~ .tabbar [for="t-audit"], #t-ref:focus-visible ~ .tabbar [for="t-ref"] { outline: 3px solid var(--focus); outline-offset: 2px; }
+#t-audit:focus-visible ~ .tabbar [for="t-audit"], #t-ref:focus-visible ~ .tabbar [for="t-ref"],
+#t-pipeline:focus-visible ~ .tabbar [for="t-pipeline"], #t-queue:focus-visible ~ .tabbar [for="t-queue"],
+#t-trends:focus-visible ~ .tabbar [for="t-trends"] { outline: 3px solid var(--focus); outline-offset: 2px; }
 
 /* ---- Buttons, forms, switches ---------------------------------------------------------------- */
 .btn { display: inline-flex; align-items: center; gap: .4rem; padding: .4rem .9rem; font: inherit; font-size: .88rem; font-weight: 500; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; text-decoration: none; }

@@ -44,6 +44,8 @@ TEMPLATES = _HERE / "templates"
 CSS = (STATIC / "oaken.css").read_bytes()
 CSS_VERSION = hashlib.sha256(CSS).hexdigest()[:10]
 REFRESH_JS = (STATIC / "refresh.js").read_bytes()
+JOBS_CHART_JS = (STATIC / "jobs-chart.js").read_bytes()
+CHART_UMD_JS = (STATIC / "chart.umd.js").read_bytes()
 LOGO = (TEMPLATES / "oaken-logo.png").read_bytes()
 DOCS_URL = "https://dfoulks1.github.io/oaken-mail/"
 
@@ -442,4 +444,4 @@ ACTIONS: dict[str, Action] = {
     "config-reload": Console.do_config_reload,
 }
 
-__all__ = ["ACTIONS", "CSS", "CSS_VERSION", "LOGO", "REFRESH_JS", "Console"]
+__all__ = ["ACTIONS", "CHART_UMD_JS", "CSS", "CSS_VERSION", "JOBS_CHART_JS", "LOGO", "REFRESH_JS", "Console"]

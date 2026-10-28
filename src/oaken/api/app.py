@@ -23,7 +23,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from oaken.api import models
-from oaken.api.console import CSS, LOGO, REFRESH_JS, Console
+from oaken.api.console import CHART_UMD_JS, CSS, JOBS_CHART_JS, LOGO, REFRESH_JS, Console
 from oaken.api.errors import INTERNAL, ApiError, body, status_for
 from oaken.api.guard import Guard, Policy, Surface
 from oaken.api.openapi import build_api_openapi
@@ -248,6 +248,8 @@ class Api:
             Route("/oaken.css", safe(self.asset_css), methods=["GET"]),
             Route("/oaken-logo.png", safe(self.asset_logo), methods=["GET"]),
             Route("/refresh.js", safe(self.asset_refresh), methods=["GET"]),
+            Route("/jobs-chart.js", safe(self.asset_jobs_chart), methods=["GET"]),
+            Route("/chart.umd.js", safe(self.asset_chart), methods=["GET"]),
             Route("/ui/config-test", safe(self.ui_config_test), methods=["POST"]),
             Route("/ui/{action}", safe(self.ui_action), methods=["POST"]),
         ]
@@ -383,6 +385,16 @@ class Api:
     async def asset_refresh(self, request: Request) -> Response:
         return Response(
             REFRESH_JS, media_type="text/javascript", headers={"cache-control": "no-store"}
+        )
+
+    async def asset_jobs_chart(self, request: Request) -> Response:
+        return Response(
+            JOBS_CHART_JS, media_type="text/javascript", headers={"cache-control": "no-store"}
+        )
+
+    async def asset_chart(self, request: Request) -> Response:
+        return Response(
+            CHART_UMD_JS, media_type="text/javascript", headers={"cache-control": "public, max-age=31536000, immutable"}
         )
 
     async def list_operations(self, request: Request) -> Response:
