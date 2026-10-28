@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// Real-time pipeline throughput chart. Tracks per_second for each stage over the last ~10 min.
+// Real-time pipeline throughput chart for the jobs trends page.
+// Tracks per_second for each stage over the last ~10 min.
 (function () {
   "use strict";
   var canvas = document.getElementById("throughput-chart");
@@ -74,11 +75,11 @@
     fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
-        if (!data || !data.pipeline || !data.pipeline.stages) return;
+        if (!data || !data.stages) return;
 
         var now = Date.now();
-        Object.keys(data.pipeline.stages).forEach(function (stage) {
-          var s = data.pipeline.stages[stage];
+        Object.keys(data.stages).forEach(function (stage) {
+          var s = data.stages[stage];
           if (!history[stage]) history[stage] = [];
           history[stage].push({ time: now, throughput: s.per_second || 0 });
           if (history[stage].length > maxPoints) {
@@ -92,8 +93,8 @@
       .catch(function () { /* silently ignore fetch errors */ });
   }
 
-  // tick on the same interval as the page refresh (default 15s)
-  var every = (parseInt(document.body.getAttribute("data-refresh-seconds") || "15", 10) * 1000);
+  // tick on the same interval as the page refresh (default 10s for jobs)
+  var every = (parseInt(document.body.getAttribute("data-refresh-seconds") || "10", 10) * 1000);
   tick(); // initial
   setInterval(tick, every);
 })();

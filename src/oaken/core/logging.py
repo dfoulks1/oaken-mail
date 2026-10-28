@@ -6,6 +6,7 @@ import os
 import re
 import sys
 import threading
+import traceback
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -33,6 +34,21 @@ def _clean(key: str, value: Any) -> Any:
     if isinstance(value, list | tuple):
         return [_clean(key, v) for v in value]
     return value
+
+
+def exc_frames(_logger: WrappedLogger, _method: str, event_dict: EventDict) -> EventDict:
+    """Swap ``exc_info`` for the exception's type and its frames. The message is left out: it
+    may quote mail."""
+    exc_info = event_dict.pop("exc_info", None)
+    if exc_info is True:
+        exc_info = sys.exc_info()
+    elif isinstance(exc_info, BaseException):
+        exc_info = (type(exc_info), exc_info, exc_info.__traceback__)
+    if exc_info and exc_info[1] is not None:
+        event_dict["exception"] = type(exc_info[1]).__name__
+        tb = traceback.extract_tb(exc_info[2])
+        event_dict["frames"] = [f"{f.filename}:{f.lineno} {f.name}" for f in tb]
+    return event_dict
 
 
 def scrub(_logger: WrappedLogger, _method: str, event_dict: EventDict) -> EventDict:
@@ -109,6 +125,7 @@ def configure_logging(settings: LogSettings, stream: TextIO | None = None) -> No
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
             structlog.processors.TimeStamper(fmt="iso", utc=True),
+            exc_frames,
             scrub,
             renderer,
         ],

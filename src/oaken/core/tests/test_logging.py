@@ -95,3 +95,15 @@ def test_a_relative_log_file_sits_under_the_data_directory(
     configure_logging(LogSettings(file="logs/oaken.log"), stream=io.StringIO())
     get_logger().info("hello")
     assert (tmp_path / "data" / "logs" / "oaken.log").exists()
+
+
+def test_an_exception_logs_its_type_and_frames_but_not_its_message() -> None:
+    out = run()
+    try:
+        raise ValueError("Dear Bob, the merger is off")
+    except ValueError:
+        get_logger().exception("boom")
+    row = last(out)
+    assert row["exception"] == "ValueError"
+    assert isinstance(row["frames"], list) and "test_logging.py" in row["frames"][-1]
+    assert "merger" not in out.getvalue()

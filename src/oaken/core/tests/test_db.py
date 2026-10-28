@@ -97,6 +97,19 @@ async def test_cancelled_transaction_rolls_back(db: Database) -> None:
     await db.execute("INSERT INTO t (v) VALUES ('ok')")
 
 
+async def test_a_cancel_while_begin_runs_leaves_no_transaction_open(db: Database) -> None:
+    # A heartbeat cancelled mid-BEGIN once left the writer holding the lock for good.
+    await make_table(db)
+    task = asyncio.create_task(db.execute("INSERT INTO t (v) VALUES ('cancelled')"))
+    await asyncio.sleep(0)  # the task is now awaiting BEGIN IMMEDIATE
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert not db._writer.in_transaction
+    await db.execute("INSERT INTO t (v) VALUES ('ok')")
+    assert [r["v"] for r in await db.fetchall("SELECT v FROM t")] == ["ok"]
+
+
 async def test_foreign_keys_enforced(db: Database) -> None:
     await db.execute("CREATE TABLE p (id INTEGER PRIMARY KEY)")
     await db.execute("CREATE TABLE c (pid INTEGER REFERENCES p(id))")

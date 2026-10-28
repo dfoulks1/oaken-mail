@@ -6,80 +6,105 @@
 {% block main %}
 {% set controlled = ("embed", "enrich") %}
 <h1>Jobs &amp; pipeline</h1>
-{% if pipeline and pipeline.stages is defined and pipeline.stages %}
-<div class="card">
-  <div class="card-head"><span>Pipeline</span>
-    <span class="row">
-      {% call m.post("pause", "/jobs") %}<button class="btn btn-sm" type="submit">{{ m.icon("pause") }} Pause model stages</button>{% endcall %}
-      {% call m.post("resume", "/jobs") %}<button class="btn btn-sm" type="submit">{{ m.icon("play") }} Resume</button>{% endcall %}
-      {% call m.post("retry-parked", "/jobs") %}<button class="btn btn-sm btn-primary" type="submit">{{ m.icon("retry") }} Retry all parked</button>{% endcall %}
-    </span>
+<div class="tabset">
+  {% for key, label in [("pipeline","Pipeline"),("queue","Queue"),("trends","Trends")] %}
+  <input type="radio" name="tab" id="t-{{ key }}" aria-label="{{ label }}"{% if key == "pipeline" %} checked{% endif %}>
+  {% endfor %}
+  <div class="tabbar" aria-hidden="true">
+    <label for="t-pipeline">Pipeline</label><label for="t-queue">Queue</label><label for="t-trends">Trends</label>
   </div>
-  <div class="card-body muted small">
-    {{ pipeline.docs or 0 }} docs · {{ pipeline.vectors or 0 }} vectors · {{ pipeline.quarantined_files or 0 }} quarantined
-    {% if pipeline.llm_paused %}· <span class="badge badge-warn">model stages paused</span>{% endif %}
-  </div>
-  <div class="table-wrap"><table class="table">
-    <thead><tr><th>Stage</th><th>Pending</th><th>Running</th><th>Failed</th><th>Per second</th><th>State</th><th>At once</th><th><span class="sr-only">Pause or resume</span></th></tr></thead>
-    <tbody>
-    {% for name, s in pipeline.stages.items() %}
-      <tr>
-        <td class="mono">{{ name }}</td>
-        <td data-bind="stages.{{ name }}.pending" data-format="int">{{ s.pending or 0 }}</td>
-        <td data-bind="stages.{{ name }}.running" data-format="int">{{ s.running or 0 }}</td>
-        <td>{% if s.failed %}<span class="badge badge-danger">{{ s.failed }}</span>{% else %}0{% endif %}</td>
-        <td data-bind="stages.{{ name }}.per_second" data-format="fixed2">{{ "%.2f" | format(s.per_second or 0) }}</td>
-        <td>{% if s.paused %}<span class="badge badge-warn">paused</span>{% endif %}</td>
-        <td>{% if name in controlled %}
-          {% call m.post("limit", "/jobs") %}
-            <input type="hidden" name="stage" value="{{ name }}">
-            <input class="input input-sm" type="number" name="concurrency" min="1" max="64" value="{{ s.concurrency or '' }}" placeholder="default" aria-label="Jobs at once for {{ name }}">
-            <button class="btn btn-sm" type="submit">Set</button>
-          {% endcall %}{% endif %}</td>
-        <td class="right">{% if name in controlled %}
-          {% call m.post(("resume" if s.paused else "pause"), "/jobs") %}<input type="hidden" name="stage" value="{{ name }}">
-            <button class="btn btn-sm" type="submit">{% if s.paused %}{{ m.icon("play") }} Resume{% else %}{{ m.icon("pause") }} Pause{% endif %}</button>{% endcall %}{% endif %}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table></div>
-</div>
-{% else %}
-<div class="card"><div class="card-body muted">The ingest pipeline is not running.</div></div>
-{% endif %}
 
-<div class="card">
-  <div class="card-head"><span>Jobs</span>
-    <form class="row" method="get" action="/jobs">
-      <label class="sr-only" for="job-status">Status</label>
-      <select class="select select-sm" id="job-status" name="status">
-        <option value="">All</option>
-        {% for s in statuses %}<option value="{{ s }}"{% if s == status %} selected{% endif %}>{{ s }}</option>{% endfor %}
-      </select>
-      <button class="btn btn-sm" type="submit">Filter</button>
-    </form>
-  </div>
-  <div class="table-wrap"><table class="table">
-    <thead><tr><th>Job</th><th>Kind</th><th>Status</th><th>Attempts</th><th>Error</th><th class="right">Actions</th></tr></thead>
-    <tbody>
-    {% for j in jobs %}
-      <tr>
-        <td class="mono small">{{ j.id }}</td>
-        <td class="mono small">{{ j.kind }}</td>
-        <td><span class="badge {{ {'succeeded': 'badge-ok', 'failed': 'badge-danger', 'running': 'badge-warn', 'queued': 'badge-muted', 'cancelled': 'badge-muted'}.get(j.status, 'badge-muted') }}">{{ j.status }}</span></td>
-        <td>{{ j.attempts }}/{{ j.max_attempts }}</td>
-        <td class="bad small clip" title="{{ j.last_error or '' }}">{{ j.last_error or "" }}</td>
-        <td class="right">
-          {% set back = "/jobs?status=" ~ status if status else "/jobs" %}
-          {% if j.status in ("queued", "running") %}{{ m.confirm("cancel", back, "Cancel", "Cancel this job?", "Cancel job", {"job_id": j.id}) }}{% endif %}
-          {% if j.status in ("failed", "cancelled") %}{% call m.post("retry", back) %}<input type="hidden" name="job_id" value="{{ j.id }}"><button class="btn btn-sm" type="submit">Retry</button>{% endcall %}{% endif %}
-        </td>
-      </tr>
-    {% else %}
-      <tr><td colspan="6" class="muted">No jobs.</td></tr>
-    {% endfor %}
-    </tbody>
-  </table></div>
+  {# ---- Pipeline ---- #}
+  <section class="pane" id="p-pipeline" aria-label="Pipeline">
+  {% if pipeline and pipeline.stages is defined and pipeline.stages %}
+    <div class="card">
+      <div class="card-head"><span>Stages</span>
+        <span class="row">
+          {% call m.post("pause", "/jobs") %}<button class="btn btn-sm" type="submit">{{ m.icon("pause") }} Pause model stages</button>{% endcall %}
+          {% call m.post("resume", "/jobs") %}<button class="btn btn-sm" type="submit">{{ m.icon("play") }} Resume</button>{% endcall %}
+          {% call m.post("retry-parked", "/jobs") %}<button class="btn btn-sm btn-primary" type="submit">{{ m.icon("retry") }} Retry all parked</button>{% endcall %}
+        </span>
+      </div>
+      <div class="card-body muted small">
+        {{ pipeline.docs or 0 }} docs · {{ pipeline.vectors or 0 }} vectors · {{ pipeline.quarantined_files or 0 }} quarantined
+        {% if pipeline.llm_paused %}· <span class="badge badge-warn">model stages paused</span>{% endif %}
+      </div>
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>Stage</th><th>Pending</th><th>Running</th><th>Failed</th><th>Per second</th><th>State</th><th>At once</th><th><span class="sr-only">Pause or resume</span></th></tr></thead>
+        <tbody>
+        {% for name, s in pipeline.stages.items() %}
+          <tr>
+            <td class="mono">{{ name }}</td>
+            <td data-bind="stages.{{ name }}.pending" data-format="int">{{ s.pending or 0 }}</td>
+            <td data-bind="stages.{{ name }}.running" data-format="int">{{ s.running or 0 }}</td>
+            <td>{% if s.failed %}<span class="badge badge-danger">{{ s.failed }}</span>{% else %}0{% endif %}</td>
+            <td data-bind="stages.{{ name }}.per_second" data-format="fixed2">{{ "%.2f" | format(s.per_second or 0) }}</td>
+            <td>{% if s.paused %}<span class="badge badge-warn">paused</span>{% endif %}</td>
+            <td>{% if name in controlled %}
+              {% call m.post("limit", "/jobs") %}
+                <input type="hidden" name="stage" value="{{ name }}">
+                <input class="input input-sm" type="number" name="concurrency" min="1" max="64" value="{{ s.concurrency or '' }}" placeholder="default" aria-label="Jobs at once for {{ name }}">
+                <button class="btn btn-sm" type="submit">Set</button>
+              {% endcall %}{% endif %}</td>
+            <td class="right">{% if name in controlled %}
+              {% call m.post(("resume" if s.paused else "pause"), "/jobs") %}<input type="hidden" name="stage" value="{{ name }}">
+                <button class="btn btn-sm" type="submit">{% if s.paused %}{{ m.icon("play") }} Resume{% else %}{{ m.icon("pause") }} Pause{% endif %}</button>{% endcall %}{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+  {% else %}
+    <div class="card"><div class="card-body muted">The ingest pipeline is not running.</div></div>
+  {% endif %}
+  </section>
+
+  {# ---- Queue ---- #}
+  <section class="pane" id="p-queue" aria-label="Queue">
+    <div class="card">
+      <div class="card-head"><span>Jobs queue</span>
+        <form class="row" method="get" action="/jobs">
+          <label class="sr-only" for="job-status">Status</label>
+          <select class="select select-sm" id="job-status" name="status">
+            <option value="">All</option>
+            {% for s in statuses %}<option value="{{ s }}"{% if s == status %} selected{% endif %}>{{ s }}</option>{% endfor %}
+          </select>
+          <button class="btn btn-sm" type="submit">Filter</button>
+        </form>
+      </div>
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>Job</th><th>Kind</th><th>Status</th><th>Attempts</th><th>Error</th><th class="right">Actions</th></tr></thead>
+        <tbody>
+        {% for j in jobs %}
+          <tr>
+            <td class="mono small">{{ j.id }}</td>
+            <td class="mono small">{{ j.kind }}</td>
+            <td><span class="badge {{ {'succeeded': 'badge-ok', 'failed': 'badge-danger', 'running': 'badge-warn', 'queued': 'badge-muted', 'cancelled': 'badge-muted'}.get(j.status, 'badge-muted') }}">{{ j.status }}</span></td>
+            <td>{{ j.attempts }}/{{ j.max_attempts }}</td>
+            <td class="bad small clip" title="{{ j.last_error or '' }}">{{ j.last_error or "" }}</td>
+            <td class="right">
+              {% set back = "/jobs?status=" ~ status if status else "/jobs" %}
+              {% if j.status in ("queued", "running") %}{{ m.confirm("cancel", back, "Cancel", "Cancel this job?", "Cancel job", {"job_id": j.id}) }}{% endif %}
+              {% if j.status in ("failed", "cancelled") %}{% call m.post("retry", back) %}<input type="hidden" name="job_id" value="{{ j.id }}"><button class="btn btn-sm" type="submit">Retry</button>{% endcall %}{% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="muted">No jobs.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  {# ---- Trends ---- #}
+  <section class="pane" id="p-trends" aria-label="Trends">
+    <div class="card">
+      <div class="card-head">Throughput (last 10 min)</div>
+      <div class="card-body" style="position: relative; height: 350px;">
+        <canvas id="throughput-chart"></canvas>
+      </div>
+    </div>
+  </section>
 </div>
 {% endblock %}
-{% block scripts %}<script src="/refresh.js"></script>{% endblock %}
+{% block scripts %}<script src="/refresh.js"></script><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script><script src="/jobs-chart.js"></script>{% endblock %}

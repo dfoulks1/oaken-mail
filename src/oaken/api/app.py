@@ -72,7 +72,7 @@ def safe(fn: Handler) -> Handler:
         except OakenError as exc:
             return _error(status_for(exc), exc.code, exc.message)
         except Exception as exc:  # reduced to its type: the message may hold mail text
-            log.error("request failed", path=request.url.path, error=type(exc).__name__)
+            log.exception("request failed", path=request.url.path, error=type(exc).__name__)
             return _json(INTERNAL, 500)
 
     return wrapped

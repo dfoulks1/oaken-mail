@@ -131,14 +131,16 @@ class Database:
     async def transaction(self) -> AsyncIterator[Tx]:
         """``BEGIN IMMEDIATE`` ... commit, or roll back if the block raises (or is cancelled)."""
         async with self._write_lock:
-            await self._writer.execute("BEGIN IMMEDIATE")
             try:
+                await _settle(self._writer, "BEGIN IMMEDIATE")
                 yield Tx(self._writer)
+                await _settle(self._writer, "COMMIT")
             except BaseException:
-                await self._writer.execute("ROLLBACK")
+                # Also reached when BEGIN ran but its caller was cancelled, or COMMIT failed:
+                # either way the writer must not be left holding the file's write lock.
+                if self._writer.in_transaction:
+                    await _settle(self._writer, "ROLLBACK")
                 raise
-            else:
-                await self._writer.execute("COMMIT")
 
     async def execute(self, sql: str, params: Params = ()) -> int:
         async with self.transaction() as tx:
@@ -246,6 +248,17 @@ async def _pragma(conn: aiosqlite.Connection, setting: str) -> None:
     """Run a PRAGMA and drain it: an unfinished statement would keep its lock."""
     async with conn.execute(f"PRAGMA {setting}") as cur:
         await cur.fetchall()
+
+
+async def _settle(conn: aiosqlite.Connection, sql: str) -> None:
+    """Run ``sql`` to the end even if the caller is cancelled, then pass the cancel on. aiosqlite
+    runs a statement in its thread either way; leaving early loses track of an open transaction."""
+    task = asyncio.ensure_future(conn.execute(sql))
+    try:
+        await asyncio.shield(task)
+    except asyncio.CancelledError:
+        await task
+        raise
 
 
 async def _connect(path: Path, busy_timeout_ms: int, *, read_only: bool) -> aiosqlite.Connection:

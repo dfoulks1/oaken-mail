@@ -1,0 +1,75 @@
+{
+  "label": "docs",
+  "sha": "6c41ad2",
+  "tree": "c1ca2c184238e74e216f979a90882414b476ab17",
+  "timestamp": 1792930965,
+  "passed": true,
+  "steps": [
+    {
+      "step": "sync",
+      "cmd": [
+        "uv",
+        "sync",
+        "--quiet"
+      ],
+      "ok": true,
+      "output": ""
+    },
+    {
+      "step": "build the site",
+      "cmd": [
+        "uv",
+        "run",
+        "python",
+        "docs/tools/build_site.py"
+      ],
+      "ok": true,
+      "output": "Built 61 files into /home/dfoulks/local/oaken-mail/docs\n"
+    },
+    {
+      "step": "check docs",
+      "cmd": [
+        "uv",
+        "run",
+        "python",
+        "docs/tools/check_docs.py"
+      ],
+      "ok": true,
+      "output": "Docs OK: built twice with identical output; links, anchors and hosts check out.\n"
+    },
+    {
+      "step": "check commands",
+      "cmd": [
+        "uv",
+        "run",
+        "python",
+        "docs/tools/check_commands.py"
+      ],
+      "ok": true,
+      "output": ""
+    },
+    {
+      "step": "check prompts",
+      "cmd": [
+        "uv",
+        "run",
+        "python",
+        "docs/tools/check_prompts.py"
+      ],
+      "ok": true,
+      "output": ""
+    },
+    {
+      "step": "TODO(user) markers",
+      "cmd": [
+        "uv",
+        "run",
+        "python",
+        "-c",
+        "import subprocess, sys; r = subprocess.run(    ['grep', '-rn', 'TODO(user)', '--include=*.md', '.',      '--exclude-dir=.venv', '--exclude-dir=.git'],     capture_output=True, text=True); lines = [l for l in r.stdout.splitlines()         if not l.startswith('./docs/tools/')]; print('\\n'.join(lines) if lines else 'none')"
+      ],
+      "ok": true,
+      "output": "./docs/prompts/DOCS_20-oss-docs.md:7:> `TODO(user)` contacts (`security`, `code-of-conduct`) that `build_site.py --strict` reports.\n./docs/prompts/DOCS_20-oss-docs.md:49:    name** as the user's `TODO(user)`), a *Start* path (install \u2192 connect Gmail \u2192 first\n./docs/prompts/DOCS_20-oss-docs.md:55:    `TODO(user)` items, which the report lists (name story, security contact). Verify the\n./docs/prompts/DOCS_01a-docs-site-scaffold.md:37:    `TODO(user)` paragraph (the user will write it); \"What it is for\" and the lead are\n./docs/prompts/DOCS_01a-docs-site-scaffold.md:84:   `--strict` additionally fails on any `TODO(user)` left in site content (used for release).\n./docs/prompts/DOCS_01a-docs-site-scaffold.md:124:  heading skip, `TODO(user)` under `--strict`).\n./docs/prompts/CORE_01-bootstrap.md:23:   placeholder contact the user must fill in \u2014 leave an obvious `TODO(user)`).\n./docs/prompts/CORE_19-security-hardening.md:42:   `SECURITY.md` updated with the disclosure process (leave the contact `TODO(user)`).\n"
+    }
+  ]
+}
