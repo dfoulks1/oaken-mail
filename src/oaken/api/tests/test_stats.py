@@ -91,15 +91,16 @@ def test_the_dropdown_and_menu_sit_on_the_first_row_of_each_component_and_none_i
     ]
     rows = StatsCollector._usage_view(usage, models)
     owners = [(r["stage"], (r["component"] or {}).get("label")) for r in rows]
+    # usage is now aggregated by stage: the two triage rows combine into one with calls=2
     assert owners == [
         ("enrich", None),  # the pipeline's own row: no component, no controls
-        ("llm.enrich.triage", "triage"),  # controls on the first row only
-        ("llm.enrich.triage", None),
+        ("llm.enrich.triage", "triage"),  # aggregated across models (calls=2)
         ("llm", "Language model"),  # nothing recorded yet: a zero row keeps it editable
         ("embed", "Embedder"),
         ("llm.enrich.summary", "summary"),
     ]
-    assert rows[3]["calls"] == 0 and rows[3]["workspace"] == "—"
+    assert rows[2]["calls"] == 0 and rows[2]["workspace"] == "—"
+    assert rows[1]["calls"] == 2  # the triage row aggregates both models
 
 
 def test_ask_has_its_own_model_row_and_its_usage_lands_on_it() -> None:

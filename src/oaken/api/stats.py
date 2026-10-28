@@ -198,10 +198,9 @@ class StatsCollector:
     def _usage_view(
         usage: list[dict[str, Any]], models: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
-        """The usage rows with the component that owns each one, so the page can show one table:
-        the model dropdown and the settings menu sit on the row that reports its tokens. Only the
-        first row of a component carries the controls. A component that has recorded nothing yet
-        gets a row of zeros, so it can still be edited."""
+        """Group token usage by stage (not stage+model), summing calls and tokens across all
+        models for each stage. The component controls (model dropdown, settings) appear on each
+        stage's row. Stages with no recorded usage still get a row of zeros."""
         by_name = {m["name"]: m for m in models if m["kind"] == "enricher"}
         backend = next((m for m in models if m["kind"] == "llm_backend"), None)
         embedder = next((m for m in models if m["kind"] == "embedder"), None)
@@ -216,14 +215,34 @@ class StatsCollector:
                 return backend
             return embedder if stage == "embed" else None
 
-        rows: list[dict[str, Any]] = []
-        seen: set[tuple[str, str]] = set()
+        # aggregate by stage: sum tokens and calls
+        by_stage: dict[tuple[str, str], dict[str, Any]] = {}
         for u in usage:
-            comp = owner(u["stage"])
-            first = comp is not None and (comp["kind"], comp["name"]) not in seen
-            if comp is not None:
-                seen.add((comp["kind"], comp["name"]))
-            rows.append({**u, "component": comp if first else None, "model_text": u["model_id"]})
+            ws = u["workspace"]
+            stage = u["stage"]
+            key = (ws, stage)
+            if key not in by_stage:
+                by_stage[key] = {
+                    "workspace": ws,
+                    "stage": stage,
+                    "calls": 0,
+                    "cached_calls": 0,
+                    "tokens_in": 0,
+                    "tokens_out": 0,
+                    "tokens_saved": 0,
+                    "component": owner(stage),
+                    "model_text": "",  # leave blank; this is aggregated
+                }
+            by_stage[key]["calls"] += u["calls"]
+            by_stage[key]["cached_calls"] += u["cached_calls"]
+            by_stage[key]["tokens_in"] += u["tokens_in"]
+            by_stage[key]["tokens_out"] += u["tokens_out"]
+            by_stage[key]["tokens_saved"] += u["tokens_saved"]
+
+        rows = list(by_stage.values())
+        seen = {(r["component"]["kind"], r["component"]["name"]) for r in rows if r["component"] is not None}
+
+        # add stages with no usage yet
         for comp in models:
             if (comp["kind"], comp["name"]) in seen:
                 continue
@@ -233,7 +252,7 @@ class StatsCollector:
                 "ask": "llm.ask",
             }.get(comp["kind"], "llm")
             rows.append(
-                {"workspace": "—", "stage": stage, "model_id": comp["model"], "calls": 0,
+                {"workspace": "—", "stage": stage, "calls": 0,
                  "cached_calls": 0, "tokens_in": 0, "tokens_out": 0, "tokens_saved": 0,
                  "component": comp, "model_text": comp["model"]}
             )  # fmt: skip
