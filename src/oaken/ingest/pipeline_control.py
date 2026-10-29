@@ -24,8 +24,8 @@ from oaken.core.db import Database
 from oaken.core.errors import InvalidInput
 from oaken.readstate.audit import AuditLog, new_audit_id
 
-# The model-bound ingest kinds a pause withholds. Mirrors pipeline.EMBED / pipeline.ENRICH.
-LLM_STAGES: frozenset[str] = frozenset({"ingest.embed", "ingest.enrich"})
+# The model-bound ingest kinds a pause withholds. Mirrors pipeline.EMBED / TRIAGE / ENRICH.
+LLM_STAGES: frozenset[str] = frozenset({"ingest.embed", "ingest.triage", "ingest.enrich"})
 # The stage names a person uses, and the job kind each one runs.
 STAGES: dict[str, str] = {"embed": "ingest.embed", "enrich": "ingest.enrich"}
 MAX_CONCURRENCY = 64  # the same ceiling as ``[jobs] workers``

@@ -74,8 +74,9 @@ log = get_logger("oaken.ingest")
 PARSE = "ingest.parse"
 EMBED = "ingest.embed"
 ENRICH = "ingest.enrich"
+TRIAGE = "ingest.triage"  # the gate enricher alone; its priority decides what ENRICH is owed
 REPROCESS = "ingest.reprocess"
-STAGE_KINDS = (PARSE, EMBED, ENRICH, REPROCESS)
+STAGE_KINDS = (PARSE, EMBED, TRIAGE, ENRICH, REPROCESS)
 GATE = "triage"  # its priority can gate the others (``[plugins.<name>] min_priority``)
 CUT = "\n[... the middle of this message was cut to fit the size limit ...]\n"
 
@@ -96,6 +97,7 @@ class ParsePayload(BaseModel):
 class MessagePayload(BaseModel):
     message_id: str
     backfill: bool = False
+    triage_failed: bool = False  # triage gave up on this message: gated enrichers run anyway
 
 
 class ReprocessPayload(BaseModel):
@@ -199,6 +201,13 @@ class Pipeline:
             result_model=StageJobResult,
         )
         runner.register(
+            TRIAGE,
+            MessagePayload,
+            self._triage_job,
+            concurrency=self.cfg.triage_concurrency,
+            result_model=StageJobResult,
+        )
+        runner.register(
             ENRICH,
             MessagePayload,
             self._enrich_job,
@@ -233,12 +242,21 @@ class Pipeline:
         )
 
     async def _enqueue_stage(
-        self, kind: str, step: int, message_id: MessageId, account_id: AccountId, backfill: bool
+        self,
+        kind: str,
+        step: int,
+        message_id: MessageId,
+        account_id: AccountId,
+        backfill: bool,
+        *,
+        triage_failed: bool = False,
     ) -> None:
         base = PRIORITY_BACKFILL if backfill else PRIORITY_INGEST
         await self.queue.enqueue(
             kind,
-            MessagePayload(message_id=message_id, backfill=backfill),
+            MessagePayload(
+                message_id=message_id, backfill=backfill, triage_failed=triage_failed
+            ),
             priority=base - step,
             account_id=account_id,
             dedupe_key=f"{kind}:{message_id}",
@@ -262,7 +280,9 @@ class Pipeline:
         await self._quarantine(mid, msg.account_id)
         if self.embedding_enabled():
             await self._enqueue_stage(EMBED, EMBED_STEP, mid, msg.account_id, p.backfill)
-        if self.backends.enrichers():
+        if self._triage_on():
+            await self._enqueue_stage(TRIAGE, ENRICH_STEP, mid, msg.account_id, p.backfill)
+        elif self.backends.enrichers():
             await self._enqueue_stage(ENRICH, ENRICH_STEP, mid, msg.account_id, p.backfill)
         changed = res is not None and res.changed
         return StageJobResult(done=int(changed), skipped=int(not changed))
@@ -396,9 +416,43 @@ class Pipeline:
             )
         return out
 
+    # -- ingest.triage ----------------------------------------------------------------------
+    async def _triage_job(self, p: MessagePayload, job: Job) -> StageJobResult:
+        """Triage alone. Its priority decides what else is owed, so ENRICH is queued once it has
+        a result. On the last attempt a failure still queues ENRICH, with the gate open, so one
+        model outage cannot strand mail."""
+        mid = MessageId(p.message_id)
+        doc = await self.index.get_doc(mid)
+        if doc is None:
+            return StageJobResult(note="gone")
+        account = AccountId(doc["account_id"])
+        try:
+            r = await self._enrich_message(mid, only={GATE}, force=False)
+        except Exception:
+            if job.attempts >= job.max_attempts:
+                await self._enqueue_stage(
+                    ENRICH, ENRICH_STEP, mid, account, p.backfill, triage_failed=True
+                )
+            raise
+        await self._enqueue_stage(ENRICH, ENRICH_STEP, mid, account, p.backfill)
+        return StageJobResult(done=r.ran, skipped=r.cached)
+
+    def _triage_on(self) -> bool:
+        return GATE in self.backends.enrichers() and (
+            self.settings.plugins.get(GATE, {}).get("enabled") is not False
+        )
+
     # -- ingest.enrich ----------------------------------------------------------------------
     async def _enrich_job(self, p: MessagePayload, _job: Job) -> StageJobResult:
-        r = await self.enrich_message(MessageId(p.message_id))
+        mid = MessageId(p.message_id)
+        # Triage has its own job, so this one leaves it out. A message with no triage result (an
+        # enrich job queued before the split) still gets it here, or strict mode would hold the
+        # gated enrichers back for good.
+        split = self._triage_on() and (
+            p.triage_failed or await self.enrichment(mid, GATE) is not None
+        )
+        others = set(self.backends.enrichers()) - {GATE} if split else None
+        r = await self.enrich_message(mid, only=others, gate_open=p.triage_failed)
         return StageJobResult(done=r.ran, skipped=r.cached + r.gated)
 
     async def enrich_message(
@@ -407,6 +461,7 @@ class Pipeline:
         *,
         only: Collection[str] | None = None,
         force: bool = False,
+        gate_open: bool = False,
     ) -> EnrichResult:
         """Run every enricher whose result for this content is not already stored. A result
         another message with the same content produced is copied, not asked for again.
@@ -415,13 +470,17 @@ class Pipeline:
         is stored and asks the model afresh (the new answer replaces the cached one)."""
         token = FRESH.set(True) if force else None
         try:
-            return await self._enrich_message(message_id, only, force)
+            return await self._enrich_message(message_id, only, force, gate_open)
         finally:
             if token is not None:
                 FRESH.reset(token)
 
     async def _enrich_message(
-        self, message_id: MessageId, only: Collection[str] | None, force: bool
+        self,
+        message_id: MessageId,
+        only: Collection[str] | None,
+        force: bool,
+        gate_open: bool = False,
     ) -> EnrichResult:
         out = EnrichResult()
         if await self._skip_ai(message_id):
@@ -442,7 +501,11 @@ class Pipeline:
             if table.get("enabled") is False:
                 continue  # switched off with [plugins.<name>] enabled = false
             bar = self._bar(name, enricher)
-            if name != GATE and bar is not None and await self._rated_below(message_id, bar):
+            if (
+                name != GATE
+                and bar is not None
+                and await self._rated_below(message_id, bar, gate_open)
+            ):
                 out.gated += 1
                 continue
             if enricher.needs_llm and llm is None:
@@ -513,7 +576,7 @@ class Pipeline:
             if table.get("enabled") is False:
                 continue
             bar = self._bar(name, enricher)
-            if name != GATE and bar is not None and isinstance(priority, int) and priority < bar:
+            if name != GATE and bar is not None and self._held_back(priority, bar):
                 continue  # triage rated it below this enricher's bar: nothing is owed
             needs = getattr(enricher, "needs_model", None)
             if needs is not None and not needs(msg):
@@ -657,12 +720,17 @@ class Pipeline:
         except (TypeError, ValueError):
             return None
 
-    async def _rated_below(self, message_id: MessageId, bar: int) -> bool:
-        """True when triage has rated this message under ``bar``. With no triage result (it is off,
-        or has not run) nothing is gated: an enricher is never skipped on a guess."""
+    async def _rated_below(self, message_id: MessageId, bar: int, gate_open: bool = False) -> bool:
         triage = await self.enrichment(message_id, GATE)
-        priority = triage.get("priority") if triage else None
-        return isinstance(priority, int) and priority < bar
+        return self._held_back(triage.get("priority") if triage else None, bar, gate_open)
+
+    def _held_back(self, priority: object, bar: int, gate_open: bool = False) -> bool:
+        """True when an enricher with this bar waits. Unrated mail waits only in strict mode, and
+        only while triage is on: nothing waits on a rater that is switched off. ``gate_open`` is
+        set when triage gave up on the message, so unrated mail no longer waits."""
+        if isinstance(priority, int):
+            return priority < bar
+        return self.settings.ai.triage_gate == "strict" and self._triage_on() and not gate_open
 
     async def _run_plugin_stages(
         self, message_id: MessageId, doc: sqlite3.Row, account: AccountId, force: bool

@@ -694,7 +694,8 @@ async def retry_parked(ctx: OpContext, inp: RetryParkedInput) -> RetryParkedOutp
         return RetryParkedOutput(retried=[inp.job_id])
     # Every failed ingest.* job. list() filters by one kind, so gather across the ingest kinds.
     retried: list[str] = []
-    for kind in ("ingest.parse", "ingest.embed", "ingest.enrich", "ingest.reprocess"):
+    kinds = ("ingest.parse", "ingest.embed", "ingest.triage", "ingest.enrich", "ingest.reprocess")
+    for kind in kinds:
         for job in await queue.query(status="failed", kind=kind, limit=500):
             await queue.retry(job.id)
             retried.append(str(job.id))

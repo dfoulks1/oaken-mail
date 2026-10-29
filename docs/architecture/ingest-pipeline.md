@@ -159,7 +159,7 @@ store can sit behind it later.
 | `ingest.embed_batch` | 32 | Chunks per embedder call |
 | `ingest.backfill_queue_cap` | 2000 | Queued `ingest.*` jobs at which a backfill pauses |
 | `ingest.stage_max_attempts` | 8 | Attempts before a stage job is parked |
-| `ingest.embed_concurrency` / `enrich_concurrency` | 1 | Jobs of each stage at once |
+| `ingest.embed_concurrency` / `enrich_concurrency` / `triage_concurrency` | 1 | Jobs of each stage at once; triage is its own job, queued first |
 | `ai.enrich_max_input_tokens` | 3000 | Most tokens of one message an LLM enricher is sent |
 | `plugins.<enricher>.enabled` | true | `false` skips that enricher |
 | `plugins.summary.skip_bulk` / `plugins.actions.skip_bulk` | true | Do not ask a model about bulk mail |

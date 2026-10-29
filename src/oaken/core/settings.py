@@ -87,6 +87,9 @@ class AISettings(_Section):
     vector_store: str = "sqlite-vec"
     # The LLM answer cache plugin (entry-point name). Empty keeps core's own SQLite cache.
     cache: str = ""
+    # strict: an enricher with a min_priority waits until triage rates the message. promiscuous:
+    # it runs on unrated mail too. Strict holds only while triage is on.
+    triage_gate: Literal["strict", "promiscuous"] = "strict"
     # Most tokens of one message's cleaned text an LLM enricher sends. A longer message keeps its
     # head and tail with a marker between, and the result says ``truncated``.
     enrich_max_input_tokens: int = Field(default=3000, ge=200)
@@ -128,6 +131,8 @@ class IngestSettings(_Section):
     # How many of each model-bound job run at once (one local GPU: leave at 1).
     embed_concurrency: int = Field(default=1, ge=1)
     enrich_concurrency: int = Field(default=1, ge=1)
+    # Triage runs as its own job, ahead of the rest of enrichment, so it has its own cap.
+    triage_concurrency: int = Field(default=1, ge=1)
     # Rolling window for the throughput the status ETA uses.
     throughput_window_seconds: float = Field(default=600.0, gt=0)
 
