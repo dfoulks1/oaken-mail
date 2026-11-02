@@ -1,7 +1,6 @@
 # 52 — The console by stage: status on `/`, a tab per kind (DRAFT)
 
-**Status:** slices A and B built (defaults taken for Q1 to Q3). Remaining: the tab names and
-layout are open to your review.
+**Status:** built, then revised after review: the stages moved into the masthead (see Goal).
 **Read first:** `00-context.md`, `CORE_50-console-without-script.md` (no script, no CDN: forms,
 redirects and `popover` only), `CORE_41-stats-controls.md`, `CORE_47-split-enrich.md`.
 **Depends on:** 41, 47, 50. Nothing unbuilt.
@@ -14,7 +13,15 @@ audit log. The Plugins tab lists every kind in one table with a Kind column that
 only `embed` and `enrich` can be paused or limited. Triage is now a plugin kind of its own, and an
 embedder is a bottleneck that must be scalable and removable. The structure has been outgrown.
 
-## Goal
+## Goal (revised after review)
+
+The masthead reads **General, Triage, Embed, Enrich, Config, Capabilities, Docs**. `/` is the front
+page. **General** (`/stats`) holds Ingest (every stage, plus live throughput), Queue (the jobs queue
+and parked jobs; the Jobs page is gone), Providers, LLM backends, Vector stores, Caches, usage and
+agents, and the Audit log. **Triage**, **Embed** and **Enrich** are pages of their own: the stage's
+controls and the plugins of its kind. **Capabilities** (the old Reference) lists operations grouped
+by the kind of plugin that offers them (Operation, Provider, Permission, MCP, Summary), with the MCP
+workspaces. The original goals below describe the first cut.
 
 1. **`/` is the front page**: status and the daemon's environment. Not `/general`.
 2. **General** (the page now called Stats) is information-forward: **Ingest**, **Audit log** and

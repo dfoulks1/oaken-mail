@@ -17,7 +17,13 @@ from pydantic import BaseModel, ValidationError
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
+from starlette.responses import (
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from starlette.routing import BaseRoute, Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -243,7 +249,11 @@ class Api:
             Route("/stats.json", safe(self.stats_json), methods=["GET"]),
             Route("/config", safe(self.config_editor), methods=["GET"]),
             Route("/getting_started", safe(self.getting_started), methods=["GET"]),
-            Route("/jobs", safe(self.jobs_page), methods=["GET"]),
+            Route("/jobs", safe(self.jobs_page), methods=["GET"]),  # moved into General
+            Route("/triage", safe(self.triage_page), methods=["GET"]),
+            Route("/embed", safe(self.embed_page), methods=["GET"]),
+            Route("/enrich", safe(self.enrich_page), methods=["GET"]),
+            Route("/capabilities", safe(self.capabilities_page), methods=["GET"]),
             Route("/jobs/pipeline", safe(self.jobs_pipeline), methods=["GET"]),
             Route("/oaken.css", safe(self.asset_css), methods=["GET"]),
             Route("/oaken-logo.png", safe(self.asset_logo), methods=["GET"]),
@@ -321,16 +331,29 @@ class Api:
         return await self.console.config_test(request, form_text, render)
 
     async def jobs_page(self, request: Request) -> Response:
-        """The jobs & pipeline console: inspect the durable queue and steer the ingest pipeline."""
-        status = request.query_params.get("status", "")
-        known = ("queued", "running", "failed", "cancelled", "succeeded")
-        payload: dict[str, Any] = {"limit": 100}
-        if status in known:
-            payload["status"] = status
-        jobs = (await self._op("list_jobs", payload)).get("jobs", [])
-        pipeline = await self._op("pipeline_status", {})
-        context = {"jobs": jobs, "pipeline": pipeline, "status": status, "statuses": known}
-        return self.console.render(request, "jobs.html", "jobs", context)
+        """The jobs page moved into General (its Queue and Ingest tabs); old links still work."""
+        return RedirectResponse("/stats?tab=queue", status_code=303)
+
+    async def _stage_page(
+        self, request: Request, kind: str, stage: str, label: str, plural: str
+    ) -> Response:
+        data = await self._stats_collector().collect()
+        data.update(stage_kind=kind, stage_name=stage, stage_label=label, stage_plural=plural)
+        return self.console.render(request, "stage.html", stage, data)
+
+    async def triage_page(self, request: Request) -> Response:
+        return await self._stage_page(request, "triager", "triage", "Triage", "Triagers")
+
+    async def embed_page(self, request: Request) -> Response:
+        return await self._stage_page(request, "embedder", "embed", "Embed", "Embedders")
+
+    async def enrich_page(self, request: Request) -> Response:
+        return await self._stage_page(request, "enricher", "enrich", "Enrich", "Enrichers")
+
+    async def capabilities_page(self, request: Request) -> Response:
+        """What this core can do, by plugin kind, and what MCP clients may call."""
+        data = await self._stats_collector().collect()
+        return self.console.render(request, "capabilities.html", "capabilities", data)
 
     async def getting_started(self, request: Request) -> Response:
         """A short in-app walkthrough of the config.toml settings."""
@@ -366,6 +389,13 @@ class Api:
         """The status page (ADR 0013). Loopback-only (the Host guard) and unauthenticated like
         ``/v1/health``; counts and health only, never mail content."""
         data = await self._stats_collector().collect()
+        status = request.query_params.get("status", "")
+        known = ("queued", "running", "failed", "cancelled", "succeeded")
+        payload: dict[str, Any] = {"limit": 100}
+        if status in known:
+            payload["status"] = status
+        data["jobs"] = (await self._op("list_jobs", payload)).get("jobs", [])
+        data.update(status=status, statuses=known)
         return self.console.render(request, "stats.html", "stats", data)
 
     async def stats_json(self, request: Request) -> Response:

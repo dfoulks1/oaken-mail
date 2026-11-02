@@ -51,7 +51,7 @@ async def test_a_remote_client_gets_the_api_but_never_the_console(
             assert (await far.get("/v1/operations", headers=headers)).status_code == 401
             assert (await far.get("/v1/health", headers=headers)).status_code == 200
             # The token-free pages (and the config editor's data) are for this machine only.
-            for path in ("/", "/config", "/jobs", "/stats", "/getting_started"):
+            for path in ("/", "/config", "/triage", "/capabilities", "/stats", "/getting_started"):
                 refused = await far.get(path, headers=headers)
                 assert refused.status_code == 403, path
                 assert refused.json()["code"] == "local_only"

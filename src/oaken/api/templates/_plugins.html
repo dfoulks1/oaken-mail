@@ -1,0 +1,139 @@
+{#- SPDX-License-Identifier: Apache-2.0 -#}
+{#- Shared pieces for the pages that list plugins: a stage's controls, a kind's plugin table and the
+    settings dialogs. Import with context: they read pipeline, plugins and models. -#}
+{% import "_macros.html" as m with context %}
+
+{% macro setting(plugin, field, spec, val, row) %}
+  {% set kinds = (spec.anyOf | map(attribute="type") | list) if spec.anyOf else [spec.type] %}
+  <div class="field">
+    <label for="pf-{{ plugin }}-{{ field }}">{{ field }}</label>
+    <div>
+    {% if field == "model" and row.choices %}
+      <input type="hidden" name="type:{{ field }}" value="string">
+      <select class="select" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}">
+        {% if row.kind == "enricher" %}<option value=""{% if not val %} selected{% endif %}>backend default ({{ row.default }})</option>{% endif %}
+        {% for c in row.choices %}<option value="{{ c }}"{% if c == val %} selected{% endif %}>{{ c }}</option>{% endfor %}
+        {% if val and val not in row.choices %}<option value="{{ val }}" selected>{{ val }} (not installed)</option>{% endif %}
+      </select>
+    {% elif "boolean" in kinds and "null" in kinds %}
+      <input type="hidden" name="type:{{ field }}" value="tristate">
+      <select class="select" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}">
+        <option value=""{% if val is none %} selected{% endif %}>automatic</option>
+        <option value="true"{% if val is sameas true %} selected{% endif %}>on</option>
+        <option value="false"{% if val is sameas false %} selected{% endif %}>off</option>
+      </select>
+    {% elif "boolean" in kinds %}
+      <input type="hidden" name="type:{{ field }}" value="boolean">
+      <label class="check"><input type="checkbox" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}" value="1"{% if val %} checked{% endif %}> on</label>
+    {% elif "integer" in kinds or "number" in kinds %}
+      <input type="hidden" name="type:{{ field }}" value="number">
+      <input class="input" type="number" step="any" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}" value="{{ val if val is not none else '' }}">
+    {% else %}
+      <input type="hidden" name="type:{{ field }}" value="string">
+      <input class="input" type="text" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}" value="{{ val if val is not none else '' }}">
+    {% endif %}
+    {% if spec.description %}<p class="hint">{{ spec.description }}</p>{% endif %}
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro health(p) %}
+  {%- if p.healthy %}<span class="badge badge-ok">healthy</span>
+  {%- elif p.started %}<span class="badge badge-danger" title="{{ p.detail }}">{{ p.detail or "unhealthy" }}</span>
+  {%- else %}<span class="badge badge-warn" title="{{ p.detail }}">{{ p.detail or "not started" }}</span>{% endif -%}
+{% endmacro %}
+
+{% macro stage_toggle(stage, s, back) %}
+  {%- if s and s.paused %}{% call m.post("resume", back) %}<input type="hidden" name="stage" value="{{ stage }}"><button class="btn btn-sm" type="submit" aria-label="Resume {{ stage }}">{{ m.icon("play") }} Resume</button>{% endcall %}
+  {%- else %}{% call m.post("pause", back) %}<input type="hidden" name="stage" value="{{ stage }}"><button class="btn btn-sm" type="submit" aria-label="Pause {{ stage }}">{{ m.icon("pause") }} Pause</button>{% endcall %}{% endif -%}
+{% endmacro %}
+
+{% macro kind_body(kind, label, stage, back) %}
+  {% if stage and pipeline and pipeline.stages.get(stage) %}
+  {% set s = pipeline.stages[stage] %}
+  <div class="card">
+    <div class="card-head"><span>{{ label }} stage <span class="mono">{{ stage }}</span>{% if s.paused %} <span class="badge badge-warn">paused</span>{% endif %}</span>
+      <span class="row">
+        {{ stage_toggle(stage, s, back) }}
+        {% if s.failed %}{% call m.post("retry-parked", back) %}<button class="btn btn-sm" type="submit">{{ m.icon("retry") }} Retry parked</button>{% endcall %}{% endif %}
+      </span>
+    </div>
+    <div class="card-body row">
+      <span class="muted mono small">{{ s.pending }} pending · {{ s.running }} running · {{ s.failed }} failed · {{ "%.2f" | format(s.per_second) }}/s</span>
+      {% call m.post("limit", back) %}
+        <input type="hidden" name="stage" value="{{ stage }}">
+        <label class="small muted" for="at-{{ kind }}">At once</label>
+        <input class="input input-sm" id="at-{{ kind }}" type="number" name="concurrency" min="1" max="64" value="{{ s.concurrency if s.concurrency else '' }}">
+        <button class="btn btn-sm" type="submit">Set</button>
+      {% endcall %}
+    </div>
+  </div>
+  {% endif %}
+  <div class="card">
+    <div class="card-head">{{ label }}</div>
+    <div class="table-wrap"><table class="table nowrap">
+      <thead><tr><th>Plugin</th><th>Version</th><th>Capabilities</th><th>Health</th><th>Model</th><th>Enabled</th>{% if kind == "enricher" %}<th>Pause</th>{% endif %}<th class="right">Actions</th></tr></thead>
+      <tbody>
+      {% for p in plugins if p.kind == kind %}
+        {% set cs = models | selectattr("kind", "equalto", p.kind) | selectattr("name", "equalto", p.name) | list %}
+        {% set c = cs[0] if cs else none %}
+        <tr>
+          <td class="mono">{{ p.name }}</td><td class="mono">{{ p.version }}</td>
+          <td class="muted mono small">{{ p.capabilities | join(", ") or "—" }}</td>
+          <td>{{ health(p) }}</td>
+          <td>
+            {% if c and c.choices %}
+              {% call m.post("model", back) %}
+                <input type="hidden" name="kind" value="{{ c.kind }}"><input type="hidden" name="plugin" value="{{ c.name }}">
+                <select class="select select-sm mono" name="model" aria-label="Model for {{ p.name }}">
+                  {% if c.kind in ("enricher", "triager") %}<option value=""{% if not c.model %} selected{% endif %}>default ({{ c.default }})</option>{% endif %}
+                  {% for ch in c.choices %}<option value="{{ ch }}"{% if ch == c.model %} selected{% endif %}>{{ ch }}</option>{% endfor %}
+                  {% if c.model and c.model not in c.choices %}<option value="{{ c.model }}" selected>{{ c.model }} (not installed)</option>{% endif %}
+                </select>
+                <button class="btn btn-sm" type="submit">Use</button>
+              {% endcall %}
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
+          <td>{{ m.switch("plugin", back, p.enabled, "Enable " ~ p.name, {"name": p.name}, "verb", "enable", "disable") }}</td>
+          {% if kind == "enricher" %}
+          <td>{{ stage_toggle("enrich." ~ p.name, pipeline.enrichers.get("enrich." ~ p.name) if pipeline else none, back) }}</td>
+          {% endif %}
+          <td class="right row">
+            {% if c and c.config_schema and c.config_schema.properties %}<button type="button" class="btn btn-sm" popovertarget="pm-{{ c.kind }}-{{ c.name }}" popovertargetaction="show">Settings</button>{% endif %}
+            {% call m.post("plugin", back) %}<input type="hidden" name="name" value="{{ p.name }}"><input type="hidden" name="verb" value="reload"><button class="btn btn-sm" type="submit" title="Restart {{ p.name }} on the current config.toml">Reload</button>{% endcall %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="muted">No {{ label | lower }} installed.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% if kind != "enricher" %}<div class="card-foot">Turn a plugin off to take it out of the pipeline for now; turn it on to put it back.</div>{% endif %}
+  </div>
+{% endmacro %}
+
+{% macro kind_pane(kind, label, stage) %}
+<section class="pane" id="p-{{ kind }}" aria-label="{{ label }}">
+  {{ kind_body(kind, label, stage, "/stats?tab=" ~ kind) }}
+</section>
+{% endmacro %}
+
+{% macro dialogs(back) %}
+{% for c in models %}{% if c.config_schema and c.config_schema.properties %}
+    <div class="dialog" id="pm-{{ c.kind }}-{{ c.name }}" popover role="dialog" aria-labelledby="pm-{{ c.kind }}-{{ c.name }}-t">
+      <form method="post" action="/ui/plugin-settings">
+        {{ m.guard(back) }}<input type="hidden" name="plugin" value="{{ c.name }}"><input type="hidden" name="kind" value="{{ c.kind }}">
+        <div class="dialog-head"><h2 id="pm-{{ c.kind }}-{{ c.name }}-t">{{ c.label }} settings</h2>
+          <button class="btn btn-ghost btn-sm" type="button" popovertarget="pm-{{ c.kind }}-{{ c.name }}" popovertargetaction="hide" aria-label="Close">{{ m.icon("x") }}</button></div>
+        <div class="dialog-body">
+          {% for field, spec in c.config_schema.properties.items() %}{{ setting(c.name, field, spec, c.config.get(field, spec.default), c) }}{% endfor %}
+        </div>
+        <div class="dialog-foot">
+          <p class="note">Saved to <code>config.toml</code>. Reload the plugin for it to take effect.</p>
+          <button class="btn" type="button" popovertarget="pm-{{ c.kind }}-{{ c.name }}" popovertargetaction="hide">Cancel</button>
+          <button class="btn btn-primary" type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+    {% endif %}{% endfor %}
+{% endmacro %}

@@ -23,14 +23,17 @@ Makes a fresh install usable without reading the docs.
 - `[ingest] embed_min_priority` (default 1): mail triage rates below it is not embedded, and stays
   keyword-searchable.
 - A `MessageTriaged` event.
-- The console is organised by stage. `/` is the front page (status, accounts and the daemon's
-  environment). `/stats` is now **General**: Ingest, one tab per plugin kind (providers, triagers,
-  embedders, enrichers, LLM backends, vector stores, caches), AI & Models, Audit log and Reference.
-  Each kind's tab has its stage's pause and concurrency and a plugin table with no Kind column
-  (enable switch, model, settings, reload); each enricher can be paused on its own, and `parse`
-  can be paused and limited like the other stages.
+- The console is organised by stage. The masthead reads General, Triage, Embed, Enrich, Config,
+  Capabilities and Docs. `/` is the front page (counts and the daemon's environment). **General**
+  (`/stats`) holds Ingest (every stage, with its own pause and concurrency, and the live
+  throughput), Queue (the jobs queue and the parked jobs; the old Jobs page is gone and `/jobs`
+  leads here), Providers, LLM backends, Vector stores, Caches, usage and agents, and the Audit log.
+  **Triage**, **Embed** and **Enrich** each have a page with the stage's controls and the plugins of
+  that kind (enable switch, model, settings, reload, and a pause for each enricher). **Capabilities**
+  lists the operations grouped by the kind of plugin that offers them, with permission and an MCP
+  switch for each. `parse` can be paused and limited like the other stages.
 
-- A live welcome page at `/`, a config editor at `/config`, a jobs and pipeline console at `/jobs`,
+- A live welcome page at `/`, a config editor at `/config`, a jobs and pipeline console,
   an in-app getting-started page and a shared nav, all on loopback. The `/stats` page now uses the
   same Bootstrap look. Four new operations back the editor: `config_get`, `config_validate`,
   `config_save` and `config_reload`.
@@ -84,7 +87,7 @@ Makes a fresh install usable without reading the docs.
 
 ### Fixed
 
-- The `/jobs` throughput chart no longer carries an inline `style=` that the CSP refuses; the
+- The throughput chart no longer carries an inline `style=` that the CSP refuses; the
   plugin and stage tables no longer wrap their cells mid-word.
 
 - `test_a_fixture_with_no_matching_enricher_is_reported` read the developer's real config and a

@@ -140,12 +140,13 @@ Operations are not routed by hand. `GET /v1/operations` lists the registry with 
 
 ## The status pages
 
-`GET /` is the front page: version, account/message/index counts, queue depth, per-account sync
-state and the daemon's environment (paths, port). `GET /stats` is **General**: a tab for the
-pipeline (every stage, with its own pause and concurrency), one tab per plugin kind (a kind is a
-stage: providers, triagers, embedders, enrichers, LLM backends, vector stores, caches) with that
-stage's controls and its plugins (enable switch, model, settings, reload, and a pause for each
-enricher), token usage and savings, the audit log and the reference. It is **unauthenticated on purpose** — it is reachable only from this
+`GET /` is the front page: version, message and index counts, queue depth, per-account sync state
+and the daemon's environment (paths, port). `GET /stats` is **General**: Ingest (every stage with
+its own pause and concurrency, and live throughput), Queue (the jobs queue and parked jobs),
+providers, LLM backends, vector stores, caches, token usage and agents, and the audit log. `/triage`,
+`/embed` and `/enrich` are the stages: each page has the stage's controls and the plugins of that
+kind (enable switch, model, settings, reload, and a pause for each enricher). `/capabilities` lists
+the operations by the kind of plugin that offers them, with an MCP switch for each. It is **unauthenticated on purpose** — it is reachable only from this
 machine (the Host guard still refuses a forged name), and it carries **counts and health only**: no
 message text, no addresses, no tokens, and not the audit log. Open `http://127.0.0.1:<port>/stats`
 (the port is in `runtime.json`; set `[api] port` to pin it). The page is self-contained — inline

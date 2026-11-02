@@ -56,19 +56,14 @@ CONSOLE_CSP = (
 )
 PALETTES = ("auto", "oak", "maple", "birch", "acorn", "moss", "stone", "sky", "stream", "contrast")
 MODES = ("auto", "light", "dark")
-PAGES = frozenset({"/", "/stats", "/jobs", "/config", "/getting_started"})
-# The tabs of /stats: the pipeline, one per plugin kind (a kind is a stage), usage, audit,
-# reference.
-KIND_TABS = (
-    "provider",
-    "triager",
-    "embedder",
-    "enricher",
-    "llm_backend",
-    "vector_store",
-    "cache_store",
+PAGES = frozenset(
+    {"/", "/stats", "/triage", "/embed", "/enrich", "/capabilities", "/config", "/getting_started"}
 )
-TABS = frozenset({"ingest", "ai", "audit", "ref", *KIND_TABS})
+# The tabs of /stats (General): the pipeline and its queue, the kinds with no stage of their own,
+# usage, the audit log.
+TABS = frozenset(
+    {"ingest", "queue", "provider", "llm_backend", "vector_store", "cache_store", "ai", "audit"}
+)
 FLASH_SECONDS = 60.0
 FLASH_MAX = 200
 MAX_FORM_BYTES = 512 * 1024  # a config.toml is a few kilobytes; this is generous

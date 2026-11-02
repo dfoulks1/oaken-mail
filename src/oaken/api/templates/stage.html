@@ -1,0 +1,13 @@
+{#- SPDX-License-Identifier: Apache-2.0 -#}
+{#- One pipeline stage (triage, embed or enrich): its controls and the plugins of its kind. -#}
+{% extends "_base.html" %}
+{% import "_macros.html" as m with context %}
+{% import "_plugins.html" as pl with context %}
+{% block title %}{{ stage_label }} · Oaken Mail{% endblock %}
+{% block body_attrs %} data-refresh="/stats.json" data-refresh-seconds="15"{% endblock %}
+{% block main %}
+<h1>{{ stage_label }}</h1>
+{{ pl.kind_body(stage_kind, stage_plural, stage_name, "/" ~ stage_name) }}
+{{ pl.dialogs("/" ~ stage_name) }}
+{% endblock %}
+{% block scripts %}<script src="/refresh.js"></script>{% endblock %}

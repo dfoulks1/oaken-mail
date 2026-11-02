@@ -127,27 +127,30 @@ async def test_stats_shows_counts_and_health(rig: Rig) -> None:
     body = (await rig.http.get("/stats")).text
     for marker in (
         "Pipeline",
+        "Queue",
         "Providers",
-        "Triagers",
-        "Embedders",
-        "Enrichers",
+        "LLM backends",
+        "Vector stores",
         "Recent audit log",
-        "Operations reference",
-        "MCP workspaces",
         "Model &amp; token usage",
         ">Agents<",
     ):
         assert marker in body, f"missing section: {marker}"
 
 
+async def test_the_masthead_leads_to_each_stage(rig: Rig) -> None:
+    body = (await rig.http.get("/stats")).text
+    for href in ("/stats", "/triage", "/embed", "/enrich", "/config", "/capabilities"):
+        assert f'href="{href}"' in body, f"missing from the masthead: {href}"
+
+
 async def test_the_tab_in_the_link_is_the_tab_that_opens(rig: Rig) -> None:
     body = (await rig.http.get("/stats?tab=ai")).text
-    assert 'id="t-ai" aria-label="AI &amp; Models" checked' in body
+    assert 'id="t-ai" aria-label="Usage &amp; agents" checked' in body
     assert 'id="t-ingest" aria-label="Ingest" checked' not in body
     assert 'id="t-ingest" aria-label="Ingest" checked' in (await rig.http.get("/stats")).text
     assert (
-        'id="t-triager" aria-label="Triagers" checked'
-        in (await rig.http.get("/stats?tab=triager")).text
+        'id="t-queue" aria-label="Queue" checked' in (await rig.http.get("/stats?tab=queue")).text
     )
 
 
@@ -157,11 +160,20 @@ async def test_the_front_page_shows_status_and_the_daemon_environment(rig: Rig) 
         assert marker in body, f"missing from the front page: {marker}"
 
 
-async def test_a_kind_tab_has_its_plugins_and_no_kind_column(rig: Rig) -> None:
-    body = (await rig.http.get("/stats?tab=enricher")).text
-    pane = body[body.index('id="p-enricher"') : body.index('id="p-llm_backend"')]
-    assert "<th>Plugin</th>" in pane and "<th>Kind</th>" not in pane
-    assert 'name="stage" value="enrich"' in pane  # the stage's own pause and limit
+async def test_a_stage_page_has_its_controls_and_its_plugins_with_no_kind_column(
+    rig: Rig,
+) -> None:
+    for page, stage in (("/enrich", "enrich"), ("/embed", "embed"), ("/triage", "triage")):
+        body = (await rig.http.get(page)).text
+        assert "<th>Plugin</th>" in body and "<th>Kind</th>" not in body
+        assert f'name="stage" value="{stage}"' in body  # the stage's own pause and limit
+
+
+async def test_capabilities_groups_the_operations_by_kind(rig: Rig) -> None:
+    body = (await rig.http.get("/capabilities")).text
+    for marker in ("Operation", "Provider", "Permission", "MCP", "Summary", "MCP workspaces"):
+        assert marker in body, f"missing from capabilities: {marker}"
+    assert body.index(">Core<") < body.index(">Enrichers<")
 
 
 async def test_uptime_moves_with_the_clock(rig: Rig) -> None:
@@ -207,7 +219,16 @@ async def test_clearing_usage_says_what_it_left_alone(rig: Rig) -> None:
 # ---- the console without script (CORE_50) ------------------------------------------------------
 
 
-PAGES = ("/", "/stats", "/jobs", "/config", "/getting_started")
+PAGES = (
+    "/",
+    "/stats",
+    "/triage",
+    "/embed",
+    "/enrich",
+    "/capabilities",
+    "/config",
+    "/getting_started",
+)
 
 
 async def test_every_page_loads_nothing_from_another_origin(rig: Rig) -> None:

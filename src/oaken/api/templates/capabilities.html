@@ -1,0 +1,57 @@
+{#- SPDX-License-Identifier: Apache-2.0 -#}
+{#- What this core can do, by the kind of plugin that offers it, and what MCP clients may call. -#}
+{% extends "_base.html" %}
+{% import "_macros.html" as m with context %}
+{% block title %}Capabilities · Oaken Mail{% endblock %}
+{% block main %}
+<h1>Capabilities</h1>
+<p class="muted">What this core can do, grouped by the kind of plugin that offers it, and what MCP clients may call. Some things you do not want an AI client doing: switch them off here.</p>
+    <div class="card" id="mcp-workspaces">
+      <div class="card-head">MCP workspaces</div>
+      <form class="card-body" method="post" action="/ui/mcp-workspaces">
+        {{ m.guard("/capabilities") }}
+        <p>
+          {% if not mcp.mounted %}<span class="badge badge-muted">MCP is off</span>
+            <span class="muted">(set <code>[api] mcp = true</code> and restart core)</span>
+          {% else %}<span class="badge badge-ok">MCP is on</span>{% endif %}
+          Clients may reach {% if mcp.all %}<strong>every workspace</strong>{% else %}only the workspaces ticked below{% endif %}.
+          Mail text returned to an AI client leaves this process.
+        </p>
+        {% if mcp.all %}<p class="alert alert-warn">Every workspace is reachable, secure ones included.</p>{% endif %}
+        <div class="row">
+        {% for w in mcp.workspaces %}
+          <label class="check"><input type="checkbox" name="workspace" value="{{ w.name }}"{% if w.linked and not mcp.all %} checked{% endif %}>
+            <span class="mono">{{ w.name }}</span> <span class="badge {{ 'badge-ok' if w.trust == 'secure' else 'badge-warn' }}">{{ w.trust }}</span></label>
+        {% endfor %}
+        </div>
+        <p><label class="check"><input type="checkbox" name="all" value="1"{% if mcp.all %} checked{% endif %}> All workspaces (writes <code>workspaces = []</code>)</label></p>
+        <button class="btn btn-primary" type="submit">Save workspaces</button>
+      </form>
+    </div>
+{% set kind_of = {} %}{% for p in plugins %}{% set _ = kind_of.update({p.name: p.kind}) %}{% endfor %}
+{% set groups = [("core","Core"),("provider","Providers"),("triager","Triagers"),("embedder","Embedders"),("enricher","Enrichers"),("llm_backend","LLM backends"),("vector_store","Vector stores"),("cache_store","Caches")] %}
+{% for key, label in groups %}
+  <div class="card">
+    <div class="card-head">{{ label }}</div>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Operation</th><th>Provider</th><th>Permission</th><th>MCP</th><th>Summary</th></tr></thead>
+      <tbody>
+      {% for o in operations if (kind_of.get(o.plugin, "core") if o.plugin else "core") == key %}
+        <tr>
+          <td class="mono">{{ o.name }}</td>
+          <td class="mono">{{ o.plugin or "core" }}</td>
+          <td>{% if o.permission == "mutate" %}<span class="badge badge-warn">mutate</span>
+              {%- elif o.permission == "send" %}<span class="badge badge-danger">send</span>
+              {%- else %}<span class="badge badge-ok">read</span>{% endif %}</td>
+          <td>{{ m.switch("expose", "/capabilities", o.mcp_enabled, "Expose " ~ o.name ~ " over MCP", {"name": o.name}, "mcp", "on", "off", not o.mcp_allowed, "Never offered over MCP (" ~ (o.mcp_locked_reason or "ceiling") ~ ")", false) }}</td>
+          <td class="muted">{{ o.summary }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="muted">None.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+{% endfor %}
+<p class="muted small">Generated from the operation registry. A plugin's operations appear under the kind of that plugin.</p>
+{% endblock %}

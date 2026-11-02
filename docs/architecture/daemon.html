@@ -253,12 +253,13 @@ it is loopback-only and shows counts and health, never mail.</li>
 </ul>
 </section>
 <section id="the-status-pages" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>The status pages</h2></div>
-<p><code>GET /</code> is the front page: version, account/message/index counts, queue depth, per-account sync
-state and the daemon's environment (paths, port). <code>GET /stats</code> is <strong>General</strong>: a tab for the
-pipeline (every stage, with its own pause and concurrency), one tab per plugin kind (a kind is a
-stage: providers, triagers, embedders, enrichers, LLM backends, vector stores, caches) with that
-stage's controls and its plugins (enable switch, model, settings, reload, and a pause for each
-enricher), token usage and savings, the audit log and the reference. It is <strong>unauthenticated on purpose</strong> — it is reachable only from this
+<p><code>GET /</code> is the front page: version, message and index counts, queue depth, per-account sync state
+and the daemon's environment (paths, port). <code>GET /stats</code> is <strong>General</strong>: Ingest (every stage with
+its own pause and concurrency, and live throughput), Queue (the jobs queue and parked jobs),
+providers, LLM backends, vector stores, caches, token usage and agents, and the audit log. <code>/triage</code>,
+<code>/embed</code> and <code>/enrich</code> are the stages: each page has the stage's controls and the plugins of that
+kind (enable switch, model, settings, reload, and a pause for each enricher). <code>/capabilities</code> lists
+the operations by the kind of plugin that offers them, with an MCP switch for each. It is <strong>unauthenticated on purpose</strong> — it is reachable only from this
 machine (the Host guard still refuses a forged name), and it carries <strong>counts and health only</strong>: no
 message text, no addresses, no tokens, and not the audit log. Open <code>http://127.0.0.1:&lt;port&gt;/stats</code>
 (the port is in <code>runtime.json</code>; set <code>[api] port</code> to pin it). The page is self-contained — inline

@@ -1,135 +1,23 @@
 {#- SPDX-License-Identifier: Apache-2.0 -#}
-{#- The status page (ADR 0013, CORE_50). Context is StatsCollector.collect() plus the console's base.
-    Counts and health only, never mail content. No script: tabs are radio inputs, menus are
-    hover menus, dialogs are popovers, every action is a form. /refresh.js only updates live numbers. -#}
+{#- General (ADR 0013, CORE_52): information first. The pipeline and its queue, the kinds that have
+    no stage of their own, usage and the audit log. The stages themselves (triage, embed, enrich)
+    and the capabilities are pages of their own in the masthead. No script: tabs are radio inputs,
+    every action is a form. /refresh.js and the chart only update live numbers. -#}
 {% extends "_base.html" %}
 {% import "_macros.html" as m with context %}
+{% import "_plugins.html" as pl with context %}
 {% block title %}General · Oaken Mail{% endblock %}
 {% block body_attrs %} data-refresh="/stats.json" data-refresh-seconds="15"{% endblock %}
-
-{% macro setting(plugin, field, spec, val, row) %}
-  {% set kinds = (spec.anyOf | map(attribute="type") | list) if spec.anyOf else [spec.type] %}
-  <div class="field">
-    <label for="pf-{{ plugin }}-{{ field }}">{{ field }}</label>
-    <div>
-    {% if field == "model" and row.choices %}
-      <input type="hidden" name="type:{{ field }}" value="string">
-      <select class="select" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}">
-        {% if row.kind == "enricher" %}<option value=""{% if not val %} selected{% endif %}>backend default ({{ row.default }})</option>{% endif %}
-        {% for c in row.choices %}<option value="{{ c }}"{% if c == val %} selected{% endif %}>{{ c }}</option>{% endfor %}
-        {% if val and val not in row.choices %}<option value="{{ val }}" selected>{{ val }} (not installed)</option>{% endif %}
-      </select>
-    {% elif "boolean" in kinds and "null" in kinds %}
-      <input type="hidden" name="type:{{ field }}" value="tristate">
-      <select class="select" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}">
-        <option value=""{% if val is none %} selected{% endif %}>automatic</option>
-        <option value="true"{% if val is sameas true %} selected{% endif %}>on</option>
-        <option value="false"{% if val is sameas false %} selected{% endif %}>off</option>
-      </select>
-    {% elif "boolean" in kinds %}
-      <input type="hidden" name="type:{{ field }}" value="boolean">
-      <label class="check"><input type="checkbox" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}" value="1"{% if val %} checked{% endif %}> on</label>
-    {% elif "integer" in kinds or "number" in kinds %}
-      <input type="hidden" name="type:{{ field }}" value="number">
-      <input class="input" type="number" step="any" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}" value="{{ val if val is not none else '' }}">
-    {% else %}
-      <input type="hidden" name="type:{{ field }}" value="string">
-      <input class="input" type="text" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}" value="{{ val if val is not none else '' }}">
-    {% endif %}
-    {% if spec.description %}<p class="hint">{{ spec.description }}</p>{% endif %}
-    </div>
-  </div>
-{% endmacro %}
-
-{% macro health(p) %}
-  {%- if p.healthy %}<span class="badge badge-ok">healthy</span>
-  {%- elif p.started %}<span class="badge badge-danger" title="{{ p.detail }}">{{ p.detail or "unhealthy" }}</span>
-  {%- else %}<span class="badge badge-warn" title="{{ p.detail }}">{{ p.detail or "not started" }}</span>{% endif -%}
-{% endmacro %}
-
-{% macro stage_toggle(stage, s, back) %}
-  {%- if s and s.paused %}{% call m.post("resume", back) %}<input type="hidden" name="stage" value="{{ stage }}"><button class="btn btn-sm" type="submit" aria-label="Resume {{ stage }}">{{ m.icon("play") }} Resume</button>{% endcall %}
-  {%- else %}{% call m.post("pause", back) %}<input type="hidden" name="stage" value="{{ stage }}"><button class="btn btn-sm" type="submit" aria-label="Pause {{ stage }}">{{ m.icon("pause") }} Pause</button>{% endcall %}{% endif -%}
-{% endmacro %}
-
-{# One tab per plugin kind (a kind is a stage): the stage's controls, then its plugins. The tab is
-   the kind, so the table has no Kind column. #}
-{% macro kind_pane(kind, label, stage) %}
-{% set back = "/stats?tab=" ~ kind %}
-<section class="pane" id="p-{{ kind }}" aria-label="{{ label }}">
-  {% if stage and pipeline and pipeline.stages.get(stage) %}
-  {% set s = pipeline.stages[stage] %}
-  <div class="card">
-    <div class="card-head"><span>{{ label }} stage <span class="mono">{{ stage }}</span>{% if s.paused %} <span class="badge badge-warn">paused</span>{% endif %}</span>
-      <span class="row">
-        {{ stage_toggle(stage, s, back) }}
-        {% if s.failed %}{% call m.post("retry-parked", back) %}<button class="btn btn-sm" type="submit">{{ m.icon("retry") }} Retry parked</button>{% endcall %}{% endif %}
-      </span>
-    </div>
-    <div class="card-body row">
-      <span class="muted mono small">{{ s.pending }} pending · {{ s.running }} running · {{ s.failed }} failed · {{ "%.2f" | format(s.per_second) }}/s</span>
-      {% call m.post("limit", back) %}
-        <input type="hidden" name="stage" value="{{ stage }}">
-        <label class="small muted" for="at-{{ kind }}">At once</label>
-        <input class="input input-sm" id="at-{{ kind }}" type="number" name="concurrency" min="1" max="64" value="{{ s.concurrency if s.concurrency else '' }}">
-        <button class="btn btn-sm" type="submit">Set</button>
-      {% endcall %}
-    </div>
-  </div>
-  {% endif %}
-  <div class="card">
-    <div class="card-head">{{ label }}</div>
-    <div class="table-wrap"><table class="table nowrap">
-      <thead><tr><th>Plugin</th><th>Version</th><th>Capabilities</th><th>Health</th><th>Model</th><th>Enabled</th>{% if kind == "enricher" %}<th>Pause</th>{% endif %}<th class="right">Actions</th></tr></thead>
-      <tbody>
-      {% for p in plugins if p.kind == kind %}
-        {% set cs = models | selectattr("kind", "equalto", p.kind) | selectattr("name", "equalto", p.name) | list %}
-        {% set c = cs[0] if cs else none %}
-        <tr>
-          <td class="mono">{{ p.name }}</td><td class="mono">{{ p.version }}</td>
-          <td class="muted mono small">{{ p.capabilities | join(", ") or "—" }}</td>
-          <td>{{ health(p) }}</td>
-          <td>
-            {% if c and c.choices %}
-              {% call m.post("model", back) %}
-                <input type="hidden" name="kind" value="{{ c.kind }}"><input type="hidden" name="plugin" value="{{ c.name }}">
-                <select class="select select-sm mono" name="model" aria-label="Model for {{ p.name }}">
-                  {% if c.kind in ("enricher", "triager") %}<option value=""{% if not c.model %} selected{% endif %}>default ({{ c.default }})</option>{% endif %}
-                  {% for ch in c.choices %}<option value="{{ ch }}"{% if ch == c.model %} selected{% endif %}>{{ ch }}</option>{% endfor %}
-                  {% if c.model and c.model not in c.choices %}<option value="{{ c.model }}" selected>{{ c.model }} (not installed)</option>{% endif %}
-                </select>
-                <button class="btn btn-sm" type="submit">Use</button>
-              {% endcall %}
-            {% else %}<span class="muted">—</span>{% endif %}
-          </td>
-          <td>{{ m.switch("plugin", back, p.enabled, "Enable " ~ p.name, {"name": p.name}, "verb", "enable", "disable") }}</td>
-          {% if kind == "enricher" %}
-          <td>{{ stage_toggle("enrich." ~ p.name, pipeline.enrichers.get("enrich." ~ p.name) if pipeline else none, back) }}</td>
-          {% endif %}
-          <td class="right row">
-            {% if c and c.config_schema and c.config_schema.properties %}<button type="button" class="btn btn-sm" popovertarget="pm-{{ c.kind }}-{{ c.name }}" popovertargetaction="show">Settings</button>{% endif %}
-            {% call m.post("plugin", back) %}<input type="hidden" name="name" value="{{ p.name }}"><input type="hidden" name="verb" value="reload"><button class="btn btn-sm" type="submit" title="Restart {{ p.name }} on the current config.toml">Reload</button>{% endcall %}
-          </td>
-        </tr>
-      {% else %}
-        <tr><td colspan="8" class="muted">No {{ label | lower }} installed.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table></div>
-    {% if kind != "enricher" %}<div class="card-foot">Turn a plugin off to take it out of the pipeline for now; turn it on to put it back.</div>{% endif %}
-  </div>
-</section>
-{% endmacro %}
 
 {% block main %}
 <h1>General</h1>
 <p class="muted small mono">{{ core.version }}{% if core.uptime_seconds is not none %} · up <span data-bind="core.uptime_minutes">{{ (core.uptime_seconds // 60) | int }}</span> min{% endif %}</p>
 <div class="tabset">
-  {% set tabs = [("ingest","Ingest"),("provider","Providers"),("triager","Triagers"),("embedder","Embedders"),("enricher","Enrichers"),("llm_backend","LLM backends"),("vector_store","Vector stores"),("cache_store","Caches"),("ai","AI & Models"),("audit","Audit log"),("ref","Reference")] %}
+  {% set tabs = [("ingest","Ingest"),("queue","Queue"),("provider","Providers"),("llm_backend","LLM backends"),("vector_store","Vector stores"),("cache_store","Caches"),("ai","Usage & agents"),("audit","Audit log")] %}
   {% for key, label in tabs %}<input type="radio" name="tab" id="t-{{ key }}" aria-label="{{ label }}"{% if tab == key %} checked{% endif %}>{% endfor %}
   <div class="tabbar" aria-hidden="true">{% for key, label in tabs %}<label for="t-{{ key }}">{{ label }}</label>{% endfor %}</div>
 
-  {# ---- Ingest ---- #}
+  {# ---- Ingest: every stage, and the live throughput ---- #}
   <section class="pane" id="p-ingest" aria-label="Ingest">
     {% if pipeline %}
     <div class="card">
@@ -160,7 +48,7 @@
             <td class="muted">{% if s.oldest_pending_seconds is not none %}{{ s.oldest_pending_seconds | int }}s{% else %}—{% endif %}</td>
             <td>{{ "%.2f" | format(s.per_second) }}</td>
             <td class="muted">{% if s.eta_seconds is not none %}{{ s.eta_seconds | int }}s{% else %}—{% endif %}</td>
-            <td>{% if name in ("parse", "embed", "triage", "enrich") %}{{ stage_toggle(name, s, "/stats?tab=ingest") }}{% endif %}</td>
+            <td>{% if name in ("parse", "embed", "triage", "enrich") %}{{ pl.stage_toggle(name, s, "/stats?tab=ingest") }}{% endif %}</td>
             <td>
               {% call m.post("limit", "/stats?tab=ingest") %}
                 <input type="hidden" name="stage" value="{{ name }}">
@@ -173,10 +61,55 @@
         </tbody>
       </table></div>
     </div>
-    {% if pipeline.parked %}
+    <div class="card">
+      <div class="card-head">Throughput (last 10 min)</div>
+      <div class="card-body chart-box"><canvas id="throughput-chart"></canvas></div>
+    </div>
+    {% else %}
+    <div class="card"><div class="card-body muted">The ingest pipeline is not running.</div></div>
+    {% endif %}
+  </section>
+
+  {# ---- Queue: the jobs, and the ones parked as failed ---- #}
+  <section class="pane" id="p-queue" aria-label="Queue">
+    <div class="card">
+      <div class="card-head"><span>Jobs queue</span>
+        <form class="row" method="get" action="/stats">
+          <input type="hidden" name="tab" value="queue">
+          <label class="sr-only" for="job-status">Status</label>
+          <select class="select select-sm" id="job-status" name="status">
+            <option value="">All</option>
+            {% for st in statuses %}<option value="{{ st }}"{% if st == status %} selected{% endif %}>{{ st }}</option>{% endfor %}
+          </select>
+          <button class="btn btn-sm" type="submit">Filter</button>
+        </form>
+      </div>
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>Job</th><th>Kind</th><th>Status</th><th>Attempts</th><th>Error</th><th class="right">Actions</th></tr></thead>
+        <tbody>
+        {% for j in jobs %}
+          <tr>
+            <td class="mono small">{{ j.id }}</td>
+            <td class="mono small">{{ j.kind }}</td>
+            <td><span class="badge {{ {'succeeded': 'badge-ok', 'failed': 'badge-danger', 'running': 'badge-warn', 'queued': 'badge-muted', 'cancelled': 'badge-muted'}.get(j.status, 'badge-muted') }}">{{ j.status }}</span></td>
+            <td>{{ j.attempts }}/{{ j.max_attempts }}</td>
+            <td class="bad small clip" title="{{ j.last_error or '' }}">{{ j.last_error or "" }}</td>
+            <td class="right">
+              {% set back = "/stats?tab=queue&status=" ~ status if status else "/stats?tab=queue" %}
+              {% if j.status in ("queued", "running") %}{{ m.confirm("cancel", back, "Cancel", "Cancel this job?", "Cancel job", {"job_id": j.id}) }}{% endif %}
+              {% if j.status in ("failed", "cancelled") %}{% call m.post("retry", back) %}<input type="hidden" name="job_id" value="{{ j.id }}"><button class="btn btn-sm" type="submit">Retry</button>{% endcall %}{% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="muted">No jobs.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+    {% if pipeline and pipeline.parked %}
     <div class="card">
       <div class="card-head"><span>Parked jobs</span>
-        {% call m.post("retry-parked", "/stats?tab=ingest") %}<button class="btn btn-sm" type="submit">{{ m.icon("retry") }} Retry all</button>{% endcall %}
+        {% call m.post("retry-parked", "/stats?tab=queue") %}<button class="btn btn-sm" type="submit">{{ m.icon("retry") }} Retry all</button>{% endcall %}
       </div>
       <div class="table-wrap"><table class="table">
         <thead><tr><th>Job</th><th>Stage</th><th>Message</th><th>Attempts</th><th>Error</th></tr></thead>
@@ -190,18 +123,12 @@
       </table></div>
     </div>
     {% endif %}
-    {% else %}
-    <div class="card"><div class="card-body muted">The ingest pipeline is not running.</div></div>
-    {% endif %}
   </section>
 
-  {{ kind_pane("provider", "Providers", none) }}
-  {{ kind_pane("triager", "Triagers", "triage") }}
-  {{ kind_pane("embedder", "Embedders", "embed") }}
-  {{ kind_pane("enricher", "Enrichers", "enrich") }}
-  {{ kind_pane("llm_backend", "LLM backends", none) }}
-  {{ kind_pane("vector_store", "Vector stores", none) }}
-  {{ kind_pane("cache_store", "Caches", none) }}
+  {{ pl.kind_pane("provider", "Providers", none) }}
+  {{ pl.kind_pane("llm_backend", "LLM backends", none) }}
+  {{ pl.kind_pane("vector_store", "Vector stores", none) }}
+  {{ pl.kind_pane("cache_store", "Caches", none) }}
 
   {# ---- AI & Models ---- #}
   <section class="pane" id="p-ai" aria-label="AI and models">
@@ -300,70 +227,7 @@
     <p class="muted small">Ids and metadata only. The audit log never records message text.</p>
   </section>
 
-  {# ---- Reference ---- #}
-  <section class="pane" id="p-ref" aria-label="Reference">
-    <div class="card" id="mcp-workspaces">
-      <div class="card-head">MCP workspaces</div>
-      <form class="card-body" method="post" action="/ui/mcp-workspaces">
-        {{ m.guard("/stats?tab=ref") }}
-        <p>
-          {% if not mcp.mounted %}<span class="badge badge-muted">MCP is off</span>
-            <span class="muted">(set <code>[api] mcp = true</code> and restart core)</span>
-          {% else %}<span class="badge badge-ok">MCP is on</span>{% endif %}
-          Clients may reach {% if mcp.all %}<strong>every workspace</strong>{% else %}only the workspaces ticked below{% endif %}.
-          Mail text returned to an AI client leaves this process.
-        </p>
-        {% if mcp.all %}<p class="alert alert-warn">Every workspace is reachable, secure ones included.</p>{% endif %}
-        <div class="row">
-        {% for w in mcp.workspaces %}
-          <label class="check"><input type="checkbox" name="workspace" value="{{ w.name }}"{% if w.linked and not mcp.all %} checked{% endif %}>
-            <span class="mono">{{ w.name }}</span> <span class="badge {{ 'badge-ok' if w.trust == 'secure' else 'badge-warn' }}">{{ w.trust }}</span></label>
-        {% endfor %}
-        </div>
-        <p><label class="check"><input type="checkbox" name="all" value="1"{% if mcp.all %} checked{% endif %}> All workspaces (writes <code>workspaces = []</code>)</label></p>
-        <button class="btn btn-primary" type="submit">Save workspaces</button>
-      </form>
-    </div>
-    <div class="card">
-      <div class="card-head">Operations reference</div>
-      <div class="table-wrap"><table class="table">
-        <thead><tr><th>Operation</th><th>Permission</th><th>MCP</th><th>Summary</th></tr></thead>
-        <tbody>
-        {% for o in operations %}
-          <tr>
-            <td class="mono">{{ o.name }}</td>
-            <td>{% if o.permission == "mutate" %}<span class="badge badge-warn">mutate</span>
-                {%- elif o.permission == "send" %}<span class="badge badge-danger">send</span>
-                {%- else %}<span class="badge badge-ok">read</span>{% endif %}</td>
-            <td>{{ m.switch("expose", "/stats?tab=ref", o.mcp_enabled, "Expose " ~ o.name ~ " over MCP", {"name": o.name}, "mcp", "on", "off", not o.mcp_allowed, "Never offered over MCP (" ~ (o.mcp_locked_reason or "ceiling") ~ ")", false) }}</td>
-            <td class="muted">{{ o.summary }}</td>
-          </tr>
-        {% else %}
-          <tr><td colspan="4" class="muted">No operations.</td></tr>
-        {% endfor %}
-        </tbody>
-      </table></div>
-    </div>
-    <p class="muted small">Generated from the operation registry: what this core can do, and what MCP clients may call.</p>
-  </section>
 </div>
-{# Settings dialogs sit outside the tab panes: a popover cannot open inside a hidden pane. #}
-    {% for c in models %}{% if c.config_schema and c.config_schema.properties %}
-    <div class="dialog" id="pm-{{ c.kind }}-{{ c.name }}" popover role="dialog" aria-labelledby="pm-{{ c.kind }}-{{ c.name }}-t">
-      <form method="post" action="/ui/plugin-settings">
-        {{ m.guard("/stats?tab=ai") }}<input type="hidden" name="plugin" value="{{ c.name }}"><input type="hidden" name="kind" value="{{ c.kind }}">
-        <div class="dialog-head"><h2 id="pm-{{ c.kind }}-{{ c.name }}-t">{{ c.label }} settings</h2>
-          <button class="btn btn-ghost btn-sm" type="button" popovertarget="pm-{{ c.kind }}-{{ c.name }}" popovertargetaction="hide" aria-label="Close">{{ m.icon("x") }}</button></div>
-        <div class="dialog-body">
-          {% for field, spec in c.config_schema.properties.items() %}{{ setting(c.name, field, spec, c.config.get(field, spec.default), c) }}{% endfor %}
-        </div>
-        <div class="dialog-foot">
-          <p class="note">Saved to <code>config.toml</code>. Reload the plugin for it to take effect.</p>
-          <button class="btn" type="button" popovertarget="pm-{{ c.kind }}-{{ c.name }}" popovertargetaction="hide">Cancel</button>
-          <button class="btn btn-primary" type="submit">Save</button>
-        </div>
-      </form>
-    </div>
-    {% endif %}{% endfor %}
+{{ pl.dialogs("/stats?tab=ai") }}
 {% endblock %}
-{% block scripts %}<script src="/refresh.js"></script>{% endblock %}
+{% block scripts %}<script src="/refresh.js"></script><script src="/chart.umd.js"></script><script src="/jobs-chart.js"></script>{% endblock %}
