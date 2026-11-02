@@ -23,11 +23,18 @@ kinds it is good at, and a job carries only that enricher's instructions.
 
 ## Decisions already taken (do not re-litigate)
 
-- **One kind per enricher**, named `ingest.enrich.<enricher name>`, for every enricher including the
-  deterministic ones. It is the default behavior, with no switch.
-- **Triage fans out.** A message gets its triage job (and every enricher that has no
-  `min_priority`) when it is parsed. The enrichers that have a bar are queued only when triage
-  completes, and only if the priority meets it. Below the bar they are never created.
+- **One kind per enricher**, named `ingest.enrich.<enricher name>`, for every enricher except the
+  gate, including the deterministic ones. It is the default behavior, with no switch.
+- **Triage stays its own kind, `ingest.triage`.** It is the gate: a worker of its own, claimable
+  alone, and not renamed. (Amended after `triage_gate` and the triage job landed.) The kinds
+  `ingest.enrich.<name>` cover every other enricher.
+- **Triage fans out, on a predicate over its stored result.** A message gets its triage job (and
+  every enricher that has no `min_priority`) when it is parsed. The enrichers that have a bar are
+  queued only when triage completes, and only if its result meets it. `min_priority` is the first
+  such predicate; the fan-out asks one function, "does this stored triage result owe this
+  enricher?", so a later prompt (CORE_50) can add label predicates without touching the pipeline.
+  Below the bar they are never created. Embedding follows triage, as today.
+- **Triage completion publishes `MessageTriaged`** with the stored result, for CORE_50's triggers.
 - **The old kind drains cheaply, with no migration.** An existing `ingest.enrich` job becomes a
   converter: it queues the per-enricher jobs for its message and finishes.
 - **Core's workers and agents race for the same jobs.** Whoever claims first wins, so nothing
@@ -38,7 +45,9 @@ kinds it is good at, and a job carries only that enricher's instructions.
 ## Not in scope
 
 New enrichers, scheduling work for idle hours, a per-kind lease setting beyond today's, and a UI.
-Specialist (non-LLM) workers are PLUGIN_49.
+Specialist (non-LLM) workers are PLUGIN_49. Custom triage labels, pluggable triagers and rules that
+launch automations from a label are CORE_50 (a triager is a classifier whose output can route work,
+not only enrich).
 
 ## Requirements
 
@@ -61,6 +70,9 @@ Specialist (non-LLM) workers are PLUGIN_49.
 7. **Reprocess.** `reprocess("enrich")` queues the per-enricher jobs that have no current result.
 8. **Status.** `pipeline_status` reports the enrich stage as the sum, and `oaken pipeline status` can
    show it per enricher.
+9. **CLI.** Everything above is operable from the CLI, not only the console: pause, resume, limits
+   and status take a stage name (`enrich`) or one enricher (`enrich.summary`, `triage`); the same
+   names work on the operations behind them. Add the rows to the audit table in `CLI_17`.
 
 ## Acceptance criteria
 
@@ -76,8 +88,9 @@ Specialist (non-LLM) workers are PLUGIN_49.
 
 ## Open questions (defaults in bold)
 
-- Q1: the job priority for fanned-out jobs: **base minus the enrich step, plus the triage priority,
-  capped below parse.**
+- Q1: the job priority for fanned-out jobs: **base minus the enrich step minus (3 minus the triage
+  priority)**, so a priority 3 message queues where `ingest.enrich` does today and lower ones sink,
+  never above parse. (Amended: "plus the priority, capped" collapsed priorities 1 to 3.)
 - Q2: should the inspector (deterministic) run inline at parse instead of as a job: **no**, a job like
   the rest, so it shows in the queue.
 - Q3: a bar set while jobs are queued: **applies when triage completes**, not retroactively.

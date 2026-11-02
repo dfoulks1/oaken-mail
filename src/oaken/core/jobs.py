@@ -715,6 +715,25 @@ class _Running:
     user_cancelled: bool = False
 
 
+def _under(kind: str, names: Collection[str]) -> bool:
+    """True when ``kind`` is one of ``names`` or sits below one (``ingest.enrich.summary`` is
+    below ``ingest.enrich``): a pause or limit on a stage covers each kind under it."""
+    return kind in names or any(kind.startswith(n + ".") for n in names)
+
+
+def _with_overrides(
+    limits: dict[str, int], kinds: Collection[str], overrides: dict[str, int]
+) -> dict[str, int]:
+    """``limits`` with run-time overrides applied. An override on a stage applies to every kind
+    below it; one on the exact kind wins."""
+    out = dict(limits)
+    for kind in kinds:
+        for name, n in overrides.items():
+            if kind.startswith(name + "."):
+                out[kind] = n
+    return {**out, **overrides}
+
+
 class JobRunner:
     """Runs jobs from a ``JobQueue`` with N concurrent workers."""
 
@@ -817,7 +836,7 @@ class JobRunner:
             kinds = await self._claimable_kinds()
             limits = self._limits()
             if self._limit_overrides is not None and kinds:
-                limits = {**limits, **await self._limit_overrides()}
+                limits = _with_overrides(limits, kinds, await self._limit_overrides())
             job = await self.queue.claim(name, kinds, limits) if kinds else None
             if job is None:
                 if idle_exit:
@@ -834,7 +853,7 @@ class JobRunner:
         if self._paused_kinds is None:
             return kinds
         paused = set(await self._paused_kinds())
-        return [k for k in kinds if k not in paused]
+        return [k for k in kinds if not _under(k, paused)]
 
     async def _idle_wait(self) -> None:
         cap = min(self.queue.settings.lease_seconds / 2, 30.0)

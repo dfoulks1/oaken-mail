@@ -287,6 +287,7 @@ class Core:
 
     async def _start_jobs(self) -> None:
         register_plugin_jobs(self.host, self.runner)  # host has started; healthy plugins known
+        self.pipeline.register_enrichers(self.runner)  # one kind per enricher, now they are known
         await seed_plugin_schedules(self.host, self.scheduler)  # seed recurring tasks if absent
         self.runner.start()
         self.scheduler.start()

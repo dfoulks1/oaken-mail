@@ -4,7 +4,7 @@
 from typing import Any, cast
 
 from oaken.core.settings import IngestSettings
-from oaken.ingest.pipeline import EMBED, ENRICH, TRIAGE, MessagePayload
+from oaken.ingest.pipeline import EMBED, ENRICH, TRIAGE, MessagePayload, enrich_kind
 from oaken.ingest.tests.conftest import Enricher, Options, mail
 from oaken.plugins.base import BaseEnricher
 from oaken.plugins.contracts import EnrichInput, EnrichOutput
@@ -89,14 +89,15 @@ class Broken(BaseEnricher):
 async def test_triage_is_its_own_job_and_queues_the_rest_when_done(make_rig: Any) -> None:
     async with make_rig(Options(embedder=False)) as rig:
         rater, words = await run(rig, priority=2, bar=2)
-        assert rater.calls == 1 and words == 1  # the enrich job did not ask triage again
+        assert rater.calls == 1 and words == 1  # the enricher's job did not ask triage again
         assert len(await rig.queue.query(kind=TRIAGE, status="succeeded")) == 1
-        assert len(await rig.queue.query(kind=ENRICH, status="succeeded")) == 1
+        assert len(await rig.queue.query(kind=enrich_kind("words"), status="succeeded")) == 1
+        assert await rig.queue.query(kind=ENRICH) == []  # the legacy kind is no longer queued
 
 
-async def test_an_enrich_job_with_no_triage_result_runs_triage_itself(make_rig: Any) -> None:
-    # An enrich job queued before the split has no triage job ahead of it; strict mode would
-    # otherwise hold the gated enricher back for good.
+async def test_a_legacy_enrich_job_drains_into_triage_and_per_enricher_jobs(make_rig: Any) -> None:
+    # An enrich job queued before the split has no triage job ahead of it; it queues triage, which
+    # queues the rest, and it never calls a model itself.
     async with make_rig(Options(embedder=False, enrich=False)) as rig:
         pid = rig.provider.add_message(mail(1))
         await rig.run_sync()
@@ -106,10 +107,12 @@ async def test_an_enrich_job_with_no_triage_result_runs_triage_itself(make_rig: 
             "words": cast(Enricher, rig.enricher),
             "triage": cast(Enricher, rater),
         }
+        rig.pipeline.register_enrichers(rig.runner)  # "words" was not there at start
         rig.pipeline.settings.plugins["words"] = {"min_priority": 2}
         await rig.queue.enqueue(ENRICH, MessagePayload(message_id=await rig.mid(pid)))
-        await rig.drain()
+        await rig.drain(rounds=3)
         assert rater.calls == 1 and len(rig.enricher.seen) == 1
+        assert len(await rig.queue.query(kind=ENRICH, status="succeeded")) == 1
 
 
 async def test_triage_failing_for_good_still_queues_the_gated_enrichers(make_rig: Any) -> None:
@@ -146,4 +149,13 @@ async def test_no_embed_job_exists_while_triage_is_still_retrying(make_rig: Any)
         await rig.drain()  # parse, then triage attempt 1 fails and waits out its backoff
         assert await rig.queue.query(kind=EMBED) == []
         await rig.drain(rounds=2)  # attempt 2 is the last: embed is queued anyway
+        assert len(await rig.queue.query(kind=EMBED, status="succeeded")) == 1
+
+
+async def test_junk_is_not_embedded_but_unrated_mail_is(make_rig: Any) -> None:
+    async with make_rig(Options()) as rig:
+        await run(rig, priority=0, bar=None)  # default embed_min_priority is 1
+        assert await rig.queue.query(kind=EMBED) == []
+    async with make_rig(Options(ingest=IngestSettings(embed_min_priority=None))) as rig:
+        await run(rig, priority=0, bar=None)
         assert len(await rig.queue.query(kind=EMBED, status="succeeded")) == 1

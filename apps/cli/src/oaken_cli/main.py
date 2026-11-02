@@ -513,7 +513,8 @@ def _register_system(
         parents=[g],
         description=(
             "Default shows status. 'pause'/'resume' stop and restart the model-bound ingest "
-            "stages (embed, enrich), or just one (oaken pipeline pause enrich) — mail keeps "
+            "stages (embed, triage, enrich), or just one (oaken pipeline pause enrich, or one enricher: "
+            "enrich.summary) — mail keeps "
             "landing and being filtered while paused. 'limits enrich 2' changes how many jobs a "
             "stage runs at once, live. 'parked' re-queues failed ingest jobs."
         ),
@@ -529,10 +530,13 @@ def _register_system(
         "words",
         nargs="*",
         metavar="STAGE",
-        help="With pause/resume: one stage (embed or enrich), or none for all. "
+        help="With pause/resume: one stage (embed, triage, enrich or enrich.<name>), or none for all. "
         "With limits: a stage and a number.",
     )
     pipeline.add_argument("--why", default="", metavar="TEXT", help="A note recorded with a pause.")
+    pipeline.add_argument(
+        "--by-enricher", action="store_true", help="With status: also each enricher's queue."
+    )
     pipeline.add_argument(
         "--retry", metavar="JOB_ID", help="With 'parked': re-queue this one parked job."
     )

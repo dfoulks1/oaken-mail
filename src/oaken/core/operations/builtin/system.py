@@ -128,10 +128,12 @@ async def pipeline_status(ctx: OpContext, inp: Empty) -> PipelineStatusOutput:
         out.llm_paused = (await control.state()).llm_paused
         paused = await control.paused_stages()
         limits = await control.limits()
-        for name, stage in out.stages.items():
-            stage.paused = name in paused
-            stage.concurrency = limits.get(STAGES.get(name, ""))
-    for name, stage in out.stages.items():
+        for name, stage in {**out.stages, **out.enrichers}.items():
+            stage.paused = name in paused or (
+                name.startswith("enrich.") and "enrich" in paused
+            )
+            stage.concurrency = limits.get(f"ingest.{name}", limits.get(STAGES.get(name, "")))
+    for name, stage in {**out.stages, **out.enrichers}.items():
         for job in await ctx.svc.queue.query(status="running", kind=f"ingest.{name}", limit=50):
             try:
                 message_id = json.loads(job.payload_json).get("message_id")
@@ -577,7 +579,8 @@ async def set_operation_exposure(ctx: OpContext, inp: ExposureInput) -> Exposure
     )
 
 
-PipelineStage = Literal["embed", "enrich"]
+# A stage (embed, triage, enrich) or one enricher (enrich.<name>); the control validates it.
+PipelineStage = str
 
 
 class PauseBackfillInput(BaseModel):

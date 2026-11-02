@@ -133,6 +133,9 @@ class IngestSettings(_Section):
     enrich_concurrency: int = Field(default=1, ge=1)
     # Triage runs as its own job, ahead of the rest of enrichment, so it has its own cap.
     triage_concurrency: int = Field(default=1, ge=1)
+    # Mail triage rated below this is not embedded (it stays keyword-searchable). Unrated mail is
+    # embedded. None embeds everything.
+    embed_min_priority: int | None = Field(default=1, ge=0, le=3)
     # Rolling window for the throughput the status ETA uses.
     throughput_window_seconds: float = Field(default=600.0, gt=0)
 

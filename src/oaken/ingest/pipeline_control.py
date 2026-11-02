@@ -27,7 +27,25 @@ from oaken.readstate.audit import AuditLog, new_audit_id
 # The model-bound ingest kinds a pause withholds. Mirrors pipeline.EMBED / TRIAGE / ENRICH.
 LLM_STAGES: frozenset[str] = frozenset({"ingest.embed", "ingest.triage", "ingest.enrich"})
 # The stage names a person uses, and the job kind each one runs.
-STAGES: dict[str, str] = {"embed": "ingest.embed", "enrich": "ingest.enrich"}
+STAGES: dict[str, str] = {
+    "embed": "ingest.embed",
+    "triage": "ingest.triage",
+    "enrich": "ingest.enrich",
+}
+ENRICHER_STAGE = "enrich."  # ``enrich.<name>`` is one enricher's kind, ``ingest.enrich.<name>``
+
+
+def stage_kind(stage: str) -> str:
+    """The job kind a stage name means: a stage (``enrich``) or one enricher (``enrich.summary``).
+    Pausing or limiting a stage covers every kind below it."""
+    if stage in STAGES:
+        return STAGES[stage]
+    name = stage.removeprefix(ENRICHER_STAGE)
+    if stage.startswith(ENRICHER_STAGE) and name.replace("_", "").replace("-", "").isalnum():
+        return "ingest." + stage
+    raise InvalidInput(
+        f"unknown stage {stage!r}; one of {', '.join(STAGES)}, or enrich.<enricher>"
+    )
 MAX_CONCURRENCY = 64  # the same ceiling as ``[jobs] workers``
 
 
@@ -67,7 +85,8 @@ class PipelineControl:
     async def paused_stages(self) -> set[str]:
         """The stage names (``embed``, ``enrich``) that are paused, by either switch."""
         kinds = await self.paused_kinds()
-        return {name for name, kind in STAGES.items() if kind in kinds}
+        names = {name for name, kind in STAGES.items() if kind in kinds}
+        return names | {k.removeprefix("ingest.") for k in kinds if k.startswith("ingest.enrich.")}
 
     async def set_llm_paused(self, paused: bool, *, actor: Actor, reason: str) -> PipelineState:
         """Pause or resume every model-bound stage."""
@@ -79,8 +98,7 @@ class PipelineControl:
         """Pause or resume one stage (``embed``, ``enrich``), or with no stage every model-bound
         one. Resuming a single stage while everything is paused resumes just that stage. The change
         is audited in the same transaction; a no-op change still records the reason."""
-        if stage is not None and stage not in STAGES:
-            raise InvalidInput(f"unknown stage {stage!r}; one of {', '.join(STAGES)}")
+        kind = stage_kind(stage) if stage is not None else ""
         now = fmt_ts(self.clock.now())
         who = actor.label or actor.kind
         async with self.db.transaction() as tx:
@@ -98,7 +116,6 @@ class PipelineControl:
                 if not paused:
                     await tx.execute("DELETE FROM pipeline_stage_pause")
             else:
-                kind = STAGES[stage]
                 if paused:
                     await tx.execute(
                         "INSERT OR REPLACE INTO pipeline_stage_pause"
@@ -140,11 +157,9 @@ class PipelineControl:
 
     async def set_limit(self, stage: str, concurrency: int, *, actor: Actor) -> int:
         """How many jobs of one stage may run at once, from now on and after a restart."""
-        if stage not in STAGES:
-            raise InvalidInput(f"unknown stage {stage!r}; one of {', '.join(STAGES)}")
+        kind = stage_kind(stage)
         if not 1 <= concurrency <= MAX_CONCURRENCY:
             raise InvalidInput(f"concurrency is between 1 and {MAX_CONCURRENCY}")
-        kind = STAGES[stage]
         before = (await self.limits()).get(kind)
         async with self.db.transaction() as tx:
             await tx.execute(

@@ -152,6 +152,15 @@ class MessageEnriched(Event):
 
 
 @dataclass(frozen=True, kw_only=True)
+class MessageTriaged(Event):
+    """The gate enricher stored its result; ``result`` is that result, for triggers (CORE_50)."""
+
+    account_id: AccountId
+    message_id: MessageId
+    result: dict[str, object]
+
+
+@dataclass(frozen=True, kw_only=True)
 class AttachmentQuarantined(Event):
     """Flagged attachments of a message were written to the quarantine folder (never opened)."""
 

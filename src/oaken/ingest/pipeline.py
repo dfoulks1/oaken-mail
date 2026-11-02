@@ -40,8 +40,9 @@ from oaken.core.events import (
     EventBus,
     MessageEmbedded,
     MessageEnriched,
+    MessageTriaged,
 )
-from oaken.core.ids import AccountId, MessageId
+from oaken.core.ids import AccountId, JobId, MessageId
 from oaken.core.jobs import (
     PRIORITY_BACKFILL,
     PRIORITY_INGEST,
@@ -75,10 +76,15 @@ log = get_logger("oaken.ingest")
 
 PARSE = "ingest.parse"
 EMBED = "ingest.embed"
-ENRICH = "ingest.enrich"
-TRIAGE = "ingest.triage"  # the gate enricher alone; its priority decides what ENRICH is owed
+ENRICH = "ingest.enrich"  # legacy: a job of this kind queues the per-enricher jobs and ends
+ENRICH_PREFIX = ENRICH + "."  # ``ingest.enrich.<enricher>``: one kind per enricher but the gate
+TRIAGE = "ingest.triage"  # the gate enricher alone; its result decides what is owed after it
 REPROCESS = "ingest.reprocess"
 STAGE_KINDS = (PARSE, EMBED, TRIAGE, ENRICH, REPROCESS)
+
+
+def enrich_kind(name: str) -> str:
+    return ENRICH_PREFIX + name
 GATE = "triage"  # its priority can gate the others (``[plugins.<name>] min_priority``)
 CUT = "\n[... the middle of this message was cut to fit the size limit ...]\n"
 
@@ -162,6 +168,7 @@ class PipelineStatus:
     backfill_paused: bool  # queue depth is at the cap
     quarantined_files: int
     parked: list[ParkedJob] = field(default_factory=list)
+    enrichers: dict[str, StageStatus] = field(default_factory=dict)  # ``enrich.<name>`` each
 
 
 class Pipeline:
@@ -223,6 +230,27 @@ class Pipeline:
             concurrency=1,
             result_model=StageJobResult,
         )
+        self.register_enrichers(runner)
+
+    def register_enrichers(self, runner: JobRunner) -> list[str]:
+        """One job kind per enricher but the gate. Call again once the plugin host has started:
+        kinds already registered are left alone."""
+        added: list[str] = []
+        for name in self.backends.enrichers():
+            if name == GATE:
+                continue
+            try:
+                runner.register(
+                    enrich_kind(name),
+                    MessagePayload,
+                    self._enricher_job(name),
+                    concurrency=self.cfg.enrich_concurrency,
+                    result_model=StageJobResult,
+                )
+            except ValueError:  # already registered
+                continue
+            added.append(enrich_kind(name))
+        return added
 
     # -- enqueueing -------------------------------------------------------------------------
     async def enqueue_parse(
@@ -280,13 +308,13 @@ class Pipeline:
         await self._filter(mid, p.changed)
         res = await self.indexer.index_one(mid)
         await self._quarantine(mid, msg.account_id)
-        if self._triage_on():  # embedding and the other enrichers wait for its result
+        if self._triage_on():  # embedding and the barred enrichers wait for its result
             await self._enqueue_stage(TRIAGE, ENRICH_STEP, mid, msg.account_id, p.backfill)
+            await self._queue_enrichers(mid, msg.account_id, p.backfill, barred=False)
         else:
             if self.embedding_enabled():
                 await self._enqueue_stage(EMBED, EMBED_STEP, mid, msg.account_id, p.backfill)
-            if self.backends.enrichers():
-                await self._enqueue_stage(ENRICH, ENRICH_STEP, mid, msg.account_id, p.backfill)
+            await self._queue_enrichers(mid, msg.account_id, p.backfill)
         changed = res is not None and res.changed
         return StageJobResult(done=int(changed), skipped=int(not changed))
 
@@ -335,6 +363,16 @@ class Pipeline:
         note = "stale: run reprocess('embed')" if r.stale else ""
         return StageJobResult(done=r.embedded, skipped=r.skipped, note=note)
 
+    async def _embed_skipped(self, mid: MessageId) -> bool:
+        """True when triage rated this message below ``[ingest] embed_min_priority``: junk is not
+        worth a vector. Unrated mail (triage off, or it failed) is embedded."""
+        bar = self.cfg.embed_min_priority
+        if bar is None or not self._triage_on():
+            return False
+        triage = await self.enrichment(mid, GATE)
+        priority = triage.get("priority") if triage else None
+        return isinstance(priority, int) and priority < bar
+
     async def _skip_ai(self, mid: MessageId) -> bool:
         return any(
             a.kind == "analysis" and a.value == "skip_enrich" for a in await self.attrs.get(mid)
@@ -351,7 +389,7 @@ class Pipeline:
         if msg.deleted_at is not None:
             await self.vectors.delete([message_id])
             return out
-        if await self._skip_ai(message_id):
+        if await self._skip_ai(message_id) or await self._embed_skipped(message_id):
             return out
         model = embedder.model_id
         held = (await self.vectors.stats()).model_id
@@ -421,9 +459,9 @@ class Pipeline:
 
     # -- ingest.triage ----------------------------------------------------------------------
     async def _triage_job(self, p: MessagePayload, job: Job) -> StageJobResult:
-        """Triage alone. Its priority decides what else is owed, so embedding and ENRICH are
-        queued once it has a result. On the last attempt a failure still queues them, with the
-        gate open, so one model outage cannot strand mail."""
+        """Triage alone. Its result decides what else is owed, so embedding and the barred
+        enrichers are queued once it has one. On the last attempt a failure still queues them,
+        with the gate open, so one model outage cannot strand mail."""
         mid = MessageId(p.message_id)
         doc = await self.index.get_doc(mid)
         if doc is None:
@@ -441,30 +479,91 @@ class Pipeline:
     async def _after_triage(
         self, mid: MessageId, account: AccountId, backfill: bool, *, failed: bool = False
     ) -> None:
-        """Queue what waits on triage: embedding, and the enrichers it gates."""
-        if self.embedding_enabled():
+        """Queue what waits on triage: embedding, and the enrichers its result owes."""
+        if self.embedding_enabled() and not await self._embed_skipped(mid):
             await self._enqueue_stage(EMBED, EMBED_STEP, mid, account, backfill)
-        await self._enqueue_stage(
-            ENRICH, ENRICH_STEP, mid, account, backfill, triage_failed=failed
-        )
+        result = await self.enrichment(mid, GATE)
+        await self._queue_enrichers(mid, account, backfill, barred=True, failed=failed)
+        if result is not None and self.bus:
+            await self.bus.publish(
+                MessageTriaged(
+                    ts=self.clock.now(), account_id=account, message_id=mid, result=result
+                )
+            )
+
+    async def _queue_enrichers(
+        self,
+        mid: MessageId,
+        account: AccountId,
+        backfill: bool,
+        *,
+        barred: bool | None = None,
+        failed: bool = False,
+        skip_stored: bool = False,
+    ) -> None:
+        """Queue one ``ingest.enrich.<name>`` job for each enricher the stored triage result owes.
+        ``barred`` keeps only enrichers with a ``min_priority`` (True) or only those without
+        (False). ``failed``: triage gave up, so nothing is held back. A job's urgency follows the
+        triage priority, below parse."""
+        triage = await self.enrichment(mid, GATE)
+        priority = triage.get("priority") if triage else None
+        step = ENRICH_STEP + (3 - priority if isinstance(priority, int) else 0)
+        for name, enricher in self.backends.enrichers().items():
+            if name == GATE or self.settings.plugins.get(name, {}).get("enabled") is False:
+                continue
+            bar = self._bar(name, enricher)
+            if barred is not None and barred != (bar is not None):
+                continue
+            if bar is not None and self._held_back(priority, bar, failed):
+                continue
+            if skip_stored and await self.enrichment(mid, name) is not None:
+                continue
+            await self._enqueue_stage(
+                enrich_kind(name), step, mid, account, backfill, triage_failed=failed
+            )
 
     def _triage_on(self) -> bool:
         return GATE in self.backends.enrichers() and (
             self.settings.plugins.get(GATE, {}).get("enabled") is not False
         )
 
-    # -- ingest.enrich ----------------------------------------------------------------------
-    async def _enrich_job(self, p: MessagePayload, _job: Job) -> StageJobResult:
-        mid = MessageId(p.message_id)
-        # Triage has its own job, so this one leaves it out. A message with no triage result (an
-        # enrich job queued before the split) still gets it here, or strict mode would hold the
-        # gated enrichers back for good.
-        split = self._triage_on() and (
-            p.triage_failed or await self.enrichment(mid, GATE) is not None
+    # -- ingest.enrich.<name> and the legacy ingest.enrich ---------------------------------
+    def _enricher_job(self, name: str) -> Any:
+        async def run(p: MessagePayload, job: Job) -> StageJobResult:
+            mid = MessageId(p.message_id)
+            # Plugin stages see every stored enrichment, so the last enricher job runs them.
+            last = not await self._enrichers_pending(mid, job.id)
+            r = await self.enrich_message(
+                mid, only={name}, gate_open=p.triage_failed, stages=last
+            )
+            return StageJobResult(done=r.ran, skipped=r.cached + r.gated)
+
+        return run
+
+    async def _enrichers_pending(self, mid: MessageId, this: JobId) -> bool:
+        row = await self.queue.db.fetchone(
+            "SELECT 1 FROM jobs WHERE dedupe_key LIKE ? AND id != ?"
+            " AND status IN ('queued', 'running')",
+            (f"{ENRICH_PREFIX}%:{mid}", this),
         )
-        others = set(self.backends.enrichers()) - {GATE} if split else None
-        r = await self.enrich_message(mid, only=others, gate_open=p.triage_failed)
-        return StageJobResult(done=r.ran, skipped=r.cached + r.gated)
+        return row is not None
+
+    async def _enrich_job(self, p: MessagePayload, _job: Job) -> StageJobResult:
+        """A legacy job: queue what the new flow would have for this message, then end. It never
+        calls a model. A message with no triage result yet gets its triage job, which queues the
+        rest when it is done."""
+        mid = MessageId(p.message_id)
+        doc = await self.index.get_doc(mid)
+        if doc is None:
+            return StageJobResult(note="gone")
+        account = AccountId(doc["account_id"])
+        if self._triage_on() and not p.triage_failed and await self.enrichment(mid, GATE) is None:
+            await self._enqueue_stage(TRIAGE, ENRICH_STEP, mid, account, p.backfill)
+            return StageJobResult(note="queued triage")
+        await self._queue_enrichers(
+            mid, account, p.backfill, failed=p.triage_failed, skip_stored=True
+        )
+        return StageJobResult(note="queued per-enricher jobs")
 
     async def enrich_message(
         self,
@@ -473,6 +572,7 @@ class Pipeline:
         only: Collection[str] | None = None,
         force: bool = False,
         gate_open: bool = False,
+        stages: bool = True,
     ) -> EnrichResult:
         """Run every enricher whose result for this content is not already stored. A result
         another message with the same content produced is copied, not asked for again.
@@ -481,7 +581,7 @@ class Pipeline:
         is stored and asks the model afresh (the new answer replaces the cached one)."""
         token = FRESH.set(True) if force else None
         try:
-            return await self._enrich_message(message_id, only, force, gate_open)
+            return await self._enrich_message(message_id, only, force, gate_open, stages)
         finally:
             if token is not None:
                 FRESH.reset(token)
@@ -492,6 +592,7 @@ class Pipeline:
         only: Collection[str] | None,
         force: bool,
         gate_open: bool = False,
+        stages: bool = True,
     ) -> EnrichResult:
         out = EnrichResult()
         if await self._skip_ai(message_id):
@@ -566,7 +667,8 @@ class Pipeline:
                         enricher=name,
                     )
                 )
-        await self._run_plugin_stages(message_id, doc, account, force)
+        if stages:
+            await self._run_plugin_stages(message_id, doc, account, force)
         return out
 
     # -- enrichment by an external agent (the swarm, prompt 33) ------------------------------
@@ -970,12 +1072,22 @@ class Pipeline:
     async def _reenrich(
         self, account_id: AccountId | None, since: str | None = None, limit: int | None = None
     ) -> StageJobResult:
-        ran = cached = 0
+        """Queue, at backfill priority, the jobs enrichment owes each message: triage first when it
+        is on (it queues the barred enrichers), then the rest. A job whose result is current is a
+        cache hit, so only what is missing or stale does model work."""
+        queued = 0
         for mid in await self._doc_ids(account_id, since, limit):
-            r = await self.enrich_message(MessageId(mid))
-            ran += r.ran
-            cached += r.cached
-        return StageJobResult(done=ran, skipped=cached)
+            doc = await self.index.get_doc(MessageId(mid))
+            if doc is None:
+                continue
+            account = AccountId(doc["account_id"])
+            if self._triage_on():
+                await self._enqueue_stage(TRIAGE, ENRICH_STEP, MessageId(mid), account, True)
+                await self._queue_enrichers(MessageId(mid), account, True, barred=False)
+            else:
+                await self._queue_enrichers(MessageId(mid), account, True)
+            queued += 1
+        return StageJobResult(done=queued, note="per-enricher jobs queued")
 
     # -- status -----------------------------------------------------------------------------
     async def depth(self) -> int:
@@ -994,14 +1106,17 @@ class Pipeline:
         now = self.clock.now()
         db = self.queue.db
         window = timedelta(seconds=self.cfg.throughput_window_seconds)
-        stages: dict[str, StageStatus] = {}
-        for kind in STAGE_KINDS:
+        async def status_of(kind: str, *, below: bool) -> StageStatus:
+            # ``below``: the stage's own kind and every kind under it (the enrich stage is the sum
+            # of its enrichers); otherwise the exact kind.
+            where = "(kind = ? OR kind LIKE ?)" if below else "kind = ?"
+            args = (kind, kind + ".%") if below else (kind,)
             counts = {
                 r["status"]: r
                 for r in await db.fetchall(
                     "SELECT status, COUNT(*) AS n, MIN(created_at) AS oldest,"
-                    " SUM(attempts > 0) AS retried FROM jobs WHERE kind = ? GROUP BY status",
-                    (kind,),
+                    f" SUM(attempts > 0) AS retried FROM jobs WHERE {where} GROUP BY status",
+                    args,
                 )
             }
             queued = counts.get("queued")
@@ -1009,14 +1124,14 @@ class Pipeline:
             running = int(counts["running"]["n"]) if "running" in counts else 0
             done = await db.fetchone(
                 "SELECT COUNT(*) AS n, MIN(updated_at) AS first FROM jobs"
-                " WHERE kind = ? AND status = 'succeeded' AND updated_at >= ?",
-                (kind, fmt_ts(now - window)),
+                f" WHERE {where} AND status = 'succeeded' AND updated_at >= ?",
+                (*args, fmt_ts(now - window)),
             )
             rate = 0.0
             if done and done["n"]:
                 span = max((now - parse_ts(done["first"])).total_seconds(), 1.0)
                 rate = float(done["n"]) / min(span, window.total_seconds())
-            stages[kind.removeprefix("ingest.")] = StageStatus(
+            return StageStatus(
                 pending=pending,
                 retrying=int(queued["retried"] or 0) if queued else 0,
                 running=running,
@@ -1029,6 +1144,17 @@ class Pipeline:
                 if rate > 0 and pending + running
                 else None,
             )
+
+        stages = {
+            kind.removeprefix("ingest."): await status_of(kind, below=True) for kind in STAGE_KINDS
+        }
+        enrichers = {
+            r["kind"].removeprefix("ingest."): await status_of(r["kind"], below=False)
+            for r in await db.fetchall(
+                "SELECT DISTINCT kind FROM jobs WHERE kind LIKE ? ORDER BY kind",
+                (ENRICH_PREFIX + "%",),
+            )
+        }
         parked = [
             ParkedJob(
                 r["id"],
@@ -1049,6 +1175,7 @@ class Pipeline:
         held = vstats.model_id if vstats else None
         return PipelineStatus(
             stages=stages,
+            enrichers=enrichers,
             docs=istats.docs,
             chunks=istats.chunks,
             index_stale=istats.stale,

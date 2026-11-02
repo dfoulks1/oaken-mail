@@ -18,8 +18,9 @@ flowchart LR
         F[Sieve filter] --> I[Index: fields and FTS5] --> Q[Quarantine flagged attachments]
     end
     Q -->|priority - 2| T[ingest.triage]
+    Q -->|priority - 2, no bar| N[ingest.enrich.name]
     T -->|priority - 1| E[ingest.embed]
-    T -->|priority - 2| N[ingest.enrich]
+    T -->|priority - 2 - (3 - rating), bar met| N
     E --> V[(vector store)]
     N --> X[(enrichments in raw.db)]
 ```
@@ -30,15 +31,19 @@ flowchart LR
 2. **Parse** (`ingest.parse`). The user's Sieve scripts run **first**, so a message that is
    discarded or marked `skip_enrich` never reaches the expensive stages. Then the message is
    indexed (fields and FTS5), flagged attachments are written to the quarantine folder, and the
-   triage job is queued. From here on the message is **searchable by keyword**. With triage off,
-   parse queues the embed and enrich jobs itself.
+   triage job is queued, with the job of each enricher that has no `min_priority`. From here on the
+   message is **searchable by keyword**. With triage off, parse queues the embed job and every
+   enricher's job itself.
 3. **Triage** (`ingest.triage`). The `triage` enricher alone, so its priority is known before
    anything else spends model time. When it finishes (or fails for good on its last attempt) the
-   embed and enrich jobs are queued.
+   embed job and the jobs of the enrichers its result owes are queued, and `MessageTriaged` is
+   published with the result.
 4. **Embed** (`ingest.embed`). Chunk text goes to the embedder and the vectors to the vector store.
-5. **Enrich** (`ingest.enrich`). The other enrichers run on the cleaned text, and on the message's
-   headers and attachment metadata. The first-party ones are `summary`, `actions` and
-   `inspector` (see below).
+   It waits for triage, and mail triage rated below `ingest.embed_min_priority` is not embedded.
+5. **Enrich** (`ingest.enrich.<name>`, one kind per enricher). Each runs on the cleaned text, and
+   on the message's headers and attachment metadata. The first-party ones are `summary`, `actions`
+   and `inspector` (see below). A job of the old `ingest.enrich` kind queues the per-enricher jobs
+   for its message and ends; it never calls a model.
 
 Embedding and enrichment are separate jobs because they are slow, can fail for different reasons,
 and can be switched off on their own. With no embedder configured the pipeline is just store, filter
@@ -113,7 +118,7 @@ refreshes only that enricher's rows.
 | Enricher | Model | Stores |
 | --- | --- | --- |
 | `summary` | yes | One to three sentences and up to five key points. A reply is summarized from its own new text plus the stored summary of the message before it, never that message's body. |
-| `triage` | only if headers cannot say | `category`, `priority` 0-3, `needs_reply`, `waiting_on_others`, a short `reason`, and `source` (`rules` or `llm`). `Auto-Submitted`, `Precedence: bulk`, `List-Id`, `List-Unsubscribe` and a no-reply sender decide the category with no model call. |
+| `triage` | only if headers cannot say | `category`, `priority` 0-3, `needs_reply`, `waiting_on_others`, a short `reason`, and `source` (`rules` or `llm`). `Auto-Submitted`, `Precedence: bulk` or `junk`, a no-reply sender, cron output (`X-Cron-Env`, a `Cron <user@host>` subject or a Cron Daemon sender), auto-reply headers and a spam verdict (`X-Spam-Flag`, `X-Spam-Status`) decide it with no model call, at priority 0. List headers alone do not: people reply through lists, so list mail goes to the model. |
 | `actions` | yes | Action items and deadlines, each with a quote and where it sits. A quote that is not in the message is dropped and counted in `dropped`, so an invented task is never stored. |
 | `inspector` | never | SPF, DKIM and DMARC from the topmost `Authentication-Results`, ARC, spam headers, hop count from `Received` headers, date sanity, `Reply-To` against `From`, `List-*` headers, and risky attachment names. Findings are short codes in `warnings`. |
 
@@ -165,6 +170,7 @@ store can sit behind it later.
 | `ingest.backfill_queue_cap` | 2000 | Queued `ingest.*` jobs at which a backfill pauses |
 | `ingest.stage_max_attempts` | 8 | Attempts before a stage job is parked |
 | `ingest.embed_concurrency` / `enrich_concurrency` / `triage_concurrency` | 1 | Jobs of each stage at once; triage is its own job, queued first |
+| `ingest.embed_min_priority` | 1 | Mail triage rated below this is not embedded (still keyword-searchable). Unrated mail is embedded. Unset embeds everything |
 | `ai.enrich_max_input_tokens` | 3000 | Most tokens of one message an LLM enricher is sent |
 | `plugins.<enricher>.enabled` | true | `false` skips that enricher |
 | `plugins.summary.skip_bulk` / `plugins.actions.skip_bulk` | true | Do not ask a model about bulk mail |

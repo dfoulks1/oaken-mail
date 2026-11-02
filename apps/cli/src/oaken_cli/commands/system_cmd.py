@@ -93,7 +93,9 @@ def _emit_pause(args: argparse.Namespace, result: CallResult) -> int:
 async def _pipeline(client: ApiClient, args: argparse.Namespace) -> int:
     result = await client.call("pipeline_status", {})
     out = result.output if isinstance(result.output, dict) else {}
-    stages = out.get("stages", {}) if isinstance(out, dict) else {}
+    stages = dict(out.get("stages", {}) if isinstance(out, dict) else {})
+    if getattr(args, "by_enricher", False):  # each enricher's own queue, under its stage
+        stages.update(out.get("enrichers", {}))
     rows = [
         {
             "stage": name,
