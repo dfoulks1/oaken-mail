@@ -464,8 +464,8 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <tr>
 <td>47</td>
 <td>CORE_47-split-enrich</td>
-<td><strong>Written</strong></td>
-<td>One job kind per enricher (<code>ingest.enrich.&lt;name&gt;</code>): triage runs first and only the enrichers whose <code>min_priority</code> it meets are queued; the old <code>ingest.enrich</code> job becomes a converter that drains the backlog cheaply. An agent's payload carries one enricher, not three. Plan only</td>
+<td><strong>Built</strong></td>
+<td>One job kind per enricher (<code>ingest.enrich.&lt;name&gt;</code>), with triage as its own first step and kind (<code>ingest.triage</code>, <code>BaseTriager</code>, default <code>rules</code> and <code>ai</code> triagers, a rank-ordered chain); only the enrichers whose <code>min_priority</code> triage's result meets are queued, and embedding waits for it (<code>[ingest] embed_min_priority</code>). The old <code>ingest.enrich</code> job drains as a converter. An agent claims one enricher's job. Pause, limits and status reach each enricher. Plugin settings are <code>[plugins.&lt;kind&gt;.&lt;name&gt;]</code>. Deviations: triage kept its own kind; the old combined agent path remains as legacy; the CLI audit rows in 17 are owed</td>
 </tr>
 <tr>
 <td>48</td>
@@ -488,8 +488,8 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <tr>
 <td>52</td>
 <td>CORE_52-console-by-stage</td>
-<td><strong>Written</strong></td>
-<td>The console by stage: status on <code>/</code>, General (Ingest, Audit log, Reference), one tab per plugin kind with its stage controls and plugin table, and per-plugin pause. The config-beside-the-thing idea is parked in the prompt. Draft</td>
+<td><strong>Built</strong></td>
+<td>The console by stage. Masthead: General, Triage, Embed, Enrich, Config, Capabilities, Docs. <code>/</code> is the front page; General (<code>/stats</code>) has Ingest, Queue, Providers, LLM backends, Vector stores, Caches, usage and agents, and the Audit log (the Jobs page is folded in); Triage, Embed and Enrich are pages with the stage's controls and its plugins; Capabilities lists operations by plugin kind with an MCP switch. <code>parse</code> can be paused and limited. The config-beside-the-thing idea is parked in the prompt</td>
 </tr>
 </tbody>
 </table></div>

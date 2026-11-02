@@ -1,6 +1,7 @@
 # 52 — The console by stage: status on `/`, a tab per kind (DRAFT)
 
-**Status:** built, then revised after review: the stages moved into the masthead (see Goal).
+**Status: Built** (commits `69eeedb`, `6ca6217`), then revised after review: the stages moved into the
+masthead (see Goal). Not built: the parked config-beside-the-thing idea.
 **Read first:** `00-context.md`, `CORE_50-console-without-script.md` (no script, no CDN: forms,
 redirects and `popover` only), `CORE_41-stats-controls.md`, `CORE_47-split-enrich.md`.
 **Depends on:** 41, 47, 50. Nothing unbuilt.

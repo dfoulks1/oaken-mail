@@ -1,5 +1,12 @@
 # 47 — One job per enricher: triage first, then only what earns it
 
+**Status: Built** (commits `cbb8202`, `b1c68f8`, `025ffde`). Where the code differs from this prompt,
+the code is right: triage kept its own kind, `ingest.triage`, and a triager is a plugin kind of its
+own (`BaseTriager`, `LLMTriager`; default `rules` and `ai`), see requirement 10; the old combined
+`ingest.enrich` agent path remains as legacy; fan-out jobs sink with a lower triage rating (Q1,
+amended); plugin settings became `[plugins.<kind>.<name>]`; `[ingest] embed_min_priority` was added.
+Owed: the `CLI_17` audit rows for the new commands, and the report-back.
+
 **Read first:** `docs/prompts/00-context.md`, `CORE_09-ingest-pipeline.md`, `CORE_33-agent-enrichment.md`
 (the agent door and its payload), `CORE_42-per-enricher-models.md` and ADR 0010.
 **Depends on:** 09, 14, 33, 42. Nothing unbuilt.
