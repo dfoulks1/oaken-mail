@@ -41,7 +41,7 @@ secret-scanning in place, with **no code or data carried over** from the legacy 
    print and ask before executing these, then verify with checksums:
    ```bash
    install -d -m 700 ~/.local/share/mailmind-legacy
-   cp -p /home/dfoulks/local/OllMCP/Memories/mailmind.db ~/.local/share/mailmind-legacy/mailmind.legacy.db
+   cp -p PATH/TO/LEGACY/mailmind.db ~/.local/share/mailmind-legacy/mailmind.legacy.db
    chmod 600 ~/.local/share/mailmind-legacy/mailmind.legacy.db
    sha256sum <original> <copy>
    ```

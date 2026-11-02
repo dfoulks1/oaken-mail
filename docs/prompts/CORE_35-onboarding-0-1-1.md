@@ -115,10 +115,10 @@ it is Bootstrap + the shared nav, themed via `--oaken-accent`. See `src/oaken/ap
 welcome.html` and `src/oaken/api/welcome.py`.
 
 
-- `/home/dfoulks/local/oaken-mail/src/oaken/core/paths.py` — path resolution logic
-- `/home/dfoulks/local/oaken-mail/src/oaken/daemon/core.py` — daemon startup
-- `/home/dfoulks/local/oaken-mail/config.example.toml` — example config to base defaults on
-- `/home/dfoulks/local/oaken-mail/src/oaken_vec_sqlite/store.py` — default vector store plugin
+- `src/oaken/core/paths.py` — path resolution logic
+- `src/oaken/daemon/core.py` — daemon startup
+- `config.example.toml` — example config to base defaults on
+- `src/oaken_vec_sqlite/store.py` — default vector store plugin
 
 ## Gmail authorization — make "connect Gmail" easy (FUTURE)
 Setting up Gmail is the worst part of onboarding: the user has to create a Google OAuth client by

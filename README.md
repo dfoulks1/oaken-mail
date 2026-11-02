@@ -42,10 +42,10 @@ mail is off over MCP until you turn it on. See [SECURITY.md](SECURITY.md).
 
 ## Quick start
 
-You need Python 3.11 or newer and [Ollama](https://ollama.com) for the local models.
+You need Python 3.11 or newer (`uv sync` fetches one if your system Python is older, such as 3.10) and [Ollama](https://ollama.com) for the local models. Without a model, mail still syncs and keyword search works; summaries, triage and semantic search wait until one is available.
 
 ```bash
-pip install oaken-core                 # or from a checkout: git clone … && uv sync
+pip install oaken-core                 # or: git clone https://github.com/dfoulks1/oaken-mail && cd oaken-mail && uv sync
 ollama pull nomic-embed-text && ollama pull qwen2.5:3b
 
 oaken start                            # in the background; prints where the console is (/, /config, /general)

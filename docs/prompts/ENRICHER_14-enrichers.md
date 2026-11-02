@@ -22,8 +22,8 @@ full body (the token-thrift mechanism).
    quote span) and `deadlines[]`. Quotes must be verbatim substrings of the cleaned
    text — validate and drop any item whose quote isn't found (anti-hallucination).
 4. **`inspector`** (**no LLM**): deterministic header/MIME report. Port the logic of
-   the legacy `HeaderAnalyzer` and `MIMEAnalyzer` (`/home/dfoulks/local/mailmind-unified/
-   mailmind/analysis.py`, read-only reference): SPF/DKIM/DMARC from `Authentication-Results`,
+   the legacy `HeaderAnalyzer` and `MIMEAnalyzer` (`mailmind-unified/
+   mailmind/analysis.py` in the sibling checkout, read-only reference): SPF/DKIM/DMARC from `Authentication-Results`,
    ARC presence, spam headers, hop count from **`Received`** headers (fix the legacy
    estimate, which wrongly counted `by ` in `Authentication-Results`), date sanity,
    `Reply-To` mismatch, `List-*`, risky attachment extensions. Add tests for each rule.

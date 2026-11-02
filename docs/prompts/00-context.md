@@ -119,7 +119,7 @@ Key rules:
 
 ## The legacy tree (read-only reference)
 
-`/home/dfoulks/local/mailmind-unified` is the previous implementation. You may
+The `mailmind-unified` checkout (a sibling of this repository) is the previous implementation. You may
 **read** it for ideas and port logic (e.g. header/MIME heuristics in
 `mailmind/analysis.py`, body extraction in `mailmind/gmail.py`). You must **not**:
 

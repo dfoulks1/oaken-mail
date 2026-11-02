@@ -18,7 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _lint_imports_cmd() -> list[str]:
     """The ``lint-imports`` console script if it is on PATH, else the module entry point."""
-    script = shutil.which("lint-imports")
+    beside = Path(sys.executable).with_name("lint-imports")  # the venv's, even if not activated
+    script = str(beside) if beside.exists() else shutil.which("lint-imports")
     if script:
         return [script]
     return [sys.executable, "-m", "importlinter"]

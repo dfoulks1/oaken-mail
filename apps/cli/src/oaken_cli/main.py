@@ -40,7 +40,8 @@ Oaken Mail — a local-first, AI-native mail client.
 Mail is pulled to your machine, filtered by your Sieve rules, and processed by a local model
 at ingest time, so search and question-answering are cheap. Nothing leaves your machine unless
 you configure a remote endpoint. This CLI is a thin client: every command is one call to the
-local core daemon over 127.0.0.1 — it holds no logic of its own, and never starts core for you.
+local core daemon over 127.0.0.1 — it holds no logic of its own, and starts core only when you
+run `oaken start`.
 """
 
 EPILOG = """\

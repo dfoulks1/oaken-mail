@@ -327,7 +327,10 @@ def detach(*, timeout: float = 30.0, runtime: Path | None = None) -> dict[str, A
         if found is not None and found.get("port"):
             return found
         if child.poll() is not None:
-            raise Unavailable(f"core exited while starting (code {child.returncode})")
+            raise Unavailable(
+                f"core exited while starting (code {child.returncode}); "
+                "run `oaken start --fg` to see why"
+            )
         time.sleep(0.05)
     raise Unavailable(f"core did not start listening within {timeout:.0f}s")
 

@@ -1,6 +1,6 @@
 # Security policy
 
-Oaken Mail is pre-alpha software. Please report suspected vulnerabilities privately and
+Oaken Mail is beta software (0.1.x). Please report suspected vulnerabilities privately and
 do not open a public issue.
 
 Report it privately through GitHub:

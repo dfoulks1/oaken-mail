@@ -12,7 +12,7 @@ seed only a few pages.
 
 ## Reference (read-only; port the design, not the content)
 
-Libra's source is at `/home/dfoulks/local/Libra/docs/` — read `index.html`, and
+Libra's source is a sibling checkout (`Libra/docs/`) — read `index.html`, and
 `tools/pagebase.py`, `tools/docnav.py`, `tools/build_index.py`, `tools/check_docs.py`.
 Do **not** copy Libra content, hardware/wiring code (`wiring.py`, `softmap_data.py`,
 `build_hardware.py`, …) or any Libra-specific text. Keep the SPDX header on all files.

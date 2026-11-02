@@ -242,3 +242,8 @@ config.toml
 
 # Another AI assistant's working files; not part of this project
 .kiro/
+
+# Local run output (carries absolute paths)
+.pytest.lastrun
+*.lastrun
+oakentest
