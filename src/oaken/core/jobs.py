@@ -466,7 +466,7 @@ class JobQueue:
     def _lease(self, kind: str, agent: bool) -> float:
         """How long a lease lasts. An agent's enrich job gets longer: a large model on modest
         hardware is slow, and the agent extends it with heartbeat_job."""
-        if agent and kind == "ingest.enrich":
+        if agent and kind.startswith(("ingest.enrich", "ingest.triage")):
             return max(self.settings.lease_seconds, self.swarm.enrich_lease_seconds)
         return self.settings.lease_seconds
 

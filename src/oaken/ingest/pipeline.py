@@ -85,6 +85,14 @@ STAGE_KINDS = (PARSE, EMBED, TRIAGE, ENRICH, REPROCESS)
 
 def enrich_kind(name: str) -> str:
     return ENRICH_PREFIX + name
+
+
+def split_enricher(kind: str) -> str | None:
+    """The one enricher a job kind runs (the gate for ``ingest.triage``), or None for any other
+    kind, including the legacy ``ingest.enrich``."""
+    if kind == TRIAGE:
+        return GATE
+    return kind.removeprefix(ENRICH_PREFIX) if kind.startswith(ENRICH_PREFIX) else None
 GATE = "triage"  # its priority can gate the others (``[plugins.<name>] min_priority``)
 CUT = "\n[... the middle of this message was cut to fit the size limit ...]\n"
 
@@ -703,7 +711,9 @@ class Pipeline:
                 owed[name] = enricher
         return owed
 
-    async def agent_offer(self, message_id: MessageId, max_chars: int) -> dict[str, Any] | None:
+    async def agent_offer(
+        self, message_id: MessageId, max_chars: int, only: str | None = None
+    ) -> dict[str, Any] | None:
         """What an agent is handed for an ``ingest.enrich`` job: the message, fenced as mail, and
         for each enrichment still owed its instructions and answer schema. None when there is
         nothing left for an agent: the message is skipped, or core could settle all of it.
@@ -715,9 +725,12 @@ class Pipeline:
             return None
         msg = await self._enrich_input(message_id, doc)
         owed = await self._owed_to_agent(message_id, doc, msg)
-        native = {n for n in self.backends.enrichers() if n not in owed}
-        if native:
-            await self.enrich_message(message_id, only=native)
+        if only is not None:  # one enricher's job: core settles it itself when nothing is owed
+            owed = {n: e for n, e in owed.items() if n == only}
+        else:
+            native = {n for n in self.backends.enrichers() if n not in owed}
+            if native:
+                await self.enrich_message(message_id, only=native)
         if not owed:
             return None
         body = msg.body.unwrap()
@@ -762,6 +775,44 @@ class Pipeline:
             "answer": {"enrichments": {"<enricher>": "an object matching that enricher's schema"}},
             "content_is_untrusted": True,
         }
+
+    async def agent_offer_one(
+        self, kind: str, job: Job, max_chars: int
+    ) -> dict[str, Any] | None:
+        """What an agent is handed for an ``ingest.triage`` or ``ingest.enrich.<name>`` job: the
+        message and that one enricher's instructions and schema. None when there is nothing for
+        an agent (skipped mail, or core can settle it): core then runs the job itself, so what
+        follows it (embedding, the enrichers its result owes) is still queued."""
+        name = split_enricher(kind)
+        payload = MessagePayload.model_validate_json(job.payload_json)
+        offer = await self.agent_offer(MessageId(payload.message_id), max_chars, only=name)
+        if offer is None:
+            if kind == TRIAGE:
+                await self._triage_job(payload, job)
+            elif name is not None:
+                await self._enricher_job(name)(payload, job)
+        return offer
+
+    async def agent_accept_one(
+        self, kind: str, job: Job, answer: Mapping[str, Any], label: str
+    ) -> int:
+        """Store an agent's answer for a one-enricher job, then do what the native job does after
+        it: queue what triage's result owes, or run the plugin stages when this was the last
+        enricher job for the message. Returns how many answers were stored."""
+        name = split_enricher(kind)
+        payload = MessagePayload.model_validate_json(job.payload_json)
+        mid = MessageId(payload.message_id)
+        if name is None:
+            raise InvalidResult(f"{kind} is not a one-enricher job")
+        stored, _ = await self.agent_accept(mid, {name: answer}, label)
+        doc = await self.index.get_doc(mid)
+        if doc is not None:
+            account = AccountId(doc["account_id"])
+            if kind == TRIAGE:
+                await self._after_triage(mid, account, payload.backfill)
+            elif not await self._enrichers_pending(mid, job.id):
+                await self._run_plugin_stages(mid, doc, account, False)
+        return stored
 
     async def agent_accept(
         self, message_id: MessageId, answers: Mapping[str, Any], label: str

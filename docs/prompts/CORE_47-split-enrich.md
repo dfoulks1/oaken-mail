@@ -74,6 +74,13 @@ not only enrich).
    and status take a stage name (`enrich`) or one enricher (`enrich.summary`, `triage`); the same
    names work on the operations behind them. Add the rows to the audit table in `CLI_17`.
 
+10. **`BaseTriager`.** (In 47, not CORE_50.) A triager is a plugin that settles or rates a message for
+    the gate. `BasePlugin` is the public name for `_Base` in `src/oaken/plugins/base.py`, and
+    `BaseTriager(BasePlugin)` sits beside `BaseEnricher` with its own config model. Two ship by
+    default: **rules** (the deterministic set in `oaken_enrichers/triage_rules.py`) and **ai** (the
+    model). They run as an ordered chain, first to settle wins, and the chain stores one result
+    under `triage` whose `source` names the triager. CORE_50 adds custom labels and triggers on top.
+
 ## Acceptance criteria
 
 - A parsed message queues triage and the unbarred enrichers, and nothing for an enricher whose bar its

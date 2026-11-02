@@ -25,7 +25,7 @@ from oaken.core.jobs import Job
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import AnyOperation, OperationRegistry, operation
 from oaken.core.operations.scope import McpScope
-from oaken.ingest.pipeline import ENRICH
+from oaken.ingest.pipeline import ENRICH, split_enricher
 
 # Jobs an agent claims that core can settle itself (skipped mail, work needing no model) are
 # finished here and the next one is tried, up to this many in one claim.
@@ -108,6 +108,16 @@ async def claim_job(ctx: OpContext, inp: ClaimJobInput) -> ClaimJobOutput:
                 await queue.complete(job.id, agent.worker, {"skipped": 1})
                 continue
             payload = {**payload, **offer}
+        elif split_enricher(job.kind) is not None:
+            try:
+                offer = await ctx.svc.need_pipeline().agent_offer_one(job.kind, job, inp.max_chars)
+            except Exception as exc:  # core ran the job itself and it failed: not the agent's
+                await queue.fail(job.id, agent.worker, type(exc).__name__)
+                continue
+            if offer is None:
+                await queue.complete(job.id, agent.worker, {"skipped": 1})
+                continue
+            payload = {**payload, **offer}
         return ClaimJobOutput(
             job=JobLease(
                 id=str(job.id),
@@ -176,10 +186,26 @@ class CompleteJobOutput(Done):
 async def complete_job(ctx: OpContext, inp: CompleteJobInput) -> CompleteJobOutput:
     """The result is checked before anything is stored: a result that does not match the kind's
     schema is rejected as invalid_result and the job stays yours, so you can fix it or fail it.
-    For ingest.enrich the result is ``{"enrichments": {"<enricher>": {...}}}``; answer some and
-    the rest stay owed (the job goes back to the queue), answer all and the job is done."""
+    For ingest.triage and ingest.enrich.<name> the result is that enricher's answer, matching the
+    schema in the claim. For the legacy ingest.enrich it is
+    ``{"enrichments": {"<enricher>": {...}}}``; answer some and the rest stay owed (the job goes
+    back to the queue), answer all and the job is done."""
     queue, worker = ctx.svc.queue, _worker(ctx)
     job = await queue.get(JobId(inp.job_id))
+    if (
+        job is not None
+        and split_enricher(job.kind) is not None
+        and job.locked_by == worker
+        and job.status == "running"
+    ):  # one enricher's job: the result is that enricher's answer itself, never partial
+        if not inp.result:
+            raise InvalidResult("the result must be the enricher's answer object")
+        agent = await ctx.svc.need_agents().get(_agent_id(ctx))
+        label = inp.produced_by or agent.label
+        stored = await ctx.svc.need_pipeline().agent_accept_one(job.kind, job, inp.result, label)
+        if not await queue.complete(job.id, worker, {"done": stored}, produced_by=label):
+            raise Conflict(LOST)
+        return CompleteJobOutput(stored=stored)
     if job is None or job.kind != ENRICH or job.locked_by != worker or job.status != "running":
         done = await queue.complete(
             JobId(inp.job_id), worker, inp.result, produced_by=inp.produced_by

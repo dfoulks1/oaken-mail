@@ -13,7 +13,7 @@ from oaken.core.operations import CallerContext, CoreClient
 from oaken.core.operations.builtin import agent_registry
 from oaken.core.operations.tests.conftest import Ops
 from oaken.core.settings import McpSettings, SwarmSettings, WorkspaceSettings
-from oaken.ingest.pipeline import ENRICH, MessagePayload, StageJobResult
+from oaken.ingest.pipeline import ENRICH, MessagePayload, StageJobResult, enrich_kind
 from oaken.plugins.base import BaseEnricher
 from oaken.plugins.contracts import EnrichInput, EnrichOutput
 
@@ -308,3 +308,30 @@ async def test_a_triage_below_an_enrichers_bar_rules_it_out_for_the_agent_too(
     )
     assert (done.stored, done.still_owed) == (1, 0)  # priority 1 is under the bar: gist is not owed
     assert (await ops.svc.queue.get(job_id)).status == "succeeded"  # type: ignore[union-attr,arg-type]
+
+
+async def test_an_agent_for_one_enricher_gets_only_that_enrichers_job_and_answers_it(
+    ops: Ops, swarm: Swarm
+) -> None:
+    mid, _ = await swarm.message()
+    gist, tone = enrich_kind("gist"), enrich_kind("tone")
+    kinds = SwarmSettings(enabled=True, allowed_kinds=[gist, tone])
+    ops.svc.agents.settings = kinds  # type: ignore[union-attr]
+    ops.svc.queue.swarm = kinds
+    for kind in (gist, tone):
+        ops.svc.queue.register_result(kind, StageJobResult)
+    agent, _ = await ops.svc.agents.create("gist only", [gist])  # type: ignore[union-attr]
+    caller = CallerContext.mcp("gist only", agent_id=str(agent.id))
+    await ops.svc.queue.enqueue(tone, MessagePayload(message_id=mid))
+    await ops.svc.queue.enqueue(gist, MessagePayload(message_id=mid))
+
+    async def call(name: str, **arguments: Any) -> Any:
+        return (await swarm.client.call(name, arguments, caller)).output
+
+    job = (await call("claim_job")).job
+    assert job.kind == gist  # the tone job is not this agent's
+    assert [o["enricher"] for o in job.payload["owed"]] == ["gist"]
+    done = await call("complete_job", job_id=job.id, result={"gist": "a note"})
+    assert done.stored == 1 and done.still_owed == 0
+    assert (await swarm.stored(mid))["gist"]["gist"] == "a note"
+    assert (await call("claim_job")).job is None
