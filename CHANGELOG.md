@@ -52,8 +52,8 @@ Makes a fresh install usable without reading the docs.
   (the `rules` triager) lists them in order with a pill each, and its values are editable. The
   front page shows the sync state (backfill and model stages paused or running, each account's next
   and last run). Paths were tidied: `/stats` is `/general` (and `/stats.json` `/general.json`),
-  `/jobs/pipeline` is `/pipeline.json`, `/getting_started` is `/getting-started`; the old pages
-  redirect, keeping the query string. `pipeline_status` takes optional
+  `/getting_started` is `/getting-started`; those old paths redirect, keeping the query string.
+  `/jobs/pipeline` is now `/pipeline.json` and does not redirect. `pipeline_status` takes optional
   `stages` and `counts` to ask for less.
 
 - A live welcome page at `/`, a config editor at `/config`, a jobs and pipeline console,

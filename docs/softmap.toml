@@ -217,11 +217,11 @@ layer = "ingest"
 status = "built"
 prompt = "09"
 path = "src/oaken/ingest"
-summary = "Staged, idempotent, resumable: store, then Sieve filter and index (keyword-searchable from here), then embed and enrich asynchronously. Every stage skips work whose content hash it has already done."
-uses = ["parsing", "sieve", "jobs", "events", "pluginhost", "rawstore", "index", "vectorstore"]
+summary = "Staged, idempotent, resumable: store, then Sieve filter and index (keyword-searchable from here), then triage, embed and enrich asynchronously (triage is its own first step; mail it rates as junk is not embedded). Every stage skips work whose content hash it has already done."
+uses = ["parsing", "sieve", "jobs", "events", "trace", "pluginhost", "rawstore", "index", "vectorstore"]
 untrusted = true
 types = [
-  ["Pipeline", "class", "Registers the ingest.parse, .embed, .enrich and .reprocess jobs; embed_message, enrich_message, reprocess, backfill_paused and pipeline_status."],
+  ["Pipeline", "class", "Registers the ingest.parse, .triage, .embed, .enrich.NAME (one kind per enricher) and .reprocess jobs; embed_message, enrich_message, reprocess, backfill_paused and pipeline_status."],
   ["SyncRunner", "class", "Pulls from a provider, stores each message, queues parse, saves the cursor only after the batch. A backfill pauses at the queue cap; new mail never does."],
   ["Backends", "dataclass", "Callables for the embedder, LLM, enrichers and vector store, so plugins can come and go while the pipeline runs."],
   ["Vectors", "class", "The one seam between core and a vector store. Optional store capabilities (stored_hashes, begin_model, activate_model, drop_model, prune_orphans) are detected, not required."],
@@ -325,6 +325,27 @@ funcs = [
 notes = ["Delivery is at least once, so handlers must be idempotent.", "See architecture/jobs for the lifecycle."]
 
 [[components]]
+id = "trace"
+name = "Trace"
+layer = "runtime"
+status = "built"
+prompt = "53"
+path = "src/oaken/core/trace.py"
+summary = "Opt-in, full-text record of what plugins, model calls, jobs and agents do, pushed over the event bus to explicit streams only. Off by default; authenticated API only, never MCP or a console page."
+uses = ["events"]
+notifies = ["api"]
+untrusted = true
+types = [
+  ["Tracer", "class", "An EventLog that also publishes each line as a TraceEvent; emit(kind, **data) stamps it with the current trace context."],
+  ["TraceEvent", "frozen dataclass", "Kind and data; only streams that ask for it receive one."],
+]
+funcs = [
+  ["trace_context(**fields)", "Binds job id, kind, attempt and message id for everything done inside, through a ContextVar."],
+  ["oaken trace -f plugin.KIND.NAME", "Follow one plugin; --job ID and --message ID follow one job or message."],
+]
+notes = ["The trace holds mail text; it is never exposed on MCP.", "Wrapped on BasePlugin, so every plugin traces without writing code."]
+
+[[components]]
 id = "swarm"
 name = "Agents and the swarm"
 layer = "runtime"
@@ -382,12 +403,12 @@ layer = "runtime"
 status = "built"
 prompt = "04"
 path = "src/oaken/plugins/host.py"
-summary = "Entry-point discovery, validation, lifecycle, capabilities and health for the five plugin contracts. Fakes and reusable contract suites live in oaken.testing."
-uses = ["events", "provider", "embedder", "llm", "enrichers", "vectorstore"]
+summary = "Entry-point discovery, validation, lifecycle, capabilities and health for the plugin kinds (provider, embedder, llm_backend, triager, enricher, vector_store, cache_store). A plugin that fails to load, or lacks config it requires, is switched off. Fakes and reusable contract suites live in oaken.testing."
+uses = ["events", "trace", "provider", "embedder", "llm", "enrichers", "vectorstore"]
 types = [
   ["PluginHost", "class", "Loads, starts, health-checks and stops plugins; looks them up by kind and name."],
   ["PluginInfo", "frozen dataclass", "Name, version, kind, capabilities and api_version of a loaded plugin."],
-  ["BaseProvider, BaseEmbedder, ...", "classes", "Optional base classes with defaults; capabilities are inferred from the methods overridden."],
+  ["BaseProvider, BaseEmbedder, BaseTriager, ...", "classes", "Optional base classes with defaults, all on BasePlugin, which also traces every public method when the trace is on."],
 ]
 funcs = [
   ["PluginHost.providers_with(capability)", "Healthy providers that implement a capability. Sending is never routed."],
