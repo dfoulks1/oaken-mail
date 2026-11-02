@@ -53,7 +53,7 @@ def fit(text: str, budget: int, tokenizer: Tokenizer) -> tuple[str, bool]:
 
 class EnricherConfig(BaseModel):
     """The ``[plugins.<name>]`` settings every model-backed enricher shares. Each enricher may
-    subclass this to add its own. The field descriptions are shown as help text in the ``/stats``
+    subclass this to add its own. The field descriptions are shown as help text in the ``/general``
     config form, so keep them plain and about what the setting does."""
 
     model_config = ConfigDict(extra="forbid")

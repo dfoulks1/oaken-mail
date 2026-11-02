@@ -7,14 +7,14 @@
 {% import "_macros.html" as m with context %}
 {% import "_plugins.html" as pl with context %}
 {% block title %}General · Oaken Mail{% endblock %}
-{% block body_attrs %} data-refresh="/stats.json?tab={{ tab }}" data-refresh-seconds="15"{% if tab == "ingest" %} data-lazy{% endif %}{% endblock %}
+{% block body_attrs %} data-refresh="/general.json?tab={{ tab }}" data-refresh-seconds="15"{% if tab == "ingest" %} data-lazy{% endif %}{% endblock %}
 
 {% block main %}
 <h1>General</h1>
 <p class="muted small mono">{{ core.version }}{% if core.uptime_seconds is not none %} · up <span data-bind="core.uptime_minutes">{{ (core.uptime_seconds // 60) | int }}</span> min{% endif %}</p>
 <div class="tabset">
   {% set tabs = [("ingest","Ingest"),("queue","Queue"),("audit","Audit log")] %}
-  <nav class="tabbar" aria-label="General">{% for key, label in tabs %}<a href="/stats?tab={{ key }}"{% if tab == key %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
+  <nav class="tabbar" aria-label="General">{% for key, label in tabs %}<a href="/general?tab={{ key }}"{% if tab == key %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
 
   {# ---- Ingest: every stage, and the live throughput ---- #}
   {% if tab == "ingest" %}
@@ -23,7 +23,7 @@
     <div class="card">
       <div class="card-head"><span>Pipeline</span>
         <span class="row">
-          <span class="muted small">Model stages</span> {{ m.switch("stage", "/stats?tab=ingest", not pipeline.llm_paused, "Run the model stages", {}, "run", "on", "off") }}
+          <span class="muted small">Model stages</span> {{ m.switch("stage", "/general?tab=ingest", not pipeline.llm_paused, "Run the model stages", {}, "run", "on", "off") }}
         </span>
       </div>
       <div class="card-body">
@@ -48,12 +48,12 @@
             <td class="muted" data-bind="pipeline.stages.{{ name }}.oldest_pending_seconds" data-format="secs">{{ "…" if not s.loaded else (((s.oldest_pending_seconds | int) ~ "s") if s.oldest_pending_seconds is not none else "—") }}</td>
             <td data-bind="pipeline.stages.{{ name }}.per_second" data-format="fixed2">{{ ("%.2f" | format(s.per_second)) if s.loaded else "…" }}</td>
             <td class="muted" data-bind="pipeline.stages.{{ name }}.eta_seconds" data-format="secs">{{ "…" if not s.loaded else (((s.eta_seconds | int) ~ "s") if s.eta_seconds is not none else "—") }}</td>
-            <td>{% if name in ("parse", "embed", "triage", "enrich") %}{{ pl.stage_toggle(name, s, "/stats?tab=ingest") }}{% endif %}</td>
+            <td>{% if name in ("parse", "embed", "triage", "enrich") %}{{ pl.stage_toggle(name, s, "/general?tab=ingest") }}{% endif %}</td>
             <td>
-              {% call m.post("limit", "/stats?tab=ingest") %}
+              {% call m.post("limit", "/general?tab=ingest") %}
                 <input type="hidden" name="stage" value="{{ name }}">
                 <input class="input input-sm" type="number" name="concurrency" min="1" max="64" value="{{ s.concurrency if s.concurrency is defined and s.concurrency else '' }}" aria-label="Jobs at once for {{ name }}">
-                <button class="btn btn-sm" type="submit">Set</button>
+                <button class="btn btn-sm btn-icon" type="submit" title="Set" aria-label="Set jobs at once for {{ name }}">{{ m.icon("check") }}</button>
               {% endcall %}
             </td>
           </tr>
@@ -76,14 +76,14 @@
   <section class="pane pane-on" id="p-queue" aria-label="Queue">
     <div class="card">
       <div class="card-head"><span>Jobs queue</span>
-        <form class="row" method="get" action="/stats">
+        <form class="row" method="get" action="/general">
           <input type="hidden" name="tab" value="queue">
           <label class="sr-only" for="job-status">Status</label>
           <select class="select select-sm" id="job-status" name="status">
             <option value="">Active</option><option value="all"{% if status == "all" %} selected{% endif %}>All</option>
             {% for st in statuses %}<option value="{{ st }}"{% if st == status %} selected{% endif %}>{{ st }}</option>{% endfor %}
           </select>
-          <button class="btn btn-sm" type="submit">Filter</button>
+          <button class="btn btn-sm btn-icon" type="submit" title="Filter" aria-label="Filter">{{ m.icon("funnel") }}</button>
         </form>
       </div>
       <div class="table-wrap"><table class="table">
@@ -97,9 +97,9 @@
             <td>{{ j.attempts }}/{{ j.max_attempts }}</td>
             <td class="bad small clip" title="{{ j.last_error or '' }}">{{ j.last_error or "" }}</td>
             <td class="right">
-              {% set back = "/stats?tab=queue&status=" ~ status if status else "/stats?tab=queue" %}
-              {% if j.status in ("queued", "running") %}{{ m.confirm("cancel", back, "Cancel", "Cancel this job?", "Cancel job", {"job_id": j.id}) }}{% endif %}
-              {% if j.status in ("failed", "cancelled") %}{% call m.post("retry", back) %}<input type="hidden" name="job_id" value="{{ j.id }}"><button class="btn btn-sm" type="submit">Retry</button>{% endcall %}{% endif %}
+              {% set back = "/general?tab=queue&status=" ~ status if status else "/general?tab=queue" %}
+              {% if j.status in ("queued", "running") %}{{ m.confirm("cancel", back, "Cancel the job", "Cancel this job?", "Cancel job", {"job_id": j.id}, "x") }}{% endif %}
+              {% if j.status in ("failed", "cancelled") %}{% call m.post("retry", back) %}<input type="hidden" name="job_id" value="{{ j.id }}"><button class="btn btn-sm btn-icon" type="submit" title="Retry" aria-label="Retry the job">{{ m.icon("retry") }}</button>{% endcall %}{% endif %}
             </td>
           </tr>
         {% else %}
@@ -111,7 +111,7 @@
     {% if parked %}
     <div class="card">
       <div class="card-head"><span>Parked jobs</span>
-        {% call m.post("retry-parked", "/stats?tab=queue") %}<button class="btn btn-sm" type="submit">{{ m.icon("retry") }} Retry all</button>{% endcall %}
+        {% call m.post("retry-parked", "/general?tab=queue") %}<button class="btn btn-sm btn-icon" type="submit" title="Retry all" aria-label="Retry all parked jobs">{{ m.icon("retry") }}</button>{% endcall %}
       </div>
       <div class="table-wrap"><table class="table">
         <thead><tr><th>Job</th><th>Stage</th><th>Message</th><th>Attempts</th><th>Error</th></tr></thead>
@@ -125,7 +125,7 @@
       </table></div>
     </div>
     {% endif %}
-    {% if agents %}{{ pl.agents_card(agents, "/stats?tab=queue", "Agents not tied to a stage") }}{% endif %}
+    {% if agents %}{{ pl.agents_card(agents, "/general?tab=queue", "Agents not tied to a stage") }}{% endif %}
   </section>
   {% endif %}
 
@@ -156,4 +156,4 @@
 
 </div>
 {% endblock %}
-{% block scripts %}<script src="/refresh.js"></script><script src="/chart.umd.js"></script><script src="/jobs-chart.js"></script>{% endblock %}
+{% block scripts %}<script src="/refresh.js"></script><script src="/chart.umd.js"></script><script src="/throughput-chart.js"></script>{% endblock %}

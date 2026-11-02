@@ -78,6 +78,38 @@ The cache holds model answers keyed by what produced them, so clearing it costs 
 had saved. Mail, the index and the usage record are untouched. Without a terminal, `clear` needs
 `--yes`.
 
+## Watching a plugin or a job: the trace
+
+```bash
+oaken trace on                       # start recording (it holds mail text: off until asked for)
+oaken trace -f plugin.triager.ai     # follow one plugin, pushed as each event happens
+oaken trace -f plugin.enricher.summary
+oaken trace plugin.llm_backend.ollama -n 20
+oaken trace --job 0192a7...          # one job instance, and nothing else
+oaken trace --message 0192a8...      # everything that happened to one message
+oaken trace off
+```
+
+The trace records, with the full text: every call into a plugin (its arguments and what it
+returned, for every kind: providers, embedders, LLM backends, vector stores, caches, triagers and
+enrichers); every model call core makes (the system text, each user part fenced as mail, the schema,
+the response, the thinking a model returned, the backend's own token counts and timings, and the
+tokens a cache hit saved); the jobs (queued, started, done, failed) and what each stored; and the
+agent door (what an agent was handed on a claim, its heartbeats, the answer it committed, and any
+thinking or tool calls it chose to report). Every event carries the plugin (`plugin_kind`,
+`plugin`), the job (`job_id`, `job_kind`) and the message it happened under, so each of the filters
+above is exact.
+
+It is off by default, because it holds mail text. `[log] trace = true` turns it on at start-up;
+`oaken trace on|off` changes it at run time. It goes to `trace.jsonl` in the data directory
+(owner-only, rotated at `trace_max_bytes`, keeping `trace_backups`), is read only through the
+authenticated API, is never shown on the console's token-free pages and is never offered over MCP.
+A single text longer than `trace_event_cap` is cut and says so.
+
+A plugin author gets the same view of their own code: every public `async` method on a plugin built
+on a base class is traced under its kind and name, and `self.trace("my.event", key=value)` adds an
+event of your own.
+
 ## What happened: events and the audit log
 
 ```bash

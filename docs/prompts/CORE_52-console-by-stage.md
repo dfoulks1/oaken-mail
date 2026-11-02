@@ -17,7 +17,7 @@ embedder is a bottleneck that must be scalable and removable. The structure has 
 ## Goal (revised after review)
 
 The masthead reads **General, Pipeline, Triage, Embed, Enrich, Config, Capabilities, Docs**. `/` is
-the front page. **General** (`/stats`) holds Ingest (every stage with a pill switch to pause it, plus
+the front page. **General** (`/general`) holds Ingest (every stage with a pill switch to pause it, plus
 live throughput), Queue (the active jobs and parked jobs; the Jobs page is gone) and the Audit log.
 Everything about a stage is on that stage's page: controls, plugins, its core settings, its model
 and token usage, and its agents. **Pipeline** (`/pipeline`) holds Providers, LLM backends, Vector stores and
@@ -79,7 +79,7 @@ workspaces. The original goals below describe the first cut.
 
 ## Open questions (defaults in bold)
 
-- Q1: General's route: **`/stats`, relabelled General**, with `/` the new front page.
+- Q1: General's route: **`/general`** (it was `/stats`, which still redirects), with `/` the new front page.
 - Q2: pausing a triager: **disable it, so the chain skips it**; the AI triager off leaves mail
   unrated and embedded.
 - Q3: the tab for `parse` (core, no plugin): **Ingest on General**.

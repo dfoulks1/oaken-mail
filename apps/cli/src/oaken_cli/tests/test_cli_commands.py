@@ -406,3 +406,52 @@ async def test_reprocess_can_be_limited_to_recent_mail(cli: Cli) -> None:
     run = await cli("reprocess", "enrich", "--limit", "2", "--since", "2020-01-01", "--json")
     assert run.code == int(ExitCode.OK), run.err
     assert (await cli("reprocess", "enrich", "--since", "yesterday")).code != int(ExitCode.OK)
+
+
+async def test_trace_switch_and_follow_one_plugin(cli: Cli, tmp_path: Path) -> None:
+    from oaken.core.clock import FakeClock
+    from oaken.core.trace import Tracer, trace_context
+
+    tracer = Tracer(tmp_path / "t.jsonl", FakeClock(), max_bytes=1 << 20, backups=1)
+    cli.ops.svc.tracer = tracer
+    assert "off" in (await cli("trace", "status")).out
+    assert "on" in (await cli("trace", "on")).out and tracer.enabled
+    with trace_context(plugin_kind="triager", plugin="ai", job_id="j1"):
+        tracer.emit("llm.call", system="THE SYSTEM TEXT", response="THE ANSWER")
+    with trace_context(plugin_kind="enricher", plugin="summary", job_id="j2"):
+        tracer.emit("llm.call", system="OTHER", response="NOT THIS")
+    shown = await cli("trace", "plugin.triager.ai")
+    assert shown.code == int(ExitCode.OK)
+    assert "THE SYSTEM TEXT" in shown.out and "THE ANSWER" in shown.out
+    assert "NOT THIS" not in shown.out  # only that plugin
+    assert "NOT THIS" not in (await cli("trace", "--job", "j1")).out
+    assert "THE ANSWER" in (await cli("trace", "--job", "j1")).out
+    assert (await cli("trace", "plugin.nonsense.x")).code != int(ExitCode.OK)
+    assert "off" in (await cli("trace", "off")).out and not tracer.enabled
+
+
+async def test_trace_follow_is_pushed_when_an_event_is_emitted(cli: Cli, tmp_path: Path) -> None:
+    import asyncio
+
+    if cli.transport != "inprocess":
+        pytest.skip("the ASGI test transport buffers a stream; test_cli_http covers a real one")
+
+    from oaken.core.clock import FakeClock
+    from oaken.core.trace import Tracer, trace_context
+
+    tracer = Tracer(tmp_path / "t.jsonl", FakeClock(), max_bytes=1 << 20, backups=1, enabled=True)
+    tracer.bus = cli.ops.svc.bus
+    cli.ops.svc.tracer = tracer
+    stream = cli._client(None).stream_trace({"plugin": "plugin.triager.ai"})
+    first = asyncio.ensure_future(stream.__anext__())
+    for _ in range(100):  # wait for the subscription to open (over HTTP it takes a moment)
+        if cli.ops.svc.bus._streams:  # type: ignore[union-attr]
+            break
+        await asyncio.sleep(0.05)
+    with trace_context(plugin_kind="enricher", plugin="summary"):
+        tracer.emit("llm.call", response="NOT THIS")
+    with trace_context(plugin_kind="triager", plugin="ai"):
+        tracer.emit("llm.call", response="THIS ONE")
+    event = await asyncio.wait_for(first, 2)
+    assert event.data["data"]["response"] == "THIS ONE"  # filtered, and no polling delay
+    await stream.aclose()  # type: ignore[attr-defined]

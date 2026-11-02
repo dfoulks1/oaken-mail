@@ -76,7 +76,7 @@ across every account and cannot be narrowed (`list_labels`, `list_mailbox`, and 
 through: name an account in scope. When the list covers every account, as on a default install, none
 of this changes anything. The CLI and the console are not scoped; the list only limits MCP clients.
 
-Set it with `oaken settings set mcp` or on the **Reference** tab of `/stats`. `check` rejects an
+Set it with `oaken settings set mcp` or on the **Reference** tab of `/general`. `check` rejects an
 unknown workspace and warns on `[]`.
 
 ## Read state

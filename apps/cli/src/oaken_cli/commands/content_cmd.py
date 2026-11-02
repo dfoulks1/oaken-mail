@@ -12,8 +12,10 @@ never offered over MCP.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import base64
 import json
+import sys
 from pathlib import Path
 
 from oaken_cli.client import ApiClient
@@ -31,7 +33,38 @@ def cmd_enrich(args: argparse.Namespace) -> int:
     return run(lambda client: _enrich(client, args), args)
 
 
+async def _try_triage(client: ApiClient, args: argparse.Namespace) -> int:
+    if (args.message_id is None) == (args.text is None):
+        raise CliError("give a MESSAGE_ID or --text FILE, not both", ExitCode.USAGE)
+    payload: dict[str, object] = {}
+    if args.message_id is not None:
+        payload["message_id"] = args.message_id
+    else:
+        payload["text"] = (
+            sys.stdin.read()
+            if args.text == "-"
+            else await asyncio.to_thread(Path(args.text).read_text, "utf-8")
+        )
+        payload["subject"], payload["sender"] = args.subject, args.sender
+    result = await client.call("try_triage", payload)
+    out = result.output if isinstance(result.output, dict) else {}
+
+    def shown() -> None:
+        from oaken_cli.output import print_text
+
+        if not out.get("rated"):
+            print_text(out.get("note") or "no triager rated it")
+            return
+        by = out.get("triager") or "?"
+        print_text(f"{by}{' on ' + out['model'] if out.get('model') else ''} (nothing stored):")
+        print_text(json.dumps(out.get("result"), indent=2, ensure_ascii=False))
+
+    return emit(args, data=result.output, text=shown)
+
+
 async def _enrich(client: ApiClient, args: argparse.Namespace) -> int:
+    if args.action == "try":
+        return await _try_triage(client, args)
     names = list(args.enricher) or None
     if args.action == "show":
         payload: dict[str, object] = {"message_id": args.message_id}

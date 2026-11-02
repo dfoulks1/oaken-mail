@@ -110,9 +110,17 @@ class LLMAccess(Protocol):
     ) -> Any: ...
 
 
+def _no_trace(kind: str, /, **data: Any) -> None:
+    """The default ``PluginContext.trace``: a context built without a tracer records nothing."""
+
+
+def _not_tracing() -> bool:
+    return False
+
+
 @dataclass(frozen=True)
 class PluginContext:
-    """Handed to ``start()``. ``config`` is the plugin's own ``[plugins.<name>]`` table."""
+    """Handed to ``start()``. ``config`` is the plugin's own ``[plugins.<kind>.<name>]`` table."""
 
     name: str
     kind: PluginKind
@@ -128,6 +136,12 @@ class PluginContext:
     # Core's language-model access (see ``LLMAccess``), for a plugin that ``needs_llm``. None in a
     # context built without it (most tests); calling it before core has one raises PluginError.
     llm: LLMAccess | None = None
+    # The trace (``[log] trace``, or ``oaken trace on``). ``trace("my.event", ...)`` records an
+    # event that ``oaken trace -f plugin.<kind>.<name>`` shows with the calls core already
+    # records for you; ``tracing()`` says whether it is on, for a field that is costly to build.
+    # Both do nothing in a context built without a tracer.
+    trace: Callable[..., None] = _no_trace
+    tracing: Callable[[], bool] = _not_tracing
     _subscriptions: list[Callable[[], None]] = field(
         default_factory=list, repr=False, compare=False
     )
@@ -479,6 +493,10 @@ class LLMResponse:
     input_tokens: int = 0
     output_tokens: int = 0
     model_id: str = ""
+    # What the backend can say about the call, for the trace: the reasoning a model produced, and
+    # whatever else it reports (tool calls, timings, why it stopped). Both optional.
+    thinking: str = ""
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 @runtime_checkable

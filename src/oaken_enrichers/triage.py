@@ -16,7 +16,7 @@ from oaken.core.untrusted import UntrustedText
 from oaken.plugins.base import BaseTriager
 from oaken.plugins.contracts import AskIntent, EnrichInput, EnrichOutput
 from oaken_enrichers._common import LLMTriager, digest, fit, labeled
-from oaken_enrichers.triage_rules import Category, settled
+from oaken_enrichers.triage_rules import Category, RulesConfig, describe, settled
 
 MAX_REASON_WORDS = 20
 
@@ -66,14 +66,6 @@ TRIAGE = PromptBuilder(
 )
 
 
-class RulesConfig(BaseModel):
-    skip_rules: list[str] = Field(
-        default_factory=list,
-        description="Rules to switch off, by name: auto_submitted, bulk, no_reply, cron, "
-        "auto_reply, spam, empty.",
-    )
-
-
 class RulesTriager(BaseTriager):
     """The deterministic triager: headers and the message itself settle it with no model, at
     priority 0. Mail no rule settles goes on to the next triager."""
@@ -84,9 +76,15 @@ class RulesTriager(BaseTriager):
     config_model = RulesConfig
     ask_intent = None
 
+    def _rules(self) -> RulesConfig:
+        return self.config if isinstance(self.config, RulesConfig) else RulesConfig()
+
+    def describe(self) -> list[dict[str, Any]]:
+        """The rules in the order they run, and whether each is on (for the settings window)."""
+        return describe(self._rules())
+
     async def triage(self, msg: EnrichInput) -> EnrichOutput | None:
-        skip = self.config.skip_rules if isinstance(self.config, RulesConfig) else ()
-        found = settled(msg, skip)
+        found = settled(msg, self._rules())
         if found is None:
             return None
         category, rule = found

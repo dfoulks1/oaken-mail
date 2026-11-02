@@ -8,6 +8,7 @@ interprets anything the model says.
 """
 
 import json
+import time
 from collections.abc import Callable
 from typing import Any, TypeVar
 
@@ -16,12 +17,13 @@ from pydantic import ValidationError
 from oaken.ai.caller import CALLER
 from oaken.ai.fresh import FRESH
 from oaken.ai.priority import ModelGate
-from oaken.ai.prompts import PromptBuilder, SafeOutput, describe_errors
+from oaken.ai.prompts import PromptBuilder, SafeOutput, describe_errors, render_user
 from oaken.ai.workspaces import Workspaces, check_backend
 from oaken.core.errors import AIBackendError, OakenError
 from oaken.core.ids import AccountId, MessageId
 from oaken.core.logging import get_logger
 from oaken.core.settings import Settings
+from oaken.core.trace import Tracer
 from oaken.core.untrusted import UntrustedText
 from oaken.ingest.usage import UsageStore
 from oaken.plugins.adapt import to_llm_response
@@ -44,7 +46,9 @@ class LLMService:
         backend_for: Callable[[str], LLMBackend],
         settings: Settings,
         cache_plugin: Callable[[], CacheOps | None] = lambda: None,
+        tracer: Tracer | None = None,
     ) -> None:
+        self.tracer = tracer
         self.cache = cache  # core's own; the default
         self.cache_plugin = cache_plugin  # the cache a plugin provides, when config names one
         self.usage = usage
@@ -126,13 +130,28 @@ class LLMService:
                     stage, effective, tokens_in=hit.tokens_in, tokens_out=hit.tokens_out,
                     cached=True, account_id=account_id, message_id=message_id, workspace=ws.name,
                 )  # fmt: skip
+                if self.tracer is not None:
+                    self.tracer.emit(
+                        "llm.cache_hit", task=builder.task, prompt_version=builder.prompt_version,
+                        model=effective, workspace=ws.name, account_id=account_id,
+                        message_id=message_id, tokens_saved=hit.tokens_in + hit.tokens_out,
+                        result=json.loads(hit.result_json),
+                    )  # fmt: skip
                 return value
 
         request = builder.build(*parts)
         spent_in = spent_out = 0
         problem = ""
         for attempt in (1, 2):
-            response = await self._call(backend, request, effective)
+            started = time.monotonic()
+            try:
+                response = await self._call(backend, request, effective)
+            except Exception as exc:
+                self._trace_call(
+                    builder, request, effective, ws.name, account_id, message_id, attempt,
+                    None, started, f"failed ({type(exc).__name__})",
+                )  # fmt: skip
+                raise
             tin = response.input_tokens or _estimate(_request_text(request))
             tout = response.output_tokens or _estimate(response.text or json.dumps(response.data))
             spent_in, spent_out = spent_in + tin, spent_out + tout
@@ -141,6 +160,10 @@ class LLMService:
                 message_id=message_id, workspace=ws.name,
             )  # fmt: skip
             value_or_problem = self._validate(builder, response)
+            self._trace_call(
+                builder, request, effective, ws.name, account_id, message_id, attempt, response,
+                started, "ok" if not isinstance(value_or_problem, str) else value_or_problem,
+            )  # fmt: skip
             if not isinstance(value_or_problem, str):
                 if value_or_problem.injection_suspected:
                     log.warning("model reports instructions inside mail", task=builder.task,
@@ -156,6 +179,46 @@ class LLMService:
                 request = builder.repair(request, problem)
         raise AIBackendError(
             f"{builder.task}: the model's answer was not valid after one repair ({problem})"
+        )
+
+    def _trace_call(
+        self,
+        builder: PromptBuilder[T],
+        request: LLMRequest,
+        model: str,
+        workspace: str,
+        account_id: AccountId | None,
+        message_id: MessageId | None,
+        attempt: int,
+        response: LLMResponse | None,
+        started: float,
+        outcome: str,
+    ) -> None:
+        """One model call, with everything that crossed: what it was told, and what it said."""
+        if self.tracer is None or not self.tracer.enabled:
+            return
+        self.tracer.emit(
+            "llm.call",
+            task=builder.task,
+            prompt_version=builder.prompt_version,
+            attempt=attempt,
+            model=model,
+            workspace=workspace,
+            account_id=account_id,
+            message_id=message_id,
+            system=request.system,
+            user=render_user(request),
+            schema=request.json_schema,
+            think=request.think,
+            temperature=request.temperature,
+            max_output_tokens=request.max_output_tokens,
+            response=None if response is None else response.text,
+            thinking=None if response is None else response.thinking,
+            tokens_in=None if response is None else response.input_tokens,
+            tokens_out=None if response is None else response.output_tokens,
+            backend=None if response is None else response.meta,
+            duration_ms=round((time.monotonic() - started) * 1000),
+            outcome=outcome,
         )
 
     async def _call(

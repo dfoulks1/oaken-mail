@@ -25,6 +25,7 @@ from oaken.core.jobs import Job
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import AnyOperation, OperationRegistry, operation
 from oaken.core.operations.scope import McpScope
+from oaken.core.trace import trace_context
 from oaken.ingest.pipeline import ENRICH, split_enricher
 
 # Jobs an agent claims that core can settle itself (skipped mail, work needing no model) are
@@ -32,6 +33,51 @@ from oaken.ingest.pipeline import ENRICH, split_enricher
 MAX_SETTLED_PER_CLAIM = 25
 
 LOST = "lease_lost: this agent no longer holds the job"
+
+
+class AgentTraceItem(BaseModel):
+    """Something an agent did while it worked a job, which it chooses to report. It lands in the
+    trace labelled as the agent's own account, and is never trusted as core's."""
+
+    kind: Literal["thinking", "tool_call", "note"]
+    text: str = Field(default="", max_length=20000)
+    name: str | None = Field(default=None, max_length=200, description="A tool call: its name.")
+    arguments: dict[str, Any] | None = Field(default=None, description="A tool call: its input.")
+    result: str | None = Field(
+        default=None, max_length=20000, description="A tool call: its output."
+    )
+
+
+async def _trace(
+    ctx: OpContext, event: str, job_id: JobId | str, *, job_kind: str | None = None, **data: Any
+) -> None:
+    """Record one agent-door event in the trace (when it is on), under the job and the plugin that
+    does its work, so ``oaken trace --job ID`` and ``oaken trace -f plugin.KIND.NAME`` see
+    it."""
+    tracer = ctx.svc.tracer
+    if tracer is None or not tracer.enabled:
+        return
+    if job_kind is None:
+        job = await ctx.svc.queue.get(JobId(str(job_id)))
+        job_kind = job.kind if job is not None else None
+    plugin = ctx.svc.pipeline.plugin_for_kind(job_kind) if ctx.svc.pipeline and job_kind else None
+    with trace_context(
+        job_id=str(job_id),
+        job_kind=job_kind,
+        plugin_kind=plugin[0] if plugin else None,
+        plugin=plugin[1] if plugin else None,
+        agent=str(ctx.caller.agent_id) if ctx.caller.agent_id else None,
+    ):
+        tracer.emit(event, **data)
+
+
+async def _trace_reports(
+    ctx: OpContext, job_id: JobId | str, items: list[AgentTraceItem] | None
+) -> None:
+    for item in items or []:
+        await _trace(
+            ctx, "agent.report", job_id, source="agent", **item.model_dump(exclude_none=True)
+        )
 
 
 def _agent_id(ctx: OpContext) -> AgentId:
@@ -118,6 +164,10 @@ async def claim_job(ctx: OpContext, inp: ClaimJobInput) -> ClaimJobOutput:
                 await queue.complete(job.id, agent.worker, {"skipped": 1})
                 continue
             payload = {**payload, **offer}
+        await _trace(
+            ctx, "agent.claim", job.id, job_kind=job.kind, agent_label=agent.label,
+            attempts=job.attempts, payload=payload,
+        )  # fmt: skip
         return ClaimJobOutput(
             job=JobLease(
                 id=str(job.id),
@@ -140,19 +190,30 @@ class HeartbeatJobOutput(BaseModel):
     cancel_requested: bool
 
 
+class HeartbeatJobInput(JobRef):
+    trace: list[AgentTraceItem] | None = Field(
+        default=None,
+        max_length=50,
+        description="What you did since the last beat (thinking, tool calls, notes), if you want "
+        "it in the trace. Optional.",
+    )
+
+
 @operation(
     "heartbeat_job",
     "Extend the lease on a job you hold; says whether the job was cancelled.",
     permission="read",
-    input=JobRef,
+    input=HeartbeatJobInput,
     output=HeartbeatJobOutput,
     mcp="on",
 )
-async def heartbeat_job(ctx: OpContext, inp: JobRef) -> HeartbeatJobOutput:
+async def heartbeat_job(ctx: OpContext, inp: HeartbeatJobInput) -> HeartbeatJobOutput:
     """Call this well inside the lease. If cancel_requested is true, stop and fail_job."""
     owner, cancel = await ctx.svc.queue.heartbeat(JobId(inp.job_id), _worker(ctx))
     if not owner:
         raise Conflict(LOST)
+    await _trace(ctx, "agent.heartbeat", inp.job_id, cancel_requested=cancel)
+    await _trace_reports(ctx, inp.job_id, inp.trace)
     return HeartbeatJobOutput(cancel_requested=cancel)
 
 
@@ -162,6 +223,12 @@ class CompleteJobInput(JobRef):
     )
     produced_by: str | None = Field(
         default=None, max_length=128, description="The model that made the result, as a label."
+    )
+    trace: list[AgentTraceItem] | None = Field(
+        default=None,
+        max_length=50,
+        description="What you did to make the result (thinking, tool calls, notes), if you want it "
+        "in the trace. Optional.",
     )
 
 
@@ -202,9 +269,14 @@ async def complete_job(ctx: OpContext, inp: CompleteJobInput) -> CompleteJobOutp
             raise InvalidResult("the result must be the enricher's answer object")
         agent = await ctx.svc.need_agents().get(_agent_id(ctx))
         label = inp.produced_by or agent.label
+        await _trace_reports(ctx, inp.job_id, inp.trace)
         stored = await ctx.svc.need_pipeline().agent_accept_one(job.kind, job, inp.result, label)
         if not await queue.complete(job.id, worker, {"done": stored}, produced_by=label):
             raise Conflict(LOST)
+        await _trace(
+            ctx, "agent.complete", inp.job_id, job_kind=job.kind, produced_by=label,
+            answer=inp.result, stored=stored,
+        )  # fmt: skip
         return CompleteJobOutput(stored=stored)
     if job is None or job.kind != ENRICH or job.locked_by != worker or job.status != "running":
         done = await queue.complete(
@@ -212,6 +284,9 @@ async def complete_job(ctx: OpContext, inp: CompleteJobInput) -> CompleteJobOutp
         )
         if not done:
             raise Conflict(LOST)
+        await _trace(
+            ctx, "agent.complete", inp.job_id, produced_by=inp.produced_by, answer=inp.result
+        )
         return CompleteJobOutput()
     answers = (inp.result or {}).get("enrichments")
     if not isinstance(answers, dict) or not answers:
@@ -226,6 +301,10 @@ async def complete_job(ctx: OpContext, inp: CompleteJobInput) -> CompleteJobOutp
         return CompleteJobOutput(stored=stored, still_owed=owed)
     if not await queue.complete(job.id, worker, {"done": stored}, produced_by=label):
         raise Conflict(LOST)
+    await _trace(
+        ctx, "agent.complete", inp.job_id, job_kind=job.kind, produced_by=label,
+        answer=inp.result, stored=stored,
+    )  # fmt: skip
     return CompleteJobOutput(stored=stored)
 
 
@@ -254,6 +333,9 @@ class FailJobOutput(BaseModel):
 )
 async def fail_job(ctx: OpContext, inp: FailJobInput) -> FailJobOutput:
     """Use permanent=true only when retrying cannot help; retry=true hands it back unharmed."""
+    await _trace(
+        ctx, "agent.fail", inp.job_id, error=inp.error, permanent=inp.permanent, retry=inp.retry
+    )
     if inp.retry and not inp.permanent:
         if not await ctx.svc.queue.release(JobId(inp.job_id), _worker(ctx)):
             raise Conflict(LOST)

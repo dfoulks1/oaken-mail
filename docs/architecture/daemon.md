@@ -135,13 +135,13 @@ Operations are not routed by hand. `GET /v1/operations` lists the registry with 
   A quiet stream sends a `: heartbeat` comment.
 - `/v1/agent/jobs/...`: claim, heartbeat, complete and fail, for the swarm.
 - `/`: files from `[api] static_dir` when set, otherwise a placeholder page.
-- `GET /stats`: a read-only status page, HTML (see below). Like `/v1/health` it needs no token —
+- `GET /general`: a read-only status page, HTML (see below). Like `/v1/health` it needs no token —
   it is loopback-only and shows counts and health, never mail.
 
 ## The status pages
 
 `GET /` is the front page: version, message and index counts, queue depth, per-account sync state
-and the daemon's environment (paths, port). `GET /stats` is **General**: Ingest (every stage with
+and the daemon's environment (paths, port). `GET /general` is **General**: Ingest (every stage with
 its own pause switch and concurrency, and live throughput), Queue (the active jobs, parked jobs
 and any agent not tied to a stage), and the audit log. `/pipeline` holds the plugins behind the stages:
 providers, LLM backends, vector stores and caches. `/triage`, `/embed` and `/enrich` are the stages:
@@ -151,7 +151,7 @@ and token usage, and the agents working it. `/capabilities` lists the operations
 that offers them, with an MCP switch for each. Each page loads only its own data; the queue numbers
 arrive just after the page paints. It is **unauthenticated on purpose** — it is reachable only from this
 machine (the Host guard still refuses a forged name), and it carries **counts and health only**: no
-message text, no addresses, no tokens, and not the audit log. Open `http://127.0.0.1:<port>/stats`
+message text, no addresses, no tokens, and not the audit log. Open `http://127.0.0.1:<port>/general`
 (the port is in `runtime.json`; set `[api] port` to pin it). The page is self-contained — inline
 styling, no external assets, no scripts — so it works offline. See
 [ADR 0013](repo:docs/adr/0013-read-only-stats-page.md); a friendly `oaken.local` name and a

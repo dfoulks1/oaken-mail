@@ -57,7 +57,7 @@ class Rig:
         return await self.http.post(path, json={} if body is None else body, headers=headers, **kw)
 
     async def ui(
-        self, action: str, back: str = "/stats", *, token: str | None = None, **fields: str
+        self, action: str, back: str = "/general", *, token: str | None = None, **fields: str
     ) -> httpx2.Response:
         """A console form post, as the browser sends it: urlencoded, with the page's token. The
         reply is the 303 back to the page; ``seen`` follows it to read the message."""
@@ -66,7 +66,7 @@ class Rig:
         data = {"csrf": csrf_token() if token is None else token, "back": back, **fields}
         return await self.http.post(f"/ui/{action}", data=data)
 
-    async def seen(self, action: str, back: str = "/stats", **fields: str) -> str:
+    async def seen(self, action: str, back: str = "/general", **fields: str) -> str:
         """The page text after a form post, with its one-time message on it."""
         resp = await self.ui(action, back, **fields)
         assert resp.status_code == 303, resp.text

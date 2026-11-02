@@ -21,9 +21,9 @@
 {%- endmacro %}
 
 {# A destructive button that asks first, with no script: a panel opens on hover or focus. #}
-{% macro confirm(action, back, label, question, yes, fields) -%}
+{% macro confirm(action, back, label, question, yes, fields, icon="") -%}
   <div class="menu">
-    <button type="button" class="btn btn-danger btn-sm menu-btn" aria-haspopup="true">{{ label }}</button>
+    <button type="button" class="btn btn-danger btn-sm menu-btn{% if icon %} btn-icon{% endif %}" aria-haspopup="true"{% if icon %} aria-label="{{ label }}" title="{{ label }}"{% endif %}>{% if icon %}{{ icon_(icon) }}{% else %}{{ label }}{% endif %}</button>
     <div class="confirm-pop">
       <p>{{ question }}</p>
       <form class="inline" method="post" action="/ui/{{ action }}">{{ guard(back) }}
@@ -33,5 +33,7 @@
     </div>
   </div>
 {%- endmacro %}
+
+{% macro icon_(name) -%}<svg class="icon" aria-hidden="true"><use href="#i-{{ name }}"/></svg>{%- endmacro %}
 
 {% macro icon(name) -%}<svg class="icon" aria-hidden="true"><use href="#i-{{ name }}"/></svg>{%- endmacro %}

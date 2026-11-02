@@ -288,3 +288,21 @@ async def test_health_reflects_reachability(ollama: FakeOllama) -> None:
 def test_the_default_context_is_loopback_and_valid() -> None:
     ctx = make_context("llm_backend")
     assert ctx.settings.ai.allow_remote is False and is_loopback("http://127.0.0.1:11434")
+
+
+async def test_the_response_carries_the_thinking_and_what_ollama_reports(
+    ollama: FakeOllama,
+) -> None:
+    ollama.chat_reply = lambda body: {
+        "message": {"role": "assistant", "content": "ok", "thinking": "step one, step two"},
+        "prompt_eval_count": 12,
+        "eval_count": 3,
+        "total_duration": 900_000_000,
+        "load_duration": 100_000_000,
+        "done_reason": "stop",
+    }
+    llm = await started_llm(ollama)
+    resp = await llm.generate(LLMRequest("Reply.", ("Hi.",), think=True))
+    assert resp.thinking == "step one, step two" and resp.text == "ok"
+    assert resp.meta["total_duration"] == 900_000_000 and resp.meta["done_reason"] == "stop"
+    assert resp.meta["sent"]["think"] is True and resp.meta["sent"]["options"]["temperature"] == 0.0

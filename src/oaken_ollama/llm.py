@@ -76,15 +76,39 @@ class OllamaLLM(BaseLLMBackend):
             except ValueError:
                 value = None
             parsed = value if isinstance(value, dict) else None
+        meta: dict[str, Any] = {
+            k: data[k]
+            for k in (
+                "done_reason",
+                "total_duration",
+                "load_duration",
+                "prompt_eval_duration",
+                "eval_duration",
+                "created_at",
+            )
+            if k in data
+        }
+        if data["message"].get("tool_calls"):
+            meta["tool_calls"] = data["message"]["tool_calls"]
+        meta["sent"] = data.get("_sent", {})  # what was asked: options, think, the schema flag
         return LLMResponse(
             text=text,
             data=parsed,
             input_tokens=int(data.get("prompt_eval_count") or 0),
             output_tokens=int(data.get("eval_count") or 0),
             model_id=run,
+            thinking=str(data["message"].get("thinking") or ""),
+            meta=meta,
         )
 
     async def health(self) -> Health:
         if self._client and await self._client.reachable():
             return Health(True)
         return Health(False, "Ollama is not reachable")
+
+
+class OllamaRemoteLLM(OllamaLLM):
+    """``ollama-remote``: the same backend for a host that is not this machine. Its address is the
+    whole point, so it stays off until ``[plugins.llm_backend.ollama-remote] base_url`` is set."""
+
+    requires_config = ("base_url",)

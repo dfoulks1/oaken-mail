@@ -7,9 +7,10 @@ The routes here only authenticate (``guard``), pick the caller class, and turn e
 ``{"code", "message"}``. See ADR 0005.
 """
 
+import asyncio
 import json
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
 from typing import Any, ClassVar, TypeVar
 
@@ -39,7 +40,7 @@ from oaken.api.runtime import same_secret
 from oaken.api.stats import StatsCollector
 from oaken.api.welcome import welcome_context
 from oaken.core.agents import TOKEN_PREFIX, Agent
-from oaken.core.errors import Conflict, OakenError, PermissionDenied
+from oaken.core.errors import Conflict, OakenError, PermissionDenied, Unavailable
 from oaken.core.ids import JobId
 from oaken.core.logging import get_logger
 from oaken.core.operations.caller import CallerContext
@@ -150,6 +151,16 @@ def call_body(op: AnyOperation, result: CallResult) -> dict[str, Any]:
     return out
 
 
+def _moved(to: str) -> Handler:
+    """A permanent redirect to ``to``, keeping the query string (``/stats?tab=queue``)."""
+
+    async def go(request: Request) -> Response:
+        query = f"?{request.url.query}" if request.url.query else ""
+        return RedirectResponse(to + query, status_code=301)
+
+    return go
+
+
 class Api:
     """The ASGI application. ``bind`` it to the port once known; ``mount`` another door."""
 
@@ -180,6 +191,7 @@ class Api:
             Surface("agent", "/v1/agent/", self._agent, agent_body, max_concurrent=16),
         ]
         self.ring = EventRing(cfg.event_ring_size)
+        self._closing = False
         self._detach: Callable[[], None] | None = None
         self._port: int | None = None
         self.console = Console(client, started_at=started_at)
@@ -206,6 +218,7 @@ class Api:
             self._detach()
             self._detach = None
         self.ring.close()
+        self._closing = True  # open trace streams end at their next beat
 
     def mount(self, surface: Surface, app: ASGIApp) -> None:
         """Serve ``app`` at ``surface.prefix`` behind the same guard, with its own token and limits.
@@ -241,25 +254,30 @@ class Api:
             Route("/v1/operations/{name}", safe(self.call_operation), methods=["POST"]),
             Route("/v1/openapi.json", safe(self.openapi), methods=["GET"]),
             Route("/v1/events", self.events, methods=["GET"]),
+            Route("/v1/trace/stream", self.trace_stream, methods=["GET"]),
             Route("/v1/agent/jobs/claim", safe(self.claim), methods=["POST"]),
             Route("/v1/agent/jobs/{job_id}/heartbeat", safe(self.heartbeat), methods=["POST"]),
             Route("/v1/agent/jobs/{job_id}/complete", safe(self.complete), methods=["POST"]),
             Route("/v1/agent/jobs/{job_id}/fail", safe(self.fail), methods=["POST"]),
-            Route("/stats", safe(self.stats), methods=["GET"]),
-            Route("/stats.json", safe(self.stats_json), methods=["GET"]),
+            Route("/general", safe(self.general), methods=["GET"]),
+            Route("/general.json", safe(self.general_json), methods=["GET"]),
             Route("/config", safe(self.config_editor), methods=["GET"]),
-            Route("/getting_started", safe(self.getting_started), methods=["GET"]),
-            Route("/jobs", safe(self.jobs_page), methods=["GET"]),  # moved into General
+            Route("/getting-started", safe(self.getting_started), methods=["GET"]),
+            # Older paths still lead somewhere: the page moved, or got a tidier name.
+            Route("/jobs", safe(self.jobs_page), methods=["GET"]),
+            Route("/stats", _moved("/general"), methods=["GET"]),
+            Route("/stats.json", _moved("/general.json"), methods=["GET"]),
+            Route("/getting_started", _moved("/getting-started"), methods=["GET"]),
             Route("/pipeline", safe(self.pipeline_page), methods=["GET"]),
             Route("/triage", safe(self.triage_page), methods=["GET"]),
             Route("/embed", safe(self.embed_page), methods=["GET"]),
             Route("/enrich", safe(self.enrich_page), methods=["GET"]),
             Route("/capabilities", safe(self.capabilities_page), methods=["GET"]),
-            Route("/jobs/pipeline", safe(self.jobs_pipeline), methods=["GET"]),
+            Route("/pipeline.json", safe(self.pipeline_json), methods=["GET"]),
             Route("/oaken.css", safe(self.asset_css), methods=["GET"]),
             Route("/oaken-logo.png", safe(self.asset_logo), methods=["GET"]),
             Route("/refresh.js", safe(self.asset_refresh), methods=["GET"]),
-            Route("/jobs-chart.js", safe(self.asset_jobs_chart), methods=["GET"]),
+            Route("/throughput-chart.js", safe(self.asset_throughput_chart), methods=["GET"]),
             Route("/chart.umd.js", safe(self.asset_chart), methods=["GET"]),
             Route("/ui/config-test", safe(self.ui_config_test), methods=["POST"]),
             Route("/ui/{action}", safe(self.ui_action), methods=["POST"]),
@@ -283,7 +301,7 @@ class Api:
     # -- the console (prompt 50) ---------------------------------------------------------------
     # Core's own pages. Each is server-rendered HTML with one stylesheet and no script (the one
     # optional exception, /refresh.js, only updates numbers). Every control is a form posting to
-    # /ui/<action>; see ``oaken.api.console``. Loopback-only and token-free like /stats, and the
+    # /ui/<action>; see ``oaken.api.console``. Loopback-only and token-free like /general, and the
     # actions run the real operations as the internal caller with confirm=True, so each still lands
     # in the audit log.
     async def _op(self, name: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -326,7 +344,7 @@ class Api:
 
     async def jobs_page(self, request: Request) -> Response:
         """The jobs page moved into General (its Queue and Ingest tabs); old links still work."""
-        return RedirectResponse("/stats?tab=queue", status_code=303)
+        return RedirectResponse("/general?tab=queue", status_code=303)
 
     # Which stage a model call or an agent belongs to, so each stage's page shows its own.
     @staticmethod
@@ -355,7 +373,7 @@ class Api:
         self, request: Request, kind: str, stage: str, label: str, plural: str
     ) -> Response:
         data = await self._stats_collector().collect(
-            {"pipeline", "plugins", "models", "usage", "agents", "stage_settings"},
+            {"pipeline", "plugins", "models", "usage", "agents", "stage_settings", "settings"},
             stages={stage},
             counts=False,
         )
@@ -429,7 +447,7 @@ class Api:
         )
         return self.console.render(request, "getting_started.html", "", {"providers": providers})
 
-    async def jobs_pipeline(self, request: Request) -> Response:
+    async def pipeline_json(self, request: Request) -> Response:
         """The pipeline numbers as JSON, for the optional refresh script."""
         return _json(await self._op("pipeline_status", {}))
 
@@ -454,10 +472,10 @@ class Api:
 
     # The Pipeline page: the plugins behind the stages, one kind per tab.
     PIPELINE_PARTS: ClassVar[dict[str, frozenset[str]]] = {
-        "provider": frozenset({"plugins"}),
-        "llm_backend": frozenset({"plugins", "models", "usage"}),
-        "vector_store": frozenset({"plugins"}),
-        "cache_store": frozenset({"plugins"}),
+        "provider": frozenset({"plugins", "schedules", "accounts", "settings"}),
+        "llm_backend": frozenset({"plugins", "models", "usage", "settings"}),
+        "vector_store": frozenset({"plugins", "settings"}),
+        "cache_store": frozenset({"plugins", "settings"}),
     }
 
     async def pipeline_page(self, request: Request) -> Response:
@@ -469,7 +487,7 @@ class Api:
         ]
         return self.console.render(request, "pipeline.html", "pipeline", data)
 
-    async def stats(self, request: Request) -> Response:
+    async def general(self, request: Request) -> Response:
         """General (ADR 0013). Loopback-only (the Host guard) and unauthenticated like
         ``/v1/health``; counts and health only, never mail content."""
         tab = request.query_params.get("tab", "ingest")
@@ -513,11 +531,11 @@ class Api:
                 if str(j["kind"]).startswith("ingest.")
             ]
             data.update(status=status, statuses=known)
-        return self.console.render(request, "stats.html", "stats", data)
+        return self.console.render(request, "general.html", "general", data)
 
-    async def stats_json(self, request: Request) -> Response:
+    async def general_json(self, request: Request) -> Response:
         """The same stats as the page, as JSON, for the optional refresh script. Loopback-only and
-        unauthenticated like `/stats`; counts and health only."""
+        unauthenticated like `/general`; counts and health only."""
         stage = request.query_params.get("stage", "")
         tab = request.query_params.get("tab", "")
         if stage:  # a stage page's live numbers
@@ -545,7 +563,7 @@ class Api:
             REFRESH_JS, media_type="text/javascript", headers={"cache-control": "no-store"}
         )
 
-    async def asset_jobs_chart(self, request: Request) -> Response:
+    async def asset_throughput_chart(self, request: Request) -> Response:
         return Response(
             JOBS_CHART_JS, media_type="text/javascript", headers={"cache-control": "no-store"}
         )
@@ -581,6 +599,54 @@ class Api:
         stream = self.ring.stream(last, self.cfg.heartbeat_seconds)
         return StreamingResponse(
             stream,
+            media_type="text/event-stream",
+            headers={"cache-control": "no-store", "x-accel-buffering": "no"},
+        )
+
+    async def trace_stream(self, request: Request) -> Response:
+        """The trace as it happens (``oaken trace -f``): server-sent events, filtered by plugin, job
+        or message, pushed when an event is emitted. Authenticated like every ``/v1`` route; the
+        trace holds mail text, so it is never on a token-free page."""
+        from oaken.core.events import TraceEvent
+        from oaken.core.operations.builtin.trace import matches, want_from
+
+        params = request.query_params
+        want = want_from(params.get("plugin"), params.get("job_id"), params.get("message_id"))
+        kinds = set(params.getlist("kind"))
+        self.client.svc.need_tracer()
+        bus = self.client.svc.bus
+        if bus is None:
+            raise Unavailable("there is no event bus in this core")
+        stream = bus.stream(
+            lambda e: (
+                isinstance(e, TraceEvent)
+                and matches(e.data, want)
+                and (not kinds or e.kind in kinds)
+            )
+        )
+
+        async def frames() -> AsyncIterator[str]:
+            yield ": connected\n\n"
+            try:
+                while not self._closing:
+                    try:
+                        event = await asyncio.wait_for(
+                            stream.__anext__(), self.cfg.heartbeat_seconds
+                        )
+                    except TimeoutError:
+                        yield ": heartbeat\n\n"
+                        continue
+                    except StopAsyncIteration:
+                        return
+                    if not isinstance(event, TraceEvent):
+                        continue
+                    row = {"ts": event.ts.isoformat(), "kind": event.kind, "data": event.data}
+                    yield f"event: trace\ndata: {json.dumps(row, default=str)}\n\n"
+            finally:
+                await stream.aclose()
+
+        return StreamingResponse(
+            frames(),
             media_type="text/event-stream",
             headers={"cache-control": "no-store", "x-accel-buffering": "no"},
         )

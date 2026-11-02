@@ -92,6 +92,30 @@ class InProcessApiClient(ApiClient):
             output = result.output.model_dump(mode="json")
         return CallResult(request_id=result.request_id, output=output, proposal=proposal)
 
+    async def stream_trace(self, filters: dict[str, Any]) -> AsyncIterator[Event]:
+        from oaken.core.events import TraceEvent
+        from oaken.core.operations.builtin.trace import matches, want_from
+
+        bus = self._core.svc.bus
+        if bus is None:
+            return
+        want = want_from(filters.get("plugin"), filters.get("job_id"), filters.get("message_id"))
+        kinds = set(filters.get("kinds") or [])
+        stream = bus.stream(
+            lambda e: (
+                isinstance(e, TraceEvent)
+                and matches(e.data, want)
+                and (not kinds or e.kind in kinds)
+            )
+        )
+        try:
+            async for ev in stream:
+                if isinstance(ev, TraceEvent):
+                    row = {"ts": ev.ts.isoformat(), "kind": ev.kind, "data": ev.data}
+                    yield Event(id=ev.event_id, event="trace", data=row)
+        finally:
+            await stream.aclose()
+
     async def stream_events(self, last_event_id: str | None = None) -> AsyncIterator[Event]:
         bus = self._core.svc.bus
         if bus is None:

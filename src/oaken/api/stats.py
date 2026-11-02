@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The data behind the read-only ``/stats`` page (ADR 0013).
+"""The data behind the read-only ``/general`` page (ADR 0013).
 
 Gathers the same counts and health the ``status``, ``pipeline_status``, ``usage_summary``,
 ``list_accounts`` and ``list_plugins`` operations expose, into one plain dict the console templates
@@ -9,6 +9,7 @@ mail content out of it lives here, in what this collector is allowed to read.
 """
 
 import asyncio
+import contextlib
 import time
 from collections.abc import Collection
 from dataclasses import asdict
@@ -21,7 +22,7 @@ from oaken.core.operations.services import Services
 
 class StatsCollector:
     _MODELS: ClassVar[dict[str, tuple[float, list[str]]]] = {}  # the models a backend listed, 30 s
-    """Builds the ``/stats`` template context from the running services. Every field is a count,
+    """Builds the ``/general`` template context from the running services. Every field is a count,
     a flag, a version, a name or a timestamp — never mail content."""
 
     def __init__(
@@ -84,6 +85,10 @@ class StatsCollector:
                 "triage_gate": s.ai.triage_gate,
                 "embed_min_priority": s.ingest.embed_min_priority,
             }
+        if want("schedules"):
+            data["schedules"] = await self._schedules()
+        if want("settings"):
+            data["settings_rows"] = await self._settings_rows()
         if want("models"):
             data["enrichers"] = await self._enrichers()
             data["llm"] = llm
@@ -97,6 +102,7 @@ class StatsCollector:
             "core": self._core(self._clock.now()),
             "mail": await self._mail(),
             "accounts": await self._accounts(),
+            "sync": await self._sync(),
         }
 
     def _core(self, now: datetime) -> dict[str, Any]:
@@ -202,14 +208,19 @@ class StatsCollector:
         ectx = getattr(embedder, "ctx", None)
         if embedder is not None and ectx is not None:
             config, schema = await settings(ectx.name)
+            choices: list[str] | None = llm["available"] if llm else None  # the same server
+            lister = getattr(embedder, "available_models", None)
+            if callable(lister):
+                with contextlib.suppress(Exception):  # keep the language backend's list
+                    choices = list(await asyncio.wait_for(lister(), timeout=2.0))
             rows.append(
                 {
                     "kind": "embedder",
                     "label": "Embedder",
                     "name": ectx.name,
-                    "model": embedder.model_id,
-                    "choices": None,
-                    "default": "",
+                    "model": config.get("model") or "",
+                    "choices": choices,
+                    "default": self._svc.settings.ai.embed_model or embedder.model_id,
                     "config": config,
                     "config_schema": schema,
                     "enabled": True,
@@ -231,19 +242,21 @@ class StatsCollector:
             )
         for e in await self._enrichers():
             props = (e["config_schema"] or {}).get("properties", {})
-            if "model" not in props:
+            if not props:  # no settings at all: nothing to configure, nothing to list
                 continue
+            takes_model = "model" in props  # a plugin with no model setting gets no dropdown
             rows.append(
                 {
                     "kind": e["kind"],
                     "label": e["name"],
                     "name": e["name"],
                     "model": e["config"].get("model") or "",
-                    "choices": llm["available"] if llm else None,
+                    "choices": llm["available"] if llm and takes_model else None,
                     "default": llm["model_id"] if llm else "",
                     "config": e["config"],
                     "config_schema": e["config_schema"],
                     "enabled": e["enabled"],
+                    "steps": e.get("steps", []),
                 }  # fmt: skip
             )
         return rows
@@ -324,6 +337,77 @@ class StatsCollector:
             return []
         rows = await self._svc.usage.usage_summary(None, None)
         return [asdict(r) for r in rows]
+
+    async def _settings_rows(self) -> list[dict[str, Any]]:
+        """Every plugin that has settings, active or not, for its configure window: its table in
+        ``config.toml`` and the schema it declares (through ``get_plugin_config``). A plugin that is
+        installed but not selected (a second LLM backend) is configured here too. A provider's
+        per-account instances share its settings, so only the plugin itself is listed."""
+        if self._svc.plugins is None:
+            return []
+        rows: list[dict[str, Any]] = []
+        for s in self._svc.plugins.statuses():
+            if "@" in s.name:
+                continue
+            cfg = await self._run_op("get_plugin_config", {"plugin": s.name, "kind": s.kind})
+            schema = cfg.config_schema if cfg else None
+            if not (schema or {}).get("properties"):
+                continue
+            steps: list[dict[str, Any]] = []
+            if s.kind == "triager":
+                with contextlib.suppress(Exception):  # a plugin's own listing must not break a page
+                    lister = getattr(
+                        self._svc.plugins.named_triagers().get(s.name), "describe", None
+                    )
+                    steps = list(lister()) if callable(lister) else []
+            rows.append(
+                {
+                    "kind": s.kind,
+                    "name": s.name,
+                    "label": s.name,
+                    "config": cfg.config if cfg else {},
+                    "config_schema": schema,
+                    "steps": steps,
+                }
+            )
+        return rows
+
+    async def _schedules(self) -> list[dict[str, Any]]:
+        """Every sync schedule, for the Providers tab's schedule manager."""
+        if self._svc.sync is None:
+            return []
+        rows = []
+        for s in await self._svc.sync.schedules():
+            rows.append(
+                {
+                    "account_id": s.account_id,
+                    "folder": s.folder,
+                    "schedule": s.schedule,
+                    "timezone": s.timezone,
+                    "quiet": "-".join(s.quiet) if s.quiet else "",
+                    "paused": s.paused,
+                    "paused_reason": s.paused_reason,
+                    "next_run": s.next_run.isoformat(),
+                    "last_run": s.last_run.isoformat() if s.last_run else None,
+                    "last_result": s.last_result,
+                    "last_error": s.last_error,
+                    "last_new": s.last_new,
+                    "failures": s.failures,
+                    "problem": s.problem,
+                }
+            )
+        return rows
+
+    async def _sync(self) -> dict[str, Any]:
+        """The state of syncing and of the pipeline's pauses, for the front page: whether a
+        backfill is held, whether the model stages are paused, and each account's next run."""
+        out: dict[str, Any] = {"backfill_paused": False, "llm_paused": False, "schedules": []}
+        if self._svc.pipeline is not None:
+            out["backfill_paused"] = await self._svc.pipeline.backfill_paused()
+        if self._svc.pipeline_control is not None:
+            out["llm_paused"] = (await self._svc.pipeline_control.state()).llm_paused
+        out["schedules"] = await self._schedules()
+        return out
 
     async def _accounts(self) -> list[dict[str, Any]]:
         # id, provider, display name and a sync summary — never credentials.
@@ -450,6 +534,15 @@ class StatsCollector:
             if s.kind not in ("enricher", "triager"):
                 continue
             cfg = await self._run_op("get_plugin_config", {"plugin": s.name, "kind": s.kind})
+            steps: list[dict[str, Any]] = []
+            if s.kind == "triager":  # a triager made of several checks lists them, in order
+                try:
+                    lister = getattr(
+                        self._svc.plugins.named_triagers().get(s.name), "describe", None
+                    )
+                    steps = list(lister()) if callable(lister) else []
+                except Exception:  # noqa: BLE001 - a plugin's own listing must not take the page down
+                    steps = []
             out.append(
                 {
                     "kind": s.kind,
@@ -457,6 +550,7 @@ class StatsCollector:
                     "enabled": s.enabled,
                     "config": cfg.config if cfg else {},
                     "config_schema": cfg.config_schema if cfg else None,
+                    "steps": steps,
                 }
             )
         return out

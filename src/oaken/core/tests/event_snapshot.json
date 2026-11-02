@@ -152,5 +152,11 @@
     "ts",
     "event_id",
     "account_id"
+  ],
+  "TraceEvent": [
+    "ts",
+    "event_id",
+    "kind",
+    "data"
   ]
 }

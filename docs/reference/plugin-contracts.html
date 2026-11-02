@@ -191,7 +191,7 @@
 </tbody>
 </table></div>
 <h3 id="plugincontext"><code>PluginContext</code></h3>
-<p>Handed to <code>start()</code>. <code>config</code> is the plugin's own <code>[plugins.&lt;name&gt;]</code> table.</p>
+<p>Handed to <code>start()</code>. <code>config</code> is the plugin's own <code>[plugins.&lt;kind&gt;.&lt;name&gt;]</code> table.</p>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
 <thead>
 <tr>
@@ -245,6 +245,16 @@
 <td><code>llm</code></td>
 <td><code>LLMAccess | None</code></td>
 <td><code>None</code></td>
+</tr>
+<tr>
+<td><code>trace</code></td>
+<td><code>Callable[..., None]</code></td>
+<td><code>_no_trace</code></td>
+</tr>
+<tr>
+<td><code>tracing</code></td>
+<td><code>Callable[[], bool]</code></td>
+<td><code>_not_tracing</code></td>
 </tr>
 <tr>
 <td><code>_subscriptions</code></td>
@@ -832,6 +842,16 @@
 <td><code>str</code></td>
 <td><code>''</code></td>
 </tr>
+<tr>
+<td><code>thinking</code></td>
+<td><code>str</code></td>
+<td><code>''</code></td>
+</tr>
+<tr>
+<td><code>meta</code></td>
+<td><code>dict[str, Any]</code></td>
+<td><code>empty</code></td>
+</tr>
 </tbody>
 </table></div>
 <h3 id="enrichattachment"><code>EnrichAttachment</code></h3>
@@ -1273,6 +1293,7 @@
 <li><code>config_example: ClassVar[str] = ''</code></li>
 <li><code>config_model: ClassVar[type[BaseModel] | None] = None</code></li>
 <li><code>enabled_default: ClassVar[bool] = True</code></li>
+<li><code>requires_config: ClassVar[tuple[str, ...]] = ()</code></li>
 <li><code>ctx: PluginContext</code></li>
 <li><code>config: Any = None</code></li>
 </ul>

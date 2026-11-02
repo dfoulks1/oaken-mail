@@ -34,7 +34,7 @@ from oaken.ai.prompts import describe_errors
 from oaken.core.actors import SYSTEM, Actor
 from oaken.core.attrs import AttrStore
 from oaken.core.clock import Clock, fmt_ts, parse_ts
-from oaken.core.errors import Conflict, InvalidResult, PluginError
+from oaken.core.errors import Conflict, InvalidInput, InvalidResult, NotFound, PluginError
 from oaken.core.events import (
     AttachmentQuarantined,
     EventBus,
@@ -54,6 +54,7 @@ from oaken.core.jobs import (
 from oaken.core.logging import get_logger
 from oaken.core.rawstore import RawStore
 from oaken.core.settings import Settings
+from oaken.core.trace import Tracer
 from oaken.core.untrusted import UntrustedText
 from oaken.index import Indexer, IndexStore, RebuildPayload, enqueue_rebuild
 from oaken.ingest.backends import Backends, Vectors
@@ -159,6 +160,16 @@ class StageStatus:
 
 
 @dataclass(frozen=True)
+class TriagePreview:
+    """What the triagers would say about a message: nothing was stored."""
+
+    triager: str | None  # the one whose verdict won; None when none of them rated it
+    result: dict[str, object] | None
+    model: str | None  # the model that answered, when a model did
+    note: str = ""
+
+
+@dataclass(frozen=True)
 class ParkedJob:
     job_id: str
     stage: str
@@ -208,6 +219,7 @@ class Pipeline:
         self.tokenizer = tokenizer or indexer.tokenizer or load_tokenizer(settings.mail)
         self.vectors = Vectors(backends.vector_store)
         self.cfg = settings.ingest
+        self.tracer: Tracer | None = None  # set by core: the opt-in trace
 
     # -- registering ------------------------------------------------------------------------
     def register(self, runner: JobRunner) -> None:
@@ -294,6 +306,11 @@ class Pipeline:
         triage_failed: bool = False,
     ) -> None:
         base = PRIORITY_BACKFILL if backfill else PRIORITY_INGEST
+        if self.tracer is not None:
+            self.tracer.emit(
+                "job.queued", job_kind=kind, message_id=message_id, priority=base - step,
+                triage_failed=triage_failed,
+            )  # fmt: skip
         await self.queue.enqueue(
             kind,
             MessagePayload(message_id=message_id, backfill=backfill, triage_failed=triage_failed),
@@ -532,16 +549,37 @@ class Pipeline:
                 enrich_kind(name), step, mid, account, backfill, triage_failed=failed
             )
 
+    def _triagers(self) -> dict[str, Triager]:
+        """The triagers in the order they run: lowest ``rank`` first, then by name. The rules
+        triager (rank 10) always decides before a model (rank 90) is asked, whatever order the host
+        or a test hands them over in."""
+        found = self.backends.triagers()
+        order = sorted(found, key=lambda n: (getattr(found[n], "rank", 50), n))
+        return {n: found[n] for n in order}
+
     def _enabled(self, name: str, kind: str = "triager") -> bool:
         return self.settings.plugin_table(kind, name).get("enabled") is not False
 
     def _triage_on(self) -> bool:
         """True when at least one triager is installed, healthy and not switched off."""
-        return any(self._enabled(n) for n in self.backends.triagers())
+        return any(self._enabled(n) for n in self._triagers())
+
+    def plugin_for_kind(self, kind: str) -> tuple[str, str] | None:
+        """``(plugin kind, plugin name)`` that does the work of one job kind, for the trace: the
+        model triager for ``ingest.triage``, the enricher for ``ingest.enrich.<name>``."""
+        name = split_enricher(kind)
+        if name is None:
+            return None
+        if kind == TRIAGE:
+            for tname, t in self._triagers().items():
+                if t is self._ai_triager():
+                    return "triager", tname
+            return "triager", GATE
+        return "enricher", name
 
     def _ai_triager(self) -> Triager | None:
         """The first enabled triager that asks a model and can take an agent's answer."""
-        for name, t in self.backends.triagers().items():
+        for name, t in self._triagers().items():
             if (
                 self._enabled(name)
                 and t.needs_llm
@@ -555,10 +593,63 @@ class Pipeline:
         """What ``ask`` may route to: the enrichers, and the first triager that declares an intent
         under the name its verdict is stored by (``triage``)."""
         out: dict[str, Any] = dict(self.backends.enrichers())
-        for name, t in self.backends.triagers().items():
+        for name, t in self._triagers().items():
             if self._enabled(name) and getattr(t, "ask_intent", None) is not None:
                 out.setdefault(GATE, t)
         return out
+
+    async def triage_preview(
+        self,
+        message_id: MessageId | None,
+        *,
+        text: str = "",
+        subject: str = "",
+        sender: str = "",
+        account_id: AccountId | None = None,
+    ) -> TriagePreview:
+        """Run the triagers, in rank order, on one stored message or on pasted text, and return
+        the first verdict. Nothing is stored and no usage is recorded: this is for tuning (a
+        different model, a changed rule) without touching a message's real result."""
+        if message_id is not None:
+            if await self._skip_ai(message_id):
+                return TriagePreview(
+                    None, None, None, "a Sieve rule says skip_enrich for this mail"
+                )
+            doc = await self.index.get_doc(message_id)
+            if doc is None:
+                raise NotFound(f"message {message_id} is not indexed")
+            msg = await self._enrich_input(message_id, doc)
+        else:
+            if account_id is None:
+                accounts = await self.raw.list_accounts()
+                if not accounts:
+                    raise InvalidInput("there is no account to run the triage under")
+                account_id = AccountId(accounts[0].id)
+            msg = EnrichInput(
+                message_id="preview",
+                account_id=account_id,
+                subject=UntrustedText(subject),
+                body=UntrustedText(text),
+                headers={"from": UntrustedText(sender)},
+                raw_headers={"from": (UntrustedText(sender),)},
+            )
+        llm = self.backends.llm()
+        for name, triager in self._triagers().items():
+            if not self._enabled(name):
+                continue
+            if triager.needs_llm and llm is None:
+                raise PluginError(f"triager {name} needs a language model, none is available")
+            verdict = await triager.triage(msg)
+            if verdict is None:
+                continue
+            out = to_enrich_output(
+                verdict, f"triager {name}", getattr(triager, "output_model", None)
+            )
+            model = None
+            if triager.needs_llm and llm is not None:
+                model = getattr(triager, "model_for", lambda: None)() or llm.model_id
+            return TriagePreview(name, dict(out.data), model)
+        return TriagePreview(None, None, None, "no triager rated this message")
 
     async def triage_message(self, message_id: MessageId, *, force: bool = False) -> EnrichResult:
         """The first step: run the triagers in rank order until one gives a verdict, and store it
@@ -573,7 +664,7 @@ class Pipeline:
         llm = self.backends.llm()
         account = AccountId(doc["account_id"])
         msg_input: EnrichInput | None = None
-        for name, triager in self.backends.triagers().items():
+        for name, triager in self._triagers().items():
             if not self._enabled(name):
                 continue
             if triager.needs_llm and llm is None:
@@ -793,7 +884,7 @@ class Pipeline:
         ai = self._ai_triager()
         if ai is not None:  # the model's verdict is owed unless a deterministic triager rates it
             rated = False
-            for tname, t in self.backends.triagers().items():
+            for tname, t in self._triagers().items():
                 if not t.needs_llm and self._enabled(tname) and await t.triage(msg) is not None:
                     rated = True
                     break
@@ -1103,6 +1194,11 @@ class Pipeline:
         self, message_id: MessageId, key: tuple[str, str, str, str], data: str
     ) -> None:
         content_hash, name, version, model = key
+        if self.tracer is not None:
+            self.tracer.emit(
+                "ingest.stored", message_id=message_id, enricher=name, version=version,
+                model=model, result=json.loads(data),
+            )  # fmt: skip
         await self.raw.db.execute(
             "INSERT INTO enrichments (message_id, enricher, version, model_id, content_hash,"
             " data_json, created_at) VALUES (?,?,?,?,?,?,?)"
@@ -1383,4 +1479,5 @@ __all__ = [
     "PipelineStatus",
     "Stage",
     "StageStatus",
+    "TriagePreview",
 ]

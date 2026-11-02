@@ -84,9 +84,11 @@
       "max_input_tokens",
       "model_id",
       "operations",
+      "requires_config",
       "setup_help",
       "start",
       "stop",
+      "trace",
       "version"
     ],
     "BaseEnricher": [
@@ -104,9 +106,11 @@
       "operations",
       "output_model",
       "output_schema",
+      "requires_config",
       "setup_help",
       "start",
       "stop",
+      "trace",
       "version"
     ],
     "BaseLLMBackend": [
@@ -124,10 +128,12 @@
       "locality",
       "model_id",
       "operations",
+      "requires_config",
       "setup_help",
       "start",
       "stop",
       "thinking_for",
+      "trace",
       "version"
     ],
     "BaseProvider": [
@@ -143,12 +149,14 @@
       "kind",
       "operations",
       "pull",
+      "requires_config",
       "send",
       "set_flags",
       "setup_help",
       "start",
       "stop",
       "supports_folders",
+      "trace",
       "version"
     ],
     "BaseVectorStore": [
@@ -163,10 +171,12 @@
       "kind",
       "operations",
       "query",
+      "requires_config",
       "setup_help",
       "start",
       "stats",
       "stop",
+      "trace",
       "upsert",
       "version"
     ]
@@ -222,7 +232,9 @@
       "data",
       "input_tokens",
       "output_tokens",
-      "model_id"
+      "model_id",
+      "thinking",
+      "meta"
     ],
     "PluginChange": [
       "target",
@@ -240,6 +252,8 @@
       "bus",
       "account_id",
       "llm",
+      "trace",
+      "tracing",
       "_subscriptions"
     ],
     "PluginInfo": [

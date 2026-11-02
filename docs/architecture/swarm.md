@@ -118,6 +118,15 @@ recorded as made by the agent (`agent:<label>`), counts as current for the nativ
 replaced by `reprocess enrich --force` or a version bump. `fail_job` with `retry` hands a job back
 unharmed.
 
+## Watching an agent work
+
+With the trace on (`oaken trace on`), `oaken trace -f plugin.triager.ai` or `oaken trace --job ID`
+shows what an agent does at the door: the claim with the instructions and message it was handed, each
+heartbeat, and the answer it committed. An agent may also report its own work: `heartbeat_job` and
+`complete_job` take an optional `trace` list of `thinking`, `tool_call` and `note` items, which the
+trace records labelled as the agent's own (they are never trusted as core's). Core cannot see an
+agent's internals, only what crosses the door and what the agent chooses to send.
+
 ## Fan-out and attribution
 
 A job can name a **parent**, and `JobQueue.children()` lists the children, so a coordinator can

@@ -10,8 +10,8 @@
   <p class="tagline">Your mail, kept close.</p>
   <p class="state"><span class="dot"></span>All quiet. Oaken is running.</p>
   <nav class="links" aria-label="Pages">
-    <a href="/stats">General</a>
-    <a href="/getting_started">Getting started</a>
+    <a href="/general">General</a>
+    <a href="/getting-started">Getting started</a>
     <a href="{{ docs_url }}" target="_blank" rel="noopener">Docs ↗</a>
   </nav>
   {% if mail %}
@@ -22,21 +22,34 @@
         <span class="note">index {% if mail.index_stale %}<span class="badge badge-danger">stale</span>{% else %}<span class="badge badge-ok">fresh</span>{% endif %}</span></div>
       <div class="tile"><span class="label">Queue depth</span><span class="value">{{ mail.queue_depth if mail.queue_depth is not none else "—" }}</span></div>
     </div>
+    {% if sync %}
+    <p class="row small">
+      {% if sync.backfill_paused %}<span class="badge badge-warn">backfill paused</span>{% endif %}
+      {% if sync.llm_paused %}<span class="badge badge-warn">model stages paused</span>{% endif %}
+      {% if not sync.backfill_paused and not sync.llm_paused %}<span class="badge badge-ok">pipeline running</span>{% endif %}
+    </p>
+    {% endif %}
     <div class="card">
       <div class="card-head">Connected accounts</div>
       <div class="table-wrap"><table class="table">
-        <thead><tr><th>Account</th><th>Provider</th><th>Sync</th></tr></thead>
+        <thead><tr><th>Account</th><th>Provider</th><th>Next sync</th><th>Last sync</th></tr></thead>
         <tbody>
         {% for a in accounts %}
+          {% set sch = (sync.schedules | selectattr("account_id", "equalto", a.account_id) | selectattr("folder", "equalto", "") | list) if sync else [] %}
+          {% set sc = sch[0] if sch else none %}
           <tr>
             <td>{{ a.display_name }}<div class="muted mono small">{{ a.account_id }}</div></td>
-            <td>{{ a.provider }}</td>
-            <td>{% if a.paused %}<span class="badge badge-warn">paused</span>
-                {%- elif a.failures %}<span class="badge badge-danger">{{ a.failures }} failing</span>
-                {%- else %}<span class="badge badge-ok">ok</span>{% endif %}</td>
+            <td>{# the provider and the state of its sync, together: with several providers, which one is paused #}
+              <span class="mono">{{ a.provider }}</span>
+              {% if a.paused %}<span class="badge badge-warn"{% if sc and sc.paused_reason %} title="{{ sc.paused_reason }}"{% endif %}>paused</span>
+              {%- elif a.failures %}<span class="badge badge-danger"{% if sc and (sc.problem or sc.last_error) %} title="{{ sc.problem or sc.last_error }}"{% endif %}>{{ a.failures }} failing</span>
+              {%- else %}<span class="badge badge-ok">syncing</span>{% endif %}
+            </td>
+            <td class="muted mono small">{{ sc.next_run[:16] | replace("T", " ") if sc and not a.paused else "—" }}</td>
+            <td class="muted small">{% if sc and sc.last_run %}{{ sc.last_run[:16] | replace("T", " ") }}{% if sc.last_result %} · {{ sc.last_result }}{% endif %}{% if sc.last_new is not none %} · {{ sc.last_new }} new{% endif %}{% else %}—{% endif %}</td>
           </tr>
         {% else %}
-          <tr><td colspan="3" class="muted">No accounts configured.</td></tr>
+          <tr><td colspan="4" class="muted">No accounts configured.</td></tr>
         {% endfor %}
         </tbody>
       </table></div>

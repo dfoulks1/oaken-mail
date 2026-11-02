@@ -277,3 +277,35 @@ async def test_ask_takes_a_timeout_and_defaults_to_five_minutes() -> None:
     parser = build_parser()
     assert parser.parse_args(["ask", "q"]).timeout == 300.0
     assert parser.parse_args(["ask", "q", "--timeout", "900"]).timeout == 900.0
+
+
+async def test_the_http_client_follows_a_plugin_in_the_trace_as_it_is_pushed(
+    served: tuple[HttpApiClient, object], tmp_path: Path
+) -> None:
+    from oaken.core.clock import FakeClock
+    from oaken.core.trace import Tracer, trace_context
+
+    client, rig = served
+    svc = rig.ops.svc  # type: ignore[attr-defined]
+    tracer = Tracer(tmp_path / "t.jsonl", FakeClock(), max_bytes=1 << 20, backups=1, enabled=True)
+    tracer.bus = svc.bus
+    svc.tracer = tracer
+    seen: list[str] = []
+
+    async def follow() -> None:
+        async for event in client.stream_trace({"plugin": "plugin.triager.ai"}):
+            seen.append(event.data["data"]["response"])
+            return
+
+    task = asyncio.ensure_future(follow())
+    async with asyncio.timeout(10):
+        for _ in range(500):  # until the subscription is open
+            if svc.bus._streams:
+                break
+            await asyncio.sleep(0.02)
+        with trace_context(plugin_kind="enricher", plugin="summary"):
+            tracer.emit("llm.call", response="NOT THIS")
+        with trace_context(plugin_kind="triager", plugin="ai"):
+            tracer.emit("llm.call", response="THIS ONE")
+        await task
+    assert seen == ["THIS ONE"]  # filtered at the server, and pushed the moment it was emitted

@@ -201,6 +201,13 @@ class OllamaClient:
         data = await self._call("POST", "/api/chat", body)
         if not isinstance(data, dict) or not isinstance(data.get("message"), dict):
             raise AIBackendError(f"{self.who}: Ollama sent an unexpected reply")
+        # What we asked, beside the answer, for the trace (the messages are the caller's own).
+        data["_sent"] = {
+            "options": options,
+            "think": body.get("think"),
+            "format": "schema" if schema is not None else None,
+            "keep_alive": body["keep_alive"],
+        }
         return data
 
     async def reachable(self) -> bool:

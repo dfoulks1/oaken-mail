@@ -16,12 +16,16 @@ Nothing requires these classes: any object with the members of a contract works,
 checks the same rules either way (``oaken.plugins.validate``).
 """
 
+import functools
+import inspect
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Sequence
 from typing import Any, ClassVar, Literal, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
 from oaken.core.errors import InvalidInput, OakenError, PluginError
+from oaken.core.trace import brief, trace_context
 from oaken.plugins.adapt import to_enrich_output
 from oaken.plugins.authorize import Authorizations
 from oaken.plugins.contracts import (
@@ -116,6 +120,68 @@ def command(
     return wrap
 
 
+# Not traced: ``health`` is polled on a timer and ``stop`` says nothing a person tunes by.
+_NOT_TRACED = frozenset({"health", "stop"})
+
+
+def _traced_call(name: str, fn: Any) -> Any:
+    @functools.wraps(fn)
+    async def call(self: Any, *args: Any, **kwargs: Any) -> Any:
+        ctx = getattr(self, "ctx", None)
+        if ctx is None or not ctx.tracing():
+            return await fn(self, *args, **kwargs)
+        started = time.monotonic()
+        with trace_context(plugin=ctx.name, plugin_kind=str(ctx.kind)):
+            ctx.trace("plugin.call", method=name, args=brief(args), kwargs=brief(kwargs))
+            try:
+                result = await fn(self, *args, **kwargs)
+            except Exception as exc:
+                ctx.trace(
+                    "plugin.error", method=name, error=type(exc).__name__,
+                    duration_ms=round((time.monotonic() - started) * 1000),
+                )  # fmt: skip
+                raise
+            ctx.trace(
+                "plugin.return", method=name, result=brief(result),
+                duration_ms=round((time.monotonic() - started) * 1000),
+            )  # fmt: skip
+            return result
+
+    call._oaken_traced = True  # type: ignore[attr-defined]
+    return call
+
+
+def _traced_stream(name: str, fn: Any) -> Any:
+    @functools.wraps(fn)
+    async def stream(self: Any, *args: Any, **kwargs: Any) -> Any:
+        ctx = getattr(self, "ctx", None)
+        if ctx is None or not ctx.tracing():
+            async for item in fn(self, *args, **kwargs):
+                yield item
+            return
+        started = time.monotonic()
+        count = 0
+        with trace_context(plugin=ctx.name, plugin_kind=str(ctx.kind)):
+            ctx.trace("plugin.call", method=name, args=brief(args), kwargs=brief(kwargs))
+            try:
+                async for item in fn(self, *args, **kwargs):
+                    count += 1
+                    yield item
+            except Exception as exc:
+                ctx.trace(
+                    "plugin.error", method=name, error=type(exc).__name__, items=count,
+                    duration_ms=round((time.monotonic() - started) * 1000),
+                )  # fmt: skip
+                raise
+            ctx.trace(
+                "plugin.return", method=name, items=count,
+                duration_ms=round((time.monotonic() - started) * 1000),
+            )  # fmt: skip
+
+    stream._oaken_traced = True  # type: ignore[attr-defined]
+    return stream
+
+
 class BasePlugin:
     kind: ClassVar[PluginKind]
     api_version: ClassVar[int] = PLUGIN_API_VERSION
@@ -133,8 +199,33 @@ class BasePlugin:
     # Whether the plugin runs when its table does not say ``enabled``. A plugin that should be
     # opt-in (it costs money, or reaches a network) sets this False; ``enabled = true`` turns it on.
     enabled_default: ClassVar[bool] = True
+    # Settings the plugin cannot run without (``("base_url",)``). While its table lacks any of them
+    # the host leaves it switched off, with the reason shown, and starts it when they are set.
+    requires_config: ClassVar[tuple[str, ...]] = ()
     ctx: PluginContext  # set by start()
     config: Any = None  # the parsed config_model instance, set by start() when config_model is set
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Every public ``async`` method a plugin defines records its call and return in the trace
+        (when it is on), under this plugin's kind and name, so ``oaken trace -f
+        plugin.<kind>.<name>`` shows what core asked of it and what it answered. A method written
+        on a base class is wrapped once, where it is defined. Nothing to do in a plugin."""
+        super().__init_subclass__(**kwargs)
+        for name, fn in list(vars(cls).items()):
+            if name.startswith("_") or name in _NOT_TRACED or getattr(fn, "_oaken_traced", False):
+                continue
+            if inspect.isasyncgenfunction(fn):
+                setattr(cls, name, _traced_stream(name, fn))
+            elif inspect.iscoroutinefunction(fn):
+                setattr(cls, name, _traced_call(name, fn))
+
+    def trace(self, kind: str, /, **data: Any) -> None:
+        """Record an event of your own in the trace (``oaken trace -f plugin.<kind>.<name>``): a
+        decision, a request you made, whatever you want to see while you build a plugin. Does
+        nothing unless tracing is on, and before ``start``."""
+        ctx = getattr(self, "ctx", None)
+        if ctx is not None:
+            ctx.trace(kind, **data)
 
     async def start(self, ctx: PluginContext) -> None:
         self.ctx = ctx
@@ -387,6 +478,12 @@ class BaseTriager(BasePlugin):
     @_default
     async def triage(self, msg: EnrichInput) -> EnrichOutput | None:
         raise NotImplementedError
+
+    def describe(self) -> list[dict[str, Any]]:
+        """The steps this triager runs, in order, for the settings window: each a dict with a
+        ``name``, a one-line ``summary`` and whether it is ``enabled``. Empty by default; a
+        triager made of several checks (the rules) lists them."""
+        return []
 
 
 class BaseVectorStore(BasePlugin):

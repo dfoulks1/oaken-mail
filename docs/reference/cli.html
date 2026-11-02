@@ -256,6 +256,10 @@
 <td>Recent events from core's event log (--follow keeps watching).</td>
 </tr>
 <tr>
+<td><a href="#trace"><code>trace</code></a></td>
+<td>Watch what a plugin or a job is told, thinks and returns (opt-in; holds mail text).</td>
+</tr>
+<tr>
 <td><a href="#agents"><code>agents</code></a></td>
 <td>Create, list and revoke external agents (the swarm).</td>
 </tr>
@@ -761,6 +765,22 @@
 <li><code>--since</code> — Nothing older than this (ISO 8601).</li>
 <li><code>--follow</code>, <code>-f</code> — Then keep watching.</li>
 </ul>
+<h3 id="trace"><code>trace</code></h3>
+<p>The trace records, with the full text, what core hands a model and what it answers (the prompt, the thinking, the timings), the calls into every plugin, and what an agent claims and commits. It is off until <code>oaken trace on</code> (or [log] trace = true). <code>oaken trace -f plugin.triager.ai</code> follows one plugin (plugin.enricher.summary, plugin.llm_backend.ollama, ...); <code>--job ID</code> follows one job and nothing else.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>PLUGIN|on|off|status</code> — plugin.KIND.NAME to show one plugin, or on, off, status for the switch.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+<li><code>--job</code> — Only this job.</li>
+<li><code>--message</code> — Only this message.</li>
+<li><code>--kind</code> — Only this kind of event.</li>
+<li><code>--tail</code>, <code>-n</code> — How many first.</li>
+<li><code>--since</code> — Nothing older than this (ISO 8601).</li>
+<li><code>--follow</code>, <code>-f</code> — Then keep watching.</li>
+</ul>
 <h3 id="agents"><code>agents</code></h3>
 <p>Agents lease jobs from the queue with a token of their own (the swarm page).</p>
 <p>Options:</p>
@@ -932,6 +952,19 @@
 <p>Options:</p>
 <ul>
 <li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
+<h4 id="enrich-try"><code>enrich try</code></h4>
+<p>Dry-run triage on a message or on text: the verdict, nothing stored.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>message_id</code> — A stored message (or use --text).</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+<li><code>--text</code> — Triage this text instead (- reads stdin).</li>
+<li><code>--subject</code> — With --text: the subject.</li>
+<li><code>--sender</code> — With --text: the From line.</li>
 </ul>
 <h3 id="sieve"><code>sieve</code></h3>
 <p>Scripts are files you edit; these commands never change them.</p>

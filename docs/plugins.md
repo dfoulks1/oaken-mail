@@ -103,6 +103,15 @@ never in config.
 
 (The kind is part of the name: `[plugins.triager.ai]`, `[plugins.enricher.summary]`, `[plugins.embedder.ollama]` and `[plugins.llm_backend.ollama]` are four different tables. The older flat `[plugins.<name>]` still works as a fallback and logs a warning; `oaken plugins set` writes the qualified form.)
 
+A plugin the host cannot load (a broken import, a failed check) is switched off, and the reason shows
+beside it; fix it and use its pill or `oaken plugins enable NAME` to try again. A plugin that needs
+settings it has not been given is also off until it has them: declare them with
+`requires_config = ("base_url",)` on the class, and the host leaves it off, saying
+"needs configuration: set base_url in [plugins.llm_backend.ollama-remote]", then starts it by itself
+on the next health pass or reload once the keys are set. (`ollama-remote` is one: it exists to reach
+another machine, so it needs its address.) A plugin that cannot start because it was never set up
+(no table at all) is treated the same way. Turning a plugin off yourself is never undone by a retry.
+
 Raise `oaken.core.errors.AuthError` (or a subclass) when credentials are missing or refused. Core
 pauses that account's schedule instead of retrying, and the other accounts carry on. Core starts one
 instance of your class per account, so `ctx.account_id` tells you which one you are and is the natural
@@ -262,7 +271,7 @@ in the CLI). A person turns a plugin on and off, restarts it and edits its setti
 | `oaken plugins set NAME KEY=VALUE ...` | Change settings (`--unset KEY`, `--replace`, or `--file FILE` with TOML). Comments and every other table in `config.toml` are kept; a secret is refused. Run `reload` to apply. |
 | `oaken plugins check NAME [KEY=VALUE ...]` | Try the saved settings, or a change, on a throwaway instance and report its health. Nothing is written and the running plugin is untouched. |
 
-The General page (`/stats`, the tab for the plugin's kind) has the same switch and a Reload button, and the same
+The General page (`/general`, the tab for the plugin's kind) has the same switch and a Reload button, and the same
 operations are available to any client (`plugin_enable`, `plugin_disable`, `plugin_reload`,
 `get_plugin_config`, `check_plugin_config`, `set_plugin_config`).
 

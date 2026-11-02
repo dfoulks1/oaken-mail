@@ -62,7 +62,7 @@ inspector = "oaken_enrichers:InspectorEnricher"
 
 [project.entry-points."oaken.llm_backends"]
 ollama = "oaken_ollama:OllamaLLM"
-ollama-remote = "oaken_ollama:OllamaLLM"
+ollama-remote = "oaken_ollama:OllamaRemoteLLM"
 
 [project.entry-points."oaken.providers"]
 gmail = "oaken_gmail:GmailProvider"

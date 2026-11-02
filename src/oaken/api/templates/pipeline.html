@@ -14,4 +14,5 @@
   {% if key == "llm_backend" %}{{ pl.usage_card(usage_rows, "/pipeline?tab=llm_backend", "Other model usage (ask, routing and the rest)", true) }}{% endif %}{% endif %}{% endfor %}
 </div>
 {{ pl.dialogs("/pipeline?tab=" ~ tab) }}
+{% if tab == "provider" %}{{ pl.schedule_dialogs("/pipeline?tab=provider") }}{% endif %}
 {% endblock %}

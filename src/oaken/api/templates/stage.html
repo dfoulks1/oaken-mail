@@ -4,7 +4,7 @@
 {% import "_macros.html" as m with context %}
 {% import "_plugins.html" as pl with context %}
 {% block title %}{{ stage_label }} · Oaken Mail{% endblock %}
-{% block body_attrs %} data-refresh="/stats.json?stage={{ stage_name }}" data-refresh-seconds="15" data-lazy{% endblock %}
+{% block body_attrs %} data-refresh="/general.json?stage={{ stage_name }}" data-refresh-seconds="15" data-lazy{% endblock %}
 {% block main %}
 <h1>{{ stage_label }}</h1>
 {{ pl.kind_body(stage_kind, stage_plural, stage_name, "/" ~ stage_name) }}

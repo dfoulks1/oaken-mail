@@ -177,7 +177,7 @@ tokens. See <a href="../mcp.html">Connect an AI client</a>.</p>
 <td>POST</td>
 <td><code>/v1/operations/{name}</code></td>
 <td>API token</td>
-<td>Call one operation. 86 exist.</td>
+<td>Call one operation. 90 exist.</td>
 </tr>
 </tbody>
 </table></div>
@@ -698,6 +698,30 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/sync_now</code></td>
 </tr>
 <tr>
+<td><code>trace_set</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/trace_set</code></td>
+</tr>
+<tr>
+<td><code>trace_status</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/trace_status</code></td>
+</tr>
+<tr>
+<td><code>trace_tail</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/trace_tail</code></td>
+</tr>
+<tr>
+<td><code>try_triage</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/try_triage</code></td>
+</tr>
+<tr>
 <td><code>undo</code></td>
 <td>mutate</td>
 <td>on by default</td>
@@ -832,6 +856,11 @@ resume from the in-memory ring. If that id is older than the ring, or from befor
 <td><code>SyncStarted</code></td>
 <td>Sync started.</td>
 <td><code>ts</code>, <code>event_id</code>, <code>account_id</code></td>
+</tr>
+<tr>
+<td><code>TraceEvent</code></td>
+<td>One line of the trace, which holds mail text. It is published with <code>publish_nowait</code>, so the persistent handlers (the event log, the SSE ring) never see it, and <code>EventBus.stream</code> leaves it out unless a stream asks for <code>TraceEvent</code> by name. Only <code>oaken trace -f</code> (through the authenticated API) subscribes.</td>
+<td><code>ts</code>, <code>event_id</code>, <code>kind</code>, <code>data</code></td>
 </tr>
 <tr>
 <td><code>gap</code></td>

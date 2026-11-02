@@ -22,6 +22,7 @@ from oaken.core.mailbox import MailboxStore
 from oaken.core.rawstore import RawStore
 from oaken.core.search import Retrieval
 from oaken.core.settings import Settings
+from oaken.core.trace import Tracer
 from oaken.index import Indexer, IndexStore
 from oaken.ingest import Pipeline, UsageStore
 from oaken.ingest.pipeline_control import PipelineControl
@@ -61,6 +62,7 @@ class Services:
     agents: AgentRegistry | None = None
     mailbox: MailboxStore | None = None  # built on first use from raw, attrs and the indexer
     eventlog: EventLog | None = None  # None when ``[log] events_file`` is empty
+    tracer: Tracer | None = None  # the opt-in trace (``[log] trace``); never None in a running core
     version: str = ""
 
     def need_readstate(self) -> ReadState:
@@ -89,6 +91,11 @@ class Services:
 
     def need_plugins(self) -> PluginHost:
         return need(self.plugins, "the plugin host")
+
+    def need_tracer(self) -> Tracer:
+        if self.tracer is None:
+            raise Unavailable("the trace is not available in this core")
+        return self.tracer
 
     def need_eventlog(self) -> EventLog:
         if self.eventlog is None:

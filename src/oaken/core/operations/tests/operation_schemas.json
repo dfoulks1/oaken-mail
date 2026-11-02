@@ -9614,6 +9614,340 @@
     "permission": "mutate",
     "streaming": true
   },
+  "trace_set": {
+    "input_schema": {
+      "properties": {
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "title": "TraceSwitch",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "content_is_untrusted": {
+          "default": true,
+          "title": "Content Is Untrusted",
+          "type": "boolean"
+        },
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "file": {
+          "title": "File",
+          "type": "string"
+        }
+      },
+      "required": [
+        "enabled",
+        "file"
+      ],
+      "title": "TraceStatus",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "trace_status": {
+    "input_schema": {
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "content_is_untrusted": {
+          "default": true,
+          "title": "Content Is Untrusted",
+          "type": "boolean"
+        },
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "file": {
+          "title": "File",
+          "type": "string"
+        }
+      },
+      "required": [
+        "enabled",
+        "file"
+      ],
+      "title": "TraceStatus",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
+  "trace_tail": {
+    "input_schema": {
+      "properties": {
+        "job_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "One job: every event under that job.",
+          "title": "Job Id"
+        },
+        "kinds": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Only these event kinds.",
+          "title": "Kinds"
+        },
+        "limit": {
+          "default": 100,
+          "maximum": 1000,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "message_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message Id"
+        },
+        "plugin": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "One plugin: plugin.KIND.NAME, for example plugin.triager.ai.",
+          "title": "Plugin"
+        },
+        "since": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Since"
+        }
+      },
+      "title": "TraceTailInput",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "TraceEvent": {
+          "properties": {
+            "data": {
+              "additionalProperties": true,
+              "title": "Data",
+              "type": "object"
+            },
+            "kind": {
+              "title": "Kind",
+              "type": "string"
+            },
+            "ts": {
+              "format": "date-time",
+              "title": "Ts",
+              "type": "string"
+            }
+          },
+          "required": [
+            "ts",
+            "kind",
+            "data"
+          ],
+          "title": "TraceEvent",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "content_is_untrusted": {
+          "default": true,
+          "title": "Content Is Untrusted",
+          "type": "boolean"
+        },
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/TraceEvent"
+          },
+          "title": "Events",
+          "type": "array"
+        }
+      },
+      "required": [
+        "events",
+        "enabled"
+      ],
+      "title": "TraceTailOutput",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
+  "try_triage": {
+    "input_schema": {
+      "properties": {
+        "message_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A stored message to triage. Give this or text, not both.",
+          "title": "Message Id"
+        },
+        "sender": {
+          "default": "",
+          "description": "With text: its From line.",
+          "maxLength": 500,
+          "title": "Sender",
+          "type": "string"
+        },
+        "subject": {
+          "default": "",
+          "description": "With text: its subject.",
+          "maxLength": 500,
+          "title": "Subject",
+          "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "maxLength": 20000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Text to triage instead of a stored message (it is treated as mail text).",
+          "title": "Text"
+        }
+      },
+      "title": "TryTriageInput",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "on",
+    "output_schema": {
+      "properties": {
+        "content_is_untrusted": {
+          "default": true,
+          "title": "Content Is Untrusted",
+          "type": "boolean"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "rated": {
+          "title": "Rated",
+          "type": "boolean"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result"
+        },
+        "stored": {
+          "default": false,
+          "title": "Stored",
+          "type": "boolean"
+        },
+        "triager": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The triager whose verdict won, or None.",
+          "title": "Triager"
+        }
+      },
+      "required": [
+        "triager",
+        "rated"
+      ],
+      "title": "TryTriageOutput",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
   "undo": {
     "input_schema": {
       "properties": {

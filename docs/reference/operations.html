@@ -682,6 +682,34 @@
 <td>Sync an account (or one folder) now, or every account on every provider when none is named. Each is a job that calls the provider's pull; it joins a sync already queued or running.</td>
 </tr>
 <tr>
+<td><code>trace_set</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Turn the trace on or off now (`oaken trace on</td>
+</tr>
+<tr>
+<td><code>trace_status</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>Whether the trace is on, and where its file is. The trace records what a model or an agent is told, thinks and returns, with the full text.</td>
+</tr>
+<tr>
+<td><code>trace_tail</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>The most recent trace events (oldest first), optionally for one plugin (plugin.KIND.NAME), one job or one message: prompts, responses, thinking, tool calls, timings and what was committed. Holds mail text.</td>
+</tr>
+<tr>
+<td><code>try_triage</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>Run triage on one stored message, or on pasted text, and show the verdict without storing it: which triager decided (a header rule or a model), the category, priority and whether a reply is owed. For tuning: change a rule or the triage model, then try again.</td>
+</tr>
+<tr>
 <td><code>undo</code></td>
 <td>mutate</td>
 <td>on by default</td>
@@ -1204,6 +1232,30 @@
 <ul>
 <li>Input: <code>account_id</code>?, <code>folder</code>?</li>
 <li>Output: <code>job_id</code>, <code>created</code>, <code>jobs</code>?, <code>skipped</code>?</li>
+</ul>
+<h3 id="trace-set"><code>trace_set</code></h3>
+<p>Turn the trace on or off now (<code>oaken trace on|off</code>). It holds mail text, so it is off until asked for; <code>[log] trace = true</code> is the start-up default. Not applied across a restart.</p>
+<ul>
+<li>Input: <code>enabled</code></li>
+<li>Output: <code>enabled</code>, <code>file</code>, <code>content_is_untrusted</code>?</li>
+</ul>
+<h3 id="trace-status"><code>trace_status</code></h3>
+<p>Whether the trace is on, and where its file is. The trace records what a model or an agent is told, thinks and returns, with the full text.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>enabled</code>, <code>file</code>, <code>content_is_untrusted</code>?</li>
+</ul>
+<h3 id="trace-tail"><code>trace_tail</code></h3>
+<p>The most recent trace events (oldest first), optionally for one plugin (plugin.KIND.NAME), one job or one message: prompts, responses, thinking, tool calls, timings and what was committed. Holds mail text.</p>
+<ul>
+<li>Input: <code>limit</code>?, <code>since</code>?, <code>kinds</code>?, <code>plugin</code>?, <code>job_id</code>?, <code>message_id</code>?</li>
+<li>Output: <code>events</code>, <code>enabled</code>, <code>content_is_untrusted</code>?</li>
+</ul>
+<h3 id="try-triage"><code>try_triage</code></h3>
+<p>Run triage on one stored message, or on pasted text, and show the verdict without storing it: which triager decided (a header rule or a model), the category, priority and whether a reply is owed. For tuning: change a rule or the triage model, then try again.</p>
+<ul>
+<li>Input: <code>message_id</code>?, <code>text</code>?, <code>subject</code>?, <code>sender</code>?</li>
+<li>Output: <code>triager</code>, <code>rated</code>, <code>result</code>?, <code>model</code>?, <code>note</code>?, <code>stored</code>?, <code>content_is_untrusted</code>?</li>
 </ul>
 <h3 id="undo"><code>undo</code></h3>
 <p>Undo a read-state change from the audit log, restoring exactly what each message was.</p>

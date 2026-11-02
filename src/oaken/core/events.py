@@ -41,6 +41,17 @@ class Event:
 
 
 @dataclass(frozen=True, kw_only=True)
+class TraceEvent(Event):
+    """One line of the trace, which holds mail text. It is published with ``publish_nowait``, so
+    the persistent handlers (the event log, the SSE ring) never see it, and ``EventBus.stream``
+    leaves it out unless a stream asks for ``TraceEvent`` by name. Only ``oaken trace -f`` (through
+    the authenticated API) subscribes."""
+
+    kind: str
+    data: dict[str, Any]
+
+
+@dataclass(frozen=True, kw_only=True)
 class SyncStarted(Event):
     account_id: AccountId
 
@@ -314,8 +325,8 @@ class EventBus:
         accept: EventFilter
         if event_filter is None:
 
-            def accept(_e: Event) -> bool:
-                return True
+            def accept(e: Event) -> bool:
+                return not isinstance(e, TraceEvent)  # mail text: only by asking for it
         elif isinstance(event_filter, type | tuple):
             types = event_filter
 
@@ -326,6 +337,15 @@ class EventBus:
         stream = EventStream(self, accept, maxsize)
         self._streams.add(stream)
         return stream
+
+    def publish_nowait(self, event: Event) -> None:
+        """Offer ``event`` to the open streams only: no handler runs and nothing persists it. For
+        events that hold mail text (the trace). Never raises."""
+        for stream in list(self._streams):
+            try:
+                stream._offer(event)
+            except Exception:  # a broken filter must not reach the publisher
+                log.exception("event stream filter failed", event_type=type(event).__name__)
 
     async def publish(self, event: Event) -> None:
         for stream in list(self._streams):

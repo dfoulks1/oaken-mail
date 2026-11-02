@@ -44,7 +44,7 @@ TEMPLATES = _HERE / "templates"
 CSS = (STATIC / "oaken.css").read_bytes()
 CSS_VERSION = hashlib.sha256(CSS).hexdigest()[:10]
 REFRESH_JS = (STATIC / "refresh.js").read_bytes()
-JOBS_CHART_JS = (STATIC / "jobs-chart.js").read_bytes()
+JOBS_CHART_JS = (STATIC / "throughput-chart.js").read_bytes()
 CHART_UMD_JS = (STATIC / "chart.umd.js").read_bytes()
 LOGO = (TEMPLATES / "oaken-logo.png").read_bytes()
 DOCS_URL = "https://dfoulks1.github.io/oaken-mail/"
@@ -59,17 +59,17 @@ MODES = ("auto", "light", "dark")
 PAGES = frozenset(
     {
         "/",
-        "/stats",
+        "/general",
         "/pipeline",
         "/triage",
         "/embed",
         "/enrich",
         "/capabilities",
         "/config",
-        "/getting_started",
+        "/getting-started",
     }
 )
-# The tabs of /stats (General): the pipeline and its queue, the kinds with no stage of their own,
+# The tabs of /general (General): the pipeline and its queue, the kinds with no stage of their own,
 # usage, the audit log.
 TABS = frozenset(
     {"ingest", "queue", "provider", "llm_backend", "vector_store", "cache_store", "audit"}
@@ -264,7 +264,7 @@ class Console:
     def _back(form: Form, flash_id: str) -> str:
         """The page to return to: one of the console's own, never a URL the form made up."""
         target = urlsplit(form.one("back", "/"))
-        path = target.path if target.path in PAGES and not target.netloc else "/stats"
+        path = target.path if target.path in PAGES and not target.netloc else "/general"
         tab = parse_qs(target.query).get("tab", [""])[0]
         query = f"tab={tab}&" if tab in TABS else ""
         return f"{path}?{query}flash={quote(flash_id)}"
@@ -331,6 +331,11 @@ class Console:
         if kind in ("ask", "llm_backend"):  # a backend pins its model when it starts
             await self.op("config_reload", {})
             return ok(f"{plugin or 'ask'} will use {shown}; core reloaded.")
+        if kind == "embedder":
+            return warn(
+                f"{plugin} will use {shown} from its next job.",
+                "Vectors from the old model are stale until `oaken reprocess embed` runs.",
+            )
         return ok(f"{plugin} will use {shown} from its next job.")
 
     async def do_plugin_settings(self, f: Form) -> Flash:
@@ -347,6 +352,8 @@ class Console:
                     config[field] = _number(raw)
                 except ValueError:
                     return danger(f"{field} must be a number.")
+            elif kind == "list":  # a list of words: commas or new lines between them
+                config[field] = [w.strip() for w in raw.replace("\n", ",").split(",") if w.strip()]
             else:
                 config[field] = raw
         payload: dict[str, Any] = {"plugin": plugin, "config": config}
@@ -356,6 +363,56 @@ class Console:
         if (why := _problem(saved)) is not None:
             return danger(f"Could not save {plugin}'s settings: {why}")
         return ok(f"{plugin} settings saved to config.toml. Reload the plugin to apply them.")
+
+    async def do_rule(self, f: Form) -> Flash:
+        """One of the rules triager's rules, on or off: ``run=off`` adds it to ``skip_rules``."""
+        plugin, rule = f.one("plugin"), f.one("rule")
+        cfg = await self.op("get_plugin_config", {"plugin": plugin, "kind": "triager"})
+        skip = [r for r in (getattr(cfg, "config", {}) or {}).get("skip_rules", []) if r != rule]
+        if f.one("run") == "off":
+            skip.append(rule)
+        saved = await self.op(
+            "set_plugin_config",
+            {"plugin": plugin, "kind": "triager", "config": {"skip_rules": skip}},
+        )
+        if (why := _problem(saved)) is not None:
+            return danger(f"Could not change the rule: {why}")
+        state = "off" if f.one("run") == "off" else "on"
+        return ok(f"{rule} is {state}. Reload {plugin} for it to take effect.")
+
+    async def do_schedule(self, f: Form) -> Flash:
+        """Change one account's sync schedule: how often (or a cron line), its timezone, quiet
+        hours. The schedule operations check the floor and the timezone."""
+        payload: dict[str, Any] = {
+            "account_id": f.one("account_id"),
+            "folder": f.one("folder"),
+            "schedule": f.one("schedule").strip(),
+        }
+        if f.one("timezone").strip():
+            payload["timezone"] = f.one("timezone").strip()
+        quiet = f.one("quiet").strip()
+        if quiet:
+            payload["quiet"] = quiet
+        else:
+            payload["clear_quiet"] = True
+        saved = await self.op("set_schedule", payload)
+        if (why := _problem(saved)) is not None:
+            return danger(f"Could not change the schedule: {why}")
+        return ok(f"{payload['account_id']} will sync {payload['schedule']}.")
+
+    async def do_schedule_state(self, f: Form) -> Flash:
+        """The schedule's pill: ``run=off`` pauses the account's sync, ``run=on`` resumes it."""
+        op = "resume_schedule" if f.one("run") == "on" else "pause_schedule"
+        await self.op(op, {"account_id": f.one("account_id"), "folder": f.one("folder")})
+        word = "resumed" if f.one("run") == "on" else "paused"
+        return ok(f"Sync {word} for {f.one('account_id')}.")
+
+    async def do_sync_now(self, f: Form) -> Flash:
+        out = await self.op("sync_now", {"account_id": f.one("account_id") or None})
+        skipped = getattr(out, "skipped", []) or []
+        if skipped:
+            return warn("Not queued: " + "; ".join(str(getattr(s, "reason", s)) for s in skipped))
+        return ok("Sync queued.")
 
     async def do_plugin(self, f: Form) -> Flash:
         verb, name = f.one("verb"), f.one("name")
@@ -490,6 +547,10 @@ ACTIONS: dict[str, Action] = {
     "plugin": Console.do_plugin,
     "stage": Console.do_stage,
     "stage-setting": Console.do_stage_setting,
+    "rule": Console.do_rule,
+    "schedule": Console.do_schedule,
+    "schedule-state": Console.do_schedule_state,
+    "sync-now": Console.do_sync_now,
     "pause": Console.do_pause,
     "resume": Console.do_resume,
     "limit": Console.do_limit,

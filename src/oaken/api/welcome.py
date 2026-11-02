@@ -3,7 +3,7 @@
 
 A friendly landing page served by core itself: it tells a person the daemon is up, what version it
 is, and where its files live (``OAKEN_HOME``, config and data directories, the port), then points
-at ``/stats``, ``/config``, ``/getting_started`` and the hosted docs. Like ``/stats`` it is
+at ``/general``, ``/config``, ``/getting-started`` and the hosted docs. Like ``/general`` it is
 loopback-only and unauthenticated, and it carries **no mail content** — only a version, a few
 paths, a status flag and counts.
 """

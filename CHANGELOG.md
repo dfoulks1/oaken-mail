@@ -23,9 +23,18 @@ Makes a fresh install usable without reading the docs.
 - `[ingest] embed_min_priority` (default 1): mail triage rates below it is not embedded, and stays
   keyword-searchable.
 - A `MessageTriaged` event.
+- **The trace** (`oaken trace`), opt-in because it holds mail text: with the full text, every call into
+  a plugin of any kind, every model call (system text, mail as sent, response, thinking, Ollama's
+  timings and token counts, tokens a cache hit saved), the jobs and what they stored, and the agent
+  door (the prompt an agent was handed, its heartbeats, the answer it committed, and any thinking
+  or tool calls it reports). `oaken trace -f plugin.<kind>.<name>` follows one plugin and `--job ID`
+  one job, pushed as each event is emitted (a `TraceEvent` on the bus that only explicit trace
+  streams receive, over the authenticated `GET /v1/trace/stream`). `[log] trace`, `oaken trace on|off`, a 0600 `trace.jsonl`, the authenticated API only,
+  never MCP or a console page. `LLMResponse` gains optional `thinking` and `meta`; every plugin
+  built on a base class traces itself, and `self.trace(...)` adds your own events.
 - The console is organised by stage and loads lazily. The masthead reads General, Pipeline, Triage,
   Embed, Enrich, Config, Capabilities and Docs. `/` is the front page (counts and the daemon's
-  environment). **General** (`/stats`) holds Ingest (every stage with its own pause, shown as a pill
+  environment). **General** (`/general`) holds Ingest (every stage with its own pause, shown as a pill
   switch, plus live throughput), Queue (the active jobs by default; the old Jobs page is gone and
   `/jobs` leads here), and the Audit log. **Pipeline** holds the plugins behind
   the stages: Providers, LLM backends, Vector stores and Caches. **Triage**, **Embed** and
@@ -36,7 +45,15 @@ Makes a fresh install usable without reading the docs.
   Pipeline > LLM backends. **Capabilities** lists the
   operations grouped by plugin kind, with an MCP switch for each. Each page loads only its own data,
   and the queue numbers fill in after the page paints, so pages stay quick on a busy machine.
-  `parse` can be paused and limited like the other stages. `pipeline_status` takes optional
+  `parse` can be paused and limited like the other stages. Buttons are icons (a gear to configure, a
+  recycle to reload, a check to apply) with their words kept as hover text and screen-reader
+  labels. A provider's gear opens its **schedule manager**: each account's interval or cron, timezone
+  and quiet hours, a pill to pause its sync, and a sync-now icon. A triager made of several checks
+  (the `rules` triager) lists them in order with a pill each, and its values are editable. The
+  front page shows the sync state (backfill and model stages paused or running, each account's next
+  and last run). Paths were tidied: `/stats` is `/general` (and `/stats.json` `/general.json`),
+  `/jobs/pipeline` is `/pipeline.json`, `/getting_started` is `/getting-started`; the old pages
+  redirect, keeping the query string. `pipeline_status` takes optional
   `stages` and `counts` to ask for less.
 
 - A live welcome page at `/`, a config editor at `/config`, a jobs and pipeline console,
@@ -74,6 +91,12 @@ Makes a fresh install usable without reading the docs.
 
 ### Changed
 
+- A plugin that cannot load is switched off, with the reason shown, and so is one that needs
+  settings it has not been given: `requires_config = ("base_url",)` on a plugin class keeps it off
+  until its table has them (`ollama-remote` needs `base_url`), and it starts by itself once they are
+  set. A plugin you turned off yourself stays off. Every plugin with options has a settings window,
+  active or not (a second LLM backend included), and a provider's per-account instances
+  (`gmail@account`) are listed under the provider, not beside it.
 - Plugin settings are `[plugins.<kind>.<name>]` (`[plugins.triager.ai]`,
   `[plugins.enricher.summary]`, `[plugins.provider.gmail]`). The flat `[plugins.<name>]` still
   works and logs a warning; `oaken plugins set` writes the qualified form, and a name two kinds

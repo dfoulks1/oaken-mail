@@ -142,6 +142,7 @@ small, .small { font-size: .85rem; }
 .skip { position: absolute; left: -999px; top: .5rem; z-index: 100; padding: .55rem .9rem; border-radius: var(--radius-sm); background: var(--accent); color: var(--on-accent); font-weight: 600; text-decoration: none; }
 .skip:focus { left: .75rem; }
 .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.btn-icon { padding: .4rem .5rem; }
 .icon { width: 1.1em; height: 1.1em; vertical-align: -.18em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .muted { color: var(--muted); }
 .mono { font-size: .88em; }

@@ -43,6 +43,60 @@ async def get_enrichment(ctx: OpContext, inp: GetEnrichmentInput) -> GetEnrichme
     return GetEnrichmentOutput(message_id=inp.message_id, results=stored)
 
 
+class TryTriageInput(BaseModel):
+    message_id: str | None = Field(
+        default=None, description="A stored message to triage. Give this or text, not both."
+    )
+    text: str | None = Field(
+        default=None,
+        max_length=20000,
+        description="Text to triage instead of a stored message (it is treated as mail text).",
+    )
+    subject: str = Field(default="", max_length=500, description="With text: its subject.")
+    sender: str = Field(default="", max_length=500, description="With text: its From line.")
+
+
+class TryTriageOutput(BaseModel):
+    triager: str | None = Field(description="The triager whose verdict won, or None.")
+    rated: bool
+    result: dict[str, Any] | None = None
+    model: str | None = None
+    note: str = ""
+    stored: bool = False  # always False: this never writes a result
+    content_is_untrusted: bool = True  # the reason is model text built from mail
+
+
+@operation(
+    "try_triage",
+    "Run triage on one stored message, or on pasted text, and show the verdict without storing "
+    "it: which triager decided (a header rule or a model), the category, priority and whether a "
+    "reply is owed. For tuning: change a rule or the triage model, then try again.",
+    permission="read",
+    input=TryTriageInput,
+    output=TryTriageOutput,
+    mcp="on",
+)
+async def try_triage(ctx: OpContext, inp: TryTriageInput) -> TryTriageOutput:
+    if (inp.message_id is None) == (inp.text is None):
+        raise InvalidInput("give a message_id or text, not both and not neither")
+    pipeline = ctx.svc.need_pipeline()
+    if inp.message_id is not None:
+        mid = MessageId(inp.message_id)
+        await ctx.svc.raw.get_message(mid)
+        shown = await pipeline.triage_preview(mid)
+    else:
+        shown = await pipeline.triage_preview(
+            None, text=inp.text or "", subject=inp.subject, sender=inp.sender
+        )
+    return TryTriageOutput(
+        triager=shown.triager,
+        rated=shown.result is not None,
+        result=shown.result,
+        model=shown.model,
+        note=shown.note,
+    )
+
+
 class EnrichMessageInput(BaseModel):
     message_id: str
     enrichers: list[str] | None = Field(default=None, description="Default: every enricher.")
@@ -85,4 +139,4 @@ async def enrich_message(ctx: OpContext, inp: EnrichMessageInput) -> EnrichMessa
     )
 
 
-OPERATIONS: tuple[AnyOperation, ...] = (get_enrichment, enrich_message)
+OPERATIONS: tuple[AnyOperation, ...] = (try_triage, get_enrichment, enrich_message)

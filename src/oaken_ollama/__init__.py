@@ -9,6 +9,6 @@ workspace use a host that is not on this machine (it needs ``ai.allow_remote = t
 
 from oaken_ollama.client import OllamaConfig, is_loopback
 from oaken_ollama.embedder import OllamaEmbedder
-from oaken_ollama.llm import OllamaLLM
+from oaken_ollama.llm import OllamaLLM, OllamaRemoteLLM
 
-__all__ = ["OllamaConfig", "OllamaEmbedder", "OllamaLLM", "is_loopback"]
+__all__ = ["OllamaConfig", "OllamaEmbedder", "OllamaLLM", "OllamaRemoteLLM", "is_loopback"]

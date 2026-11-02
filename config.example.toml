@@ -122,7 +122,7 @@
 
 # --- Local HTTP API (loopback only) ---------------------------------------------------
 # The CLI and other local clients reach core here. Binds 127.0.0.1 unless you say otherwise; the
-# token is a file in the config dir (mode 0600). The console pages (/, /config, /jobs, /stats) carry no token and
+# token is a file in the config dir (mode 0600). The console pages (/, /config, /jobs, /general) carry no token and
 # are only ever served to this machine, even on a remote bind.
 # [api]
 # port = 62536                 # the default; 0 = pick a free port (a reload keeps it)
@@ -170,7 +170,7 @@
 # workspaces = ["default"]     # which workspaces' mail an MCP client may reach; [] = all of them
 #
 # [mcp.allowed]                # which operations it may call: an operation or plugin name -> true | false
-# get_message = true           # (written by `oaken mcp expose` and the /stats switches)
+# get_message = true           # (written by `oaken mcp expose` and the /general switches)
 
 
 # --- Logging --------------------------------------------------------------------------
@@ -185,3 +185,9 @@
 #                              # for `oaken events`; empty turns it off
 # events_max_bytes = 10485760  # rotate at this size ...
 # events_backups = 3           # ... keeping events.jsonl.1 to events.jsonl.3
+# trace = false                # record what a model or agent is told, thinks and returns (it holds
+#                              # MAIL TEXT): `oaken trace -f plugin.triager.ai`; also `oaken trace on`
+# trace_file = "trace.jsonl"   # owner-only; read only through the authenticated API
+# trace_max_bytes = 10485760   # rotate at this size ...
+# trace_backups = 3            # ... keeping trace.jsonl.1 to trace.jsonl.3
+# trace_event_cap = 200000     # the longest text kept in one event (longer is cut, and says so)

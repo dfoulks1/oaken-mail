@@ -139,6 +139,12 @@ class ApiClient(ABC):
         """
 
     @abstractmethod
+    def stream_trace(self, filters: dict[str, Any]) -> AsyncIterator[Event]:
+        """Yield trace events as they are emitted, filtered by ``plugin``, ``job_id``,
+        ``message_id`` and ``kinds`` (the ``/v1/trace/stream`` route). Each event's ``data`` is
+        ``{"ts", "kind", "data"}``. Authenticated: the trace holds mail text."""
+
+    @abstractmethod
     def stream_events(self, last_event_id: str | None = None) -> AsyncIterator[Event]:
         """Yield events as they arrive, resuming after ``last_event_id`` when given. Returns an
         async iterator (not a coroutine) so ``oaken watch`` can ``async for`` over it."""

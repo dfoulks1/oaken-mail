@@ -96,7 +96,9 @@ def _started(args: argparse.Namespace, info: dict[str, Any] | None, verb: str) -
 
         url = data["url"]
         print_text(f"🌳 Oaken Mail {verb}: {url} (pid {info['pid']})")
-        print_text(f"   Open {url}/ to get started · config at {url}/config · stats at {url}/stats")
+        print_text(
+            f"   Open {url}/ to get started · config at {url}/config · stats at {url}/general"
+        )
 
     return emit(args, data=data, text=text)
 

@@ -42,6 +42,7 @@ from oaken.core.events import EventBus, JobStateChanged
 from oaken.core.ids import AccountId, JobId, new_job_id, uuid7
 from oaken.core.logging import get_logger
 from oaken.core.settings import JobsSettings, SwarmSettings
+from oaken.core.trace import Tracer, trace_context
 
 log = get_logger("oaken.jobs")
 
@@ -754,6 +755,7 @@ class JobRunner:
         self._paused_kinds = paused_kinds
         self._limit_overrides = limit_overrides  # chosen at run time; they outrank config
         self._registry: dict[str, _Registration] = {}
+        self.tracer: Tracer | None = None  # set by core: the opt-in trace
         self._running: dict[JobId, _Running] = {}
         self._tasks: list[asyncio.Task[None]] = []
         self._stopping = False
@@ -872,7 +874,14 @@ class JobRunner:
         except ValidationError as exc:
             await q.fail(job.id, worker, f"invalid payload: {exc}", permanent=True)
             return
-        task = asyncio.ensure_future(_call(reg.handler, payload, job))
+        with trace_context(
+            job_id=str(job.id),
+            job_kind=job.kind,
+            attempt=job.attempts,
+            message_id=getattr(payload, "message_id", None),
+        ):
+            self._trace("job.start", priority=job.priority, worker=worker)
+            task = asyncio.ensure_future(_call(reg.handler, payload, job))  # carries the context
         entry = _Running(task)
         self._running[job.id] = entry
         beat = asyncio.create_task(self._heartbeat(job, worker, entry))
@@ -881,10 +890,12 @@ class JobRunner:
             timeout = self.queue.settings.handler_timeout_seconds
         try:
             result = await (asyncio.wait_for(task, timeout) if timeout else task)
+            self._trace("job.done", job_id=str(job.id), job_kind=job.kind, result=result)
             if not await q.complete(job.id, worker, result):
                 log.warning("job finished after losing its lease", job_id=job.id, kind=job.kind)
         except TimeoutError:  # a wedged handler (e.g. a hung model call) must not hold the worker
             log.warning("job timed out", job_id=job.id, kind=job.kind, timeout=timeout)
+            self._trace("job.failed", job_id=str(job.id), job_kind=job.kind, error="timeout")
             await q.fail(job.id, worker, f"handler exceeded {timeout:g}s")  # retried with backoff
         except asyncio.CancelledError:
             if entry.user_cancelled:
@@ -893,13 +904,24 @@ class JobRunner:
             await q.release(job.id, worker)  # shutting down
             raise
         except (PermanentJobError, InvalidResult) as exc:  # a retry would only repeat it
+            self._trace(
+                "job.failed", job_id=str(job.id), job_kind=job.kind, error=type(exc).__name__,
+                permanent=True,
+            )  # fmt: skip
             await q.fail(job.id, worker, exc, permanent=True)
         except Exception as exc:
             log.warning("job failed", job_id=job.id, kind=job.kind, attempt=job.attempts)
+            self._trace(
+                "job.failed", job_id=str(job.id), job_kind=job.kind, error=type(exc).__name__
+            )  # fmt: skip
             await q.fail(job.id, worker, exc)
         finally:
             beat.cancel()
             self._running.pop(job.id, None)
+
+    def _trace(self, kind: str, /, **data: Any) -> None:
+        if self.tracer is not None:
+            self.tracer.emit(kind, **data)
 
     async def _heartbeat(self, job: Job, worker: str, entry: _Running) -> None:
         interval = self.queue.settings.lease_seconds / 3

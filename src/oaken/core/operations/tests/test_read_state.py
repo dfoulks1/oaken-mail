@@ -34,6 +34,7 @@ def examples(a: MessageId, job_id: str = "none") -> dict[str, Any]:
         "create_agent": {"label": "x", "kinds": ["enrich"]}, "list_agents": {},
         "revoke_agent": {"agent_id": "none"},
         "get_enrichment": {"message_id": a}, "enrich_message": {"message_id": a},
+        "try_triage": {"message_id": a}, "trace_status": {}, "trace_tail": {},
         "sieve_check": {"script": 'keep;'}, "sieve_list": {},
         "sieve_test": {"script": "keep;", "message_id": a},
         "get_account": {"account_id": "main"},
@@ -72,6 +73,8 @@ FLAGGING = {"set_flagged"}
 # config_reload signals the running process (SIGHUP) to rebuild core; it is not exercised in this
 # read-state loop, which would send the signal to the test runner. It touches no read state.
 SIGNALING = {"config_reload"}
+# trace_set flips an in-memory flag (the trace); it touches no mail and no read state.
+SWITCHING = {"trace_set"}
 
 
 async def test_no_operation_that_does_not_mark_read_changes_read_state(ops: Ops) -> None:
@@ -86,9 +89,9 @@ async def test_no_operation_that_does_not_mark_read_changes_read_state(ops: Ops)
     job = await ops.svc.queue.enqueue("ingest.enrich", _P())
     table = examples(a, str(job.job_id))
     declared = {o.name for o in core_operations() if o.marks_read}
-    assert set(table) | MARKING | FLAGGING | SIGNALING == {o.name for o in core_operations()}, (
-        "add a case for the new one"
-    )
+    assert set(table) | MARKING | FLAGGING | SIGNALING | SWITCHING == {
+        o.name for o in core_operations()
+    }, "add a case for the new one"
     assert declared == MARKING | {"summarize_message"}
     for name, payload in table.items():
         try:

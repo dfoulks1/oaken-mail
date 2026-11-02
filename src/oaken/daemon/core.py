@@ -30,6 +30,7 @@ from oaken.core.operations.plugin_ops import plugin_operations
 from oaken.core.rawstore import RawStore
 from oaken.core.scheduler import Scheduler
 from oaken.core.settings import Settings
+from oaken.core.trace import Tracer
 from oaken.index import Indexer, IndexStore
 from oaken.ingest import Backends, Pipeline, Quarantine, SyncRunner, UsageStore
 from oaken.ingest.pipeline_control import PipelineControl
@@ -89,7 +90,7 @@ class Core:
     # -- building -------------------------------------------------------------------------
     async def open(self) -> None:
         s, clock, bus = self.settings, self.clock, self.bus
-        self._started_at = clock.now()  # for the /stats page's uptime
+        self._started_at = clock.now()  # for the /general page's uptime
         st = s.storage
         self.raw_db = await Database.open(
             _under_data(st.raw_db), read_pool_size=st.read_pool_size,
@@ -111,6 +112,12 @@ class Core:
         self.queue = JobQueue(self.raw_db, clock, bus, settings=s.jobs, swarm=s.swarm)
         self.usage = UsageStore(self.raw_db, clock)
         self.audit = AuditLog(self.raw_db, clock)
+        # The trace: off unless [log] trace (or `oaken trace on`); its file is opened on first use.
+        self.tracer = Tracer(
+            event_log_path(s.log.trace_file), clock,
+            max_bytes=s.log.trace_max_bytes, backups=s.log.trace_backups,
+            enabled=s.log.trace, cap=s.log.trace_event_cap,
+        )  # fmt: skip
         # The durable "pause the model" switch: the runner consults it so paused stages are not
         # claimed, and the pause survives a restart.
         self.pipeline_control = PipelineControl(self.raw_db, clock, self.audit)
@@ -125,7 +132,7 @@ class Core:
         self.llm = LLMService(
             LLMCache(self.raw_db, clock), self.usage, Workspaces(s),
             lambda name: self.host.llm_backend(name), s,
-            cache_plugin=self._cache_plugin,
+            cache_plugin=self._cache_plugin, tracer=self.tracer,
         )  # fmt: skip
         self.host.llm_access = WorkspaceLLM(self.llm, self.raw)
         engine = FilterEngine(
@@ -139,6 +146,10 @@ class Core:
             Backends.from_host(self.host), s, clock, filters=engine, quarantine=quarantine,
             bus=bus,
         )  # fmt: skip
+        self.tracer.bus = bus
+        self.host.tracer = self.tracer
+        self.pipeline.tracer = self.tracer
+        self.runner.tracer = self.tracer
         self.pipeline.register(self.runner)
         self.accounts = AccountProviders(self.host, self.raw)
         self.readstate = ReadState(
@@ -167,7 +178,7 @@ class Core:
             settings=s, clock=clock, bus=bus, readstate=self.readstate, pipeline=self.pipeline,
             indexer=self.indexer, usage=self.usage, sync=self.sync, plugins=self.host,
             llm=self.llm, agents=self.agents, pipeline_control=self.pipeline_control,
-            eventlog=self.eventlog, version=oaken.__version__,
+            eventlog=self.eventlog, tracer=self.tracer, version=oaken.__version__,
         )  # fmt: skip
         registry = core_registry()
         registry.attach_plugins(lambda: plugin_operations(self.host))

@@ -165,6 +165,27 @@ class HttpApiClient(_Base, ApiClient):
             else None,
         )
 
+    async def stream_trace(self, filters: dict[str, Any]) -> AsyncIterator[Event]:
+        params: list[tuple[str, str | int | float | bool | None]] = [
+            (k, str(filters[k])) for k in ("plugin", "job_id", "message_id") if filters.get(k)
+        ]
+        params += [("kind", k) for k in filters.get("kinds") or []]
+        try:
+            async with self._http.stream(
+                "GET",
+                "/v1/trace/stream",
+                params=params,
+                headers={"Accept": "text/event-stream"},
+                timeout=httpx2.Timeout(10.0, read=None),
+            ) as response:
+                if response.status_code >= 400:
+                    await response.aread()
+                    _raise_for(response)
+                async for event in _parse_sse(response):
+                    yield event
+        except (*CONNECT_ERRORS, httpx2.ReadError):
+            raise CoreUnavailable("the trace stream dropped") from None
+
     async def stream_events(self, last_event_id: str | None = None) -> AsyncIterator[Event]:
         """Events as they arrive, reconnecting with ``Last-Event-ID`` if the stream drops. A
         ``gap`` event is yielded like any other: it means "re-fetch state"."""

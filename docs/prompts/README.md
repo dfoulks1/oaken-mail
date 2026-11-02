@@ -80,6 +80,7 @@ all tables (a `CLI_` prompt and a `CORE_` prompt do not restart the count).
 | 50 | [console-without-script](CORE_50-console-without-script.md) | **Written** | The console with no script and no CDN: one local `oaken.css`, several palettes, forms for every action, menus and dialogs from `popover`; only an optional refresh file stays | 16, 23, 32, 41 |
 | 51 | [triage-labels-and-automations](CORE_51-triage-labels-and-automations.md) | **Written** | Custom triage labels and rules that launch automations from a label, on top of the triager kind built in CORE_47; triagers and rules operable from the CLI and over MCP. Draft: needs an ADR first | 47 |
 | 52 | [console-by-stage](CORE_52-console-by-stage.md) | **Built** | The console by stage: masthead General, Triage, Embed, Enrich, Config, Capabilities, Docs; General holds Ingest, Queue and the other kinds; the stage pages have the stage's controls and plugins; per-plugin pause. The config-beside-the-thing idea is parked in the prompt | 41, 47, 50 |
+| 53 | [agent-trace-and-step](CORE_53-agent-trace-and-step.md) | **Written** | An opt-in, token-protected trace of what a model or agent is told, thinks and returns (prompt, thinking, tool calls, timings, the answer committed), the agent door traffic with optional agent reports, single-step on a paused stage, and a view of the rules that run. Draft | 33, 47, 52 |
 
 ### CLI — the command line
 

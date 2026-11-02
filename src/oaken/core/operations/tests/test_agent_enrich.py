@@ -335,3 +335,51 @@ async def test_an_agent_for_one_enricher_gets_only_that_enrichers_job_and_answer
     assert done.stored == 1 and done.still_owed == 0
     assert (await swarm.stored(mid))["gist"]["gist"] == "a note"
     assert (await call("claim_job")).job is None
+
+
+async def test_the_agent_door_is_traced_with_what_it_hands_over_and_commits(
+    ops: Ops, swarm: Swarm, tmp_path: Any
+) -> None:
+    from oaken.core.clock import FakeClock
+    from oaken.core.trace import Tracer
+
+    tracer = Tracer(tmp_path / "t.jsonl", FakeClock(), max_bytes=1 << 20, backups=1, enabled=True)
+    ops.svc.tracer = tracer
+    mid, _ = await swarm.message()
+    gist = enrich_kind("gist")
+    kinds = SwarmSettings(enabled=True, allowed_kinds=[gist])
+    ops.svc.agents.settings = kinds  # type: ignore[union-attr]
+    ops.svc.queue.swarm = kinds
+    ops.svc.queue.register_result(gist, StageJobResult)
+    agent, _ = await ops.svc.agents.create("gist only", [gist])  # type: ignore[union-attr]
+    caller = CallerContext.mcp("gist only", agent_id=str(agent.id))
+    await ops.svc.queue.enqueue(gist, MessagePayload(message_id=mid))
+
+    async def call(name: str, **arguments: Any) -> Any:
+        return (await swarm.client.call(name, arguments, caller)).output
+
+    job = (await call("claim_job")).job
+    await call(
+        "heartbeat_job", job_id=job.id, trace=[{"kind": "thinking", "text": "weighing the options"}]
+    )
+    await call(
+        "complete_job", job_id=job.id, result={"gist": "a note"},
+        trace=[{"kind": "tool_call", "name": "lookup", "arguments": {"q": "x"}}],
+    )  # fmt: skip
+    events = tracer.tail(50)
+    kinds_seen = [e["kind"] for e in events if e["data"].get("job_id") == job.id]
+    assert kinds_seen == [
+        "agent.claim",
+        "agent.heartbeat",
+        "agent.report",
+        "agent.report",
+        "agent.complete",
+    ]
+    claim = next(e for e in events if e["kind"] == "agent.claim")["data"]
+    assert claim["plugin_kind"] == "enricher" and claim["plugin"] == "gist"
+    assert claim["payload"]["owed"][0]["instructions"]  # the prompt it was handed
+    reports = [e["data"] for e in events if e["kind"] == "agent.report"]
+    assert reports[0]["source"] == "agent" and reports[0]["text"] == "weighing the options"
+    assert reports[1]["name"] == "lookup"
+    done = next(e for e in events if e["kind"] == "agent.complete")["data"]
+    assert done["answer"] == {"gist": "a note"} and done["stored"] == 1

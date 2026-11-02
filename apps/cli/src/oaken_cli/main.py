@@ -775,6 +775,32 @@ def _register_admin(
     events.add_argument("--follow", "-f", action="store_true", help="Then keep watching.")
     events.set_defaults(func=_lazy("admin_cmd", "cmd_events"))
 
+    trace = sub.add_parser(
+        "trace",
+        help="Watch what a plugin or a job is told, thinks and returns (opt-in; holds mail text).",
+        parents=[g],
+        description=(
+            "The trace records, with the full text, what core hands a model and what it answers "
+            "(the prompt, the thinking, the timings), the calls into every plugin, and what an "
+            "agent claims and commits. It is off until `oaken trace on` (or [log] trace = true). "
+            "`oaken trace -f plugin.triager.ai` follows one plugin (plugin.enricher.summary, "
+            "plugin.llm_backend.ollama, ...); `--job ID` follows one job and nothing else."
+        ),
+    )
+    trace.add_argument(
+        "target",
+        nargs="?",
+        metavar="PLUGIN|on|off|status",
+        help="plugin.KIND.NAME to show one plugin, or on, off, status for the switch.",
+    )
+    trace.add_argument("--job", metavar="JOB_ID", help="Only this job.")
+    trace.add_argument("--message", metavar="MESSAGE_ID", help="Only this message.")
+    trace.add_argument("--kind", action="append", metavar="KIND", help="Only this kind of event.")
+    trace.add_argument("--tail", "-n", type=int, default=50, metavar="N", help="How many first.")
+    trace.add_argument("--since", metavar="DATE", help="Nothing older than this (ISO 8601).")
+    trace.add_argument("--follow", "-f", action="store_true", help="Then keep watching.")
+    trace.set_defaults(func=_lazy("admin_cmd", "cmd_trace"))
+
 
 def _register_mcp(
     sub: argparse._SubParsersAction[argparse.ArgumentParser], g: argparse.ArgumentParser
@@ -937,6 +963,15 @@ def _register_content(sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
     show = verbs.add_parser("show", parents=[_globals(True)], help="Show the stored results.")
     show.add_argument("message_id")
     show.add_argument("enricher", nargs="*", help="One enricher (default: all stored).")
+    tri = verbs.add_parser(
+        "try",
+        parents=[_globals(True)],
+        help="Dry-run triage on a message or on text: the verdict, nothing stored.",
+    )
+    tri.add_argument("message_id", nargs="?", help="A stored message (or use --text).")
+    tri.add_argument("--text", metavar="FILE", help="Triage this text instead (- reads stdin).")
+    tri.add_argument("--subject", default="", help="With --text: the subject.")
+    tri.add_argument("--sender", default="", help="With --text: the From line.")
     enrich.set_defaults(func=_lazy("content_cmd", "cmd_enrich"))
 
     sieve = sub.add_parser(

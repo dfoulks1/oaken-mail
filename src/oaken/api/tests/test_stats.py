@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The read-only ``/stats`` page (ADR 0013): loopback-only, unauthenticated, counts/health only."""
+"""The read-only ``/general`` page (ADR 0013): loopback-only, no token, counts and health only."""
 
 from collections.abc import Callable
 from pathlib import Path
@@ -10,14 +10,14 @@ from oaken.core import paths
 
 
 async def test_stats_is_html_without_a_token(rig: Rig) -> None:
-    resp = await rig.http.get("/stats")  # no Authorization header
+    resp = await rig.http.get("/general")  # no Authorization header
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
     assert "Oaken Mail" in resp.text and "General" in resp.text
 
 
 async def test_stats_json_is_the_same_data_without_a_token(rig: Rig) -> None:
-    resp = await rig.http.get("/stats.json")  # no auth
+    resp = await rig.http.get("/general.json")  # no auth
     assert resp.status_code == 200
     data = resp.json()
     # the same counts/health shape the page renders, as JSON
@@ -26,8 +26,8 @@ async def test_stats_json_is_the_same_data_without_a_token(rig: Rig) -> None:
 
 
 async def test_stats_wrong_host_is_refused(rig: Rig) -> None:
-    # The loopback Host guard applies to /stats as to everything else.
-    resp = await rig.http.get("/stats", headers={"Host": "evil.example"})
+    # The loopback Host guard applies to /general as to everything else.
+    resp = await rig.http.get("/general", headers={"Host": "evil.example"})
     assert resp.status_code == 400
 
 
@@ -47,21 +47,21 @@ async def test_stats_leaks_no_mail_content(make_rig: Callable[..., Any], tmp_pat
         account_id = acct[0].id if acct else None
         if account_id is not None:
             await ops.rig.raw.put(account_id, provider_id="leak1", raw=raw)
-        body = (await rig.http.get("/stats")).text
+        body = (await rig.http.get("/general")).text
         for leak in (secret_subject, secret_body, secret_addr):
-            assert leak not in body, f"mail content leaked onto /stats: {leak}"
+            assert leak not in body, f"mail content leaked onto /general: {leak}"
         # nor the API token
         assert TOKEN not in body
 
 
 async def test_stats_says_which_workspaces_an_mcp_client_may_reach(rig: Rig) -> None:
-    mcp = (await rig.http.get("/stats.json")).json()["mcp"]
+    mcp = (await rig.http.get("/general.json")).json()["mcp"]
     assert mcp["listed"] == ["default"] and mcp["all"] is False
     assert [(w["name"], w["linked"]) for w in mcp["workspaces"]] == [("default", True)]
 
 
 async def test_stats_json_lists_the_models_the_ai_tab_shows(rig: Rig) -> None:
-    models = (await rig.http.get("/stats.json")).json()["models"]
+    models = (await rig.http.get("/general.json")).json()["models"]
     assert isinstance(models, list)
     for row in models:
         assert {"kind", "label", "name", "model", "choices", "config", "config_schema"} <= set(row)
@@ -124,7 +124,7 @@ def test_ask_has_its_own_model_row_and_its_usage_lands_on_it() -> None:
 
 
 async def test_stats_shows_counts_and_health(rig: Rig) -> None:
-    body = (await rig.http.get("/stats")).text
+    body = (await rig.http.get("/general")).text
     for marker in (
         "Pipeline",
         "Ingest",
@@ -133,27 +133,35 @@ async def test_stats_shows_counts_and_health(rig: Rig) -> None:
     ):
         assert marker in body, f"missing from General: {marker}"
     assert "Throughput" in body  # the Ingest tab is the default
-    assert "Recent audit log" in (await rig.http.get("/stats?tab=audit")).text
+    assert "Recent audit log" in (await rig.http.get("/general?tab=audit")).text
     for page in ("/triage", "/embed", "/enrich"):  # each stage shows its own usage and agents
         body = (await rig.http.get(page)).text
         assert "Model &amp; token usage" in body and "Agents working" in body, page
-    queue = (await rig.http.get("/stats?tab=queue")).text
+    queue = (await rig.http.get("/general?tab=queue")).text
     assert "Jobs queue" in queue and '<option value="">Active</option>' in queue
 
 
 async def test_the_masthead_leads_to_each_stage(rig: Rig) -> None:
-    body = (await rig.http.get("/stats")).text
-    for href in ("/stats", "/pipeline", "/triage", "/embed", "/enrich", "/config", "/capabilities"):
+    body = (await rig.http.get("/general")).text
+    for href in (
+        "/general",
+        "/pipeline",
+        "/triage",
+        "/embed",
+        "/enrich",
+        "/config",
+        "/capabilities",
+    ):
         assert f'href="{href}"' in body, f"missing from the masthead: {href}"
 
 
 async def test_the_tab_in_the_link_is_the_tab_that_opens(rig: Rig) -> None:
-    body = (await rig.http.get("/stats?tab=audit")).text
-    assert 'href="/stats?tab=audit" aria-current="page"' in body
-    assert 'href="/stats?tab=ingest" aria-current="page"' not in body
-    assert 'href="/stats?tab=ingest" aria-current="page"' in (await rig.http.get("/stats")).text
-    queue = await rig.http.get("/stats?tab=queue")
-    assert 'href="/stats?tab=queue" aria-current="page"' in queue.text
+    body = (await rig.http.get("/general?tab=audit")).text
+    assert 'href="/general?tab=audit" aria-current="page"' in body
+    assert 'href="/general?tab=ingest" aria-current="page"' not in body
+    assert 'href="/general?tab=ingest" aria-current="page"' in (await rig.http.get("/general")).text
+    queue = await rig.http.get("/general?tab=queue")
+    assert 'href="/general?tab=queue" aria-current="page"' in queue.text
 
 
 async def test_the_front_page_shows_status_and_the_daemon_environment(rig: Rig) -> None:
@@ -180,24 +188,24 @@ async def test_capabilities_groups_the_operations_by_kind(rig: Rig) -> None:
 
 async def test_uptime_moves_with_the_clock(rig: Rig) -> None:
     rig.api._started_at = rig.ops.rig.clock.now()
-    assert 'data-bind="core.uptime_minutes"' in (await rig.http.get("/stats")).text
-    first = (await rig.http.get("/stats.json")).json()
+    assert 'data-bind="core.uptime_minutes"' in (await rig.http.get("/general")).text
+    first = (await rig.http.get("/general.json")).json()
     rig.ops.rig.clock.advance(seconds=125)
-    later = (await rig.http.get("/stats.json")).json()
+    later = (await rig.http.get("/general.json")).json()
     assert later["generated_at"] > first["generated_at"]
     assert (first["core"]["uptime_minutes"], later["core"]["uptime_minutes"]) == (0, 2)
 
 
 async def test_the_workspace_form_refuses_an_empty_pick_and_an_unknown_workspace(rig: Rig) -> None:
-    assert "Tick at least one workspace" in await rig.seen("mcp-workspaces", "/stats?tab=ref")
-    page = await rig.seen("mcp-workspaces", "/stats?tab=ref", workspace="nope")
+    assert "Tick at least one workspace" in await rig.seen("mcp-workspaces", "/general?tab=ref")
+    page = await rig.seen("mcp-workspaces", "/general?tab=ref", workspace="nope")
     assert "toast-danger" in page  # check_settings: no workspace named 'nope'
-    assert (await rig.http.get("/stats.json")).json()["mcp"]["listed"] == ["default"]
+    assert (await rig.http.get("/general.json")).json()["mcp"]["listed"] == ["default"]
 
 
 async def test_the_workspace_form_saves_a_list_and_all(rig: Rig) -> None:
-    assert "saved" in await rig.seen("mcp-workspaces", "/stats?tab=ref", workspace="default")
-    assert "saved" in await rig.seen("mcp-workspaces", "/stats?tab=ref", all="1")
+    assert "saved" in await rig.seen("mcp-workspaces", "/general?tab=ref", workspace="default")
+    assert "saved" in await rig.seen("mcp-workspaces", "/general?tab=ref", all="1")
     assert "workspaces = []" in (paths.config_dir() / "config.toml").read_text(encoding="utf-8")
 
 
@@ -209,13 +217,13 @@ async def test_the_leftover_usage_is_one_table_on_the_llm_backend_tab(rig: Rig) 
 
 
 async def test_ask_model_form_refuses_nothing_it_cannot_store(rig: Rig) -> None:
-    page = await rig.seen("model", "/stats?tab=ai", kind="ask", plugin="ask", model="big-model")
+    page = await rig.seen("model", "/general?tab=ai", kind="ask", plugin="ask", model="big-model")
     assert "ask will use big-model" in page
     assert 'ask_model = "big-model"' in (paths.config_dir() / "config.toml").read_text("utf-8")
 
 
 async def test_clearing_usage_says_what_it_left_alone(rig: Rig) -> None:
-    assert "Mail and the index are untouched" in await rig.seen("reset-usage", "/stats?tab=ai")
+    assert "Mail and the index are untouched" in await rig.seen("reset-usage", "/general?tab=ai")
 
 
 # ---- the console without script (CORE_50) ------------------------------------------------------
@@ -223,21 +231,21 @@ async def test_clearing_usage_says_what_it_left_alone(rig: Rig) -> None:
 
 PAGES = (
     "/",
-    "/stats",
+    "/general",
     "/pipeline",
     "/triage",
     "/embed",
     "/enrich",
     "/capabilities",
     "/config",
-    "/getting_started",
+    "/getting-started",
 )
 
 
 async def test_every_page_loads_nothing_from_another_origin(rig: Rig) -> None:
     import re
 
-    for path in (*PAGES, "/stats?tab=ai", "/stats?tab=plugins", "/stats?tab=ref"):
+    for path in (*PAGES, "/general?tab=ai", "/general?tab=plugins", "/general?tab=ref"):
         resp = await rig.http.get(path)
         body = resp.text
         for url in re.findall(r"""(?:src|href|action)=["']([^"']+)["']""", body):
@@ -274,14 +282,16 @@ async def test_the_logo_is_a_real_png_and_leads_the_page(rig: Rig) -> None:
     resp = await rig.http.get("/oaken-logo.png")
     assert resp.status_code == 200 and resp.headers["content-type"] == "image/png"
     assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
-    assert 'class="logo" src="/oaken-logo.png"' in (await rig.http.get("/stats")).text
+    assert 'class="logo" src="/oaken-logo.png"' in (await rig.http.get("/general")).text
 
 
 async def test_a_look_is_saved_and_rendered_on_every_page(rig: Rig) -> None:
-    assert "Look set to moss, dark" in await rig.seen("look", "/stats", palette="moss", mode="dark")
+    assert "Look set to moss, dark" in await rig.seen(
+        "look", "/general", palette="moss", mode="dark"
+    )
     for path in PAGES:
         assert 'data-palette="moss" data-mode="dark"' in (await rig.http.get(path)).text
-    bad = await rig.seen("look", "/stats", palette="neon", mode="dark")
+    bad = await rig.seen("look", "/general", palette="neon", mode="dark")
     assert "Pick a palette" in bad and 'data-palette="moss"' in bad
 
 
@@ -290,7 +300,7 @@ async def test_a_form_without_the_token_is_refused_and_does_nothing(rig: Rig) ->
     for token in ("", "forged"):
         resp = await rig.ui("pause", token=token)
         assert resp.status_code == 403
-    assert (await rig.http.get("/jobs/pipeline")).json()["llm_paused"] is False
+    assert (await rig.http.get("/pipeline.json")).json()["llm_paused"] is False
     after = len((await rig.call("list_audit", {"limit": 50}))["output"]["entries"])
     assert after == before
 
@@ -304,13 +314,13 @@ async def test_a_form_from_another_site_is_refused(rig: Rig) -> None:
         headers={"Origin": "http://evil.example"},
     )
     assert resp.status_code == 403
-    assert (await rig.http.get("/jobs/pipeline")).json()["llm_paused"] is False
+    assert (await rig.http.get("/pipeline.json")).json()["llm_paused"] is False
 
 
 async def test_the_form_can_only_send_you_back_to_a_console_page(rig: Rig) -> None:
     for back in ("http://evil.example/", "//evil.example", "/v1/health", "javascript:alert(1)"):
         resp = await rig.ui("resume", back)
-        assert resp.headers["location"].startswith("/stats?flash="), back
+        assert resp.headers["location"].startswith("/general?flash="), back
 
 
 async def test_a_message_shows_once(rig: Rig) -> None:
@@ -321,7 +331,7 @@ async def test_a_message_shows_once(rig: Rig) -> None:
 
 
 async def test_the_old_json_mutators_are_gone(rig: Rig) -> None:
-    for path in ("/plugins/reload", "/stats/reset-usage", "/jobs/pause", "/config/save"):
+    for path in ("/plugins/reload", "/general/reset-usage", "/jobs/pause", "/config/save"):
         resp = await rig.http.post(path, json={})
         assert resp.status_code in (404, 405), path
     assert (await rig.http.get("/stats.js")).status_code == 404
@@ -346,3 +356,70 @@ async def test_a_stage_page_can_change_its_own_core_settings(rig: Rig) -> None:
     assert "embed_min_priority = 0" in (paths.config_dir() / "config.toml").read_text("utf-8")
     refused = await rig.seen("stage-setting", "/embed", section="mcp", key="workspaces", value="x")
     assert "not changed from here" in refused
+
+
+async def test_the_old_paths_lead_to_the_new_ones_and_keep_the_query(rig: Rig) -> None:
+    for old, new in (
+        ("/stats?tab=queue", "/general?tab=queue"),
+        ("/stats.json", "/general.json"),
+        ("/getting_started", "/getting-started"),
+    ):
+        r = await rig.http.get(old, follow_redirects=False)
+        assert r.status_code == 301 and r.headers["location"] == new, old
+
+
+async def test_buttons_are_icons_with_their_words_kept_for_screen_readers(rig: Rig) -> None:
+    await rig.ops.add(1)  # an account, so its provider has something to configure
+    body = (await rig.http.get("/pipeline?tab=provider")).text
+    assert 'aria-label="Reload fake"' in body and "#i-recycle" in body
+    assert 'aria-label="Configure fake"' in body and "#i-gear" in body
+    assert ">Reload</button>" not in body and ">Settings</button>" not in body
+
+
+async def test_a_provider_gear_opens_its_schedule_manager(rig: Rig) -> None:
+    await rig.ops.add(1)  # an account to sync
+    await rig.ops.svc.need_sync().ensure_schedules()
+    body = (await rig.http.get("/pipeline?tab=provider")).text
+    assert 'popovertarget="sm-fake"' in body and 'id="sm-fake"' in body
+    assert 'action="/ui/schedule-state"' in body and 'action="/ui/sync-now"' in body
+    assert 'name="schedule"' in body and 'name="quiet"' in body
+
+
+async def test_the_schedule_manager_changes_and_pauses_a_schedule(rig: Rig) -> None:
+    await rig.ops.add(1)
+    await rig.ops.svc.need_sync().ensure_schedules()
+    listed = (await rig.call("list_schedules", {}))["output"]["schedules"]
+    account = listed[0]["account_id"]
+    flash = await rig.seen(
+        "schedule", "/pipeline?tab=provider",
+        account_id=account, folder="", schedule="every 30m", timezone="UTC", quiet="",
+    )  # fmt: skip
+    assert "will sync every 30m" in flash
+    assert (await rig.call("list_schedules", {}))["output"]["schedules"][0][
+        "schedule"
+    ] == "every 30m"
+    await rig.ui(
+        "schedule-state", "/pipeline?tab=provider", account_id=account, folder="", run="off"
+    )
+    assert (await rig.call("list_schedules", {}))["output"]["schedules"][0]["paused"] is True
+    await rig.ui(
+        "schedule-state", "/pipeline?tab=provider", account_id=account, folder="", run="on"
+    )
+    assert (await rig.call("list_schedules", {}))["output"]["schedules"][0]["paused"] is False
+
+
+async def test_the_front_page_shows_the_sync_state(rig: Rig) -> None:
+    body = (await rig.http.get("/")).text
+    assert "pipeline running" in body and "<th>Next sync</th>" in body
+    assert "<th>Last sync</th>" in body and "<th>Sync</th>" not in body
+
+
+async def test_the_front_page_puts_each_providers_sync_state_beside_its_name(rig: Rig) -> None:
+    await rig.ops.add(1)
+    await rig.ops.svc.need_sync().ensure_schedules()
+    row = (await rig.http.get("/")).text
+    assert "syncing" in row  # the provider and its state share a cell
+    (listed,) = (await rig.call("list_schedules", {}))["output"]["schedules"]
+    await rig.call("pause_schedule", {"account_id": listed["account_id"]})
+    paused = (await rig.http.get("/")).text
+    assert ">paused</span>" in paused and "syncing" not in paused

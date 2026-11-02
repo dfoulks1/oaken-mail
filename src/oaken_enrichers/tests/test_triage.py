@@ -155,3 +155,34 @@ async def test_a_short_message_with_a_real_subject_or_an_attachment_still_goes_t
 async def test_a_rule_can_be_switched_off_in_the_triagers_config(rig: Rig) -> None:
     enricher = await rig.start(RulesTriager(), config={"skip_rules": ["cron"]})
     assert await enricher.triage(message(x_cron_env="<SHELL=/bin/sh>")) is None
+
+
+async def test_the_values_a_rule_matches_on_are_configurable(rig: Rig) -> None:
+    default = await rig.start(RulesTriager())
+    assert await default.triage(message(precedence="list")) is None  # people reply through lists
+    wider = await rig.start(RulesTriager(), config={"bulk_precedence": ["bulk", "List"]})
+    out = await wider.triage(message(precedence="list"))
+    assert out is not None and out.data["rule"] == "precedence"  # now it counts (and is lowered)
+    quiet = await rig.start(RulesTriager(), config={"empty_max_subject_words": 0})
+    assert await quiet.triage(message(body="", subject="delete")) is None
+    assert (await default.triage(message(body="", subject="delete"))) is not None
+    custom = await rig.start(RulesTriager(), config={"autoreply_headers": ["x-vacation"]})
+    assert (await custom.triage(message(x_vacation="yes"))) is not None
+    assert await custom.triage(message(x_autoreply="yes")) is None  # the default list was replaced
+
+
+async def test_a_rule_name_that_does_not_exist_is_refused(rig: Rig) -> None:
+    from oaken.core.errors import PluginError
+
+    with pytest.raises(PluginError, match="skip_rules"):
+        await rig.start(RulesTriager(), config={"skip_rules": ["cron", "nope"]})
+
+
+async def test_the_rules_are_listed_in_the_order_they_run_with_their_state(rig: Rig) -> None:
+    plugin = await rig.start(RulesTriager(), config={"skip_rules": ["cron"]})
+    rules = plugin.describe()
+    assert [r["name"] for r in rules] == [
+        "auto_submitted", "bulk", "no_reply", "cron", "auto_reply", "spam", "empty",
+    ]  # fmt: skip
+    assert [r["name"] for r in rules if not r["enabled"]] == ["cron"]
+    assert all(r["summary"] for r in rules)

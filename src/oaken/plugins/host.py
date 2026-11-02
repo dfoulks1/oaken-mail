@@ -23,6 +23,7 @@ from oaken.core.errors import NotFound, PluginError
 from oaken.core.events import EventBus, PluginHealthChanged
 from oaken.core.logging import get_logger
 from oaken.core.settings import Settings
+from oaken.core.trace import Tracer
 from oaken.plugins.base import ALLOWED_ATTR
 from oaken.plugins.contracts import (
     CAPABILITIES,
@@ -103,6 +104,7 @@ class _Record:
     disabled: bool = False  # turned off at runtime (``disable``); ``enabled = false`` also counts
     forced_on: bool = False  # ``enable`` was asked for: beats the plugin's own off-by-default
     allowed: frozenset[str] | None = None  # the user's ``capabilities`` allow-list, if any
+    auto_disabled: bool = False  # switched off for want of configuration: retried, not forced off
 
 
 @dataclass(frozen=True)
@@ -175,6 +177,7 @@ class PluginHost:
         self.settings = settings
         self.clock = clock
         self.bus = bus
+        self.tracer: Tracer | None = None  # set by core: the opt-in trace
         self._discover = discover
         self.health_interval = health_interval
         self.call_timeout = call_timeout
@@ -220,6 +223,7 @@ class PluginHost:
         except Exception as exc:  # a broken plugin must never take core down
             rec.instance = None
             rec.healthy = False
+            rec.disabled = True  # a plugin that cannot load is switched off, with the reason shown
             rec.detail = f"failed to load: {exc}"
             log.error("plugin failed to load", kind=kind, name=ep.name, error=str(exc))
         return rec
@@ -275,6 +279,23 @@ class PluginHost:
             await self._announce(rec)
         return instance_name
 
+    async def _switch_off(self, rec: _Record, detail: str) -> None:
+        """Turn a plugin off because it lacks configuration it needs. It is tried again on the
+        next health pass and on ``reload``, so it comes back by itself once the settings exist."""
+        if rec.detail != detail:  # the health tick retries; say it once
+            log.info("plugin switched off: it needs configuration", kind=rec.kind, name=rec.name)
+        rec.disabled = rec.auto_disabled = True
+        rec.started = rec.healthy = False
+        rec.detail = detail
+        await self._announce(rec)
+
+    def _trace_hooks(self) -> dict[str, Any]:
+        """The trace functions a started plugin's context gets, when core has a tracer."""
+        tracer = self.tracer
+        if tracer is None:
+            return {}
+        return {"trace": tracer.emit, "tracing": lambda: tracer.enabled}
+
     async def _start_one(self, rec: _Record) -> None:
         base_name = rec.name.partition(ACCOUNT_SEP)[0]
         config = {**self.settings.plugin_table(rec.kind, base_name), **(rec.overlay or {})}
@@ -285,6 +306,15 @@ class PluginHost:
                 "plugin settings use the old flat table; move it under its kind",
                 plugin=base_name, move_to=f"plugins.{rec.kind}.{base_name}",
             )  # fmt: skip
+        if rec.auto_disabled:  # it was off for want of configuration: some may have arrived
+            rec.disabled = rec.auto_disabled = False
+        needs = [k for k in getattr(rec.instance, "requires_config", ()) if not config.get(k)]
+        if needs and rec.account_id is None:
+            await self._switch_off(
+                rec,
+                f"needs configuration: set {', '.join(needs)} in [plugins.{rec.kind}.{base_name}]",
+            )
+            return
         # ``enabled`` and ``capabilities`` are the host's, not the plugin's settings: a plugin never
         # sees them.
         if not self._is_enabled(rec, config) or rec.disabled:
@@ -312,6 +342,7 @@ class PluginHost:
             bus=self.bus,
             account_id=rec.account_id,
             llm=_HostLLM(self),
+            **self._trace_hooks(),
         )
         rec.ctx = ctx
         try:
@@ -325,7 +356,9 @@ class PluginHost:
         except Exception as exc:
             rec.started, rec.healthy = False, False
             if rec.account_id is None and not ctx.config:
-                # Installed but never set up (no [plugins.<name>] table): not an error.
+                # Installed but never set up (no [plugins.<kind>.<name>] table): not an error, and
+                # not left half-alive either: it is switched off until it is configured.
+                rec.disabled = rec.auto_disabled = True
                 rec.detail = f"not configured ({exc})"
                 log.info("plugin not configured", kind=rec.kind, name=rec.name, detail=str(exc))
             else:
@@ -427,6 +460,7 @@ class PluginHost:
             bus=None,
             account_id=None,
             llm=_HostLLM(self),
+            **self._trace_hooks(),
         )
         started = False
         try:
@@ -511,7 +545,7 @@ class PluginHost:
         ``[plugins.<name>]`` is the lasting form). Returns the names affected."""
         recs = self._family(name)
         for rec in recs:
-            rec.disabled = True
+            rec.disabled, rec.auto_disabled = True, False  # now it is the person's doing
             await self._stop_one(rec)
             rec.healthy, rec.detail = False, "disabled"
             await self._announce(rec)
@@ -522,9 +556,11 @@ class PluginHost:
         ``enabled = false``: that is a setting, and ``reload`` picks up a change to it."""
         recs = self._family(name)
         for rec in recs:
-            rec.disabled = False
+            rec.disabled = rec.auto_disabled = False
             rec.forced_on = True
-            if rec.instance is not None and not rec.started:
+            if rec.instance is None and rec.account_id is None:
+                await self.reload(rec.name)  # it never loaded: take a fresh instance and try again
+            elif rec.instance is not None and not rec.started:
                 await self._start_one(rec)
         return [r.name for r in recs]
 
@@ -551,7 +587,8 @@ class PluginHost:
                     await self._announce(rec)
                     continue
                 fresh = self._load_one(rec.kind, ep)
-                fresh.disabled, fresh.forced_on = rec.disabled, rec.forced_on
+                fresh.disabled = fresh.disabled or rec.disabled  # a failed load stays off
+                fresh.auto_disabled, fresh.forced_on = rec.auto_disabled, rec.forced_on
                 self._records[(rec.kind, rec.name)] = fresh
                 rec = fresh
             else:

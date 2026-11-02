@@ -189,6 +189,7 @@ async def test_every_problem_is_reported_at_once_and_load_errors_never_raise(
         assert "api_version is 99" in detail and "unknown capability 'telepathy'" in detail
         assert "embed() is not implemented" in detail
         assert "failed to load" in by_name["gone"].detail
+        assert not by_name["gone"].enabled  # a plugin that cannot load is switched off
     finally:
         await host.stop()
 
@@ -392,3 +393,39 @@ async def test_a_plugin_reaches_the_language_model_only_through_ctx_llm() -> Non
     host.llm_access = Access()
     assert await ctx[0].llm.generate_cached(object(), content_hash="h") == "answer"  # type: ignore[arg-type]
     assert len(seen) == 1
+
+
+async def test_a_plugin_that_needs_settings_is_off_until_it_has_them(
+    install_plugin: Installer,
+) -> None:
+    install_plugin(
+        "plug_needy",
+        """
+        from oaken.plugins.base import BaseEmbedder
+
+        class Needy(BaseEmbedder):
+            model_id = "m"
+            dimensions = 2
+            requires_config = ("url",)
+
+            async def embed(self, texts):
+                return [[0.0, 0.0] for _ in texts]
+        """,
+        [("oaken.embedders", "needy", "Needy")],
+    )
+    host, _, _ = make_host()
+    await host.start()
+    try:
+        [st] = host.statuses()
+        assert not st.enabled and not st.started
+        assert st.detail == "needs configuration: set url in [plugins.embedder.needy]"
+        host.settings.plugins["embedder"] = {"needy": {"url": "http://example"}}
+        await host.check_health()  # the next pass tries it again: the settings are there now
+        [st] = host.statuses()
+        assert st.enabled and st.started and st.healthy
+        await host.disable("needy")  # a person's own off switch is not undone by a retry
+        host.settings.plugins["embedder"] = {"needy": {"url": "http://example"}}
+        await host.check_health()
+        assert not host.statuses()[0].enabled
+    finally:
+        await host.stop()

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // The console's one optional script. It refreshes the numbers on a page that asks for it, and does
 // nothing else: every page is complete and correct without it, and every action is a plain form.
-// A page opts in with <body data-refresh="/stats.json">, and marks each live value with
+// A page opts in with <body data-refresh="/general.json">, and marks each live value with
 // data-bind="path.in.the.json" (and optionally data-format="int", "fixed2" or "secs"). A page that
 // paints first and fills its numbers after says so with <body data-lazy>.
 (function () {

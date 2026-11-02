@@ -302,6 +302,83 @@ async def _cache_clear(client: ApiClient, args: argparse.Namespace) -> int:
 # --- events ---------------------------------------------------------------------------------
 
 
+# -- the trace ----------------------------------------------------------------------------------
+HEADER_KEYS = ("plugin_kind", "plugin", "job_id", "job_kind", "message_id", "agent", "attempt")
+
+
+def _render_trace(event: dict[str, Any]) -> str:
+    """One event: a header line, then each long value (a prompt, an answer, thinking) in full."""
+    data = dict(event["data"])
+    head = " ".join(f"{k}={_show(data.pop(k))}" for k in HEADER_KEYS if k in data)
+    short: list[str] = []
+    blocks: list[str] = []
+    for key, value in data.items():
+        if isinstance(value, str) and "\n" not in value and len(value) <= 80:
+            short.append(f"{key}={value}")
+        elif isinstance(value, bool | int | float) or value is None:
+            short.append(f"{key}={value}")
+        else:
+            text = (
+                value if isinstance(value, str) else json.dumps(value, indent=2, ensure_ascii=False)
+            )
+            blocks.append(f"    {key}:\n" + "\n".join(f"      {ln}" for ln in text.splitlines()))
+    first = f"{event['ts'][11:23]}  {event['kind']}  {head}  {' '.join(short)}".rstrip()
+    return "\n".join([first, *blocks])
+
+
+def cmd_trace(args: argparse.Namespace) -> int:
+    return run(lambda client: _trace(client, args), args)
+
+
+async def _trace(client: ApiClient, args: argparse.Namespace) -> int:
+    from oaken_cli.output import print_json, print_text
+
+    target = args.target
+    if target in ("on", "off"):
+        result = await client.call("trace_set", {"enabled": target == "on"}, confirm=True)
+        out = _out(result)
+        print_text(
+            f"trace {'on' if out.get('enabled') else 'off'} ({out.get('file')})"
+            + ("; it holds mail text" if out.get("enabled") else "")
+        )
+        return int(ExitCode.OK)
+    if target == "status":
+        out = _out(await client.call("trace_status", {}))
+        print_text(f"trace {'on' if out.get('enabled') else 'off'} ({out.get('file')})")
+        return int(ExitCode.OK)
+    payload: dict[str, Any] = {"limit": args.tail}
+    if target:
+        payload["plugin"] = target
+    for flag, key in (("job", "job_id"), ("message", "message_id"), ("since", "since")):
+        if getattr(args, flag):
+            payload[key] = getattr(args, flag)
+    if args.kind:
+        payload["kinds"] = list(args.kind)
+    as_json = getattr(args, "json", False)
+    seen: set[str] = set()
+
+    def show(events: list[dict[str, Any]]) -> None:
+        for event in events:
+            key = json.dumps(event, sort_keys=True)
+            if key in seen:
+                continue
+            seen.add(key)
+            print_json(event) if as_json else print_text(_render_trace(event))
+
+    out = _out(await client.call("trace_tail", payload))
+    show(out.get("events", []))
+    if not out.get("enabled"):
+        print_text("(the trace is off: `oaken trace on` to record; nothing new will appear)")
+    if args.follow:  # pushed as each event is emitted: no polling
+        try:
+            async for live in client.stream_trace(payload):
+                if isinstance(live.data, dict):
+                    show([live.data])
+        except KeyboardInterrupt:
+            pass
+    return int(ExitCode.OK)
+
+
 def cmd_events(args: argparse.Namespace) -> int:
     return run(lambda client: _events(client, args), args)
 

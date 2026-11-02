@@ -414,7 +414,7 @@ DEFAULT_PORT = 62536
 
 class APISettings(_Section):
     # The address the API listens on. Anything but loopback needs ``allow_remote = true``: the
-    # console pages (/, /config, /jobs, /stats) stay for clients on this machine either way, and
+    # console pages (/, /config, /jobs, /general) stay for clients on this machine either way, and
     # only the token-protected API is reachable from elsewhere. The token travels in clear text,
     # so reach it through an SSH tunnel or a TLS proxy, not over an open network.
     host: str = "127.0.0.1"
@@ -488,6 +488,16 @@ class LogSettings(_Section):
     events_file: str = "events.jsonl"
     events_max_bytes: int = Field(default=10 * 1024 * 1024, ge=1024)
     events_backups: int = Field(default=3, ge=0, le=100)
+    # The trace: what a model or an agent is told, thinks and returns, with the full text, so a
+    # person can tune triage and enrichment. It holds MAIL TEXT, so it is off until asked for. It
+    # goes to its own owner-only file (never the audit log or the event log) and is read through the
+    # authenticated API (`oaken trace`), never from the console's token-free pages. ``oaken trace
+    # on|off`` changes it at run time; this is the start-up default.
+    trace: bool = False
+    trace_file: str = "trace.jsonl"
+    trace_max_bytes: int = Field(default=10 * 1024 * 1024, ge=1024)
+    trace_backups: int = Field(default=3, ge=0, le=100)
+    trace_event_cap: int = Field(default=200_000, ge=1000)  # longest text kept in one event
 
 
 class Settings(BaseSettings):

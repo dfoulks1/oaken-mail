@@ -248,13 +248,13 @@ older than the ring, or from before core restarted, gets a <code>gap</code> even
 A quiet stream sends a <code>: heartbeat</code> comment.</li>
 <li><code>/v1/agent/jobs/...</code>: claim, heartbeat, complete and fail, for the swarm.</li>
 <li><code>/</code>: files from <code>[api] static_dir</code> when set, otherwise a placeholder page.</li>
-<li><code>GET /stats</code>: a read-only status page, HTML (see below). Like <code>/v1/health</code> it needs no token —
+<li><code>GET /general</code>: a read-only status page, HTML (see below). Like <code>/v1/health</code> it needs no token —
 it is loopback-only and shows counts and health, never mail.</li>
 </ul>
 </section>
 <section id="the-status-pages" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>The status pages</h2></div>
 <p><code>GET /</code> is the front page: version, message and index counts, queue depth, per-account sync state
-and the daemon's environment (paths, port). <code>GET /stats</code> is <strong>General</strong>: Ingest (every stage with
+and the daemon's environment (paths, port). <code>GET /general</code> is <strong>General</strong>: Ingest (every stage with
 its own pause switch and concurrency, and live throughput), Queue (the active jobs, parked jobs
 and any agent not tied to a stage), and the audit log. <code>/pipeline</code> holds the plugins behind the stages:
 providers, LLM backends, vector stores and caches. <code>/triage</code>, <code>/embed</code> and <code>/enrich</code> are the stages:
@@ -264,7 +264,7 @@ and token usage, and the agents working it. <code>/capabilities</code> lists the
 that offers them, with an MCP switch for each. Each page loads only its own data; the queue numbers
 arrive just after the page paints. It is <strong>unauthenticated on purpose</strong> — it is reachable only from this
 machine (the Host guard still refuses a forged name), and it carries <strong>counts and health only</strong>: no
-message text, no addresses, no tokens, and not the audit log. Open <code>http://127.0.0.1:&lt;port&gt;/stats</code>
+message text, no addresses, no tokens, and not the audit log. Open <code>http://127.0.0.1:&lt;port&gt;/general</code>
 (the port is in <code>runtime.json</code>; set <code>[api] port</code> to pin it). The page is self-contained — inline
 styling, no external assets, no scripts — so it works offline. See
 <a href="https://github.com/dfoulks1/oaken-mail/blob/main/docs/adr/0013-read-only-stats-page.md">ADR 0013</a>; a friendly <code>oaken.local</code> name and a

@@ -79,8 +79,9 @@
       <a class="nav-link" href="#core-settings"><span class="num">1</span>Core settings</a>
       <a class="nav-link" href="#storage"><span class="num">2</span>Storage</a>
       <a class="nav-link" href="#the-enrichment-cache"><span class="num">3</span>The enrichment cache</a>
-      <a class="nav-link" href="#what-happened-events-and-the-audit-log"><span class="num">4</span>What happened: events and the audit log</a>
-      <a class="nav-link" href="#is-it-healthy"><span class="num">5</span>Is it healthy?</a>
+      <a class="nav-link" href="#watching-a-plugin-or-a-job-the-trace"><span class="num">4</span>Watching a plugin or a job: the trace</a>
+      <a class="nav-link" href="#what-happened-events-and-the-audit-log"><span class="num">5</span>What happened: events and the audit log</a>
+      <a class="nav-link" href="#is-it-healthy"><span class="num">6</span>Is it healthy?</a>
     </nav></div>
   </div></div>
 </nav>
@@ -187,7 +188,34 @@ oaken<span class="w"> </span>cache<span class="w"> </span>clear<span class="w"> 
 had saved. Mail, the index and the usage record are untouched. Without a terminal, <code>clear</code> needs
 <code>--yes</code>.</p>
 </section>
-<section id="what-happened-events-and-the-audit-log" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>What happened: events and the audit log</h2></div>
+<section id="watching-a-plugin-or-a-job-the-trace" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Watching a plugin or a job: the trace</h2></div>
+<div class="code"><pre class="highlight"><code class="language-bash">oaken<span class="w"> </span>trace<span class="w"> </span>on<span class="w">                       </span><span class="c1"># start recording (it holds mail text: off until asked for)</span>
+oaken<span class="w"> </span>trace<span class="w"> </span>-f<span class="w"> </span>plugin.triager.ai<span class="w">     </span><span class="c1"># follow one plugin, pushed as each event happens</span>
+oaken<span class="w"> </span>trace<span class="w"> </span>-f<span class="w"> </span>plugin.enricher.summary
+oaken<span class="w"> </span>trace<span class="w"> </span>plugin.llm_backend.ollama<span class="w"> </span>-n<span class="w"> </span><span class="m">20</span>
+oaken<span class="w"> </span>trace<span class="w"> </span>--job<span class="w"> </span>0192a7...<span class="w">          </span><span class="c1"># one job instance, and nothing else</span>
+oaken<span class="w"> </span>trace<span class="w"> </span>--message<span class="w"> </span>0192a8...<span class="w">      </span><span class="c1"># everything that happened to one message</span>
+oaken<span class="w"> </span>trace<span class="w"> </span>off
+</code></pre></div>
+<p>The trace records, with the full text: every call into a plugin (its arguments and what it
+returned, for every kind: providers, embedders, LLM backends, vector stores, caches, triagers and
+enrichers); every model call core makes (the system text, each user part fenced as mail, the schema,
+the response, the thinking a model returned, the backend's own token counts and timings, and the
+tokens a cache hit saved); the jobs (queued, started, done, failed) and what each stored; and the
+agent door (what an agent was handed on a claim, its heartbeats, the answer it committed, and any
+thinking or tool calls it chose to report). Every event carries the plugin (<code>plugin_kind</code>,
+<code>plugin</code>), the job (<code>job_id</code>, <code>job_kind</code>) and the message it happened under, so each of the filters
+above is exact.</p>
+<p>It is off by default, because it holds mail text. <code>[log] trace = true</code> turns it on at start-up;
+<code>oaken trace on|off</code> changes it at run time. It goes to <code>trace.jsonl</code> in the data directory
+(owner-only, rotated at <code>trace_max_bytes</code>, keeping <code>trace_backups</code>), is read only through the
+authenticated API, is never shown on the console's token-free pages and is never offered over MCP.
+A single text longer than <code>trace_event_cap</code> is cut and says so.</p>
+<p>A plugin author gets the same view of their own code: every public <code>async</code> method on a plugin built
+on a base class is traced under its kind and name, and <code>self.trace(&quot;my.event&quot;, key=value)</code> adds an
+event of your own.</p>
+</section>
+<section id="what-happened-events-and-the-audit-log" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>What happened: events and the audit log</h2></div>
 <div class="code"><pre class="highlight"><code class="language-bash">oaken<span class="w"> </span>events<span class="w"> </span>--tail<span class="w"> </span><span class="m">20</span><span class="w">           </span><span class="c1"># recent events, including from before core's last restart</span>
 oaken<span class="w"> </span>events<span class="w"> </span>--kind<span class="w"> </span>JobStateChanged<span class="w"> </span>--since<span class="w"> </span><span class="m">2026</span>-10-24T09:00:00
 oaken<span class="w"> </span>events<span class="w"> </span>--follow<span class="w">            </span><span class="c1"># the history, then the live stream</span>
@@ -199,7 +227,7 @@ it off), one JSON line each, owner-only, rotated at <code>events_max_bytes</code
 older files. Events hold ids, states and numbers, never mail text. <code>audit</code> pages with a cursor: the
 last line of each page gives the command for the next, and <code>--all</code> follows them all.</p>
 </section>
-<section id="is-it-healthy" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Is it healthy?</h2></div>
+<section id="is-it-healthy" class="doc-section"><div class="section-head"><span class="section-num">6</span><h2>Is it healthy?</h2></div>
 <p><code>oaken status</code> says whether core is running and, when it answers, adds a line: accounts, messages
 (and how many are indexed), the queue, healthy plugins, and anything that needs attention, such as a
 stale index or sync schedules that are paused or failing.</p>

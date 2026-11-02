@@ -16,6 +16,7 @@ from oaken.core.operations.builtin import (
     schedules,
     settings_ops,
     system,
+    trace,
     workspaces,
 )
 from oaken.core.operations.registry import AnyOperation, OperationRegistry
@@ -37,6 +38,7 @@ def core_operations() -> tuple[AnyOperation, ...]:
         *config.OPERATIONS,
         *settings_ops.OPERATIONS,
         *maintenance.OPERATIONS,
+        *trace.OPERATIONS,
         *workspaces.OPERATIONS,
     )
 

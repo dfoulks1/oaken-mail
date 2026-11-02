@@ -275,6 +275,14 @@ is no second list to keep in step:</p>
 the table <code>[plugins.&lt;kind&gt;.&lt;name&gt;]</code> from the user's <code>config.toml</code>. Credentials belong in the OS keyring,
 never in config.</p>
 <p>(The kind is part of the name: <code>[plugins.triager.ai]</code>, <code>[plugins.enricher.summary]</code>, <code>[plugins.embedder.ollama]</code> and <code>[plugins.llm_backend.ollama]</code> are four different tables. The older flat <code>[plugins.&lt;name&gt;]</code> still works as a fallback and logs a warning; <code>oaken plugins set</code> writes the qualified form.)</p>
+<p>A plugin the host cannot load (a broken import, a failed check) is switched off, and the reason shows
+beside it; fix it and use its pill or <code>oaken plugins enable NAME</code> to try again. A plugin that needs
+settings it has not been given is also off until it has them: declare them with
+<code>requires_config = (&quot;base_url&quot;,)</code> on the class, and the host leaves it off, saying
+&quot;needs configuration: set base_url in [plugins.llm_backend.ollama-remote]&quot;, then starts it by itself
+on the next health pass or reload once the keys are set. (<code>ollama-remote</code> is one: it exists to reach
+another machine, so it needs its address.) A plugin that cannot start because it was never set up
+(no table at all) is treated the same way. Turning a plugin off yourself is never undone by a retry.</p>
 <p>Raise <code>oaken.core.errors.AuthError</code> (or a subclass) when credentials are missing or refused. Core
 pauses that account's schedule instead of retrying, and the other accounts carry on. Core starts one
 instance of your class per account, so <code>ctx.account_id</code> tells you which one you are and is the natural
@@ -430,7 +438,7 @@ in the CLI). A person turns a plugin on and off, restarts it and edits its setti
 </tr>
 </tbody>
 </table></div>
-<p>The General page (<code>/stats</code>, the tab for the plugin's kind) has the same switch and a Reload button, and the same
+<p>The General page (<code>/general</code>, the tab for the plugin's kind) has the same switch and a Reload button, and the same
 operations are available to any client (<code>plugin_enable</code>, <code>plugin_disable</code>, <code>plugin_reload</code>,
 <code>get_plugin_config</code>, <code>check_plugin_config</code>, <code>set_plugin_config</code>).</p>
 </section>
