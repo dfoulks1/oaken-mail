@@ -1252,17 +1252,17 @@ class Pipeline:
         db = self.queue.db
         window = timedelta(seconds=self.cfg.throughput_window_seconds)
 
-        async def status_of(kind: str, *, below: bool) -> StageStatus:
-            # ``below``: the stage's own kind and every kind under it (the enrich stage is the sum
-            # of its enrichers); otherwise the exact kind.
-            where = "(kind = ? OR kind LIKE ?)" if below else "kind = ?"
-            args = (kind, kind + ".%") if below else (kind,)
+        async def status_of(kinds: list[str]) -> StageStatus:
+            # Exact kinds only: ``kind IN (...)`` uses the (kind, status) index; a LIKE prefix
+            # would scan every job. The enrich stage is the sum of its enrichers.
+            marks = ", ".join("?" * len(kinds))
             counts = {
                 r["status"]: r
                 for r in await db.fetchall(
                     "SELECT status, COUNT(*) AS n, MIN(created_at) AS oldest,"  # noqa: S608
-                    f" SUM(attempts > 0) AS retried FROM jobs WHERE {where} GROUP BY status",
-                    args,
+                    f" SUM(attempts > 0) AS retried FROM jobs WHERE kind IN ({marks})"
+                    " GROUP BY status",
+                    tuple(kinds),
                 )
             }
             queued = counts.get("queued")
@@ -1270,8 +1270,8 @@ class Pipeline:
             running = int(counts["running"]["n"]) if "running" in counts else 0
             done = await db.fetchone(
                 "SELECT COUNT(*) AS n, MIN(updated_at) AS first FROM jobs"  # noqa: S608
-                f" WHERE {where} AND status = 'succeeded' AND updated_at >= ?",
-                (*args, fmt_ts(now - window)),
+                f" WHERE kind IN ({marks}) AND status = 'succeeded' AND updated_at >= ?",
+                (*kinds, fmt_ts(now - window)),
             )
             rate = 0.0
             if done and done["n"]:
@@ -1291,15 +1291,15 @@ class Pipeline:
                 else None,
             )
 
+        enricher_kinds = [enrich_kind(n) for n in self.backends.enrichers() if n != GATE]
         stages = {
-            kind.removeprefix("ingest."): await status_of(kind, below=True) for kind in STAGE_KINDS
+            kind.removeprefix("ingest."): await status_of(
+                [kind, *enricher_kinds] if kind == ENRICH else [kind]
+            )
+            for kind in STAGE_KINDS
         }
         enrichers = {
-            r["kind"].removeprefix("ingest."): await status_of(r["kind"], below=False)
-            for r in await db.fetchall(
-                "SELECT DISTINCT kind FROM jobs WHERE kind LIKE ? ORDER BY kind",
-                (ENRICH_PREFIX + "%",),
-            )
+            kind.removeprefix("ingest."): await status_of([kind]) for kind in enricher_kinds
         }
         parked = [
             ParkedJob(
