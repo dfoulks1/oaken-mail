@@ -56,6 +56,8 @@ Makes a fresh install usable without reading the docs.
   `/jobs/pipeline` is now `/pipeline.json` and does not redirect. `pipeline_status` takes optional
   `stages` and `counts` to ask for less.
 
+- **A master MCP switch.** `[mcp] enabled` (default true) and a big ON/OFF toggle on Capabilities: off, the person's MCP door answers 503 and offers no tools. The door itself is still `[api] mcp` and a restart. The Capabilities tables fold, and core operations are grouped Mail, Pipeline, Enrichment and System, so the Enrichment table can be switched off to stop an AI client re-running the analysis.
+
 - A live welcome page at `/`, a config editor at `/config`, a jobs and pipeline console,
   an in-app getting-started page and a shared nav, all on loopback. The `/stats` page now uses the
   same Bootstrap look. Four new operations back the editor: `config_get`, `config_validate`,

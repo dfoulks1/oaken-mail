@@ -26,6 +26,7 @@ from typing import Any
 import mcp_types as types
 from mcp.server.lowlevel import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from starlette.responses import JSONResponse
 from starlette.types import Receive, Scope, Send
 
 from oaken.api.guard import Surface
@@ -192,6 +193,13 @@ class McpServer:
             return None
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if self._agents is None and not self.client.svc.settings.mcp.enabled:
+            # the master switch: nothing is served to the person's MCP clients (agents have their own door)
+            await JSONResponse(
+                {"error": "mcp_off", "message": "MCP is switched off in Oaken's console."},
+                status_code=503,
+            )(scope, receive, send)
+            return
         principal = scope.get("oaken", {}).get("principal")
         reset = _AGENT.set(principal if isinstance(principal, Agent) else None)
         try:

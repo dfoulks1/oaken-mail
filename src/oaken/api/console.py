@@ -305,6 +305,14 @@ class Console:
         verb = "offered to" if on else "hidden from"
         return ok(f"{name} is now {verb} MCP clients. It applies on their next tool list.")
 
+    async def do_mcp_power(self, f: Form) -> Flash:
+        on = f.one("mcp") == "on"
+        saved = await self.op("set_settings", {"section": "mcp", "values": {"enabled": on}})
+        if (why := _problem(saved)) is not None:
+            return danger(f"Could not switch MCP {'on' if on else 'off'}: {why}")
+        await self.op("config_reload", {})
+        return ok(f"MCP is {'on' if on else 'off'}.")
+
     async def do_mcp_workspaces(self, f: Form) -> Flash:
         everything = f.one("all") == "1"
         names = f.many("workspace")
@@ -542,6 +550,7 @@ ACTIONS: dict[str, Action] = {
     "revoke-agent": Console.do_revoke_agent,
     "expose": Console.do_expose,
     "mcp-workspaces": Console.do_mcp_workspaces,
+    "mcp-power": Console.do_mcp_power,
     "model": Console.do_model,
     "plugin-settings": Console.do_plugin_settings,
     "plugin": Console.do_plugin,

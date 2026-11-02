@@ -25,12 +25,12 @@ from oaken.core.errors import InvalidInput
 from oaken.readstate.audit import AuditLog, new_audit_id
 
 # The model-bound ingest kinds a pause withholds. Mirrors pipeline.EMBED / TRIAGE / ENRICH.
-LLM_STAGES: frozenset[str] = frozenset({"ingest.embed", "ingest.triage", "ingest.enrich"})
+LLM_STAGES: frozenset[str] = frozenset({"ingest.triage", "ingest.embed", "ingest.enrich"})
 # The stage names a person uses, and the job kind each one runs.
 STAGES: dict[str, str] = {
     "parse": "ingest.parse",
-    "embed": "ingest.embed",
     "triage": "ingest.triage",
+    "embed": "ingest.embed",
     "enrich": "ingest.enrich",
 }
 ENRICHER_STAGE = "enrich."  # ``enrich.<name>`` is one enricher's kind, ``ingest.enrich.<name>``

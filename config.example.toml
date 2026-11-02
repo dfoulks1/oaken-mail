@@ -167,6 +167,7 @@
 
 # --- MCP ------------------------------------------------------------------------------
 # [mcp]
+# enabled = true               # the master switch: false and the MCP door answers 503 (the console has a big toggle)
 # workspaces = ["default"]     # which workspaces' mail an MCP client may reach; [] = all of them
 #
 # [mcp.allowed]                # which operations it may call: an operation or plugin name -> true | false

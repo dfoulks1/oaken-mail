@@ -17,7 +17,15 @@ async def test_jobs_page_renders_without_a_token(rig: Rig) -> None:
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
     assert "Queue" in resp.text and "Pipeline" in resp.text
-    assert 'action="/ui/stage"' in resp.text and 'action="/ui/limit"' in resp.text
+    assert 'action="/ui/stage"' in resp.text
+    assert 'action="/ui/limit"' not in resp.text  # fan-out is set on a stage's own page
+
+
+async def test_a_stage_page_sets_fan_out_and_an_enricher_has_its_own(rig: Rig) -> None:
+    body = (await rig.http.get("/enrich")).text
+    assert body.count('action="/ui/limit"') >= 2  # the stage's own, and one per enricher
+    assert 'name="stage" value="enrich"' in body and 'name="stage" value="enrich.' in body
+    assert "<th>Capabilities</th>" not in body
 
 
 async def test_jobs_page_filters_by_status(rig: Rig) -> None:

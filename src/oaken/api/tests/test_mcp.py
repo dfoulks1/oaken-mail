@@ -325,3 +325,12 @@ def test_the_instructions_name_the_workspaces_a_client_may_reach() -> None:
     both = Settings(mcp=McpSettings(workspaces=["a", "b"]))
     assert "these workspaces: a, b." in _instructions(both)
     assert "every workspace." in _instructions(Settings(mcp=McpSettings(workspaces=[])))
+
+
+async def test_the_master_switch_closes_the_person_s_door(mcp: McpRig) -> None:
+    assert (await mcp.rpc("tools/list")).status_code == 200
+    object.__setattr__(mcp.ops.client.svc.settings.mcp, "enabled", False)
+    off = await mcp.rpc("tools/list")
+    assert off.status_code == 503 and off.json()["error"] == "mcp_off"
+    object.__setattr__(mcp.ops.client.svc.settings.mcp, "enabled", True)
+    assert (await mcp.rpc("tools/list")).status_code == 200

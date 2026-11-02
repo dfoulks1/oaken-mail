@@ -10,6 +10,7 @@
   rebuilds core in place (the old config comes back if the new one fails to start). Secrets are
   never kept here: tokens live in the OS keyring.
 </p>
+<p><a class="btn" href="/getting-started" target="_blank" rel="noopener">Get started ↗</a></p>
 <p class="muted small">File: <code>{{ path }}</code>{% if not exists %} (not created yet){% endif %}</p>
 <form method="post" action="/ui/config-save">
   {{ m.guard("/config") }}

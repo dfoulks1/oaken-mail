@@ -42,3 +42,11 @@ async def test_status_sums_the_enrich_stage_and_lists_each_enricher(make_rig: An
         status = await rig.pipeline.pipeline_status()
         assert "enrich.words" in status.enrichers
         assert status.stages["enrich"].per_second == status.enrichers["enrich.words"].per_second
+
+
+def test_stages_are_listed_in_the_order_they_run() -> None:
+    from oaken.ingest.pipeline import STAGE_KINDS
+    from oaken.ingest.pipeline_control import STAGES
+
+    assert list(STAGES) == ["parse", "triage", "embed", "enrich"]
+    assert [k.removeprefix("ingest.") for k in STAGE_KINDS[:4]] == list(STAGES)

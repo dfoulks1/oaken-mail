@@ -389,6 +389,9 @@ class McpSettings(_Section):
     """
 
     allowed: dict[str, bool] = Field(default_factory=dict)
+    # The master switch: false and the person's MCP door answers 503 and offers no tools, whatever
+    # ``[api] mcp`` and ``allowed`` say. It can only be turned on where ``[api] mcp`` mounted the door.
+    enabled: bool = True
     # Which workspaces an MCP client may reach: only mail whose account is in one of these. An empty
     # list means every workspace. A name that is not a workspace matches nothing (a typo hides mail,
     # it never exposes it). A fresh install lists only ``default``. See ``oaken.core.operations.scope``.

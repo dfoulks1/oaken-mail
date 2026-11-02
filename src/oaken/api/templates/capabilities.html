@@ -6,14 +6,21 @@
 {% block main %}
 <h1>Capabilities</h1>
 <p class="muted">What this core can do, grouped by the kind of plugin that offers it, and what MCP clients may call. Some things you do not want an AI client doing: switch them off here.</p>
-    <div class="card" id="mcp-workspaces">
-      <div class="card-head">MCP workspaces</div>
+    {% set mcp_on = mcp.mounted and mcp.enabled %}
+    <div class="card mcp-power {{ 'is-on' if mcp_on else 'is-off' }}" id="mcp-power">
+      <div class="card-body row">
+        <span class="mcp-state">MCP is {{ "ON" if mcp_on else "OFF" }}</span>
+        {{ m.switch("mcp-power", "/capabilities", mcp_on, "MCP", {}, "mcp", "on", "off", not mcp.mounted, "The MCP door is not mounted: set [api] mcp = true and restart core", false) }}
+        <span class="muted">{% if not mcp.mounted %}Not mounted: set <code>[api] mcp = true</code> and restart core.
+          {%- elif mcp.enabled %}AI clients can reach the operations ticked below.
+          {%- else %}Switched off: the door answers 503 and offers no tools.{% endif %}</span>
+      </div>
+    </div>
+    <details class="card fold" id="mcp-workspaces">
+      <summary class="card-head">MCP workspaces</summary>
       <form class="card-body" method="post" action="/ui/mcp-workspaces">
         {{ m.guard("/capabilities") }}
         <p>
-          {% if not mcp.mounted %}<span class="badge badge-muted">MCP is off</span>
-            <span class="muted">(set <code>[api] mcp = true</code> and restart core)</span>
-          {% else %}<span class="badge badge-ok">MCP is on</span>{% endif %}
           Clients may reach {% if mcp.all %}<strong>every workspace</strong>{% else %}only the workspaces ticked below{% endif %}.
           Mail text returned to an AI client leaves this process.
         </p>
@@ -27,16 +34,25 @@
         <p><label class="check"><input type="checkbox" name="all" value="1"{% if mcp.all %} checked{% endif %}> All workspaces (writes <code>workspaces = []</code>)</label></p>
         <button class="btn btn-primary" type="submit">Save workspaces</button>
       </form>
-    </div>
+    </details>
 {% set kind_of = {} %}{% for p in plugins %}{% set _ = kind_of.update({p.name: p.kind}) %}{% endfor %}
-{% set groups = [("core","Core"),("provider","Providers"),("triager","Triagers"),("embedder","Embedders"),("enricher","Enrichers"),("llm_backend","LLM backends"),("vector_store","Vector stores"),("cache_store","Caches")] %}
+{# Core operations by rough function, so a client that may read mail can be kept from re-running the
+   analysis: switch the Enrichment table off and list/read still work. Anything not named here is Mail. #}
+{% set enrichment = ["enrich_message","get_enrichment","summarize_message","try_triage","ask","reprocess"] %}
+{% set pipeline_ops = ["pipeline_status","pause_backfill","resume_backfill","set_pipeline_limits","retry_job","retry_parked","cancel_job","list_jobs","rebuild_index","sync_now","list_schedules","set_schedule","pause_schedule","resume_schedule","remove_schedule","events_tail","trace_set","trace_status","trace_tail","usage_summary","reset_usage","cache_stats","clear_cache","savings_summary","storage_info","vacuum","list_audit","status"] %}
+{% set system_ops = ["check_plugin_config","check_settings","check_workspace","config_get","config_reload","config_save","config_validate","create_account","create_agent","get_account","get_plugin_config","get_settings","get_workspace","list_accounts","list_agents","list_operations","list_plugins","list_workspaces","plugin_disable","plugin_enable","plugin_health","plugin_reload","remove_account","remove_workspace","revoke_agent","set_account_config","set_operation_exposure","set_plugin_config","set_settings","set_workspace"] %}
+{% macro group_of(o) %}{% if o.plugin %}{{ kind_of.get(o.plugin, "core") }}{% elif o.name in enrichment %}enrichment{% elif o.name in pipeline_ops %}pipeline{% elif o.name in system_ops %}system{% else %}mail{% endif %}{% endmacro %}
+{% set groups = [("mail","Core: Mail"),("pipeline","Core: Pipeline"),("enrichment","Core: Enrichment"),("system","Core: System"),("provider","Providers"),("triager","Triagers"),("embedder","Embedders"),("enricher","Enrichers"),("llm_backend","LLM backends"),("vector_store","Vector stores"),("cache_store","Caches")] %}
 {% for key, label in groups %}
-  <div class="card">
-    <div class="card-head">{{ label }}</div>
+  {% set have = namespace(n=0) %}
+  {% for o in operations if group_of(o) | trim == key %}{% set have.n = have.n + 1 %}{% endfor %}
+  {% if have.n or key in ("mail","pipeline","enrichment","system","provider","triager","embedder","enricher") %}
+  <details class="card fold" id="fold-{{ key }}">
+    <summary class="card-head">{{ label }} <span class="muted small">{{ have.n }}</span></summary>
     <div class="table-wrap"><table class="table">
       <thead><tr><th>Operation</th><th>Provider</th><th>Permission</th><th>MCP</th><th>Summary</th></tr></thead>
       <tbody>
-      {% for o in operations if (kind_of.get(o.plugin, "core") if o.plugin else "core") == key %}
+      {% for o in operations if group_of(o) | trim == key %}
         <tr>
           <td class="mono">{{ o.name }}</td>
           <td class="mono">{{ o.plugin or "core" }}</td>
@@ -51,7 +67,10 @@
       {% endfor %}
       </tbody>
     </table></div>
-  </div>
+  </details>
+  {% endif %}
 {% endfor %}
-<p class="muted small">Generated from the operation registry. A plugin's operations appear under the kind of that plugin.</p>
+<p class="muted small">No bundled triager, embedder or enricher adds operations of its own; they run inside the pipeline. LLM backends, vector stores and caches are not listed at all, because Oaken is not a model router and nothing there is for a client to call (one would appear only if such a plugin defined <code>operations()</code>, so a switch is never hidden).</p>
+<p class="muted small">Generated from the operation registry. A plugin's operations appear under the kind of that plugin; a kind none of whose plugins add an operation is not listed.</p>
 {% endblock %}
+{% block scripts %}<script src="/refresh.js"></script>{% endblock %}

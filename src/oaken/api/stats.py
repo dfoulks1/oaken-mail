@@ -491,14 +491,15 @@ class StatsCollector:
         """Which workspaces an MCP client may reach, each with its trust, for the Reference tab.
         ``listed`` is ``[mcp] workspaces`` as saved (empty means every workspace)."""
         listed: list[str] = []
-        mounted = False
+        mounted = enabled = False
         if self._client is not None:
             cfg = self._client.svc.settings
-            listed, mounted = list(cfg.mcp.workspaces), cfg.api.mcp
+            listed, mounted, enabled = list(cfg.mcp.workspaces), cfg.api.mcp, cfg.mcp.enabled
         out = await self._run_op("list_workspaces", {})
         known = [] if out is None else [{"name": w.name, "trust": w.trust} for w in out.workspaces]
         return {
             "mounted": mounted,
+            "enabled": enabled,
             "listed": listed,
             "all": not listed,
             "workspaces": [{**w, "linked": not listed or w["name"] in listed} for w in known],

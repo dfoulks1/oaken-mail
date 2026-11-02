@@ -183,7 +183,18 @@ async def test_capabilities_groups_the_operations_by_kind(rig: Rig) -> None:
     body = (await rig.http.get("/capabilities")).text
     for marker in ("Operation", "Provider", "Permission", "MCP", "Summary", "MCP workspaces"):
         assert marker in body, f"missing from capabilities: {marker}"
-    assert body.index(">Core<") < body.index(">Enrichers<")
+    assert (
+        body.index(">Core: Mail ")
+        < body.index(">Core: Pipeline ")
+        < body.index(">Core: Enrichment ")
+    )
+    assert body.index(">Core: Enrichment ") < body.index(">Enrichers ")
+    assert "<details" in body  # each table folds
+    for name in ("list_messages", "enrich_message"):  # one in Mail, one in Enrichment
+        assert name in body
+    mail, rest = body.split(">Core: Pipeline ")[0], body.split(">Core: Enrichment ")[1]
+    assert "list_messages" in mail and "enrich_message" not in mail
+    assert "enrich_message" in rest.split(">Core: System ")[0]
 
 
 async def test_uptime_moves_with_the_clock(rig: Rig) -> None:
@@ -423,3 +434,33 @@ async def test_the_front_page_puts_each_providers_sync_state_beside_its_name(rig
     await rig.call("pause_schedule", {"account_id": listed["account_id"]})
     paused = (await rig.http.get("/")).text
     assert ">paused</span>" in paused and "syncing" not in paused
+
+
+async def test_the_mcp_power_switch_is_big_and_writes_the_master_switch(rig: Rig) -> None:
+    page = (await rig.http.get("/capabilities")).text
+    assert 'id="mcp-power"' in page and "MCP is " in page
+    assert "MCP is off" in await rig.seen("mcp-power", "/capabilities", mcp="off")
+    assert "enabled = false" in (paths.config_dir() / "config.toml").read_text(encoding="utf-8")
+
+
+async def test_capabilities_folds_have_ids_so_the_page_can_remember_them(rig: Rig) -> None:
+    page = (await rig.http.get("/capabilities")).text
+    assert 'id="fold-mail"' in page and 'id="fold-pipeline"' in page
+    assert 'src="/refresh.js"' in page
+    assert "oaken.fold." in (await rig.http.get("/refresh.js")).text
+
+
+async def test_the_front_page_has_no_link_row_and_config_opens_the_guide_in_a_new_tab(
+    rig: Rig,
+) -> None:
+    home = (await rig.http.get("/")).text
+    assert 'class="links"' not in home and "Getting started" not in home
+    config = (await rig.http.get("/config")).text
+    assert 'href="/getting-started" target="_blank"' in config
+
+
+async def test_the_pipeline_page_has_no_model_field(rig: Rig) -> None:
+    for tab in ("provider", "llm_backend", "vector_store", "cache_store"):
+        body = (await rig.http.get(f"/pipeline?tab={tab}")).text
+        assert 'name="model"' not in body and "<th>Model</th>" not in body.split("Other model")[0]
+    assert "<th>Model</th>" in (await rig.http.get("/enrich")).text  # the stage pages keep theirs

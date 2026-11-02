@@ -54,9 +54,12 @@
 {% endmacro %}
 
 {% macro health(p) %}
+  {#- The pill says the state; the reason goes under it, wrapped, so a long config error cannot stretch the table. -#}
+  {%- set d = p.detail or "" %}{% set short = d.split(" (")[0] if " (" in d else d %}
   {%- if p.healthy %}<span class="badge badge-ok">healthy</span>
-  {%- elif p.started %}<span class="badge badge-danger" title="{{ p.detail }}">{{ p.detail or "unhealthy" }}</span>
-  {%- else %}<span class="badge badge-warn" title="{{ p.detail }}">{{ p.detail or "not started" }}</span>{% endif -%}
+  {%- elif p.started %}<span class="badge badge-danger" title="{{ d }}">{{ short or "unhealthy" }}</span>
+  {%- else %}<span class="badge badge-warn" title="{{ d }}">{{ short or "not started" }}</span>{% endif -%}
+  {%- if not p.healthy and short != d %}<div class="health-detail muted small">{{ d }}</div>{% endif -%}
 {% endmacro %}
 
 {# A stage runs or is paused: the same pill switch as Enabled. On is running, off is paused, so the
@@ -89,7 +92,7 @@
   <div class="card">
     <div class="card-head">{{ label }}</div>
     <div class="table-wrap"><table class="table nowrap">
-      <thead><tr><th>Plugin</th><th>Version</th><th>Capabilities</th><th>Health</th><th>Model</th><th>Enabled</th>{% if kind == "enricher" %}<th>Pause</th>{% endif %}<th class="right">Actions</th></tr></thead>
+      <thead><tr><th>Plugin</th><th>Version</th>{% if kind == "enricher" %}<th>At once</th>{% endif %}<th>Health</th>{% if stage %}<th>Model</th>{% endif %}<th>Enabled</th>{% if kind == "enricher" %}<th>Pause</th>{% endif %}<th class="right">Actions</th></tr></thead>
       <tbody>
       {% set names = plugins | map(attribute="name") | list %}
       {# A provider runs one instance per account, named plugin@account. Those are listed under the
@@ -101,33 +104,38 @@
         {% set has_options = sr and (sr[0].config_schema.properties.keys() | reject("equalto", "model") | list) %}
         <tr>
           <td class="mono">{{ p.name }}</td><td class="mono">{{ p.version }}</td>
-          <td class="muted mono small">{{ p.capabilities | join(", ") or "—" }}</td>
+          {% if kind == "enricher" %}{% set es = pipeline.enrichers.get("enrich." ~ p.name) if pipeline else none %}
+          <td>{% call m.post("limit", back) %}
+            <input type="hidden" name="stage" value="enrich.{{ p.name }}">
+            <input class="input input-sm" type="number" name="concurrency" min="1" max="64" value="{{ es.concurrency if es and es.concurrency else '' }}" aria-label="Jobs at once for {{ p.name }}">
+            <button class="btn btn-sm btn-icon" type="submit" title="Set" aria-label="Set jobs at once for {{ p.name }}">{{ m.icon("check") }}</button>
+          {% endcall %}</td>{% endif %}
           <td>{{ health(p) }}</td>
-          <td>
+          {% if stage %}<td>
             {% if c and c.choices %}{{ model_picker(c, back, p.name) }}
             {% else %}<span class="muted">—</span>{% endif %}
-          </td>
+          </td>{% endif %}
           <td>{{ m.switch("plugin", back, p.enabled, "Enable " ~ p.name, {"name": p.name}, "verb", "enable", "disable") }}</td>
           {% if kind == "enricher" %}
           <td>{{ stage_toggle("enrich." ~ p.name, pipeline.enrichers.get("enrich." ~ p.name) if pipeline else none, back) }}</td>
           {% endif %}
-          <td class="right row">
+          <td class="right"><div class="row actions-cell">
             {% if kind == "provider" %}{% if accounts | selectattr("provider", "equalto", p.name) | list %}<button type="button" class="btn btn-sm btn-icon" popovertarget="sm-{{ p.name }}" popovertargetaction="show" title="Configure {{ p.name }}" aria-label="Configure {{ p.name }}">{{ m.icon("gear") }}</button>{% endif %}
             {% elif has_options %}<button type="button" class="btn btn-sm btn-icon" popovertarget="pm-{{ p.kind }}-{{ p.name }}" popovertargetaction="show" title="Configure {{ p.name }}" aria-label="Configure {{ p.name }}">{{ m.icon("gear") }}</button>{% endif %}
             {% call m.post("plugin", back) %}<input type="hidden" name="name" value="{{ p.name }}"><input type="hidden" name="verb" value="reload"><button class="btn btn-sm btn-icon" type="submit" title="Reload {{ p.name }}" aria-label="Reload {{ p.name }}">{{ m.icon("recycle") }}</button>{% endcall %}
-          </td>
+          </div></td>
         </tr>
         {% for ch in plugins if p.kind == kind and ch.kind == kind and "@" not in p.name and ch.name.startswith(p.name ~ "@") %}
         <tr class="sub">
-          <td class="mono muted">&nbsp;&nbsp;↳ {{ ch.name.split("@", 1)[1] }}</td><td></td><td></td>
-          <td>{{ health(ch) }}</td><td><span class="muted">—</span></td>
+          <td class="mono muted">&nbsp;&nbsp;↳ {{ ch.name.split("@", 1)[1] }}</td><td></td>{% if kind == "enricher" %}<td></td>{% endif %}
+          <td>{{ health(ch) }}</td>{% if stage %}<td><span class="muted">—</span></td>{% endif %}
           <td>{{ m.switch("plugin", back, ch.enabled, "Enable " ~ ch.name, {"name": ch.name}, "verb", "enable", "disable") }}</td>
           {% if kind == "enricher" %}<td></td>{% endif %}
-          <td class="right row">{% call m.post("plugin", back) %}<input type="hidden" name="name" value="{{ ch.name }}"><input type="hidden" name="verb" value="reload"><button class="btn btn-sm btn-icon" type="submit" title="Reload {{ ch.name }}" aria-label="Reload {{ ch.name }}">{{ m.icon("recycle") }}</button>{% endcall %}</td>
+          <td class="right"><div class="row actions-cell">{% call m.post("plugin", back) %}<input type="hidden" name="name" value="{{ ch.name }}"><input type="hidden" name="verb" value="reload"><button class="btn btn-sm btn-icon" type="submit" title="Reload {{ ch.name }}" aria-label="Reload {{ ch.name }}">{{ m.icon("recycle") }}</button>{% endcall %}</div></td>
         </tr>
         {% endfor %}
       {% else %}
-        <tr><td colspan="8" class="muted">No {{ label | lower }} installed.</td></tr>
+        <tr><td colspan="8" class="muted">{% if kind == "cache_store" %}No cache plugin installed. Core's own SQLite cache (in raw.db) is in use.{% else %}No {{ label | lower }} installed.{% endif %}</td></tr>
       {% endfor %}
       </tbody>
     </table></div>
@@ -142,12 +150,12 @@
 {% endmacro %}
 
 {# Token usage rows for one page. ``back`` is where an action returns to. #}
-{% macro usage_card(rows, back, title="Model &amp; token usage", reset=false) %}
+{% macro usage_card(rows, back, title="Model &amp; token usage", reset=false, pick=true) %}
     <div class="card">
       <div class="card-head"><span>{{ title }}</span>
         {% if reset %}{{ m.confirm("reset-usage", back, "Clear usage stats", "Clear the token figures? Mail, the index and the cache stay.", "Clear", {}, "trash") }}{% endif %}
       </div>
-      <div class="table-wrap"><table class="table">
+      <div class="table-wrap"><table class="table nowrap">
         <thead><tr><th>Workspace</th><th>Stage</th><th>Model</th><th>Calls</th><th>Cached</th><th>In</th><th>Out</th><th>Saved</th><th><span class="sr-only">Actions</span></th></tr></thead>
         <tbody>
         {% for u in rows %}
@@ -156,7 +164,7 @@
           <tr>
             <td>{{ u.workspace }}</td><td>{{ u.stage }}</td>
             <td>
-              {% if c and c.choices %}{{ model_picker(c, back, c.label) }}
+              {% if pick and c and c.choices %}{{ model_picker(c, back, c.label) }}
               {% else %}
                 <span class="mono{% if not c %} muted{% endif %}">{{ u.model_text or "—" }}</span>
               {% endif %}

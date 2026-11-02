@@ -82,7 +82,7 @@ ENRICH = "ingest.enrich"  # legacy: a job of this kind queues the per-enricher j
 ENRICH_PREFIX = ENRICH + "."  # ``ingest.enrich.<enricher>``: one kind per enricher but the gate
 TRIAGE = "ingest.triage"  # the gate enricher alone; its result decides what is owed after it
 REPROCESS = "ingest.reprocess"
-STAGE_KINDS = (PARSE, EMBED, TRIAGE, ENRICH, REPROCESS)
+STAGE_KINDS = (PARSE, TRIAGE, EMBED, ENRICH, REPROCESS)
 
 
 def enrich_kind(name: str) -> str:

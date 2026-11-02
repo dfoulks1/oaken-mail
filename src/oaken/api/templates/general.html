@@ -48,14 +48,8 @@
             <td class="muted" data-bind="pipeline.stages.{{ name }}.oldest_pending_seconds" data-format="secs">{{ "…" if not s.loaded else (((s.oldest_pending_seconds | int) ~ "s") if s.oldest_pending_seconds is not none else "—") }}</td>
             <td data-bind="pipeline.stages.{{ name }}.per_second" data-format="fixed2">{{ ("%.2f" | format(s.per_second)) if s.loaded else "…" }}</td>
             <td class="muted" data-bind="pipeline.stages.{{ name }}.eta_seconds" data-format="secs">{{ "…" if not s.loaded else (((s.eta_seconds | int) ~ "s") if s.eta_seconds is not none else "—") }}</td>
-            <td>{% if name in ("parse", "embed", "triage", "enrich") %}{{ pl.stage_toggle(name, s, "/general?tab=ingest") }}{% endif %}</td>
-            <td>
-              {% call m.post("limit", "/general?tab=ingest") %}
-                <input type="hidden" name="stage" value="{{ name }}">
-                <input class="input input-sm" type="number" name="concurrency" min="1" max="64" value="{{ s.concurrency if s.concurrency is defined and s.concurrency else '' }}" aria-label="Jobs at once for {{ name }}">
-                <button class="btn btn-sm btn-icon" type="submit" title="Set" aria-label="Set jobs at once for {{ name }}">{{ m.icon("check") }}</button>
-              {% endcall %}
-            </td>
+            <td>{% if name in ("parse", "triage", "embed", "enrich") %}{{ pl.stage_toggle(name, s, "/general?tab=ingest") }}{% endif %}</td>
+            <td class="muted" data-bind="pipeline.stages.{{ name }}.concurrency" data-format="int">{{ (s.concurrency or "—") if s.loaded else "…" }}</td>
           </tr>
         {% endfor %}
         </tbody>

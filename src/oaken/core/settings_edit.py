@@ -126,9 +126,10 @@ SECTIONS: tuple[Section, ...] = (
     Section(
         "mcp",
         "mcp",
-        "Which workspaces an MCP client may reach. Which operations it may call is set per "
+        "Whether MCP is on at all, and which workspaces a client may reach. Which operations it may call is set per "
         "operation (`oaken operations`).",
         {
+            "enabled": Key(note="the master switch; the door itself is `[api] mcp`"),
             "workspaces": Key(),
             "allowed": Key(editable=False, note="set with `oaken operations enable|disable`"),
         },

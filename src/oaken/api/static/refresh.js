@@ -7,6 +7,17 @@
 (function () {
   "use strict";
   var body = document.body;
+
+  // A <details class="fold" id="..."> remembers whether it was left open, per browser. Without the
+  // script (or without storage) it simply starts closed.
+  document.querySelectorAll("details.fold[id]").forEach(function (d) {
+    var key = "oaken.fold." + d.id;
+    try { if (localStorage.getItem(key) === "1") d.open = true; } catch (e) { /* no storage */ }
+    d.addEventListener("toggle", function () {
+      try { localStorage.setItem(key, d.open ? "1" : "0"); } catch (e) { /* no storage */ }
+    });
+  });
+
   var url = body.getAttribute("data-refresh");
   if (!url) return;
   var every = parseInt(body.getAttribute("data-refresh-seconds") || "15", 10) * 1000;

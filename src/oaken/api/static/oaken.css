@@ -203,6 +203,20 @@ small, .small { font-size: .85rem; }
 .table td { padding: .7rem 1.2rem; border-top: 1px solid var(--border); vertical-align: middle; overflow-wrap: anywhere; }
 .table tbody tr:hover { background: var(--surface-2); }
 .table td.right, .table th.right { text-align: right; }
+.mcp-power { border-width: 2px; }
+.mcp-power.is-on { border-color: var(--ok); }
+.mcp-power.is-off { border-color: var(--danger); }
+.mcp-state { font-size: 1.8rem; font-weight: 700; letter-spacing: .02em; }
+.mcp-power.is-on .mcp-state { color: var(--ok); }
+.mcp-power.is-off .mcp-state { color: var(--danger); }
+.fold > summary { cursor: pointer; list-style: none; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary { justify-content: flex-start; gap: .7rem; }
+.fold > summary::before { content: ""; flex: none; width: .55rem; height: .55rem; margin: 0 .2rem .2rem .1rem; border: solid var(--text); border-width: 0 2px 2px 0; transform: rotate(45deg); transition: transform .15s; }
+.fold:not([open]) > summary::before { transform: rotate(-45deg); margin-bottom: 0; }
+.fold > summary:hover::before { border-color: var(--ok); }
+.fold:not([open]) > summary { border-bottom: 0; }
+.health-detail { max-width: 24rem; margin-top: .2rem; white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
 .clip { max-width: 26rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 1rem; margin: 0 0 1.5rem; }
 .tile { padding: 1rem 1.1rem; background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--brand); border-radius: var(--radius); box-shadow: var(--shadow-1); }
@@ -333,3 +347,8 @@ input.input-sm[type="number"] { width: 5rem; }
 @media (forced-colors: active) { .btn, .card, .tile, .links a, .badge, .switch { border: 1px solid CanvasText; } .switch[aria-checked="true"] { background: Highlight; } }
 @media (max-width: 40rem) { .hd { flex-wrap: wrap; gap: .6rem 1rem; padding: .6rem 1rem; } .nav { margin-left: 0; order: 3; width: 100%; } .wrap { padding: 1.2rem 1rem 2rem; } .field { grid-template-columns: 1fr; } .field .hint { grid-column: 1; } }
 @media print { .hd, .toast, .skip { display: none !important; } body { background: #fff; color: #000; } .card, .tile { box-shadow: none; } }
+.mcp-power .switch { transform: scale(1.7); transform-origin: left center; margin-right: 1.6rem; }
+.actions-cell { justify-content: flex-end; flex-wrap: nowrap; }
+/* wide data tables: tighter cells so a row of numbers fits its card */
+.table.nowrap th, .table.nowrap td { padding-left: .8rem; padding-right: .8rem; }
+.table.nowrap select.select-sm { max-width: 11rem; }
