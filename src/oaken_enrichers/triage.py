@@ -3,10 +3,10 @@
 
 Headers decide first. Mail that says it is automated, bulk or from a no-reply address gets its
 category from a rule and the model is never asked (``source`` is ``rules``); the model sees only
-what the rules cannot settle (``source`` is ``llm``).
+what the rules cannot settle (``source`` is ``llm``). List headers alone settle nothing: a person
+can reply through a list, so list mail goes to the model for its priority.
 """
 
-import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -14,13 +14,9 @@ from pydantic import BaseModel, Field, field_validator
 from oaken.ai.prompts import PromptBuilder, SafeOutput
 from oaken.core.untrusted import UntrustedText
 from oaken.plugins.contracts import AskIntent, EnrichInput, EnrichOutput
-from oaken_enrichers._common import LLMEnricher, digest, fit, header_values, labeled
+from oaken_enrichers._common import LLMEnricher, digest, fit, labeled
+from oaken_enrichers.triage_rules import Category, settled
 
-Category = Literal[
-    "personal", "work", "transactional", "notification", "newsletter", "automated", "other"
-]
-_NOREPLY = re.compile(r"(?<![a-z0-9])(?:no[._-]?reply|do[._-]?not[._-]?reply)@", re.I)
-_PRECEDENCE = {"bulk", "list", "junk"}
 MAX_REASON_WORDS = 20
 
 
@@ -67,46 +63,6 @@ TRIAGE = PromptBuilder(
     TriageAnswer,
     max_output_tokens=200,
 )
-
-
-def rule_for(headers: dict[str, tuple[str, ...]], sender: str) -> tuple[Category, str] | None:
-    """The category headers settle on their own, with the rule's name; None when they do not."""
-
-    def first(name: str) -> str:
-        values = headers.get(name)
-        return values[0].strip() if values else ""
-
-    if (first("auto-submitted") or "no").lower() != "no":
-        return "automated", "auto-submitted"
-    if first("precedence").lower() in _PRECEDENCE:
-        return "newsletter", "precedence"
-    if first("list-id") or first("list-unsubscribe"):
-        return "newsletter", "list-headers"
-    if _NOREPLY.search(sender):
-        return "notification", "no-reply-sender"
-    return None
-
-
-def junk_for(msg: EnrichInput) -> tuple[Category, str] | None:
-    """Mail that is junk on its face, settled without a model: the spam filter's own verdict, or a
-    message with nothing in it (no body, no attachment, a subject of three words or fewer)."""
-    headers = header_values(msg)
-    flag = headers.get("x-spam-flag", ("",))[0].strip().lower()
-    if flag in {"yes", "true"}:
-        return "other", "spam-flag"
-    if (
-        not msg.body.unwrap().strip()
-        and not msg.attachments
-        and len(msg.subject.unwrap().split()) <= 3
-    ):
-        return "other", "empty-message"
-    return None
-
-
-def settled(msg: EnrichInput) -> tuple[Category, str] | None:
-    """The category and rule when headers or the message itself settle triage with no model."""
-    sender = msg.headers.get("from", UntrustedText("")).unwrap()
-    return rule_for(header_values(msg), sender) or junk_for(msg)
 
 
 class TriageEnricher(LLMEnricher):

@@ -23,9 +23,6 @@ class TestTriageContract(EnricherContract):
 @pytest.mark.parametrize(
     ("headers", "sender", "category", "rule"),
     [
-        ({"list_id": "<dev.example.org>"}, "Dev <dev@example.org>", "newsletter", "list-headers"),
-        ({"list_unsubscribe": "<mailto:u@example.org>"}, "Shop <s@example.org>", "newsletter",
-         "list-headers"),
         ({"precedence": "bulk"}, "Shop <s@example.org>", "newsletter", "precedence"),
         ({"precedence": "junk"}, "Shop <s@example.org>", "newsletter", "precedence"),
         ({"auto_submitted": "auto-generated"}, "Bot <bot@example.org>", "automated",
@@ -47,11 +44,53 @@ async def test_bulk_and_automated_mail_is_classified_without_the_model(
     assert len(rig.llm.requests) == 0, "a rule settled it; the model must not be asked"
 
 
+@pytest.mark.parametrize(
+    ("kw", "category", "rule"),
+    [
+        ({"x_cron_env": "<SHELL=/bin/sh>"}, "automated", "cron"),
+        ({"subject": "Cron <root@host> /usr/bin/backup"}, "automated", "cron"),
+        ({"sender": "Cron Daemon <root@host.example.org>"}, "automated", "cron"),
+        ({"x_autoreply": "yes"}, "automated", "auto-reply"),
+        ({"x_spam_status": "Yes, score=9.1 required=5.0"}, "other", "spam-flag"),
+        ({"x_spam": "YES"}, "other", "spam-flag"),
+    ],
+)
+async def test_system_and_spam_mail_is_settled_without_the_model(
+    rig: Rig, kw: dict[str, Any], category: str, rule: str
+) -> None:
+    enricher = await rig.start(TriageEnricher())
+    out = (await enricher.enrich(message("Body text here.", **kw))).data
+    assert (out["category"], out["source"], out["rule"]) == (category, "rules", rule)
+    assert out["priority"] == 0 and len(rig.llm.requests) == 0
+
+
+async def test_spam_status_no_is_not_spam(rig: Rig) -> None:
+    rig.llm.reply(WORK)
+    enricher = await rig.start(TriageEnricher())
+    out = (await enricher.enrich(message(x_spam_status="No, score=0.1"))).data
+    assert out["source"] == "llm"
+
+
 async def test_auto_submitted_no_is_not_automated(rig: Rig) -> None:
     rig.llm.reply(WORK)
     enricher = await rig.start(TriageEnricher())
     out = (await enricher.enrich(message(auto_submitted="no"))).data
     assert out["source"] == "llm" and len(rig.llm.requests) == 1
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"list_id": "<dev.example.org>"},
+        {"list_unsubscribe": "<mailto:u@example.org>"},
+        {"precedence": "list"},
+    ],
+)
+async def test_list_mail_goes_to_the_model(rig: Rig, headers: dict[str, Any]) -> None:
+    rig.llm.reply(WORK)
+    enricher = await rig.start(TriageEnricher())
+    out = (await enricher.enrich(message("Can you send the report?", **headers))).data
+    assert out["source"] == "llm" and out["priority"] == 3 and len(rig.llm.requests) == 1
 
 
 async def test_everything_else_goes_to_the_model(rig: Rig) -> None:
