@@ -572,6 +572,16 @@ class RawStore:
             raise StorageError("raw.db has no store id; run the migrations")
         return str(row["value"])
 
+    async def message_counts(self) -> tuple[int, int]:
+        """``(accounts, messages not deleted)``: two cheap counts, for pages that show only those
+        (``stats`` also sums every blob's size, which scans the whole blobs table)."""
+        row = await self.db.fetchone(
+            "SELECT (SELECT COUNT(*) FROM accounts) AS accounts,"
+            " (SELECT COUNT(*) FROM messages WHERE deleted_at IS NULL) AS live"
+        )
+        assert row is not None  # noqa: S101 (an aggregate always yields a row)
+        return int(row["accounts"]), int(row["live"])
+
     async def stats(self) -> StoreStats:
         row = await self.db.fetchone(
             "SELECT (SELECT COUNT(*) FROM accounts) AS accounts,"

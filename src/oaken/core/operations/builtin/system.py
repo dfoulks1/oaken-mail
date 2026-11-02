@@ -78,6 +78,7 @@ class StageOut(BaseModel):
     oldest_pending_seconds: float | None = None
     per_second: float = 0.0
     eta_seconds: float | None = None
+    loaded: bool = True  # False: the numbers above were left for a later request
     paused: bool = False  # held back by a pause (this stage's, or the one for every model stage)
     concurrency: int | None = None  # how many of its jobs may run at once, where one is set
     current: list["RunningJobOut"] = Field(default_factory=list)  # the jobs running now
@@ -113,16 +114,30 @@ class PipelineStatusOutput(BaseModel):
     enrichers: dict[str, StageOut] = Field(default_factory=dict)  # each enricher, ``enrich.<name>``
 
 
+class PipelineStatusInput(BaseModel):
+    stages: list[str] | None = Field(
+        default=None,
+        max_length=16,
+        description="Only these stages (triage, embed, enrich...); omit for everything. The "
+        "totals and parked jobs are left out when it is given.",
+    )
+    counts: bool = Field(
+        default=True,
+        description="False leaves the queue numbers out (they scan the jobs table): the "
+        "pause and concurrency of each stage still come back.",
+    )
+
+
 @operation(
     "pipeline_status",
     "Where ingest stands: each stage's queue, throughput and ETA, and jobs parked as failed.",
     permission="read",
-    input=Empty,
+    input=PipelineStatusInput,
     output=PipelineStatusOutput,
     mcp="on",
 )
-async def pipeline_status(ctx: OpContext, inp: Empty) -> PipelineStatusOutput:
-    s = await ctx.svc.need_pipeline().pipeline_status()
+async def pipeline_status(ctx: OpContext, inp: PipelineStatusInput) -> PipelineStatusOutput:
+    s = await ctx.svc.need_pipeline().pipeline_status(inp.stages, counts=inp.counts)
     out = PipelineStatusOutput.model_validate(asdict(s))
     control = ctx.svc.pipeline_control
     if control is not None:

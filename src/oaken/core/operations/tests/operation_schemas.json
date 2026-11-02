@@ -5050,8 +5050,32 @@
   },
   "pipeline_status": {
     "input_schema": {
-      "properties": {},
-      "title": "Empty",
+      "properties": {
+        "counts": {
+          "default": true,
+          "description": "False leaves the queue numbers out (they scan the jobs table): the pause and concurrency of each stage still come back.",
+          "title": "Counts",
+          "type": "boolean"
+        },
+        "stages": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 16,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Only these stages (triage, embed, enrich...); omit for everything. The totals and parked jobs are left out when it is given.",
+          "title": "Stages"
+        }
+      },
+      "title": "PipelineStatusInput",
       "type": "object"
     },
     "marks_read": false,
@@ -5172,6 +5196,11 @@
               "default": 0,
               "title": "Failed",
               "type": "integer"
+            },
+            "loaded": {
+              "default": true,
+              "title": "Loaded",
+              "type": "boolean"
             },
             "oldest_pending_seconds": {
               "anyOf": [

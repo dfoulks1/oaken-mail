@@ -24,7 +24,7 @@ async def plugin(rig: Rig, name: str) -> dict[str, object]:
 
 
 async def test_each_plugin_has_a_switch_and_a_reload_button(rig: Rig) -> None:
-    page = (await rig.http.get("/stats?tab=plugins")).text
+    page = (await rig.http.get("/pipeline?tab=provider")).text
     assert page.count('role="switch"') >= 2 and 'value="fake@main"' in page  # an account's too
     assert 'name="verb" value="reload"' in page
     assert (await plugin(rig, "fake"))["enabled"] is True

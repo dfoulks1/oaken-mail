@@ -17,7 +17,7 @@ async def test_jobs_page_renders_without_a_token(rig: Rig) -> None:
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
     assert "Queue" in resp.text and "Pipeline" in resp.text
-    assert 'action="/ui/pause"' in resp.text and 'action="/ui/limit"' in resp.text
+    assert 'action="/ui/stage"' in resp.text and 'action="/ui/limit"' in resp.text
 
 
 async def test_jobs_page_filters_by_status(rig: Rig) -> None:
@@ -58,6 +58,16 @@ async def test_one_stage_can_be_paused_and_limited(rig: Rig) -> None:
     assert (await state(rig))["stages"]["enrich"]["concurrency"] == 2
     await rig.ui("resume", "/stats?tab=ingest", stage="enrich")
     assert (await state(rig))["stages"]["enrich"]["paused"] is False
+
+
+async def test_a_stage_pill_switch_pauses_and_plays_it(rig: Rig) -> None:
+    await rig.ui("stage", "/stats?tab=ingest", stage="triage", run="off")
+    stages = (await state(rig))["stages"]
+    assert stages["triage"]["paused"] is True and stages["enrich"]["paused"] is False
+    page = (await rig.http.get("/triage")).text
+    assert 'aria-label="Run triage"' in page and 'aria-checked="false"' in page  # off: paused
+    await rig.ui("stage", "/stats?tab=ingest", stage="triage", run="on")
+    assert (await state(rig))["stages"]["triage"]["paused"] is False
 
 
 async def test_a_bad_limit_changes_nothing_and_says_why(rig: Rig) -> None:

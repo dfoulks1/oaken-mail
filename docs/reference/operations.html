@@ -980,7 +980,7 @@
 <h3 id="pipeline-status"><code>pipeline_status</code></h3>
 <p>Where ingest stands: each stage's queue, throughput and ETA, and jobs parked as failed.</p>
 <ul>
-<li>Input: none</li>
+<li>Input: <code>stages</code>?, <code>counts</code>?</li>
 <li>Output: <code>stages</code>, <code>docs</code>, <code>chunks</code>, <code>index_stale</code>, <code>vector_model</code>?, <code>vectors</code>, <code>embedder_model</code>?, <code>embeddings_stale</code>, <code>backfill_paused</code>, <code>llm_paused</code>?, <code>quarantined_files</code>, <code>parked</code>?, <code>enrichers</code>?</li>
 </ul>
 <h3 id="plugin-disable"><code>plugin_disable</code></h3>

@@ -2,7 +2,7 @@
 {#- The home page. Version, paths and a status flag only: no mail content. -#}
 {% extends "_base.html" %}
 {% block title %}Oaken Mail{% endblock %}
-{% block header %}<header class="hd bare">{% include "_theme.html" %}</header>{% endblock %}
+{% block header %}<header class="hd bare">{% include "_nav.html" %}{% include "_theme.html" %}</header>{% endblock %}
 {% block main %}
 <div class="home">
   <div class="home-logo"><img src="/oaken-logo.png" width="196" height="128" alt=""></div>

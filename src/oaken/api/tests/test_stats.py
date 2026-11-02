@@ -13,7 +13,7 @@ async def test_stats_is_html_without_a_token(rig: Rig) -> None:
     resp = await rig.http.get("/stats")  # no Authorization header
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
-    assert "Oaken Mail" in resp.text and "status" in resp.text
+    assert "Oaken Mail" in resp.text and "General" in resp.text
 
 
 async def test_stats_json_is_the_same_data_without_a_token(rig: Rig) -> None:
@@ -127,31 +127,33 @@ async def test_stats_shows_counts_and_health(rig: Rig) -> None:
     body = (await rig.http.get("/stats")).text
     for marker in (
         "Pipeline",
+        "Ingest",
         "Queue",
-        "Providers",
-        "LLM backends",
-        "Vector stores",
-        "Recent audit log",
-        "Model &amp; token usage",
-        ">Agents<",
+        "Audit log",
     ):
-        assert marker in body, f"missing section: {marker}"
+        assert marker in body, f"missing from General: {marker}"
+    assert "Throughput" in body  # the Ingest tab is the default
+    assert "Recent audit log" in (await rig.http.get("/stats?tab=audit")).text
+    for page in ("/triage", "/embed", "/enrich"):  # each stage shows its own usage and agents
+        body = (await rig.http.get(page)).text
+        assert "Model &amp; token usage" in body and "Agents working" in body, page
+    queue = (await rig.http.get("/stats?tab=queue")).text
+    assert "Jobs queue" in queue and '<option value="">Active</option>' in queue
 
 
 async def test_the_masthead_leads_to_each_stage(rig: Rig) -> None:
     body = (await rig.http.get("/stats")).text
-    for href in ("/stats", "/triage", "/embed", "/enrich", "/config", "/capabilities"):
+    for href in ("/stats", "/pipeline", "/triage", "/embed", "/enrich", "/config", "/capabilities"):
         assert f'href="{href}"' in body, f"missing from the masthead: {href}"
 
 
 async def test_the_tab_in_the_link_is_the_tab_that_opens(rig: Rig) -> None:
-    body = (await rig.http.get("/stats?tab=ai")).text
-    assert 'id="t-ai" aria-label="Usage &amp; agents" checked' in body
-    assert 'id="t-ingest" aria-label="Ingest" checked' not in body
-    assert 'id="t-ingest" aria-label="Ingest" checked' in (await rig.http.get("/stats")).text
-    assert (
-        'id="t-queue" aria-label="Queue" checked' in (await rig.http.get("/stats?tab=queue")).text
-    )
+    body = (await rig.http.get("/stats?tab=audit")).text
+    assert 'href="/stats?tab=audit" aria-current="page"' in body
+    assert 'href="/stats?tab=ingest" aria-current="page"' not in body
+    assert 'href="/stats?tab=ingest" aria-current="page"' in (await rig.http.get("/stats")).text
+    queue = await rig.http.get("/stats?tab=queue")
+    assert 'href="/stats?tab=queue" aria-current="page"' in queue.text
 
 
 async def test_the_front_page_shows_status_and_the_daemon_environment(rig: Rig) -> None:
@@ -199,9 +201,9 @@ async def test_the_workspace_form_saves_a_list_and_all(rig: Rig) -> None:
     assert "workspaces = []" in (paths.config_dir() / "config.toml").read_text(encoding="utf-8")
 
 
-async def test_the_ai_tab_is_one_table_with_a_menu_and_a_settings_dialog(rig: Rig) -> None:
-    body = (await rig.http.get("/stats?tab=ai")).text
-    table = body.split("Model &amp; token usage")[1].split("Agents")[0]
+async def test_the_leftover_usage_is_one_table_on_the_llm_backend_tab(rig: Rig) -> None:
+    body = (await rig.http.get("/pipeline?tab=llm_backend")).text
+    table = body.split("Other model usage")[1]
     assert "<th>Model</th>" in table and "<th>Stage</th>" in table
     assert 'action="/ui/reset-usage"' in body
 
@@ -222,6 +224,7 @@ async def test_clearing_usage_says_what_it_left_alone(rig: Rig) -> None:
 PAGES = (
     "/",
     "/stats",
+    "/pipeline",
     "/triage",
     "/embed",
     "/enrich",
@@ -322,3 +325,24 @@ async def test_the_old_json_mutators_are_gone(rig: Rig) -> None:
         resp = await rig.http.post(path, json={})
         assert resp.status_code in (404, 405), path
     assert (await rig.http.get("/stats.js")).status_code == 404
+
+
+async def test_the_pipeline_page_has_a_tab_per_kind_behind_the_stages(rig: Rig) -> None:
+    for tab in ("provider", "llm_backend", "vector_store", "cache_store"):
+        body = (await rig.http.get(f"/pipeline?tab={tab}")).text
+        assert f'href="/pipeline?tab={tab}" aria-current="page"' in body
+        assert "<th>Plugin</th>" in body and "<th>Kind</th>" not in body
+
+
+async def test_a_stage_page_can_change_its_own_core_settings(rig: Rig) -> None:
+    triage = (await rig.http.get("/triage")).text
+    assert 'name="key" value="triage_gate"' in triage
+    embed = (await rig.http.get("/embed")).text
+    assert 'name="key" value="embed_min_priority"' in embed
+    page = await rig.seen(
+        "stage-setting", "/embed", section="ingest", key="embed_min_priority", value="0"
+    )
+    assert "ingest.embed_min_priority saved" in page
+    assert "embed_min_priority = 0" in (paths.config_dir() / "config.toml").read_text("utf-8")
+    refused = await rig.seen("stage-setting", "/embed", section="mcp", key="workspaces", value="x")
+    assert "not changed from here" in refused

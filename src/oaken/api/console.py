@@ -24,7 +24,7 @@ from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 from urllib.parse import parse_qs, quote, urlsplit
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -57,12 +57,22 @@ CONSOLE_CSP = (
 PALETTES = ("auto", "oak", "maple", "birch", "acorn", "moss", "stone", "sky", "stream", "contrast")
 MODES = ("auto", "light", "dark")
 PAGES = frozenset(
-    {"/", "/stats", "/triage", "/embed", "/enrich", "/capabilities", "/config", "/getting_started"}
+    {
+        "/",
+        "/stats",
+        "/pipeline",
+        "/triage",
+        "/embed",
+        "/enrich",
+        "/capabilities",
+        "/config",
+        "/getting_started",
+    }
 )
 # The tabs of /stats (General): the pipeline and its queue, the kinds with no stage of their own,
 # usage, the audit log.
 TABS = frozenset(
-    {"ingest", "queue", "provider", "llm_backend", "vector_store", "cache_store", "ai", "audit"}
+    {"ingest", "queue", "provider", "llm_backend", "vector_store", "cache_store", "audit"}
 )
 FLASH_SECONDS = 60.0
 FLASH_MAX = 200
@@ -372,6 +382,41 @@ class Console:
             f"{f.one('stage') or 'The model stages'} paused. Mail still arrives and is indexed."
         )
 
+    # The core settings a stage's page may change: (section, key) -> how to read the value.
+    STAGE_SETTINGS: ClassVar[dict[tuple[str, str], str]] = {
+        ("ai", "triage_gate"): "text",
+        ("ingest", "embed_min_priority"): "int",
+    }
+
+    async def do_stage_setting(self, f: Form) -> Flash:
+        section, key = f.one("section"), f.one("key")
+        kind = self.STAGE_SETTINGS.get((section, key))
+        if kind is None:
+            return danger("That setting is not changed from here.")
+        raw = f.one("value").strip()
+        payload: dict[str, Any] = {"section": section}
+        if kind == "int" and raw == "":
+            payload["unset"] = [key]  # back to its default
+        elif kind == "int":
+            try:
+                payload["values"] = {key: int(raw)}
+            except ValueError:
+                return warn("Enter a whole number.")
+        else:
+            payload["values"] = {key: raw}
+        saved = await self.op("set_settings", payload)
+        if (why := _problem(saved)) is not None:
+            return danger(f"Could not save {section}.{key}: {why}")
+        return ok(
+            f"{section}.{key} saved to config.toml. It applies after a reload.",
+            *(getattr(saved, "warnings", []) or []),
+        )
+
+    async def do_stage(self, f: Form) -> Flash:
+        """A stage's pill switch: ``run=off`` pauses it, ``run=on`` lets it run. No stage means
+        the model-bound stages together."""
+        return await (self.do_resume(f) if f.one("run") == "on" else self.do_pause(f))
+
     async def do_resume(self, f: Form) -> Flash:
         await self.op("resume_backfill", {"stage": f.one("stage")} if f.one("stage") else {})
         return ok(f"{f.one('stage') or 'The model stages'} resumed.")
@@ -443,6 +488,8 @@ ACTIONS: dict[str, Action] = {
     "model": Console.do_model,
     "plugin-settings": Console.do_plugin_settings,
     "plugin": Console.do_plugin,
+    "stage": Console.do_stage,
+    "stage-setting": Console.do_stage_setting,
     "pause": Console.do_pause,
     "resume": Console.do_resume,
     "limit": Console.do_limit,

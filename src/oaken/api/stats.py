@@ -8,15 +8,19 @@ page is served on loopback without a token (like ``/v1/health``), so the discipl
 mail content out of it lives here, in what this collector is allowed to read.
 """
 
+import asyncio
+import time
+from collections.abc import Collection
 from dataclasses import asdict
 from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from oaken.core.clock import Clock
 from oaken.core.operations.services import Services
 
 
 class StatsCollector:
+    _MODELS: ClassVar[dict[str, tuple[float, list[str]]]] = {}  # the models a backend listed, 30 s
     """Builds the ``/stats`` template context from the running services. Every field is a count,
     a flag, a version, a name or a timestamp — never mail content."""
 
@@ -35,28 +39,55 @@ class StatsCollector:
         self._client = client
         self._audit_limit = audit_limit
 
-    async def collect(self) -> dict[str, Any]:
+    async def collect(
+        self,
+        parts: Collection[str] | None = None,
+        stages: Collection[str] | None = None,
+        counts: bool = True,
+    ) -> dict[str, Any]:
+        """The page's data. ``parts`` names what the page shows (None: all of it): mail, pipeline,
+        usage, accounts, plugins, audit, operations, mcp, agents, models. A page that needs one
+        part does not pay for the others (the pipeline numbers scan the jobs table, ``models``
+        asks the model server). ``stages`` narrows ``pipeline`` to those stages; ``counts=False``
+        leaves the queue numbers for a later request, so the page paints at once."""
+
+        def want(name: str) -> bool:
+            return parts is None or name in parts
+
         now = self._clock.now()
-        llm = await self._llm()
-        usage = await self._usage()
-        models = await self._models(llm)
-        data: dict[str, Any] = {
-            "generated_at": now.isoformat(),
-            "core": self._core(now),
-            "mail": await self._mail(),
-            "pipeline": await self._pipeline(),
-            "usage": usage,
-            "usage_rows": self._usage_view(usage, models),
-            "accounts": await self._accounts(),
-            "plugins": self._plugins(),
-            "audit": await self._audit(),
-            "operations": await self._operations_via_op(),
-            "mcp": await self._mcp(),
-            "agents": await self._agents(),
-            "enrichers": await self._enrichers(),
-            "llm": llm,
-            "models": models,
-        }
+        data: dict[str, Any] = {"generated_at": now.isoformat(), "core": self._core(now)}
+        if want("mail"):
+            data["mail"] = await self._mail()
+        if want("pipeline"):
+            data["pipeline"] = await self._pipeline(stages, counts)
+        llm = await self._llm() if want("usage") or want("models") else None
+        models = await self._models(llm) if want("usage") or want("models") else []
+        if want("usage"):
+            usage = await self._usage()
+            data["usage"] = usage
+            data["usage_rows"] = self._usage_view(usage, models)
+        if want("accounts"):
+            data["accounts"] = await self._accounts()
+        if want("plugins"):
+            data["plugins"] = self._plugins()
+        if want("audit"):
+            data["audit"] = await self._audit()
+        if want("operations"):
+            data["operations"] = await self._operations_via_op()
+        if want("mcp"):
+            data["mcp"] = await self._mcp()
+        if want("agents"):
+            data["agents"] = await self._agents()
+        if want("stage_settings"):
+            s = self._svc.settings
+            data["stage_settings"] = {
+                "triage_gate": s.ai.triage_gate,
+                "embed_min_priority": s.ingest.embed_min_priority,
+            }
+        if want("models"):
+            data["enrichers"] = await self._enrichers()
+            data["llm"] = llm
+            data["models"] = models
         return data
 
     async def front(self) -> dict[str, Any]:
@@ -79,11 +110,11 @@ class StatsCollector:
         }
 
     async def _mail(self) -> dict[str, Any]:
-        stats = await self._svc.raw.stats()
+        accounts, messages = await self._svc.raw.message_counts()
         index = await self._svc.index.stats()
         mail: dict[str, Any] = {
-            "accounts": stats.accounts,
-            "messages": stats.messages - stats.deleted_messages,
+            "accounts": accounts,
+            "messages": messages,
             "indexed": index.docs,
             "index_stale": index.stale,
             "queue_depth": None,
@@ -92,10 +123,19 @@ class StatsCollector:
             mail["queue_depth"] = await self._svc.pipeline.depth()
         return mail
 
-    async def _pipeline(self) -> dict[str, Any] | None:
+    async def _pipeline(
+        self, stages: Collection[str] | None = None, counts: bool = True
+    ) -> dict[str, Any] | None:
         if self._svc.pipeline is None:
             return None
-        status = await self._svc.pipeline.pipeline_status()
+        # Through the operation, so each stage carries its pause and concurrency and what runs now.
+        ask: dict[str, Any] = {"counts": counts}
+        if stages:
+            ask["stages"] = list(stages)
+        shown = await self._run_op("pipeline_status", ask)
+        if shown is not None:
+            return dict(shown.model_dump())
+        status = await self._svc.pipeline.pipeline_status(stages, counts=counts)
         out = asdict(status)
         if self._svc.pipeline_control is not None:
             out["llm_paused"] = (await self._svc.pipeline_control.state()).llm_paused
@@ -110,8 +150,13 @@ class StatsCollector:
             backend = self._svc.plugins.llm_backend()
         except Exception:  # noqa: BLE001 - no started backend: no picker, not an error
             return None
-        try:
-            models = await backend.available_models()
+        try:  # a busy model server must not stall a page: a timeout, and a recent answer stands
+            cached = StatsCollector._MODELS.get(backend.model_id)
+            if cached is not None and time.monotonic() - cached[0] < 30:
+                models = cached[1]
+            else:
+                models = await asyncio.wait_for(backend.available_models(), timeout=2.0)
+                StatsCollector._MODELS[backend.model_id] = (time.monotonic(), models)
         except Exception:  # noqa: BLE001 - degrade to the current model
             models = [backend.model_id] if backend.model_id else []
         ctx = getattr(backend, "ctx", None)

@@ -109,11 +109,19 @@ SECTIONS: tuple[Section, ...] = (
                 "enrich_max_input_tokens",
                 "ask_context_tokens",
                 "ask_model",
+                "triage_gate",
                 "background_yield_seconds",
                 "max_output_chars",
             ),
             **_keys("chunk_tokens", "chunk_overlap", effect="reindex"),
         },
+    ),
+    Section(
+        "ingest",
+        "ingest",
+        "How ingest treats mail: what triage must rate before mail is embedded, and how many "
+        "times a stage retries.",
+        _keys("embed_min_priority", "stage_max_attempts", "backfill_queue_cap"),
     ),
     Section(
         "mcp",

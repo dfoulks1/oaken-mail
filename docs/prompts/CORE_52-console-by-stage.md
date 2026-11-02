@@ -16,10 +16,12 @@ embedder is a bottleneck that must be scalable and removable. The structure has 
 
 ## Goal (revised after review)
 
-The masthead reads **General, Triage, Embed, Enrich, Config, Capabilities, Docs**. `/` is the front
-page. **General** (`/stats`) holds Ingest (every stage, plus live throughput), Queue (the jobs queue
-and parked jobs; the Jobs page is gone), Providers, LLM backends, Vector stores, Caches, usage and
-agents, and the Audit log. **Triage**, **Embed** and **Enrich** are pages of their own: the stage's
+The masthead reads **General, Pipeline, Triage, Embed, Enrich, Config, Capabilities, Docs**. `/` is
+the front page. **General** (`/stats`) holds Ingest (every stage with a pill switch to pause it, plus
+live throughput), Queue (the active jobs and parked jobs; the Jobs page is gone) and the Audit log.
+Everything about a stage is on that stage's page: controls, plugins, its core settings, its model
+and token usage, and its agents. **Pipeline** (`/pipeline`) holds Providers, LLM backends, Vector stores and
+Caches. Every page loads only its own data, and the queue numbers fill in after the first paint. **Triage**, **Embed** and **Enrich** are pages of their own: the stage's
 controls and the plugins of its kind. **Capabilities** (the old Reference) lists operations grouped
 by the kind of plugin that offers them (Operation, Provider, Permission, MCP, Summary), with the MCP
 workspaces. The original goals below describe the first cut.

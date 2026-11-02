@@ -2,7 +2,8 @@
 // The console's one optional script. It refreshes the numbers on a page that asks for it, and does
 // nothing else: every page is complete and correct without it, and every action is a plain form.
 // A page opts in with <body data-refresh="/stats.json">, and marks each live value with
-// data-bind="path.in.the.json" (and optionally data-format="int" or "fixed2").
+// data-bind="path.in.the.json" (and optionally data-format="int", "fixed2" or "secs"). A page that
+// paints first and fills its numbers after says so with <body data-lazy>.
 (function () {
   "use strict";
   var body = document.body;
@@ -18,6 +19,7 @@
     var how = el.getAttribute("data-format");
     if (how === "int" && typeof value === "number") return Math.round(value).toLocaleString();
     if (how === "fixed2" && typeof value === "number") return value.toFixed(2);
+    if (how === "secs" && typeof value === "number") return Math.round(value) + "s";
     return String(value);
   }
   function tick() {
@@ -31,5 +33,7 @@
       })
       .catch(function () { /* a missed refresh is harmless: the last numbers stand */ });
   }
+  // A page that paints its numbers later (<body data-lazy>) asks for them as soon as it loads.
+  if (body.hasAttribute("data-lazy")) tick();
   setInterval(tick, every);
 })();

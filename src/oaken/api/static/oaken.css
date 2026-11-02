@@ -230,6 +230,12 @@ small, .small { font-size: .85rem; }
 #t-pipeline:focus-visible ~ .tabbar [for="t-pipeline"], #t-queue:focus-visible ~ .tabbar [for="t-queue"],
 #t-trends:focus-visible ~ .tabbar [for="t-trends"] { outline: 3px solid var(--focus); outline-offset: 2px; }
 
+/* General's tabs are links: each tab loads only its own data. */
+.tabbar a { margin-bottom: -1px; padding: .5rem 0; font-weight: 500; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; }
+.tabbar a:hover { color: var(--text); }
+.tabbar a[aria-current="page"] { color: var(--text); border-bottom-color: var(--brand); }
+.pane-on { display: block; }
+
 /* The tab per plugin kind (a kind is a stage). */
 #t-provider:checked ~ #p-provider, #t-triager:checked ~ #p-triager, #t-embedder:checked ~ #p-embedder, #t-enricher:checked ~ #p-enricher, #t-llm_backend:checked ~ #p-llm_backend, #t-vector_store:checked ~ #p-vector_store, #t-cache_store:checked ~ #p-cache_store { display: block; }
 #t-provider:checked ~ .tabbar [for="t-provider"], #t-triager:checked ~ .tabbar [for="t-triager"], #t-embedder:checked ~ .tabbar [for="t-embedder"], #t-enricher:checked ~ .tabbar [for="t-enricher"], #t-llm_backend:checked ~ .tabbar [for="t-llm_backend"], #t-vector_store:checked ~ .tabbar [for="t-vector_store"], #t-cache_store:checked ~ .tabbar [for="t-cache_store"] { color: var(--text); border-bottom-color: var(--brand); }

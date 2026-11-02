@@ -155,6 +155,7 @@ class StageStatus:
     oldest_pending_seconds: float | None = None
     per_second: float = 0.0  # recent throughput
     eta_seconds: float | None = None
+    loaded: bool = True  # False: the numbers were not worked out (a page that fills them in later)
 
 
 @dataclass(frozen=True)
@@ -1247,16 +1248,25 @@ class Pipeline:
     async def backfill_paused(self) -> bool:
         return await self.depth() >= self.cfg.backfill_queue_cap
 
-    async def pipeline_status(self) -> PipelineStatus:
+    async def pipeline_status(
+        self, only: Collection[str] | None = None, *, counts: bool = True
+    ) -> PipelineStatus:
+        """The ingest status. ``only`` names stages (``triage``, ``embed``, ``enrich``...): then
+        just those stages' numbers are worked out, and the totals (docs, vectors, parked jobs) are
+        left empty. A page that shows one stage asks for that and stays fast. ``counts=False``
+        skips the queue numbers altogether (they scan the jobs table): a page paints first and
+        asks for them after."""
         now = self.clock.now()
         db = self.queue.db
         window = timedelta(seconds=self.cfg.throughput_window_seconds)
 
         async def status_of(kinds: list[str]) -> StageStatus:
+            if not counts:
+                return StageStatus(loaded=False)
             # Exact kinds only: ``kind IN (...)`` uses the (kind, status) index; a LIKE prefix
             # would scan every job. The enrich stage is the sum of its enrichers.
             marks = ", ".join("?" * len(kinds))
-            counts = {
+            by_status = {
                 r["status"]: r
                 for r in await db.fetchall(
                     "SELECT status, COUNT(*) AS n, MIN(created_at) AS oldest,"  # noqa: S608
@@ -1265,9 +1275,9 @@ class Pipeline:
                     tuple(kinds),
                 )
             }
-            queued = counts.get("queued")
+            queued = by_status.get("queued")
             pending = int(queued["n"]) if queued else 0
-            running = int(counts["running"]["n"]) if "running" in counts else 0
+            running = int(by_status["running"]["n"]) if "running" in by_status else 0
             done = await db.fetchone(
                 "SELECT COUNT(*) AS n, MIN(updated_at) AS first FROM jobs"  # noqa: S608
                 f" WHERE kind IN ({marks}) AND status = 'succeeded' AND updated_at >= ?",
@@ -1281,7 +1291,7 @@ class Pipeline:
                 pending=pending,
                 retrying=int(queued["retried"] or 0) if queued else 0,
                 running=running,
-                failed=int(counts["failed"]["n"]) if "failed" in counts else 0,
+                failed=int(by_status["failed"]["n"]) if "failed" in by_status else 0,
                 oldest_pending_seconds=(
                     (now - parse_ts(queued["oldest"])).total_seconds() if queued else None
                 ),
@@ -1297,10 +1307,27 @@ class Pipeline:
                 [kind, *enricher_kinds] if kind == ENRICH else [kind]
             )
             for kind in STAGE_KINDS
+            if only is None or kind.removeprefix("ingest.") in only
         }
-        enrichers = {
-            kind.removeprefix("ingest."): await status_of([kind]) for kind in enricher_kinds
-        }
+        enrichers = (
+            {kind.removeprefix("ingest."): await status_of([kind]) for kind in enricher_kinds}
+            if only is None or "enrich" in only
+            else {}
+        )
+        if only is not None:
+            return PipelineStatus(
+                stages=stages,
+                enrichers=enrichers,
+                docs=0,
+                chunks=0,
+                index_stale=False,
+                vector_model=None,
+                vectors=0,
+                embedder_model=None,
+                embeddings_stale=False,
+                backfill_paused=False,
+                quarantined_files=0,
+            )
         parked = [
             ParkedJob(
                 r["id"],

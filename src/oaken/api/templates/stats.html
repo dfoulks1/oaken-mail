@@ -7,24 +7,23 @@
 {% import "_macros.html" as m with context %}
 {% import "_plugins.html" as pl with context %}
 {% block title %}General · Oaken Mail{% endblock %}
-{% block body_attrs %} data-refresh="/stats.json" data-refresh-seconds="15"{% endblock %}
+{% block body_attrs %} data-refresh="/stats.json?tab={{ tab }}" data-refresh-seconds="15"{% if tab == "ingest" %} data-lazy{% endif %}{% endblock %}
 
 {% block main %}
 <h1>General</h1>
 <p class="muted small mono">{{ core.version }}{% if core.uptime_seconds is not none %} · up <span data-bind="core.uptime_minutes">{{ (core.uptime_seconds // 60) | int }}</span> min{% endif %}</p>
 <div class="tabset">
-  {% set tabs = [("ingest","Ingest"),("queue","Queue"),("provider","Providers"),("llm_backend","LLM backends"),("vector_store","Vector stores"),("cache_store","Caches"),("ai","Usage & agents"),("audit","Audit log")] %}
-  {% for key, label in tabs %}<input type="radio" name="tab" id="t-{{ key }}" aria-label="{{ label }}"{% if tab == key %} checked{% endif %}>{% endfor %}
-  <div class="tabbar" aria-hidden="true">{% for key, label in tabs %}<label for="t-{{ key }}">{{ label }}</label>{% endfor %}</div>
+  {% set tabs = [("ingest","Ingest"),("queue","Queue"),("audit","Audit log")] %}
+  <nav class="tabbar" aria-label="General">{% for key, label in tabs %}<a href="/stats?tab={{ key }}"{% if tab == key %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
 
   {# ---- Ingest: every stage, and the live throughput ---- #}
-  <section class="pane" id="p-ingest" aria-label="Ingest">
+  {% if tab == "ingest" %}
+  <section class="pane pane-on" id="p-ingest" aria-label="Ingest">
     {% if pipeline %}
     <div class="card">
       <div class="card-head"><span>Pipeline</span>
         <span class="row">
-          {% if pipeline.llm_paused %}{% call m.post("resume", "/stats?tab=ingest") %}<button class="btn btn-sm" type="submit">{{ m.icon("play") }} Resume model stages</button>{% endcall %}
-          {% else %}{% call m.post("pause", "/stats?tab=ingest") %}<button class="btn btn-sm" type="submit">{{ m.icon("pause") }} Pause model stages</button>{% endcall %}{% endif %}
+          <span class="muted small">Model stages</span> {{ m.switch("stage", "/stats?tab=ingest", not pipeline.llm_paused, "Run the model stages", {}, "run", "on", "off") }}
         </span>
       </div>
       <div class="card-body">
@@ -42,12 +41,13 @@
         {% for name, s in pipeline.stages.items() %}
           <tr>
             <td class="mono">{{ name }}</td>
-            <td data-bind="pipeline.stages.{{ name }}.pending" data-format="int">{{ s.pending }}</td><td>{{ s.retrying }}</td>
-            <td data-bind="pipeline.stages.{{ name }}.running" data-format="int">{{ s.running }}</td>
-            <td>{% if s.failed %}<span class="badge badge-danger">{{ s.failed }}</span>{% else %}0{% endif %}</td>
-            <td class="muted">{% if s.oldest_pending_seconds is not none %}{{ s.oldest_pending_seconds | int }}s{% else %}—{% endif %}</td>
-            <td>{{ "%.2f" | format(s.per_second) }}</td>
-            <td class="muted">{% if s.eta_seconds is not none %}{{ s.eta_seconds | int }}s{% else %}—{% endif %}</td>
+            <td data-bind="pipeline.stages.{{ name }}.pending" data-format="int">{{ s.pending if s.loaded else "…" }}</td>
+            <td data-bind="pipeline.stages.{{ name }}.retrying" data-format="int">{{ s.retrying if s.loaded else "…" }}</td>
+            <td data-bind="pipeline.stages.{{ name }}.running" data-format="int">{{ s.running if s.loaded else "…" }}</td>
+            <td data-bind="pipeline.stages.{{ name }}.failed" data-format="int">{{ s.failed if s.loaded else "…" }}</td>
+            <td class="muted" data-bind="pipeline.stages.{{ name }}.oldest_pending_seconds" data-format="secs">{{ "…" if not s.loaded else (((s.oldest_pending_seconds | int) ~ "s") if s.oldest_pending_seconds is not none else "—") }}</td>
+            <td data-bind="pipeline.stages.{{ name }}.per_second" data-format="fixed2">{{ ("%.2f" | format(s.per_second)) if s.loaded else "…" }}</td>
+            <td class="muted" data-bind="pipeline.stages.{{ name }}.eta_seconds" data-format="secs">{{ "…" if not s.loaded else (((s.eta_seconds | int) ~ "s") if s.eta_seconds is not none else "—") }}</td>
             <td>{% if name in ("parse", "embed", "triage", "enrich") %}{{ pl.stage_toggle(name, s, "/stats?tab=ingest") }}{% endif %}</td>
             <td>
               {% call m.post("limit", "/stats?tab=ingest") %}
@@ -69,16 +69,18 @@
     <div class="card"><div class="card-body muted">The ingest pipeline is not running.</div></div>
     {% endif %}
   </section>
+  {% endif %}
 
   {# ---- Queue: the jobs, and the ones parked as failed ---- #}
-  <section class="pane" id="p-queue" aria-label="Queue">
+  {% if tab == "queue" %}
+  <section class="pane pane-on" id="p-queue" aria-label="Queue">
     <div class="card">
       <div class="card-head"><span>Jobs queue</span>
         <form class="row" method="get" action="/stats">
           <input type="hidden" name="tab" value="queue">
           <label class="sr-only" for="job-status">Status</label>
           <select class="select select-sm" id="job-status" name="status">
-            <option value="">All</option>
+            <option value="">Active</option><option value="all"{% if status == "all" %} selected{% endif %}>All</option>
             {% for st in statuses %}<option value="{{ st }}"{% if st == status %} selected{% endif %}>{{ st }}</option>{% endfor %}
           </select>
           <button class="btn btn-sm" type="submit">Filter</button>
@@ -106,7 +108,7 @@
         </tbody>
       </table></div>
     </div>
-    {% if pipeline and pipeline.parked %}
+    {% if parked %}
     <div class="card">
       <div class="card-head"><span>Parked jobs</span>
         {% call m.post("retry-parked", "/stats?tab=queue") %}<button class="btn btn-sm" type="submit">{{ m.icon("retry") }} Retry all</button>{% endcall %}
@@ -114,7 +116,7 @@
       <div class="table-wrap"><table class="table">
         <thead><tr><th>Job</th><th>Stage</th><th>Message</th><th>Attempts</th><th>Error</th></tr></thead>
         <tbody>
-        {% for j in pipeline.parked %}
+        {% for j in parked %}
           <tr><td class="mono">{{ j.job_id }}</td><td>{{ j.stage }}</td>
               <td class="mono muted">{{ j.message_id or "—" }}</td><td>{{ j.attempts }}</td>
               <td class="bad">{{ j.error }}</td></tr>
@@ -123,90 +125,14 @@
       </table></div>
     </div>
     {% endif %}
+    {% if agents %}{{ pl.agents_card(agents, "/stats?tab=queue", "Agents not tied to a stage") }}{% endif %}
   </section>
+  {% endif %}
 
-  {{ pl.kind_pane("provider", "Providers", none) }}
-  {{ pl.kind_pane("llm_backend", "LLM backends", none) }}
-  {{ pl.kind_pane("vector_store", "Vector stores", none) }}
-  {{ pl.kind_pane("cache_store", "Caches", none) }}
-
-  {# ---- AI & Models ---- #}
-  <section class="pane" id="p-ai" aria-label="AI and models">
-    <div class="card">
-      <div class="card-head"><span>Model &amp; token usage</span>
-        {{ m.confirm("reset-usage", "/stats?tab=ai", "Clear usage stats", "Clear the token figures? Mail, the index and the cache stay.", "Clear", {}) }}
-      </div>
-      <div class="table-wrap"><table class="table">
-        <thead><tr><th>Workspace</th><th>Stage</th><th>Model</th><th>Calls</th><th>Cached</th><th>In</th><th>Out</th><th>Saved</th><th><span class="sr-only">Actions</span></th></tr></thead>
-        <tbody>
-        {% for u in usage_rows %}
-          {% set c = u.component %}
-          {% set has_settings = c and c.config_schema and c.config_schema.properties %}
-          <tr>
-            <td>{{ u.workspace }}</td><td>{{ u.stage }}</td>
-            <td>
-              {% if c and c.choices %}
-                {% call m.post("model", "/stats?tab=ai") %}
-                  <input type="hidden" name="kind" value="{{ c.kind }}"><input type="hidden" name="plugin" value="{{ c.name }}">
-                  <select class="select select-sm mono" name="model" aria-label="Model for {{ c.label }}">
-                    {% if c.kind in ("enricher", "ask") %}<option value=""{% if not c.model %} selected{% endif %}>default ({{ c.default }})</option>{% endif %}
-                    {% for ch in c.choices %}<option value="{{ ch }}"{% if ch == c.model %} selected{% endif %}>{{ ch }}</option>{% endfor %}
-                    {% if c.model and c.model not in c.choices %}<option value="{{ c.model }}" selected>{{ c.model }} (not installed)</option>{% endif %}
-                  </select>
-                  <button class="btn btn-sm" type="submit">Use</button>
-                {% endcall %}
-              {% else %}
-                <span class="mono{% if not c %} muted{% endif %}">{{ u.model_text or "—" }}</span>
-              {% endif %}
-            </td>
-            <td>{{ "{:,}".format(u.calls) }}</td><td class="muted">{{ "{:,}".format(u.cached_calls) }}</td>
-            <td>{{ "{:,}".format(u.tokens_in) }}</td><td>{{ "{:,}".format(u.tokens_out) }}</td>
-            <td class="ok">{{ "{:,}".format(u.tokens_saved) }}</td>
-            <td class="right">
-              {% if c and c.kind != "ask" %}
-              <div class="menu">
-                <button type="button" class="menu-btn" aria-haspopup="true" aria-label="Actions for {{ c.label }}">{{ m.icon("dots") }}</button>
-                <div class="menu-list">
-                  {% if has_settings %}<button type="button" popovertarget="pm-{{ c.kind }}-{{ c.name }}" popovertargetaction="show">Edit plugin…</button>
-                  {% else %}<button type="button" disabled title="This plugin declares no settings">Edit plugin…</button>{% endif %}
-                  <form method="post" action="/ui/plugin">{{ m.guard("/stats?tab=ai") }}<input type="hidden" name="verb" value="reload"><input type="hidden" name="name" value="{{ c.name }}"><button type="submit">Reload plugin</button></form>
-                </div>
-              </div>
-              {% endif %}
-            </td>
-          </tr>
-        {% else %}
-          <tr><td colspan="9" class="muted">No model usage recorded yet.</td></tr>
-        {% endfor %}
-        </tbody>
-      </table></div>
-      <div class="card-foot">Vector store model: <code>{{ (pipeline.vector_model or "—") if pipeline else "—" }}</code></div>
-    </div>
-
-    <div class="card">
-      <div class="card-head">Agents</div>
-      <div class="table-wrap"><table class="table">
-        <thead><tr><th>Agent</th><th>Kinds</th><th>Last seen</th><th>State</th><th class="right">Revoke</th></tr></thead>
-        <tbody>
-        {% for a in agents %}
-          <tr>
-            <td>{{ a.label }}</td>
-            <td class="muted mono small">{{ a.kinds | join(", ") or "—" }}</td>
-            <td class="muted mono small">{{ a.last_seen_at or "never" }}</td>
-            <td>{% if a.revoked %}<span class="badge badge-muted">revoked</span>{% else %}<span class="badge badge-ok">active</span>{% endif %}</td>
-            <td class="right">{% if not a.revoked %}{{ m.confirm("revoke-agent", "/stats?tab=ai", "Revoke", "Revoke " ~ a.label ~ "? Its jobs return to the queue.", "Revoke", {"agent_id": a.id}) }}{% endif %}</td>
-          </tr>
-        {% else %}
-          <tr><td colspan="5" class="muted">No agents registered.</td></tr>
-        {% endfor %}
-        </tbody>
-      </table></div>
-    </div>
-
-  </section>
 
   {# ---- Audit log ---- #}
-  <section class="pane" id="p-audit" aria-label="Audit log">
+  {% if tab == "audit" %}
+  <section class="pane pane-on" id="p-audit" aria-label="Audit log">
     <div class="card">
       <div class="card-head">Recent audit log</div>
       <div class="table-wrap"><table class="table">
@@ -226,8 +152,8 @@
     </div>
     <p class="muted small">Ids and metadata only. The audit log never records message text.</p>
   </section>
+  {% endif %}
 
 </div>
-{{ pl.dialogs("/stats?tab=ai") }}
 {% endblock %}
 {% block scripts %}<script src="/refresh.js"></script><script src="/chart.umd.js"></script><script src="/jobs-chart.js"></script>{% endblock %}

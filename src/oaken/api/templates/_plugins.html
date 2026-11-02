@@ -43,23 +43,24 @@
   {%- else %}<span class="badge badge-warn" title="{{ p.detail }}">{{ p.detail or "not started" }}</span>{% endif -%}
 {% endmacro %}
 
+{# A stage runs or is paused: the same pill switch as Enabled. On is running, off is paused, so the
+   state is the switch and there is no separate button or badge. #}
 {% macro stage_toggle(stage, s, back) %}
-  {%- if s and s.paused %}{% call m.post("resume", back) %}<input type="hidden" name="stage" value="{{ stage }}"><button class="btn btn-sm" type="submit" aria-label="Resume {{ stage }}">{{ m.icon("play") }} Resume</button>{% endcall %}
-  {%- else %}{% call m.post("pause", back) %}<input type="hidden" name="stage" value="{{ stage }}"><button class="btn btn-sm" type="submit" aria-label="Pause {{ stage }}">{{ m.icon("pause") }} Pause</button>{% endcall %}{% endif -%}
+  {{ m.switch("stage", back, not (s and s.paused), "Run " ~ stage, {"stage": stage}, "run", "on", "off") }}
 {% endmacro %}
 
 {% macro kind_body(kind, label, stage, back) %}
   {% if stage and pipeline and pipeline.stages.get(stage) %}
   {% set s = pipeline.stages[stage] %}
   <div class="card">
-    <div class="card-head"><span>{{ label }} stage <span class="mono">{{ stage }}</span>{% if s.paused %} <span class="badge badge-warn">paused</span>{% endif %}</span>
+    <div class="card-head"><span>{{ label }} stage <span class="mono">{{ stage }}</span></span>
       <span class="row">
         {{ stage_toggle(stage, s, back) }}
-        {% if s.failed %}{% call m.post("retry-parked", back) %}<button class="btn btn-sm" type="submit">{{ m.icon("retry") }} Retry parked</button>{% endcall %}{% endif %}
+        {% if s.loaded and s.failed %}{% call m.post("retry-parked", back) %}<button class="btn btn-sm" type="submit">{{ m.icon("retry") }} Retry parked</button>{% endcall %}{% endif %}
       </span>
     </div>
     <div class="card-body row">
-      <span class="muted mono small">{{ s.pending }} pending · {{ s.running }} running · {{ s.failed }} failed · {{ "%.2f" | format(s.per_second) }}/s</span>
+      <span class="muted mono small"><span data-bind="pipeline.stages.{{ stage }}.pending" data-format="int">{{ s.pending if s.loaded else "…" }}</span> pending · <span data-bind="pipeline.stages.{{ stage }}.running" data-format="int">{{ s.running if s.loaded else "…" }}</span> running · <span data-bind="pipeline.stages.{{ stage }}.failed" data-format="int">{{ s.failed if s.loaded else "…" }}</span> failed · <span data-bind="pipeline.stages.{{ stage }}.per_second" data-format="fixed2">{{ ("%.2f" | format(s.per_second)) if s.loaded else "…" }}</span>/s</span>
       {% call m.post("limit", back) %}
         <input type="hidden" name="stage" value="{{ stage }}">
         <label class="small muted" for="at-{{ kind }}">At once</label>
@@ -112,10 +113,108 @@
   </div>
 {% endmacro %}
 
-{% macro kind_pane(kind, label, stage) %}
-<section class="pane" id="p-{{ kind }}" aria-label="{{ label }}">
-  {{ kind_body(kind, label, stage, "/stats?tab=" ~ kind) }}
+{% macro kind_pane(kind, label, stage, page="/stats") %}
+<section class="pane pane-on" id="p-{{ kind }}" aria-label="{{ label }}">
+  {{ kind_body(kind, label, stage, page ~ "?tab=" ~ kind) }}
 </section>
+{% endmacro %}
+
+{# Token usage rows for one page. ``back`` is where an action returns to. #}
+{% macro usage_card(rows, back, title="Model &amp; token usage", reset=false) %}
+    <div class="card">
+      <div class="card-head"><span>{{ title }}</span>
+        {% if reset %}{{ m.confirm("reset-usage", back, "Clear usage stats", "Clear the token figures? Mail, the index and the cache stay.", "Clear", {}) }}{% endif %}
+      </div>
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>Workspace</th><th>Stage</th><th>Model</th><th>Calls</th><th>Cached</th><th>In</th><th>Out</th><th>Saved</th><th><span class="sr-only">Actions</span></th></tr></thead>
+        <tbody>
+        {% for u in rows %}
+          {% set c = u.component %}
+          {% set has_settings = c and c.config_schema and c.config_schema.properties %}
+          <tr>
+            <td>{{ u.workspace }}</td><td>{{ u.stage }}</td>
+            <td>
+              {% if c and c.choices %}
+                {% call m.post("model", back) %}
+                  <input type="hidden" name="kind" value="{{ c.kind }}"><input type="hidden" name="plugin" value="{{ c.name }}">
+                  <select class="select select-sm mono" name="model" aria-label="Model for {{ c.label }}">
+                    {% if c.kind in ("enricher", "ask") %}<option value=""{% if not c.model %} selected{% endif %}>default ({{ c.default }})</option>{% endif %}
+                    {% for ch in c.choices %}<option value="{{ ch }}"{% if ch == c.model %} selected{% endif %}>{{ ch }}</option>{% endfor %}
+                    {% if c.model and c.model not in c.choices %}<option value="{{ c.model }}" selected>{{ c.model }} (not installed)</option>{% endif %}
+                  </select>
+                  <button class="btn btn-sm" type="submit">Use</button>
+                {% endcall %}
+              {% else %}
+                <span class="mono{% if not c %} muted{% endif %}">{{ u.model_text or "—" }}</span>
+              {% endif %}
+            </td>
+            <td>{{ "{:,}".format(u.calls) }}</td><td class="muted">{{ "{:,}".format(u.cached_calls) }}</td>
+            <td>{{ "{:,}".format(u.tokens_in) }}</td><td>{{ "{:,}".format(u.tokens_out) }}</td>
+            <td class="ok">{{ "{:,}".format(u.tokens_saved) }}</td>
+            <td class="right">
+              {% if c and c.kind != "ask" %}
+              <div class="menu">
+                <button type="button" class="menu-btn" aria-haspopup="true" aria-label="Actions for {{ c.label }}">{{ m.icon("dots") }}</button>
+                <div class="menu-list">
+                  {% if has_settings %}<button type="button" popovertarget="pm-{{ c.kind }}-{{ c.name }}" popovertargetaction="show">Edit plugin…</button>
+                  {% else %}<button type="button" disabled title="This plugin declares no settings">Edit plugin…</button>{% endif %}
+                  <form method="post" action="/ui/plugin">{{ m.guard(back) }}<input type="hidden" name="verb" value="reload"><input type="hidden" name="name" value="{{ c.name }}"><button type="submit">Reload plugin</button></form>
+                </div>
+              </div>
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="9" class="muted">No model usage recorded yet.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+{% endmacro %}
+
+{# The agents (external workers) the page is given; each can be revoked. #}
+{% macro agents_card(list, back, title="Agents") %}
+    <div class="card">
+      <div class="card-head">{{ title }}</div>
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>Agent</th><th>Kinds</th><th>Last seen</th><th>State</th><th class="right">Revoke</th></tr></thead>
+        <tbody>
+        {% for a in list %}
+          <tr>
+            <td>{{ a.label }}</td>
+            <td class="muted mono small">{{ a.kinds | join(", ") or "—" }}</td>
+            <td class="muted mono small">{{ a.last_seen_at or "never" }}</td>
+            <td>{% if a.revoked %}<span class="badge badge-muted">revoked</span>{% else %}<span class="badge badge-ok">active</span>{% endif %}</td>
+            <td class="right">{% if not a.revoked %}{{ m.confirm("revoke-agent", back, "Revoke", "Revoke " ~ a.label ~ "? Its jobs return to the queue.", "Revoke", {"agent_id": a.id}) }}{% endif %}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="muted">No agents registered.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+{% endmacro %}
+
+{# A setting of core's, changed in place: one field and a Save. Applies on the next reload. #}
+{% macro setting_card(title, back, fields) %}
+<div class="card">
+  <div class="card-head">{{ title }}</div>
+  <div class="card-body">
+  {% for f in fields %}
+    {% call m.post("stage-setting", back) %}
+      <input type="hidden" name="section" value="{{ f.section }}"><input type="hidden" name="key" value="{{ f.key }}">
+      <label for="ss-{{ f.key }}">{{ f.label }}</label>
+      {% if f.choices %}
+      <select class="select select-sm" id="ss-{{ f.key }}" name="value">{% for c in f.choices %}<option value="{{ c }}"{% if c == f.value %} selected{% endif %}>{{ c }}</option>{% endfor %}</select>
+      {% else %}
+      <input class="input input-sm" id="ss-{{ f.key }}" type="number" min="0" max="3" name="value" value="{{ f.value if f.value is not none else '' }}">
+      {% endif %}
+      <button class="btn btn-sm" type="submit">Save</button>
+      <p class="hint">{{ f.hint }}</p>
+    {% endcall %}
+  {% endfor %}
+  </div>
+</div>
 {% endmacro %}
 
 {% macro dialogs(back) %}

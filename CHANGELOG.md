@@ -23,15 +23,21 @@ Makes a fresh install usable without reading the docs.
 - `[ingest] embed_min_priority` (default 1): mail triage rates below it is not embedded, and stays
   keyword-searchable.
 - A `MessageTriaged` event.
-- The console is organised by stage. The masthead reads General, Triage, Embed, Enrich, Config,
-  Capabilities and Docs. `/` is the front page (counts and the daemon's environment). **General**
-  (`/stats`) holds Ingest (every stage, with its own pause and concurrency, and the live
-  throughput), Queue (the jobs queue and the parked jobs; the old Jobs page is gone and `/jobs`
-  leads here), Providers, LLM backends, Vector stores, Caches, usage and agents, and the Audit log.
-  **Triage**, **Embed** and **Enrich** each have a page with the stage's controls and the plugins of
-  that kind (enable switch, model, settings, reload, and a pause for each enricher). **Capabilities**
-  lists the operations grouped by the kind of plugin that offers them, with permission and an MCP
-  switch for each. `parse` can be paused and limited like the other stages.
+- The console is organised by stage and loads lazily. The masthead reads General, Pipeline, Triage,
+  Embed, Enrich, Config, Capabilities and Docs. `/` is the front page (counts and the daemon's
+  environment). **General** (`/stats`) holds Ingest (every stage with its own pause, shown as a pill
+  switch, plus live throughput), Queue (the active jobs by default; the old Jobs page is gone and
+  `/jobs` leads here), and the Audit log. **Pipeline** holds the plugins behind
+  the stages: Providers, LLM backends, Vector stores and Caches. **Triage**, **Embed** and
+  **Enrich** each have everything about the stage on one page: its controls, the plugins of that
+  kind (enable switch, model, settings, reload, and a pause for each enricher), the stage's own
+  core settings (`ai.triage_gate` on Triage, `ingest.embed_min_priority` on Embed), the model and
+  token usage for the stage, and the agents working it. The usage that belongs to no stage sits on
+  Pipeline > LLM backends. **Capabilities** lists the
+  operations grouped by plugin kind, with an MCP switch for each. Each page loads only its own data,
+  and the queue numbers fill in after the page paints, so pages stay quick on a busy machine.
+  `parse` can be paused and limited like the other stages. `pipeline_status` takes optional
+  `stages` and `counts` to ask for less.
 
 - A live welcome page at `/`, a config editor at `/config`, a jobs and pipeline console,
   an in-app getting-started page and a shared nav, all on loopback. The `/stats` page now uses the

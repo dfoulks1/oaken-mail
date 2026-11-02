@@ -1,0 +1,17 @@
+{#- SPDX-License-Identifier: Apache-2.0 -#}
+{#- The machinery behind the stages: mail providers, language-model backends, vector stores and
+    caches. Each tab loads only its own plugins. -#}
+{% extends "_base.html" %}
+{% import "_macros.html" as m with context %}
+{% import "_plugins.html" as pl with context %}
+{% block title %}Pipeline · Oaken Mail{% endblock %}
+{% block main %}
+<h1>Pipeline</h1>
+{% set tabs = [("provider","Providers"),("llm_backend","LLM backends"),("vector_store","Vector stores"),("cache_store","Caches")] %}
+<div class="tabset">
+  <nav class="tabbar" aria-label="Pipeline">{% for key, label in tabs %}<a href="/pipeline?tab={{ key }}"{% if tab == key %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
+  {% for key, label in tabs %}{% if tab == key %}{{ pl.kind_pane(key, label, none, "/pipeline") }}
+  {% if key == "llm_backend" %}{{ pl.usage_card(usage_rows, "/pipeline?tab=llm_backend", "Other model usage (ask, routing and the rest)", true) }}{% endif %}{% endif %}{% endfor %}
+</div>
+{{ pl.dialogs("/pipeline?tab=" ~ tab) }}
+{% endblock %}

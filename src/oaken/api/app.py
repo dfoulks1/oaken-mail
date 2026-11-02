@@ -11,7 +11,7 @@ import json
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, ClassVar, TypeVar
 
 from pydantic import BaseModel, ValidationError
 from starlette.applications import Starlette
@@ -250,6 +250,7 @@ class Api:
             Route("/config", safe(self.config_editor), methods=["GET"]),
             Route("/getting_started", safe(self.getting_started), methods=["GET"]),
             Route("/jobs", safe(self.jobs_page), methods=["GET"]),  # moved into General
+            Route("/pipeline", safe(self.pipeline_page), methods=["GET"]),
             Route("/triage", safe(self.triage_page), methods=["GET"]),
             Route("/embed", safe(self.embed_page), methods=["GET"]),
             Route("/enrich", safe(self.enrich_page), methods=["GET"]),
@@ -293,14 +294,7 @@ class Api:
         """Core's home page (``/``): the version, the daemon's paths and port, and a short live
         status. If it cannot be rendered it falls back to plain text so ``/`` always answers."""
         try:
-            status: dict[str, Any] = {}
-            try:
-                status = await self._op("status", {})
-            except OakenError:
-                status = {}  # a status hiccup must not take the home page down
-            context = welcome_context(
-                version=self.client.svc.version, port=self._port, status=status
-            )
+            context = welcome_context(version=self.client.svc.version, port=self._port)
             try:
                 context.update(await self._stats_collector().front())
             except Exception:  # noqa: BLE001 - counts are a nicety; the home page still answers
@@ -334,11 +328,76 @@ class Api:
         """The jobs page moved into General (its Queue and Ingest tabs); old links still work."""
         return RedirectResponse("/stats?tab=queue", status_code=303)
 
+    # Which stage a model call or an agent belongs to, so each stage's page shows its own.
+    @staticmethod
+    def _usage_stage(stage: str) -> str:
+        if stage == "llm.enrich.triage":
+            return "triage"
+        if stage == "embed" or stage.startswith(("embed.", "llm.embed")):
+            return "embed"
+        if stage == "enrich" or stage.startswith("llm.enrich."):
+            return "enrich"
+        return "pipeline"  # the language model itself, ask and routing, anything else
+
+    @staticmethod
+    def _agent_stages(kinds: list[str]) -> set[str]:
+        out: set[str] = set()
+        for k in kinds:
+            if k == "ingest.triage":
+                out.add("triage")
+            elif k == "ingest.embed":
+                out.add("embed")
+            elif k == "ingest.enrich" or k.startswith("ingest.enrich."):
+                out.add("enrich")
+        return out
+
     async def _stage_page(
         self, request: Request, kind: str, stage: str, label: str, plural: str
     ) -> Response:
-        data = await self._stats_collector().collect()
-        data.update(stage_kind=kind, stage_name=stage, stage_label=label, stage_plural=plural)
+        data = await self._stats_collector().collect(
+            {"pipeline", "plugins", "models", "usage", "agents", "stage_settings"},
+            stages={stage},
+            counts=False,
+        )
+        data["usage_rows"] = [
+            r for r in data.get("usage_rows", []) if self._usage_stage(r["stage"]) == stage
+        ]
+        data["agents"] = [
+            a for a in data.get("agents", []) if stage in self._agent_stages(a["kinds"])
+        ]
+        have = data.get("stage_settings", {})
+        fields: list[dict[str, Any]] = []
+        if stage == "triage":
+            fields.append(
+                {
+                    "section": "ai",
+                    "key": "triage_gate",
+                    "label": "Triage gate",
+                    "choices": ["strict", "promiscuous"],
+                    "value": have.get("triage_gate"),
+                    "hint": "strict: an enricher with a min_priority waits until triage rates the "
+                    "message. promiscuous: it runs on unrated mail.",
+                }
+            )
+        if stage == "embed":
+            fields.append(
+                {
+                    "section": "ingest",
+                    "key": "embed_min_priority",
+                    "label": "Embed mail rated at least",
+                    "choices": None,
+                    "value": have.get("embed_min_priority"),
+                    "hint": "0 embeds everything; 1 skips mail triage rated 0 (junk). Blank "
+                    "restores the default.",
+                }
+            )
+        data.update(
+            stage_kind=kind,
+            stage_name=stage,
+            stage_label=label,
+            stage_plural=plural,
+            stage_fields=fields,
+        )
         return self.console.render(request, "stage.html", stage, data)
 
     async def triage_page(self, request: Request) -> Response:
@@ -352,7 +411,7 @@ class Api:
 
     async def capabilities_page(self, request: Request) -> Response:
         """What this core can do, by plugin kind, and what MCP clients may call."""
-        data = await self._stats_collector().collect()
+        data = await self._stats_collector().collect({"operations", "plugins", "mcp"})
         return self.console.render(request, "capabilities.html", "capabilities", data)
 
     async def getting_started(self, request: Request) -> Response:
@@ -385,23 +444,88 @@ class Api:
             client=self.client,
         )
 
+    # What each General tab needs. A tab loads only its own data: the pipeline numbers scan the
+    # jobs table and ``models`` asks the model server, so a page that does not show them skips them.
+    GENERAL_PARTS: ClassVar[dict[str, frozenset[str]]] = {
+        "ingest": frozenset({"pipeline"}),
+        "queue": frozenset({"agents"}),
+        "audit": frozenset({"audit"}),
+    }
+
+    # The Pipeline page: the plugins behind the stages, one kind per tab.
+    PIPELINE_PARTS: ClassVar[dict[str, frozenset[str]]] = {
+        "provider": frozenset({"plugins"}),
+        "llm_backend": frozenset({"plugins", "models", "usage"}),
+        "vector_store": frozenset({"plugins"}),
+        "cache_store": frozenset({"plugins"}),
+    }
+
+    async def pipeline_page(self, request: Request) -> Response:
+        tab = request.query_params.get("tab", "provider")
+        tab = tab if tab in self.PIPELINE_PARTS else "provider"
+        data = await self._stats_collector().collect(self.PIPELINE_PARTS[tab])
+        data["usage_rows"] = [
+            r for r in data.get("usage_rows", []) if self._usage_stage(r["stage"]) == "pipeline"
+        ]
+        return self.console.render(request, "pipeline.html", "pipeline", data)
+
     async def stats(self, request: Request) -> Response:
-        """The status page (ADR 0013). Loopback-only (the Host guard) and unauthenticated like
+        """General (ADR 0013). Loopback-only (the Host guard) and unauthenticated like
         ``/v1/health``; counts and health only, never mail content."""
-        data = await self._stats_collector().collect()
-        status = request.query_params.get("status", "")
-        known = ("queued", "running", "failed", "cancelled", "succeeded")
-        payload: dict[str, Any] = {"limit": 100}
-        if status in known:
-            payload["status"] = status
-        data["jobs"] = (await self._op("list_jobs", payload)).get("jobs", [])
-        data.update(status=status, statuses=known)
+        tab = request.query_params.get("tab", "ingest")
+        tab = tab if tab in self.GENERAL_PARTS else "ingest"
+        data = await self._stats_collector().collect(
+            self.GENERAL_PARTS[tab],
+            counts=tab != "ingest",  # Ingest paints first, then fills
+        )
+        if tab == "queue":
+            # The default view is the jobs that matter (running, queued, failed): a status filter
+            # is an index lookup, while "all" sorts every job ever run. "all" is still one click.
+            status = request.query_params.get("status", "")
+            known = ("queued", "running", "failed", "cancelled", "succeeded")
+            wanted = (
+                (status,)
+                if status in known
+                else (() if status == "all" else ("running", "queued", "failed"))
+            )
+            jobs: list[dict[str, Any]] = []
+            if status == "all":
+                jobs = (await self._op("list_jobs", {"limit": 100})).get("jobs", [])
+            for st in wanted:
+                jobs += (await self._op("list_jobs", {"status": st, "limit": 50})).get("jobs", [])
+            if len(wanted) > 1:
+                jobs.sort(key=lambda j: str(j["created_at"]), reverse=True)
+            data["jobs"] = jobs
+            failed = [j for j in jobs if j["status"] == "failed"] if status != "all" else []
+            if status in known and status != "failed":
+                failed = (await self._op("list_jobs", {"status": "failed", "limit": 20})).get(
+                    "jobs", []
+                )
+            data["parked"] = [
+                {
+                    "job_id": j["id"],
+                    "stage": str(j["kind"]).removeprefix("ingest."),
+                    "message_id": None,
+                    "attempts": j["attempts"],
+                    "error": j.get("last_error") or "",
+                }
+                for j in failed[:20]
+                if str(j["kind"]).startswith("ingest.")
+            ]
+            data.update(status=status, statuses=known)
         return self.console.render(request, "stats.html", "stats", data)
 
     async def stats_json(self, request: Request) -> Response:
         """The same stats as the page, as JSON, for the optional refresh script. Loopback-only and
         unauthenticated like `/stats`; counts and health only."""
-        data = await self._stats_collector().collect()
+        stage = request.query_params.get("stage", "")
+        tab = request.query_params.get("tab", "")
+        if stage:  # a stage page's live numbers
+            data = await self._stats_collector().collect({"pipeline"}, stages={stage})
+        elif tab in self.GENERAL_PARTS:
+            data = await self._stats_collector().collect(self.GENERAL_PARTS[tab])
+        else:
+            data = await self._stats_collector().collect()
         return _json(data)
 
     # The stylesheet, the logo and the optional script are served from the package, so the pages
