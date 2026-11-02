@@ -81,7 +81,7 @@ def test_the_dropdown_and_menu_sit_on_the_first_row_of_each_component_and_none_i
     models = [
         comp("llm_backend", "ollama", "Language model"),
         comp("embedder", "ollama", "Embedder"),
-        comp("enricher", "triage", "triage"),
+        comp("triager", "ai", "triage"),
         comp("enricher", "summary", "summary"),
     ]
     usage = [

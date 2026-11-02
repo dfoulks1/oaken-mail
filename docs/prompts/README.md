@@ -78,6 +78,8 @@ all tables (a `CLI_` prompt and a `CORE_` prompt do not restart the count).
 | 47 | [split-enrich](CORE_47-split-enrich.md) | **Written** | One job per enricher: triage first, then only the enrichers it earns; the old job drains as a converter; an agent's payload carries one enricher | 09, 14, 33, 42 |
 | 48 | [ask-router](CORE_48-ask-router.md) | **Built** | `ask` works out what was asked (summary, what needs me, actions, find, factual) with a small model that never sees mail, then runs the right read path. Enrichers extend its menu with an `AskIntent` | 13, 14, 15 |
 | 50 | [console-without-script](CORE_50-console-without-script.md) | **Written** | The console with no script and no CDN: one local `oaken.css`, several palettes, forms for every action, menus and dialogs from `popover`; only an optional refresh file stays | 16, 23, 32, 41 |
+| 51 | [triage-labels-and-automations](CORE_51-triage-labels-and-automations.md) | **Written** | Custom triage labels and rules that launch automations from a label, on top of the triager kind built in CORE_47; triagers and rules operable from the CLI and over MCP. Draft: needs an ADR first | 47 |
+| 52 | [console-by-stage](CORE_52-console-by-stage.md) | **Written** | The console by stage: status on `/`, General (Ingest, Audit log, Reference), one tab per plugin kind with its stage controls and plugin table, and per-plugin pause. The config-beside-the-thing idea is parked in the prompt. Draft | 41, 47, 50 |
 
 ### CLI — the command line
 

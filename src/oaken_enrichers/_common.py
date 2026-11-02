@@ -7,12 +7,12 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from oaken.ai.prompts import PromptBuilder
 from oaken.core.errors import PluginError
 from oaken.core.untrusted import UntrustedText
 from oaken.mail.clean import bulk_signals
 from oaken.mail.tokens import Tokenizer, load_tokenizer
-from oaken.ai.prompts import PromptBuilder
-from oaken.plugins.base import BaseEnricher
+from oaken.plugins.base import BaseEnricher, BaseTriager
 from oaken.plugins.contracts import EnrichInput, LLMAccess, PluginContext
 
 CUT_MARKER = "\n[... the middle of this message was cut to fit the size limit ...]\n"
@@ -118,6 +118,36 @@ class LLMEnricher(BaseEnricher):
     def model_for(self) -> str | None:
         """The model this enricher is configured to run, or None for the backend default. Validity
         is checked in the LLM service (which holds the backend); an unknown model falls back."""
+        return self.config.model if self.config is not None else None
+
+    def budget(self) -> int:
+        return int(self.ctx.settings.ai.enrich_max_input_tokens)
+
+
+class LLMTriager(BaseTriager):
+    """A triager that asks a model: ``self.llm`` and ``self.tokenizer`` after ``start``. It runs
+    after the deterministic ones (higher ``rank``)."""
+
+    needs_llm = True
+    rank = 90
+    config_model = EnricherConfig
+    prompt: ClassVar[PromptBuilder[Any] | None] = None
+
+    llm: LLMAccess
+    tokenizer: Tokenizer
+
+    async def start(self, ctx: PluginContext) -> None:
+        await super().start(ctx)
+        self.tokenizer = load_tokenizer(ctx.settings.mail)
+
+    def access(self) -> LLMAccess:
+        llm = self.ctx.llm
+        if llm is None:
+            raise PluginError(f"{self.ctx.name} needs a language model and none was provided")
+        return llm
+
+    def model_for(self) -> str | None:
+        """The model this triager is configured to run, or None for the backend default."""
         return self.config.model if self.config is not None else None
 
     def budget(self) -> int:

@@ -18,7 +18,8 @@ Every AI-powered and mail-transport component in Oaken is a plugin seam. The fiv
 | `BaseProvider` | `oaken.providers` | Mail in, flags back, mail out |
 | `BaseEmbedder` | `oaken.embedders` | Text → vectors (feeds search and `ask`) |
 | `BaseLLMBackend` | `oaken.llm_backends` | Language model calls (enrichers, `ask`, workspaces) |
-| `BaseEnricher` | `oaken.enrichers` | Per-message derivation (summary, triage, custom) |
+| `BaseTriager` | `oaken.triagers` | The first pipeline step: rates a message (`rules`, `ai`, custom). Deterministic; `LLMTriager` in `oaken_enrichers` adds a model |
+| `BaseEnricher` | `oaken.enrichers` | Per-message derivation (summary, actions, custom) |
 | `BaseVectorStore` | `oaken.vector_stores` | Vector storage and nearest-neighbor queries |
 | `BaseCache` | `oaken.cache_stores` | The LLM answer cache: which question maps to which stored answer |
 
@@ -54,6 +55,7 @@ always valid.
 | Provider | `oaken.providers` | Brings mail in from a service and writes flags back. |
 | Embedder | `oaken.embedders` | Turns text into vectors. |
 | LLM backend | `oaken.llm_backends` | Runs a language model. |
+| Triager | `oaken.triagers` | Rates one message first, so core can decide what else it is owed. Runs in `rank` order; the first verdict wins and is stored under `triage`. Implement `async triage(msg)`: return an `EnrichOutput`, or None to leave it to the next. |
 | Enricher | `oaken.enrichers` | Derives something from one message (a summary, a category, actions). |
 | Vector store | `oaken.vector_stores` | Stores vectors and finds the nearest ones. |
 | Cache | `oaken.cache_stores` | Keeps validated model answers so a repeated question costs no model call. |
@@ -96,8 +98,10 @@ is no second list to keep in step:
 | `send(raw_bytes)` | `send`, declared for the future. Nothing calls it in v1, and sending is never exposed over MCP |
 
 `ctx` (also on `self.ctx` once started) carries your settings, a logger, the clock, and `config`,
-the table `[plugins.<name>]` from the user's `config.toml`. Credentials belong in the OS keyring,
+the table `[plugins.<kind>.<name>]` from the user's `config.toml`. Credentials belong in the OS keyring,
 never in config.
+
+(The kind is part of the name: `[plugins.triager.ai]`, `[plugins.enricher.summary]`, `[plugins.embedder.ollama]` and `[plugins.llm_backend.ollama]` are four different tables. The older flat `[plugins.<name>]` still works as a fallback and logs a warning; `oaken plugins set` writes the qualified form.)
 
 Raise `oaken.core.errors.AuthError` (or a subclass) when credentials are missing or refused. Core
 pauses that account's schedule instead of retrying, and the other accounts carry on. Core starts one
@@ -192,7 +196,7 @@ repeated question from its cache, validates the reply against `Answer` and recor
 The instructions are a literal in your source; the mail goes in as `UntrustedText` parts, and a
 lint test fails a module that builds a request any other way. The first-party enrichers
 (`oaken_enrichers`: `summary`, `triage`, `actions`, `inspector`) are the worked examples. Turn one
-off with `[plugins.<name>] enabled = false`; `summary` and `actions` skip bulk mail unless you set
+off with `[plugins.enricher.<name>] enabled = false`; `summary` and `actions` skip bulk mail unless you set
 `skip_bulk = false`.
 
 ### Teaching `ask` what an enricher knows
@@ -254,7 +258,7 @@ in the CLI). A person turns a plugin on and off, restarts it and edits its setti
 | `oaken plugins` | List every plugin with its health. `--check` runs each health probe now. |
 | `oaken plugins disable NAME` / `enable NAME` | Stop or start it (and its accounts, or one account as `gmail@work`) without restarting core. `enabled = false` in its table is the lasting form. |
 | `oaken plugins reload NAME` | Restart it on the current `config.toml`, picking up a newly installed version. |
-| `oaken plugins config NAME` | Show its `[plugins.NAME]` settings, or the example it declares if it has none. |
+| `oaken plugins config NAME` | Show its `[plugins.KIND.NAME]` settings, or the example it declares if it has none. |
 | `oaken plugins set NAME KEY=VALUE ...` | Change settings (`--unset KEY`, `--replace`, or `--file FILE` with TOML). Comments and every other table in `config.toml` are kept; a secret is refused. Run `reload` to apply. |
 | `oaken plugins check NAME [KEY=VALUE ...]` | Try the saved settings, or a change, on a throwaway instance and report its health. Nothing is written and the running plugin is untouched. |
 
@@ -264,7 +268,7 @@ operations are available to any client (`plugin_enable`, `plugin_disable`, `plug
 
 ## What a person can say about your plugin
 
-Every plugin's `[plugins.<name>]` table takes two keys that belong to the host, not to you, so your
+Every plugin's `[plugins.<kind>.<name>]` table takes two keys that belong to the host, not to you, so your
 `ctx.config` never contains them:
 
 - `enabled = false` keeps the plugin off. A plugin that should be opt-in (it costs money, or reaches
@@ -460,7 +464,7 @@ no model and no real mail.
 ## A first-party example: Ollama
 
 `oaken_ollama` (an embedder and an LLM backend) is the reference for anything that talks to a
-model server. It reads its own `[plugins.<entry-point-name>]` table through `ctx.config` (here
+model server. It reads its own `[plugins.<kind>.<entry-point-name>]` table through `ctx.config` (here
 `base_url`, `model`, `keep_alive`, `timeout`, `max_retries`, `backoff`, `batch_size`), sets
 `model_id`, `dimensions` and `context_window` in `start()`, and an LLM backend sets `locality` to
 `"local"` or `"remote"` so a secure workspace can refuse it. Register one class under two entry

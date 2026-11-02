@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""``[plugins.gmail]``. Nothing here is a secret: the client secret is read from the file named
-by ``client_secret_file`` and the refresh token lives only in the OS keyring."""
+"""``[plugins.provider.gmail]``. Nothing here is a secret: the client secret is read from the file
+named by ``client_secret_file`` and the refresh token lives only in the OS keyring."""
 
 from pathlib import Path
 from typing import Any
@@ -34,4 +34,6 @@ class GmailConfig(BaseModel):
             return cls.model_validate(raw)
         except ValidationError as exc:
             fields = ", ".join(str(e["loc"][0]) for e in exc.errors() if e["loc"])
-            raise PluginError(f"gmail: invalid [plugins.gmail] settings ({fields})") from None
+            raise PluginError(
+                f"gmail: invalid [plugins.provider.gmail] settings ({fields})"
+            ) from None

@@ -513,8 +513,18 @@ class Settings(BaseSettings):
     ui: UISettings = UISettings()
     api: APISettings = APISettings()
     log: LogSettings = LogSettings()
-    # Free-form, per plugin: [plugins.gmail] ... reaches that plugin as ``ctx.config``.
+    # Free-form, per plugin: [plugins.<kind>.<name>] (or the older flat [plugins.<name>]) reaches
+    # that plugin as ``ctx.config``. Read it with ``plugin_table``.
     plugins: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+    def plugin_table(self, kind: str, name: str) -> dict[str, Any]:
+        """The settings table of one plugin: ``[plugins.<kind>.<name>]`` when present, else the
+        flat ``[plugins.<name>]``. Two plugins of different kinds may share a name this way
+        (``embedder.ollama`` and ``llm_backend.ollama``)."""
+        by_kind = self.plugins.get(kind)
+        if isinstance(by_kind, dict) and isinstance(by_kind.get(name), dict):
+            return dict(by_kind[name])
+        return self.plugins.get(name, {})
 
     @classmethod
     def settings_customise_sources(

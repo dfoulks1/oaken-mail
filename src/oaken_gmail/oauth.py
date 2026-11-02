@@ -32,7 +32,8 @@ def load_client(path: Path | None) -> ClientCredentials:
     """The id and secret from the OAuth client JSON Google lets you download."""
     if path is None:
         raise PluginError(
-            "gmail: set client_secret_file in [plugins.gmail] to your Google OAuth client JSON"
+            "gmail: set client_secret_file in [plugins.provider.gmail] to your Google OAuth "
+            "client JSON"
         )
     try:
         raw: Any = json.loads(Path(path).expanduser().read_text(encoding="utf-8"))

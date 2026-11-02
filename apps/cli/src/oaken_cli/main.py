@@ -97,9 +97,7 @@ ALIASES: dict[str, tuple[str, frozenset[str]]] = {
     ),
     "sawyer": (
         "The Oaken mail flow: sync, the ingest pipeline, its jobs and schedules.",
-        frozenset(
-            "sync pipeline watch reprocess rebuild-index enrich jobs schedule help".split()
-        ),
+        frozenset("sync pipeline watch reprocess rebuild-index enrich jobs schedule help".split()),
     ),
     "cubby": (
         "The Oaken mailbox: search, read and file your mail.",
@@ -513,7 +511,8 @@ def _register_system(
         parents=[g],
         description=(
             "Default shows status. 'pause'/'resume' stop and restart the model-bound ingest "
-            "stages (embed, triage, enrich), or just one (oaken pipeline pause enrich, or one enricher: "
+            "stages (embed, triage, enrich), or just one (oaken pipeline pause enrich, or one "
+            "enricher: "
             "enrich.summary) — mail keeps "
             "landing and being filtered while paused. 'limits enrich 2' changes how many jobs a "
             "stage runs at once, live. 'parked' re-queues failed ingest jobs."
@@ -530,7 +529,8 @@ def _register_system(
         "words",
         nargs="*",
         metavar="STAGE",
-        help="With pause/resume: one stage (embed, triage, enrich or enrich.<name>), or none for all. "
+        help="With pause/resume: one stage (embed, triage, enrich or enrich.NAME), or none "
+        "for all. "
         "With limits: a stage and a number.",
     )
     pipeline.add_argument("--why", default="", metavar="TEXT", help="A note recorded with a pause.")
@@ -561,7 +561,7 @@ def _register_system(
         description=(
             "Plugin control is core's, all here. Default lists plugins; --check runs the health "
             "probe now. 'disable' stops a plugin until 'enable' (or a restart; "
-            "`enabled = false` in [plugins.NAME] makes it last). 'reload' restarts one on the "
+            "`enabled = false` in [plugins.KIND.NAME] makes it last). 'reload' restarts one on the "
             "current config.toml. 'config NAME' shows its settings. 'set NAME KEY=VALUE ...' "
             "changes them (--unset KEY, --replace, or --file FILE for TOML; comments in "
             "config.toml are kept, secrets are refused). 'check NAME [KEY=VALUE ...]' tries "
@@ -577,6 +577,12 @@ def _register_system(
     )
     plugins.add_argument("name", nargs="?", help="The plugin (gmail) or one account (gmail@work).")
     plugins.add_argument("pairs", nargs="*", metavar="KEY=VALUE", help="With set/check: settings.")
+    plugins.add_argument(
+        "--kind",
+        metavar="KIND",
+        help="For a name two kinds share (ollama): which one. NAME may also be KIND.NAME, as in "
+        "triager.ai.",
+    )
     plugins.add_argument("--check", action="store_true", help="Run each plugin's health probe.")
     plugins.add_argument(
         "--unset", action="append", metavar="KEY", help="With set/check: remove a setting."

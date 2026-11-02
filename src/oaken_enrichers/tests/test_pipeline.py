@@ -13,10 +13,16 @@ from oaken.ai.access import WorkspaceLLM
 from oaken.core.logging import get_logger
 from oaken.core.settings import Settings
 from oaken.ingest.tests.conftest import Options, Rig, build, mail
-from oaken.plugins.contracts import Enricher, LLMRequest, PluginContext
-from oaken_enrichers import ActionsEnricher, InspectorEnricher, SummaryEnricher, TriageEnricher
+from oaken.plugins.contracts import Enricher, LLMRequest, PluginContext, Triager
+from oaken_enrichers import (
+    ActionsEnricher,
+    AITriager,
+    InspectorEnricher,
+    RulesTriager,
+    SummaryEnricher,
+)
 
-NAMES = ("summary", "triage", "actions", "inspector")
+NAMES = ("summary", "actions", "inspector")
 
 
 def answer(request: LLMRequest) -> dict[str, Any]:
@@ -29,33 +35,46 @@ def answer(request: LLMRequest) -> dict[str, Any]:
     return {"action_items": [], "deadlines": []}
 
 
-async def start_all(rig: Rig, settings: Settings) -> dict[str, Enricher]:
+async def start_all(rig: Rig, settings: Settings) -> tuple[dict[str, Enricher], dict[str, Triager]]:
     service = LLMService(
         LLMCache(rig.raw_db, rig.clock), rig.usage, Workspaces(settings), lambda _n: rig.llm,
         settings,
     )  # fmt: skip
-    found: dict[str, Enricher] = {}
-    for name, cls in zip(NAMES, (SummaryEnricher, TriageEnricher, ActionsEnricher,
-                                 InspectorEnricher), strict=True):  # fmt: skip
-        plugin = cls()
-        await plugin.start(PluginContext(
-            name=name, kind="enricher", settings=settings, clock=rig.clock,
+
+    def context(name: str, kind: Any) -> PluginContext:
+        return PluginContext(
+            name=name, kind=kind, settings=settings, clock=rig.clock,
             log=get_logger("test"), llm=WorkspaceLLM(service, rig.raw),
-        ))  # fmt: skip
+        )  # fmt: skip
+
+    found: dict[str, Enricher] = {}
+    for name, cls in zip(NAMES, (SummaryEnricher, ActionsEnricher, InspectorEnricher), strict=True):
+        plugin = cls()
+        await plugin.start(context(name, "enricher"))
         found[name] = cast(Enricher, plugin)
-    return found
+    triagers: dict[str, Triager] = {}
+    for name, tcls in (("rules", RulesTriager), ("ai", AITriager)):
+        triager = tcls()
+        await triager.start(context(name, "triager"))
+        triagers[name] = cast(Triager, triager)
+    return found, triagers
 
 
 @pytest.fixture
 async def rig(tmp_path: Path) -> AsyncIterator[Rig]:
     async for r in build(tmp_path, Options(enrich=False)):
         r.llm.responder = answer
-        started = await start_all(r, r.pipeline.settings)
+        started, triagers = await start_all(r, r.pipeline.settings)
 
-        def provide(found: dict[str, Enricher] = started) -> dict[str, Enricher]:
+        def enrichers(found: dict[str, Enricher] = started) -> dict[str, Enricher]:
             return found
 
-        r.pipeline.backends.enrichers = provide
+        def triager_set(found: dict[str, Triager] = triagers) -> dict[str, Triager]:
+            return found
+
+        r.pipeline.backends.enrichers = enrichers
+        r.pipeline.backends.triagers = triager_set
+        r.pipeline.register_enrichers(r.runner)  # the enrichers were not known at build time
         yield r
 
 
@@ -71,7 +90,7 @@ async def test_every_enricher_stores_a_result(rig: Rig) -> None:
     await rig.run_sync()
     await rig.drain()
     mid = await rig.mid(pid)
-    assert set(await rows(rig, mid)) == set(NAMES)
+    assert set(await rows(rig, mid)) == set(NAMES) | {"triage"}
     summary = await rig.pipeline.enrichment(mid, "summary")
     assert summary is not None and summary["summary"] == "A short summary."
     inspector: Any = await rig.pipeline.enrichment(mid, "inspector")

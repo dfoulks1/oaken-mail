@@ -173,7 +173,26 @@ async def test_set_plugin_config_creates_the_file_when_there_is_none(home: Path)
         ctx, cfg.PluginConfigCandidate(plugin="imap", config={"host": "h"})
     )
     assert out.ok and out.backup is None
-    assert "[plugins.imap]" in Path(out.path).read_text(encoding="utf-8")
+    assert "[plugins.provider.imap]" in Path(out.path).read_text(encoding="utf-8")  # the rule
+
+
+async def test_a_table_goes_where_the_file_has_it_and_new_ones_are_kind_qualified(
+    home: Path,
+) -> None:
+    ctx, _ = _plugin_ctx()
+    both = 'host = "flat"\n'
+    await cfg.config_save.handler(ctx, cfg.ConfigCandidate(text=f"[plugins.imap]\n{both}"))
+    out = await cfg.set_plugin_config.handler(
+        ctx, cfg.PluginConfigCandidate(plugin="imap", config={"port": 1})
+    )
+    text = Path(out.path).read_text(encoding="utf-8")
+    assert "[plugins.imap]" in text and "provider" not in text  # the flat table is edited in place
+    qualified = '[plugins.provider.imap]\nhost = "q"\n'
+    await cfg.config_save.handler(
+        ctx, cfg.ConfigCandidate(text=qualified + f"[plugins.imap]\n{both}")
+    )
+    got = await cfg.get_plugin_config.handler(ctx, cfg.PluginName(plugin="imap"))
+    assert got.config == {"host": "q"}  # the kind-qualified table wins
 
 
 async def test_check_plugin_config_probes_and_reports_without_writing(home: Path) -> None:

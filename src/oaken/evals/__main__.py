@@ -17,12 +17,14 @@ import asyncio
 import importlib.util
 import sys
 import tempfile
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 from oaken.ai import LLMCache, LLMService, Workspaces
 from oaken.core.clock import SystemClock
 from oaken.core.db import Database, migrate
+from oaken.core.errors import PluginError
 from oaken.core.logging import get_logger
 from oaken.core.settings import Settings
 from oaken.evals import Fixture, Score, build_input, load_fixtures, score
@@ -69,8 +71,12 @@ async def run(root: Path, only: str | None, settings: Settings) -> list[Score]:
                 lambda _name: backend, settings,
             )  # fmt: skip
             enrichers = host.named_enrichers()
+            triagers = host.named_triagers()
             for fx in load_fixtures(root, only):
-                enricher = enrichers.get(fx.enricher)
+                # triage is a chain of triagers: the fixture runs through all of them, in order
+                enricher = (
+                    triagers or None if fx.enricher == "triage" else enrichers.get(fx.enricher)
+                )
                 if enricher is None:
                     scores.append(Score(fx, error=f"enricher {fx.enricher} is not installed"))
                     continue
@@ -79,20 +85,33 @@ async def run(root: Path, only: str | None, settings: Settings) -> list[Score]:
     return scores
 
 
+async def first_verdict(triagers: Iterable[Any], msg: Any) -> Any:
+    """What the triage step stores: the first triager's verdict, in the order given."""
+    for t in triagers:
+        if (out := await t.triage(msg)) is not None:
+            return out
+    raise PluginError("no triager gave a verdict")
+
+
 async def _one(fx: Fixture, enricher: Any, settings: Settings, clock: Any, access: Any) -> Score:
-    await enricher.start(
-        PluginContext(
-            name=fx.enricher,
-            kind="enricher",
-            settings=settings,
-            clock=clock,
-            log=get_logger("oaken.evals"),
-            llm=access,
-        )  # fmt: skip
-    )
+    chain = enricher if isinstance(enricher, dict) else None  # triagers by name, in rank order
+    for name, plugin in chain.items() if chain else [(fx.enricher, enricher)]:
+        await plugin.start(
+            PluginContext(
+                name=name,
+                kind="triager" if chain else "enricher",
+                settings=settings,
+                clock=clock,
+                log=get_logger("oaken.evals"),
+                llm=access,
+            )  # fmt: skip
+        )
     msg = build_input(fx)
     try:
-        result = (await enricher.enrich(msg)).data
+        if chain:
+            result = (await first_verdict(chain.values(), msg)).data
+        else:
+            result = (await enricher.enrich(msg)).data
     except Exception as exc:  # noqa: BLE001 - one bad answer must not stop the run
         return Score(fx, error=f"{type(exc).__name__}: {exc}")
     return score(fx, result, msg.body.unwrap())

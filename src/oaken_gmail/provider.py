@@ -202,7 +202,7 @@ class GmailProvider(BaseProvider):
         "include_labels empty to sync all mail; Spam and Trash never sync."
     )
     config_example = (
-        "[plugins.gmail]\n"
+        "[plugins.provider.gmail]\n"
         'client_secret_file = "/path/to/gmail_client_secret.json"\n'
         'account = "default"\n'
         "include_labels = []   # empty = all mail\n"

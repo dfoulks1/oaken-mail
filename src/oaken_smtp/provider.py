@@ -89,7 +89,7 @@ class SmtpProvider(BaseProvider):
         "keyring with `oaken smtp auth`. `from_address` is the one that matters."
     )
     config_example = (
-        "[plugins.smtp]\n"
+        "[plugins.provider.smtp]\n"
         'host = "smtp.example.com"\n'
         'security = "starttls"  # or "tls"\n'
         'from_address = "you@example.com"\n'

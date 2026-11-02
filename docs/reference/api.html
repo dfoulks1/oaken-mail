@@ -794,6 +794,11 @@ resume from the in-memory ring. If that id is older than the ring, or from befor
 <td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>message_id</code>, <code>is_new</code>, <code>changed</code></td>
 </tr>
 <tr>
+<td><code>MessageTriaged</code></td>
+<td>The gate enricher stored its result; <code>result</code> is that result, for triggers (CORE_51).</td>
+<td><code>ts</code>, <code>event_id</code>, <code>account_id</code>, <code>message_id</code>, <code>result</code></td>
+</tr>
+<tr>
 <td><code>PluginEvent</code></td>
 <td>Base for events a plugin defines itself: subclass it, add plain-data fields, and publish with <code>ctx.publish(...)</code>. <code>plugin</code> names the sender (the host fills it in).</td>
 <td><code>ts</code>, <code>event_id</code>, <code>plugin</code></td>

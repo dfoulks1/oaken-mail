@@ -1,4 +1,4 @@
-# 50 — Pluggable triagers: custom labels, and rules that launch automations (DRAFT)
+# 51 — Pluggable triagers: custom labels, and rules that launch automations (DRAFT)
 
 **Status:** draft. Harden it (questions, ADR) before anyone builds it.
 **Depends on:** 47 (triage is its own kind; fan-out asks one predicate; `MessageTriaged` exists).

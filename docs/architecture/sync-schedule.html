@@ -205,7 +205,7 @@ as <code>quiet</code>, so a client can hold back notifications overnight while m
 </section>
 <section id="several-accounts-of-one-provider" class="doc-section"><div class="section-head"><span class="section-num">5</span><h2>Several accounts of one provider</h2></div>
 <p>A provider plugin is a class, and core starts <strong>one instance per account</strong>, named
-<code>&lt;plugin&gt;@&lt;account id&gt;</code>. Its configuration is the plugin's <code>[plugins.&lt;name&gt;]</code> table with the
+<code>&lt;plugin&gt;@&lt;account id&gt;</code>. Its configuration is the plugin's <code>[plugins.&lt;kind&gt;.&lt;name&gt;]</code> table with the
 account's own non-secret settings on top, and its keyring entry defaults to the account id. Three
 Google accounts and a Fastmail account are four accounts, each with its own credentials.</p>
 </section>

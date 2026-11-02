@@ -22,6 +22,7 @@ from oaken.plugins.contracts import (
     Hit,
     LLMBackend,
     PluginStageContext,
+    Triager,
     VectorItem,
     VectorStats,
     VectorStore,
@@ -42,6 +43,7 @@ class Backends:
     embedder: Callable[[], Embedder | None] = _none
     llm: Callable[[], LLMBackend | None] = _none
     enrichers: Callable[[], dict[str, Enricher]] = field(default=dict)
+    triagers: Callable[[], dict[str, Triager]] = field(default=dict)  # in rank order
     vector_store: Callable[[], VectorStore | None] = _none
     # Plugin pipeline stages (run after the enrichers) and a factory for a stage's context.
     pipeline_stages: Callable[[], list["OfferedPipelineStage"]] = _no_stages
@@ -65,6 +67,7 @@ class Backends:
             embedder=quietly(host.embedder),
             llm=quietly(host.llm_backend),
             enrichers=host.named_enrichers,
+            triagers=host.named_triagers,
             vector_store=quietly(host.vector_store),
             pipeline_stages=host.offered_pipeline_stages,
             stage_context=host.stage_context,

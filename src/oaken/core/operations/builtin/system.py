@@ -110,6 +110,7 @@ class PipelineStatusOutput(BaseModel):
     llm_paused: bool = False  # the model-bound stages (embed, enrich) are paused by the person
     quarantined_files: int
     parked: list[ParkedOut] = Field(default_factory=list)
+    enrichers: dict[str, StageOut] = Field(default_factory=dict)  # each enricher, ``enrich.<name>``
 
 
 @operation(
@@ -129,9 +130,7 @@ async def pipeline_status(ctx: OpContext, inp: Empty) -> PipelineStatusOutput:
         paused = await control.paused_stages()
         limits = await control.limits()
         for name, stage in {**out.stages, **out.enrichers}.items():
-            stage.paused = name in paused or (
-                name.startswith("enrich.") and "enrich" in paused
-            )
+            stage.paused = name in paused or (name.startswith("enrich.") and "enrich" in paused)
             stage.concurrency = limits.get(f"ingest.{name}", limits.get(STAGES.get(name, "")))
     for name, stage in {**out.stages, **out.enrichers}.items():
         for job in await ctx.svc.queue.query(status="running", kind=f"ingest.{name}", limit=50):

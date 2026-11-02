@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""``[plugins.imap]``. Nothing here is a secret: the password lives only in the OS keyring
+"""``[plugins.provider.imap]``. Nothing here is a secret: the password lives only in the OS keyring
 (service ``oaken``, user ``imap:<account>``). There is deliberately no way to ask for plaintext."""
 
 from typing import Any, Literal
@@ -39,4 +39,6 @@ class ImapConfig(BaseModel):
             return cls.model_validate(raw)
         except ValidationError as exc:
             fields = ", ".join(str(e["loc"][0]) for e in exc.errors() if e["loc"])
-            raise PluginError(f"imap: invalid [plugins.imap] settings ({fields})") from None
+            raise PluginError(
+                f"imap: invalid [plugins.provider.imap] settings ({fields})"
+            ) from None

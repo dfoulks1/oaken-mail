@@ -50,7 +50,7 @@ assessment, are only needed to give a client to other people, because `gmail.mod
 ## Configure and authorize
 
 ```toml
-[plugins.gmail]
+[plugins.provider.gmail]
 client_secret_file = "~/secrets/oaken-google-client.json"   # the JSON you downloaded
 account = "default"          # names the keyring entry: oaken / gmail:default
 # include_labels = []        # label names or ids; empty means all mail

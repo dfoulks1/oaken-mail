@@ -8,15 +8,21 @@ from typing import Any
 import pytest
 
 from oaken.evals import Fixture, build_input, load_fixtures, score
-from oaken.evals.__main__ import default_fixture_root, main
-from oaken_enrichers import ActionsEnricher, InspectorEnricher, SummaryEnricher, TriageEnricher
+from oaken.evals.__main__ import default_fixture_root, first_verdict, main
+from oaken_enrichers import (
+    ActionsEnricher,
+    AITriager,
+    InspectorEnricher,
+    RulesTriager,
+    SummaryEnricher,
+)
 from oaken_enrichers.tests.conftest import Rig
 
 ROOT = Path(__file__).parent / "evals"
 FIXTURES = load_fixtures(ROOT)
 CLASSES: dict[str, Any] = {
     "summary": SummaryEnricher,
-    "triage": TriageEnricher,
+    "triage": AITriager,  # run as the chain: rules, then this
     "actions": ActionsEnricher,
     "inspector": InspectorEnricher,
 }
@@ -37,9 +43,13 @@ def test_the_runner_finds_the_fixtures_next_to_the_package() -> None:
 async def test_fixture_passes_against_its_scripted_reply(rig: Rig, fx: Fixture) -> None:
     if fx.fake_reply is not None:
         rig.llm.reply(fx.fake_reply)
-    enricher = await rig.start(CLASSES[fx.enricher]())
     msg = build_input(fx)
-    result = (await enricher.enrich(msg)).data
+    if fx.enricher == "triage":
+        chain = [await rig.start(RulesTriager()), await rig.start(CLASSES["triage"]())]
+        result = (await first_verdict(chain, msg)).data
+    else:
+        enricher = await rig.start(CLASSES[fx.enricher]())
+        result = (await enricher.enrich(msg)).data
     s = score(fx, result, msg.body.unwrap(), calls=len(rig.llm.requests))
     assert s.passed, s.failures
 

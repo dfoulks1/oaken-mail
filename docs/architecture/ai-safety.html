@@ -181,7 +181,7 @@ for example <code>ollama pull qwen2.5:3b</code>. It never pulls anything itself.
 messages never include what was sent or received, because both are mail.</li>
 <li>Structured output uses Ollama's <code>format</code> field with the task's JSON schema.</li>
 </ul>
-<div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[plugins.ollama]</span>
+<div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[plugins.llm_backend.ollama]</span>
 <span class="c1"># base_url defaults to this machine</span>
 <span class="n">keep_alive</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"5m"</span>
 <span class="n">batch_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">32</span>

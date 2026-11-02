@@ -234,6 +234,24 @@ async def check_enricher_output(enricher: Any, sample: EnrichInput = SAMPLE) -> 
 ENRICHER_CHECKS = (check_enricher_valid, check_enricher_output)
 
 
+# -- Triager -----------------------------------------------------------------------------------
+async def check_triager_valid(triager: Any, sample: EnrichInput = SAMPLE) -> None:
+    _valid("triager", triager)
+    assert isinstance(triager.needs_llm, bool), "needs_llm must be True or False"
+    assert isinstance(triager.rank, int), "rank must be an int (lowest runs first)"
+    assert isinstance(triager.output_schema, dict), "output_schema must be a dict"
+
+
+async def check_triager_output(triager: Any, sample: EnrichInput = SAMPLE) -> None:
+    out = await triager.triage(sample)
+    if out is not None:  # None leaves the message to the next triager
+        model = getattr(triager, "output_model", None)
+        assert isinstance(to_enrich_output(out, "triager", model).data, dict)
+
+
+TRIAGER_CHECKS = (check_triager_valid, check_triager_output)
+
+
 # -- Vector store ------------------------------------------------------------------------------
 def _item(
     mid: str, vec: tuple[float, ...], model: str = "m-a", account: str = "acct"
@@ -336,6 +354,10 @@ async def verify_llm(make: Callable[[], Any]) -> None:
 
 async def verify_enricher(make: Callable[[], Any], sample: EnrichInput = SAMPLE) -> None:
     await _verify(ENRICHER_CHECKS, make, "enricher", sample)
+
+
+async def verify_triager(make: Callable[[], Any], sample: EnrichInput = SAMPLE) -> None:
+    await _verify(TRIAGER_CHECKS, make, "triager", sample)
 
 
 async def verify_vector_store(make: Callable[[], Any]) -> None:
@@ -478,6 +500,24 @@ class EnricherContract:
     async def test_output(self, enricher: Any, sample: EnrichInput) -> None:
         async with running(enricher, "enricher"):
             await check_enricher_output(enricher, sample)
+
+
+class TriagerContract:
+    """Override ``triager``, and optionally ``sample`` (an ``EnrichInput`` it can handle)."""
+
+    triager = _abstract("triager")
+
+    @pytest.fixture
+    def sample(self) -> EnrichInput:
+        return SAMPLE
+
+    async def test_is_valid(self, triager: Any, sample: EnrichInput) -> None:
+        async with running(triager, "triager"):
+            await check_triager_valid(triager, sample)
+
+    async def test_output(self, triager: Any, sample: EnrichInput) -> None:
+        async with running(triager, "triager"):
+            await check_triager_output(triager, sample)
 
 
 class CacheContract:

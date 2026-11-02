@@ -600,16 +600,17 @@
 <li><code>--timeout</code> — Give up waiting for the answer after S seconds (a local model can be slow).</li>
 </ul>
 <h3 id="pipeline"><code>pipeline</code></h3>
-<p>Default shows status. 'pause'/'resume' stop and restart the model-bound ingest stages (embed, enrich), or just one (oaken pipeline pause enrich) — mail keeps landing and being filtered while paused. 'limits enrich 2' changes how many jobs a stage runs at once, live. 'parked' re-queues failed ingest jobs.</p>
+<p>Default shows status. 'pause'/'resume' stop and restart the model-bound ingest stages (embed, triage, enrich), or just one (oaken pipeline pause enrich, or one enricher: enrich.summary) — mail keeps landing and being filtered while paused. 'limits enrich 2' changes how many jobs a stage runs at once, live. 'parked' re-queues failed ingest jobs.</p>
 <p>Arguments:</p>
 <ul>
 <li><code>subcommand</code> — status (default), pause, resume, limits, or parked.</li>
-<li><code>STAGE</code> — With pause/resume: one stage (embed or enrich), or none for all. With limits: a stage and a number.</li>
+<li><code>STAGE</code> — With pause/resume: one stage (embed, triage, enrich or enrich.NAME), or none for all. With limits: a stage and a number.</li>
 </ul>
 <p>Options:</p>
 <ul>
 <li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--why</code> — A note recorded with a pause.</li>
+<li><code>--by-enricher</code> — With status: also each enricher's queue.</li>
 <li><code>--retry</code> — With 'parked': re-queue this one parked job.</li>
 <li><code>--all</code> — With 'parked': re-queue every parked ingest job.</li>
 </ul>
@@ -622,7 +623,7 @@
 <li><code>--workspace</code> — Only this workspace.</li>
 </ul>
 <h3 id="plugins"><code>plugins</code></h3>
-<p>Plugin control is core's, all here. Default lists plugins; --check runs the health probe now. 'disable' stops a plugin until 'enable' (or a restart; <code>enabled = false</code> in [plugins.NAME] makes it last). 'reload' restarts one on the current config.toml. 'config NAME' shows its settings. 'set NAME KEY=VALUE ...' changes them (--unset KEY, --replace, or --file FILE for TOML; comments in config.toml are kept, secrets are refused). 'check NAME [KEY=VALUE ...]' tries settings on a throwaway instance and writes nothing.</p>
+<p>Plugin control is core's, all here. Default lists plugins; --check runs the health probe now. 'disable' stops a plugin until 'enable' (or a restart; <code>enabled = false</code> in [plugins.KIND.NAME] makes it last). 'reload' restarts one on the current config.toml. 'config NAME' shows its settings. 'set NAME KEY=VALUE ...' changes them (--unset KEY, --replace, or --file FILE for TOML; comments in config.toml are kept, secrets are refused). 'check NAME [KEY=VALUE ...]' tries settings on a throwaway instance and writes nothing.</p>
 <p>Arguments:</p>
 <ul>
 <li><code>subcommand</code> — list (default), enable, disable, reload, config, check or set.</li>
@@ -632,6 +633,7 @@
 <p>Options:</p>
 <ul>
 <li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+<li><code>--kind</code> — For a name two kinds share (ollama): which one. NAME may also be KIND.NAME, as in triager.ai.</li>
 <li><code>--check</code> — Run each plugin's health probe.</li>
 <li><code>--unset</code> — With set/check: remove a setting.</li>
 <li><code>--replace</code> — With set/check: KEY=VALUE is the whole table.</li>

@@ -414,7 +414,7 @@ async def ask(ctx: OpContext, inp: AskInput) -> AskOutput:
             warnings=list(found.warnings),
             evidence=gathered,
         )
-    enrichers = ctx.svc.pipeline.backends.enrichers() if ctx.svc.pipeline is not None else {}
+    enrichers = ctx.svc.pipeline.ask_sources() if ctx.svc.pipeline is not None else {}
     menu = routing.catalog(enrichers)
     model = ctx.svc.settings.ai.ask_model or None  # its own model, else the backend's
     picked = (

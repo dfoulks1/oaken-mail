@@ -162,11 +162,13 @@ def write_mcp_allowed(ctx: OpContext, chosen: Mapping[str, bool]) -> None:
 
 
 class PluginName(BaseModel):
-    plugin: str  # an installed plugin: the name its table goes by, [plugins.<plugin>]
+    plugin: str  # an installed plugin: the name its table goes by, [plugins.<kind>.<plugin>]
+    kind: str | None = None  # for a name two kinds share (ollama embeds and generates)
 
 
 class PluginConfig(BaseModel):
     plugin: str
+    kind: str = ""  # the kind its table is under: [plugins.<kind>.<plugin>]
     exists: bool  # the file has a [plugins.<plugin>] table
     config: dict[str, Any]  # its settings; secrets are never here
     text: str = ""  # its own settings as editable TOML (the host's keys left out)
@@ -190,18 +192,18 @@ def _config_text() -> str:
 )
 async def get_plugin_config(ctx: OpContext, inp: PluginName) -> PluginConfig:
     host = ctx.svc.need_plugins()
-    kinds = host.kinds_of(inp.plugin)
-    if not kinds:
-        raise NotFound(f"no plugin named {inp.plugin!r}")
+    kind = _kind_of(host, inp.plugin, inp.kind)
     saved = _config_text()
-    table = config_edit.get_table(saved, ["plugins", inp.plugin])
-    _, example, _ = host.declared_text(kinds[0], inp.plugin)
+    path = _path(inp.plugin, kind, saved)
+    table = config_edit.get_table(saved, path)
+    _, example, _ = host.declared_text(kind, inp.plugin)  # type: ignore[arg-type]
     return PluginConfig(
         plugin=inp.plugin,
+        kind=kind,
         exists=bool(table),
         config=table,
-        text=config_edit.get_table_text(saved, ["plugins", inp.plugin]),
-        config_schema=host.config_schema(kinds[0], inp.plugin),
+        text=config_edit.get_table_text(saved, path),
+        config_schema=host.config_schema(kind, inp.plugin),  # type: ignore[arg-type]
         config_example=example,
     )
 
@@ -220,15 +222,36 @@ class PluginConfigCandidate(BaseModel):
     kind: str | None = None  # for a name two kinds share (ollama embeds and generates)
 
 
-def _path(plugin: str) -> list[str]:
-    return ["plugins", plugin]
+def _kind_of(host: Any, plugin: str, kind: str | None) -> str:
+    """The kind a request means: the one named, else the plugin's only (or first) kind."""
+    kinds = host.kinds_of(plugin)
+    if not kinds:
+        raise NotFound(f"no plugin named {plugin!r}")
+    if kind is None:
+        return str(kinds[0])
+    if kind not in kinds:
+        raise NotFound(f"no {kind} named {plugin!r} (it is: {', '.join(kinds)})")
+    return kind
 
 
-def _edited(inp: PluginConfigCandidate) -> dict[str, Any]:
+def _path(plugin: str, kind: str, saved: str) -> list[str]:
+    """Where a plugin's table lives in the file: ``[plugins.<kind>.<plugin>]``, or the older flat
+    ``[plugins.<plugin>]`` when that is the one the file has. A plugin with no table yet gets the
+    kind-qualified one."""
+    qualified = ["plugins", kind, plugin]
+    if not config_edit.get_table(saved, qualified) and config_edit.get_table(
+        saved, ["plugins", plugin]
+    ):
+        return ["plugins", plugin]
+    return qualified
+
+
+def _edited(inp: PluginConfigCandidate, kind: str) -> dict[str, Any]:
     """The settings table as ``inp`` would leave it."""
+    saved = _config_text()
     return config_edit.edited_table(
-        _config_text(),
-        _path(inp.plugin),
+        saved,
+        _path(inp.plugin, kind, saved),
         snippet=inp.text,
         config=inp.config,
         unset=inp.unset,
@@ -261,24 +284,24 @@ class PluginConfigCheck(BaseModel):
 )
 async def check_plugin_config(ctx: OpContext, inp: PluginConfigCandidate) -> PluginConfigCheck:
     host = ctx.svc.need_plugins()
-    if not host.kinds_of(inp.plugin):
-        raise NotFound(f"no plugin named {inp.plugin!r}")
+    kind = _kind_of(host, inp.plugin, inp.kind)
     try:
-        table = _edited(inp)
+        table = _edited(inp, kind)
         config_edit.refuse_secrets(table)
     except ConfigError as exc:
         return PluginConfigCheck(ok=False, problems=[str(exc)])
     problems = host.check_config(inp.plugin, table)
     if problems:
         return PluginConfigCheck(ok=False, problems=problems)
-    probes = await host.probe(inp.plugin, table, kind=inp.kind)  # type: ignore[arg-type]
+    probes = await host.probe(inp.plugin, table, kind=kind)  # type: ignore[arg-type]
     rows = [ProbeResult(kind=p.kind, ok=p.ok, detail=p.detail) for p in probes]
     return PluginConfigCheck(ok=all(r.ok for r in rows), probes=rows)
 
 
 @operation(
     "set_plugin_config",
-    "Change one plugin's settings in its [plugins.NAME] table and leave the rest of config.toml, "
+    "Change one plugin's settings in its [plugins.KIND.NAME] table (or the older "
+    "[plugins.NAME]) and leave the rest of config.toml, "
     "comments included, as it is. Keys are merged onto the saved ones (or replace them); text "
     "from an editor keeps the person's comments. Validated first; the previous file is backed "
     "up. Does not restart the plugin: call plugin_reload to apply.",
@@ -290,20 +313,20 @@ async def check_plugin_config(ctx: OpContext, inp: PluginConfigCandidate) -> Plu
 async def set_plugin_config(ctx: OpContext, inp: PluginConfigCandidate) -> SaveResult:
     path = str(_config_path())
     host = ctx.svc.need_plugins()
-    if not host.kinds_of(inp.plugin):
-        raise NotFound(f"no plugin named {inp.plugin!r}")
+    kind = _kind_of(host, inp.plugin, inp.kind)
     try:
-        table = _edited(inp)
+        table = _edited(inp, kind)
         problems = host.check_config(inp.plugin, table)
         if problems:
             return SaveResult(ok=False, path=path, error="; ".join(problems))
         saved = _config_text()
+        where = _path(inp.plugin, kind, saved)
         if inp.text is not None:  # the person's own text and comments are kept
             text = config_edit.set_table_text(
-                saved, _path(inp.plugin), inp.text, config=inp.config, unset=inp.unset
+                saved, where, inp.text, config=inp.config, unset=inp.unset
             )
         else:
-            text = config_edit.set_table(saved, _path(inp.plugin), table)
+            text = config_edit.set_table(saved, where, table)
     except ConfigError as exc:
         return SaveResult(ok=False, path=path, error=str(exc))
     return _write(ctx, text)

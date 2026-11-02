@@ -124,6 +124,12 @@
 <td><code>model_id</code>, <code>context_window</code>, <code>generate</code></td>
 </tr>
 <tr>
+<td><code>triager</code></td>
+<td><code>oaken.triagers</code></td>
+<td>none</td>
+<td><code>version</code>, <code>needs_llm</code>, <code>rank</code>, <code>triage</code></td>
+</tr>
+<tr>
 <td><code>enricher</code></td>
 <td><code>oaken.enrichers</code></td>
 <td>none</td>
@@ -1209,6 +1215,18 @@
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">enrich</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span> <span class="n">EnrichInput</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EnrichOutput</span>
 </code></pre></div>
 <p>Derive this enricher's result for <code>msg</code>.</p>
+<h3 id="triager"><code>Triager</code></h3>
+<p>The first step of the pipeline: rates one message so core can decide what else it is owed. Triagers run in <code>rank</code> order (lowest first) and the first verdict wins. <code>version</code> is part of the cache key: bump it when the output could change.</p>
+<p>Attributes:</p>
+<ul>
+<li><code>version: str</code></li>
+<li><code>needs_llm: bool</code></li>
+<li><code>rank: int</code></li>
+<li><code>output_schema: dict[str, Any]</code></li>
+</ul>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">triage</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span> <span class="n">EnrichInput</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EnrichOutput</span> <span class="o">|</span> <span class="kc">None</span>
+</code></pre></div>
+<p>The verdict for <code>msg</code>, or None to leave it to the next triager.</p>
 <h3 id="vectorstore"><code>VectorStore</code></h3>
 <p>Stores vectors and finds the nearest ones.</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">upsert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">items</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">VectorItem</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span>
@@ -1245,6 +1263,19 @@
 </section>
 <section id="base-classes" class="doc-section"><div class="section-head"><span class="section-num">4</span><h2>Base classes</h2></div>
 <p>Optional. They supply defaults so a plugin overrides only what it does.</p>
+<h3 id="baseplugin"><code>BasePlugin</code></h3>
+<p>Set:</p>
+<ul>
+<li><code>kind: ClassVar[PluginKind]</code></li>
+<li><code>api_version: ClassVar[int] = PLUGIN_API_VERSION</code></li>
+<li><code>version: ClassVar[str] = ''</code></li>
+<li><code>setup_help: ClassVar[str] = ''</code></li>
+<li><code>config_example: ClassVar[str] = ''</code></li>
+<li><code>config_model: ClassVar[type[BaseModel] | None] = None</code></li>
+<li><code>enabled_default: ClassVar[bool] = True</code></li>
+<li><code>ctx: PluginContext</code></li>
+<li><code>config: Any = None</code></li>
+</ul>
 <h3 id="baseprovider"><code>BaseProvider</code></h3>
 <p>Override <code>pull</code> (a mail source) or <code>send</code> (a sender) at least. Add <code>authenticate</code> and <code>set_flags</code> as the service allows. Capabilities come from what you override (<code>pull</code> is <code>sync.pull</code>, <code>set_flags</code> is <code>flags.write</code>). To state them yourself, set <code>capabilities = frozenset({...})</code>; the host rejects a capability whose method you did not write.</p>
 <p>Set:</p>
@@ -1297,6 +1328,21 @@
 <p>Override:</p>
 <ul>
 <li><code>async def enrich(self, msg: EnrichInput) -&gt; EnrichOutput</code></li>
+</ul>
+<h3 id="basetriager"><code>BaseTriager</code></h3>
+<p>The first step of the pipeline: rate a message so core can decide what else it is owed. This is the deterministic kind: override <code>triage</code> to return the verdict (an <code>EnrichOutput</code>), or None to leave the message to the next triager. One that asks a model extends <code>LLMTriager</code>. Triagers run in <code>rank</code> order (lowest first) and the first verdict wins, so the model is asked only for what the cheaper ones leave. Set <code>output_model</code> as for an enricher.</p>
+<p>Set:</p>
+<ul>
+<li><code>kind: ClassVar[PluginKind] = 'triager'</code></li>
+<li><code>version: ClassVar[str] = '1'</code></li>
+<li><code>rank: ClassVar[int] = 50</code></li>
+<li><code>needs_llm: bool = False</code></li>
+<li><code>output_model: ClassVar[type[BaseModel] | None] = None</code></li>
+<li><code>ask_intent: ClassVar[AskIntent | None] = None</code></li>
+</ul>
+<p>Override:</p>
+<ul>
+<li><code>async def triage(self, msg: EnrichInput) -&gt; EnrichOutput | None</code></li>
 </ul>
 <h3 id="basevectorstore"><code>BaseVectorStore</code></h3>
 <p>Set:</p>

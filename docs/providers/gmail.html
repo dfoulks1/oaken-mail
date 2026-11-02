@@ -131,7 +131,7 @@ assessment, are only needed to give a client to other people, because <code>gmai
 <em>restricted</em> scope.)</p>
 </section>
 <section id="configure-and-authorize" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Configure and authorize</h2></div>
-<div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[plugins.gmail]</span>
+<div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[plugins.provider.gmail]</span>
 <span class="n">client_secret_file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"~/secrets/oaken-google-client.json"</span><span class="w">   </span><span class="c1"># the JSON you downloaded</span>
 <span class="n">account</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"default"</span><span class="w">          </span><span class="c1"># names the keyring entry: oaken / gmail:default</span>
 <span class="c1"># include_labels = []        # label names or ids; empty means all mail</span>

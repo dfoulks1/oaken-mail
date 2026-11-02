@@ -40,8 +40,28 @@ def parse_pair(pair: str) -> tuple[str, Any]:
         return key.strip(), raw
 
 
+KINDS = (
+    "provider",
+    "embedder",
+    "llm_backend",
+    "triager",
+    "enricher",
+    "vector_store",
+    "cache_store",
+)
+
+
+def _split_kind(args: argparse.Namespace) -> None:
+    """``triager.ai`` is the plugin ``ai`` of kind ``triager`` (``[plugins.triager.ai]``)."""
+    kind, _, rest = args.name.partition(".")
+    if rest and kind in KINDS:
+        args.kind, args.name = kind, rest
+
+
 def _payload(args: argparse.Namespace) -> dict[str, Any]:
     payload: dict[str, Any] = {"plugin": args.name}
+    if getattr(args, "kind", None):
+        payload["kind"] = args.kind
     if args.pairs:
         payload["config"] = dict(parse_pair(p) for p in args.pairs)
     if args.unset:
@@ -69,6 +89,7 @@ async def settings(client: ApiClient, args: argparse.Namespace) -> int:
     sub = args.subcommand
     if not args.name:
         raise _usage(f"plugins {sub} needs a plugin name")
+    _split_kind(args)
     if sub != "config" and not (
         args.pairs or args.unset or args.file or args.replace or sub == "check"
     ):
@@ -84,7 +105,7 @@ async def settings(client: ApiClient, args: argparse.Namespace) -> int:
 
 
 async def _show(client: ApiClient, args: argparse.Namespace) -> int:
-    result = await client.call("get_plugin_config", {"plugin": args.name})
+    result = await client.call("get_plugin_config", _payload(args))
     out = _out(result)
 
     def text() -> None:
@@ -96,7 +117,8 @@ async def _show(client: ApiClient, args: argparse.Namespace) -> int:
         for key, value in extra.items():
             print_text(f"# {key} = {value!r}  (set by the host)")
         if not out.get("exists"):
-            print_text(f"no [plugins.{args.name}] settings yet")
+            kind = out.get("kind") or getattr(args, "kind", None) or "<kind>"
+            print_text(f"no [plugins.{kind}.{args.name}] settings yet")
             if out.get("config_example"):
                 print_text("\nan example to start from:\n" + out["config_example"].rstrip("\n"))
 

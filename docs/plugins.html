@@ -131,9 +131,14 @@
 <td>Language model calls (enrichers, <code>ask</code>, workspaces)</td>
 </tr>
 <tr>
+<td><code>BaseTriager</code></td>
+<td><code>oaken.triagers</code></td>
+<td>The first pipeline step: rates a message (<code>rules</code>, <code>ai</code>, custom). Deterministic; <code>LLMTriager</code> in <code>oaken_enrichers</code> adds a model</td>
+</tr>
+<tr>
 <td><code>BaseEnricher</code></td>
 <td><code>oaken.enrichers</code></td>
-<td>Per-message derivation (summary, triage, custom)</td>
+<td>Per-message derivation (summary, actions, custom)</td>
 </tr>
 <tr>
 <td><code>BaseVectorStore</code></td>
@@ -192,6 +197,11 @@ always valid.</p>
 <td>LLM backend</td>
 <td><code>oaken.llm_backends</code></td>
 <td>Runs a language model.</td>
+</tr>
+<tr>
+<td>Triager</td>
+<td><code>oaken.triagers</code></td>
+<td>Rates one message first, so core can decide what else it is owed. Runs in <code>rank</code> order; the first verdict wins and is stored under <code>triage</code>. Implement <code>async triage(msg)</code>: return an <code>EnrichOutput</code>, or None to leave it to the next.</td>
 </tr>
 <tr>
 <td>Enricher</td>
@@ -262,8 +272,9 @@ is no second list to keep in step:</p>
 </tbody>
 </table></div>
 <p><code>ctx</code> (also on <code>self.ctx</code> once started) carries your settings, a logger, the clock, and <code>config</code>,
-the table <code>[plugins.&lt;name&gt;]</code> from the user's <code>config.toml</code>. Credentials belong in the OS keyring,
+the table <code>[plugins.&lt;kind&gt;.&lt;name&gt;]</code> from the user's <code>config.toml</code>. Credentials belong in the OS keyring,
 never in config.</p>
+<p>(The kind is part of the name: <code>[plugins.triager.ai]</code>, <code>[plugins.enricher.summary]</code>, <code>[plugins.embedder.ollama]</code> and <code>[plugins.llm_backend.ollama]</code> are four different tables. The older flat <code>[plugins.&lt;name&gt;]</code> still works as a fallback and logs a warning; <code>oaken plugins set</code> writes the qualified form.)</p>
 <p>Raise <code>oaken.core.errors.AuthError</code> (or a subclass) when credentials are missing or refused. Core
 pauses that account's schedule instead of retrying, and the other accounts carry on. Core starts one
 instance of your class per account, so <code>ctx.account_id</code> tells you which one you are and is the natural
@@ -339,7 +350,7 @@ repeated question from its cache, validates the reply against <code>Answer</code
 The instructions are a literal in your source; the mail goes in as <code>UntrustedText</code> parts, and a
 lint test fails a module that builds a request any other way. The first-party enrichers
 (<code>oaken_enrichers</code>: <code>summary</code>, <code>triage</code>, <code>actions</code>, <code>inspector</code>) are the worked examples. Turn one
-off with <code>[plugins.&lt;name&gt;] enabled = false</code>; <code>summary</code> and <code>actions</code> skip bulk mail unless you set
+off with <code>[plugins.enricher.&lt;name&gt;] enabled = false</code>; <code>summary</code> and <code>actions</code> skip bulk mail unless you set
 <code>skip_bulk = false</code>.</p>
 <h3 id="teaching-ask-what-an-enricher-knows">Teaching <code>ask</code> what an enricher knows</h3>
 <p>An enricher can declare an <code>ask_intent</code>, so a person's question like &quot;any deadlines this week?&quot; or
@@ -407,7 +418,7 @@ in the CLI). A person turns a plugin on and off, restarts it and edits its setti
 </tr>
 <tr>
 <td><code>oaken plugins config NAME</code></td>
-<td>Show its <code>[plugins.NAME]</code> settings, or the example it declares if it has none.</td>
+<td>Show its <code>[plugins.KIND.NAME]</code> settings, or the example it declares if it has none.</td>
 </tr>
 <tr>
 <td><code>oaken plugins set NAME KEY=VALUE ...</code></td>
@@ -424,7 +435,7 @@ operations are available to any client (<code>plugin_enable</code>, <code>plugin
 <code>get_plugin_config</code>, <code>check_plugin_config</code>, <code>set_plugin_config</code>).</p>
 </section>
 <section id="what-a-person-can-say-about-your-plugin" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>What a person can say about your plugin</h2></div>
-<p>Every plugin's <code>[plugins.&lt;name&gt;]</code> table takes two keys that belong to the host, not to you, so your
+<p>Every plugin's <code>[plugins.&lt;kind&gt;.&lt;name&gt;]</code> table takes two keys that belong to the host, not to you, so your
 <code>ctx.config</code> never contains them:</p>
 <ul>
 <li><code>enabled = false</code> keeps the plugin off. A plugin that should be opt-in (it costs money, or reaches
@@ -589,7 +600,7 @@ no model and no real mail.</p>
 </section>
 <section id="a-first-party-example-ollama" class="doc-section"><div class="section-head"><span class="section-num">14</span><h2>A first-party example: Ollama</h2></div>
 <p><code>oaken_ollama</code> (an embedder and an LLM backend) is the reference for anything that talks to a
-model server. It reads its own <code>[plugins.&lt;entry-point-name&gt;]</code> table through <code>ctx.config</code> (here
+model server. It reads its own <code>[plugins.&lt;kind&gt;.&lt;entry-point-name&gt;]</code> table through <code>ctx.config</code> (here
 <code>base_url</code>, <code>model</code>, <code>keep_alive</code>, <code>timeout</code>, <code>max_retries</code>, <code>backoff</code>, <code>batch_size</code>), sets
 <code>model_id</code>, <code>dimensions</code> and <code>context_window</code> in <code>start()</code>, and an LLM backend sets <code>locality</code> to
 <code>&quot;local&quot;</code> or <code>&quot;remote&quot;</code> so a secure workspace can refuse it. Register one class under two entry

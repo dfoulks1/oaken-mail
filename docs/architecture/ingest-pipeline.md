@@ -34,8 +34,10 @@ flowchart LR
    triage job is queued, with the job of each enricher that has no `min_priority`. From here on the
    message is **searchable by keyword**. With triage off, parse queues the embed job and every
    enricher's job itself.
-3. **Triage** (`ingest.triage`). The `triage` enricher alone, so its priority is known before
-   anything else spends model time. When it finishes (or fails for good on its last attempt) the
+3. **Triage** (`ingest.triage`). The first step, and independent of enrichment: the **triagers**
+   (plugins of their own kind, `oaken.triagers`) run in `rank` order and the first verdict wins,
+   stored under `triage`. The default `rules` triager settles what headers can with no model; the
+   `ai` triager rates the rest. Its priority is known before anything else spends model time. When it finishes (or fails for good on its last attempt) the
    embed job and the jobs of the enrichers its result owes are queued, and `MessageTriaged` is
    published with the result.
 4. **Embed** (`ingest.embed`). Chunk text goes to the embedder and the vectors to the vector store.
@@ -118,15 +120,15 @@ refreshes only that enricher's rows.
 | Enricher | Model | Stores |
 | --- | --- | --- |
 | `summary` | yes | One to three sentences and up to five key points. A reply is summarized from its own new text plus the stored summary of the message before it, never that message's body. |
-| `triage` | only if headers cannot say | `category`, `priority` 0-3, `needs_reply`, `waiting_on_others`, a short `reason`, and `source` (`rules` or `llm`). `Auto-Submitted`, `Precedence: bulk` or `junk`, a no-reply sender, cron output (`X-Cron-Env`, a `Cron <user@host>` subject or a Cron Daemon sender), auto-reply headers and a spam verdict (`X-Spam-Flag`, `X-Spam-Status`) decide it with no model call, at priority 0. List headers alone do not: people reply through lists, so list mail goes to the model. |
+| `triage` (the `rules` then `ai` triagers) | only if headers cannot say | `category`, `priority` 0-3, `needs_reply`, `waiting_on_others`, a short `reason`, and `source` (`rules` or `llm`). `Auto-Submitted`, `Precedence: bulk` or `junk`, a no-reply sender, cron output (`X-Cron-Env`, a `Cron <user@host>` subject or a Cron Daemon sender), auto-reply headers and a spam verdict (`X-Spam-Flag`, `X-Spam-Status`) decide it with no model call, at priority 0. List headers alone do not: people reply through lists, so list mail goes to the model. |
 | `actions` | yes | Action items and deadlines, each with a quote and where it sits. A quote that is not in the message is dropped and counted in `dropped`, so an invented task is never stored. |
 | `inspector` | never | SPF, DKIM and DMARC from the topmost `Authentication-Results`, ARC, spam headers, hop count from `Received` headers, date sanity, `Reply-To` against `From`, `List-*` headers, and risky attachment names. Findings are short codes in `warnings`. |
 
 The model-backed ones cut a long message to `ai.enrich_max_input_tokens` by keeping its head and
 tail with a marker between, and say `truncated`. `summary` and `actions` do not ask a model about
 bulk or automated mail (`skip_bulk`, on by default): nobody wrote it to the reader, and it is the
-largest saving there is. `triage` runs first on every message, and `[plugins.summary] min_priority`
-or `[plugins.actions] min_priority` (0 ignore, 1 low, 2 normal, 3 soon) skips a message triage
+largest saving there is. `triage` runs first on every message, and `[plugins.enricher.summary] min_priority`
+or `[plugins.enricher.actions] min_priority` (0 ignore, 1 low, 2 normal, 3 soon) skips a message triage
 rated below that number. With no triage result, or no bar set, nothing is skipped. Every model call goes through `generate_cached`, so mail is only ever
 fenced `UntrustedText`, answers are validated against a schema, and a rerun is a cache hit.
 Enrichment never marks a message read.

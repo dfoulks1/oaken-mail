@@ -32,9 +32,9 @@ kinds it is good at, and a job carries only that enricher's instructions.
   every enricher that has no `min_priority`) when it is parsed. The enrichers that have a bar are
   queued only when triage completes, and only if its result meets it. `min_priority` is the first
   such predicate; the fan-out asks one function, "does this stored triage result owe this
-  enricher?", so a later prompt (CORE_50) can add label predicates without touching the pipeline.
+  enricher?", so a later prompt (CORE_51) can add label predicates without touching the pipeline.
   Below the bar they are never created. Embedding follows triage, as today.
-- **Triage completion publishes `MessageTriaged`** with the stored result, for CORE_50's triggers.
+- **Triage completion publishes `MessageTriaged`** with the stored result, for CORE_51's triggers.
 - **The old kind drains cheaply, with no migration.** An existing `ingest.enrich` job becomes a
   converter: it queues the per-enricher jobs for its message and finishes.
 - **Core's workers and agents race for the same jobs.** Whoever claims first wins, so nothing
@@ -46,7 +46,7 @@ kinds it is good at, and a job carries only that enricher's instructions.
 
 New enrichers, scheduling work for idle hours, a per-kind lease setting beyond today's, and a UI.
 Specialist (non-LLM) workers are PLUGIN_49. Custom triage labels, pluggable triagers and rules that
-launch automations from a label are CORE_50 (a triager is a classifier whose output can route work,
+launch automations from a label are CORE_51 (a triager is a classifier whose output can route work,
 not only enrich).
 
 ## Requirements
@@ -74,12 +74,12 @@ not only enrich).
    and status take a stage name (`enrich`) or one enricher (`enrich.summary`, `triage`); the same
    names work on the operations behind them. Add the rows to the audit table in `CLI_17`.
 
-10. **`BaseTriager`.** (In 47, not CORE_50.) A triager is a plugin that settles or rates a message for
+10. **`BaseTriager`.** (In 47, not CORE_51.) A triager is a plugin that settles or rates a message for
     the gate. `BasePlugin` is the public name for `_Base` in `src/oaken/plugins/base.py`, and
     `BaseTriager(BasePlugin)` sits beside `BaseEnricher` with its own config model. Two ship by
     default: **rules** (the deterministic set in `oaken_enrichers/triage_rules.py`) and **ai** (the
     model). They run as an ordered chain, first to settle wins, and the chain stores one result
-    under `triage` whose `source` names the triager. CORE_50 adds custom labels and triggers on top.
+    under `triage` whose `source` names the triager. CORE_51 adds custom labels and triggers on top.
 
 ## Acceptance criteria
 

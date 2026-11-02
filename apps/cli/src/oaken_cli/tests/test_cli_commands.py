@@ -337,7 +337,7 @@ async def test_plugins_config_set_and_check_edit_one_plugins_settings(
     monkeypatch.setenv("OAKEN_STATE_DIR", str(tmp_path / "state"))
     empty = await cli("plugins", "config", "fake")
     assert empty.code == int(ExitCode.OK), empty.err
-    assert "no [plugins.fake] settings yet" in empty.out
+    assert "no [plugins.provider.fake] settings yet" in empty.out
     saved = await cli("plugins", "set", "fake", "alpha=2", 'tags=["a", "b"]', "name=plain")
     assert saved.code == int(ExitCode.OK), saved.err
     assert "apply it with: oaken plugins reload fake" in saved.out

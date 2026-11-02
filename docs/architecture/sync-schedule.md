@@ -65,7 +65,7 @@ as `quiet`, so a client can hold back notifications overnight while mail keeps a
 ## Several accounts of one provider
 
 A provider plugin is a class, and core starts **one instance per account**, named
-`<plugin>@<account id>`. Its configuration is the plugin's `[plugins.<name>]` table with the
+`<plugin>@<account id>`. Its configuration is the plugin's `[plugins.<kind>.<name>]` table with the
 account's own non-secret settings on top, and its keyring entry defaults to the account id. Three
 Google accounts and a Fastmail account are four accounts, each with its own credentials.
 

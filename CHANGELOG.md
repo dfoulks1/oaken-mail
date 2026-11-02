@@ -11,6 +11,19 @@ Makes a fresh install usable without reading the docs.
 
 ### Added
 
+- Triage is its own first step and its own plugin kind, `triager` (`oaken.triagers`, `BaseTriager`,
+  `LLMTriager`). Two ship by default: `rules` (header and message rules, no model) and `ai` (a
+  model); they run in `rank` order and the first verdict wins, stored under `triage`. New rules
+  settle cron output, auto-replies and `X-Spam-Status`.
+- One job kind per enricher, `ingest.enrich.<name>`, with `ingest.triage` for the gate. Triage fans
+  out: embedding and the enrichers with a `min_priority` are queued once it has rated the message.
+  An agent claims one enricher's job and answers just that. The old `ingest.enrich` job drains into
+  the new kinds. Pause, limits and status reach each enricher (`oaken pipeline pause enrich.summary`,
+  `oaken pipeline --by-enricher`).
+- `[ingest] embed_min_priority` (default 1): mail triage rates below it is not embedded, and stays
+  keyword-searchable.
+- A `MessageTriaged` event.
+
 - A live welcome page at `/`, a config editor at `/config`, a jobs and pipeline console at `/jobs`,
   an in-app getting-started page and a shared nav, all on loopback. The `/stats` page now uses the
   same Bootstrap look. Four new operations back the editor: `config_get`, `config_validate`,
@@ -29,7 +42,7 @@ Makes a fresh install usable without reading the docs.
   and `set` (`oaken plugins set imap port=993`). A plugin offers none of these itself. The stats
   page's Plugins tab has an enable switch and a Reload button, and every one of these is audited.
 - `oaken plugins check` tries a plugin's settings on a throwaway instance before they are saved;
-  `oaken plugins config` and `set` read and write one `[plugins.<name>]` table, keeping the
+  `oaken plugins config` and `set` read and write one `[plugins.<kind>.<name>]` table, keeping the
   comments and the rest of `config.toml` (new dependency: `tomlkit`).
 
 - `oaken settings` shows and changes core's own settings (`index`, `retrieval`, `read_state`,
@@ -46,13 +59,20 @@ Makes a fresh install usable without reading the docs.
 
 ### Changed
 
+- Plugin settings are `[plugins.<kind>.<name>]` (`[plugins.triager.ai]`,
+  `[plugins.enricher.summary]`, `[plugins.provider.gmail]`). The flat `[plugins.<name>]` still
+  works and logs a warning; `oaken plugins set` writes the qualified form, and a name two kinds
+  share (`ollama`) is now unambiguous. **Upgrade:** `[plugins.triage]` becomes `[plugins.triager.ai]`
+  (drop `skip_bulk`).
+- List headers (`List-Id`, `List-Unsubscribe`, `Precedence: list`) no longer settle triage at
+  priority 0: a person can reply through a list, so list mail goes to the model.
 - `oaken start` and `oaken restart` run core in the background by default; `--fg` keeps it attached
   to the terminal (`--detach` is still accepted). `oaken stop` says what it is waiting for, gives
   core `--grace` seconds (40 by default), then kills it and clears its runtime file; `--no-kill`
   reports an error instead. `restart` takes the same flags.
 - A reload keeps the port core was already listening on when `[api] port` is `0`, so the stats page
   and other clients stay put.
-- A plugin that is installed but has no `[plugins.<name>]` settings (Gmail, IMAP, SMTP) is reported
+- A plugin that is installed but has no `[plugins.<kind>.<name>]` settings (Gmail, IMAP, SMTP) is reported
   as "not configured" instead of logging an error.
 - `sqlite-vec` is a core dependency, so the default vector store works after a plain install.
 

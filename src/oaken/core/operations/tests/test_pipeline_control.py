@@ -110,7 +110,7 @@ async def test_resuming_one_stage_while_everything_is_paused_keeps_the_other_pau
 ) -> None:
     await ops.out("pause_backfill", {})
     out = await ops.out("resume_backfill", {"stage": "embed"})
-    assert out.llm_paused is False and out.paused_stages == ["enrich"]
+    assert out.llm_paused is False and out.paused_stages == ["enrich", "triage"]
     out = await ops.out("resume_backfill", {})
     assert out.paused_stages == []
 

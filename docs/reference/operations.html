@@ -588,7 +588,7 @@
 <td>mutate</td>
 <td>never</td>
 <td>no</td>
-<td>Change one plugin's settings in its [plugins.NAME] table and leave the rest of config.toml, comments included, as it is. Keys are merged onto the saved ones (or replace them); text from an editor keeps the person's comments. Validated first; the previous file is backed up. Does not restart the plugin: call plugin_reload to apply.</td>
+<td>Change one plugin's settings in its [plugins.KIND.NAME] table (or the older [plugins.NAME]) and leave the rest of config.toml, comments included, as it is. Keys are merged onto the saved ones (or replace them); text from an editor keeps the person's comments. Validated first; the previous file is backed up. Does not restart the plugin: call plugin_reload to apply.</td>
 </tr>
 <tr>
 <td><code>set_schedule</code></td>
@@ -836,8 +836,8 @@
 <h3 id="get-plugin-config"><code>get_plugin_config</code></h3>
 <p>Read one plugin's settings: its [plugins.NAME] table, the schema of its settings and an example to start from. Non-secret only.</p>
 <ul>
-<li>Input: <code>plugin</code></li>
-<li>Output: <code>plugin</code>, <code>exists</code>, <code>config</code>, <code>text</code>?, <code>config_schema</code>?, <code>config_example</code>?</li>
+<li>Input: <code>plugin</code>, <code>kind</code>?</li>
+<li>Output: <code>plugin</code>, <code>kind</code>?, <code>exists</code>, <code>config</code>, <code>text</code>?, <code>config_schema</code>?, <code>config_example</code>?</li>
 </ul>
 <h3 id="get-raw"><code>get_raw</code></h3>
 <p>The raw headers of a message, and optionally its raw bytes, for inspection. Not for MCP.</p>
@@ -981,7 +981,7 @@
 <p>Where ingest stands: each stage's queue, throughput and ETA, and jobs parked as failed.</p>
 <ul>
 <li>Input: none</li>
-<li>Output: <code>stages</code>, <code>docs</code>, <code>chunks</code>, <code>index_stale</code>, <code>vector_model</code>?, <code>vectors</code>, <code>embedder_model</code>?, <code>embeddings_stale</code>, <code>backfill_paused</code>, <code>llm_paused</code>?, <code>quarantined_files</code>, <code>parked</code>?</li>
+<li>Output: <code>stages</code>, <code>docs</code>, <code>chunks</code>, <code>index_stale</code>, <code>vector_model</code>?, <code>vectors</code>, <code>embedder_model</code>?, <code>embeddings_stale</code>, <code>backfill_paused</code>, <code>llm_paused</code>?, <code>quarantined_files</code>, <code>parked</code>?, <code>enrichers</code>?</li>
 </ul>
 <h3 id="plugin-disable"><code>plugin_disable</code></h3>
 <p>Stop a plugin and keep it off until plugin_enable or a restart, without reloading core. Put <code>enabled = false</code> in the plugin's [plugins] table to make it last.</p>
@@ -1122,7 +1122,7 @@
 <li>Output: <code>stage</code>, <code>concurrency</code></li>
 </ul>
 <h3 id="set-plugin-config"><code>set_plugin_config</code></h3>
-<p>Change one plugin's settings in its [plugins.NAME] table and leave the rest of config.toml, comments included, as it is. Keys are merged onto the saved ones (or replace them); text from an editor keeps the person's comments. Validated first; the previous file is backed up. Does not restart the plugin: call plugin_reload to apply.</p>
+<p>Change one plugin's settings in its [plugins.KIND.NAME] table (or the older [plugins.NAME]) and leave the rest of config.toml, comments included, as it is. Keys are merged onto the saved ones (or replace them); text from an editor keeps the person's comments. Validated first; the previous file is backed up. Does not restart the plugin: call plugin_reload to apply.</p>
 <ul>
 <li>Input: <code>plugin</code>, <code>text</code>?, <code>config</code>?, <code>unset</code>?, <code>replace</code>?, <code>kind</code>?</li>
 <li>Output: <code>ok</code>, <code>path</code>, <code>backup</code>?, <code>error</code>?</li>
@@ -1262,12 +1262,6 @@
 <td>none yet</td>
 </tr>
 <tr>
-<td><code>triage</code></td>
-<td>enricher</td>
-<td>1</td>
-<td>none yet</td>
-</tr>
-<tr>
 <td><code>ollama</code></td>
 <td>llm_backend</td>
 <td>0.1.1</td>
@@ -1296,6 +1290,18 @@
 <td>provider</td>
 <td>1</td>
 <td><code>smtp.auth</code></td>
+</tr>
+<tr>
+<td><code>ai</code></td>
+<td>triager</td>
+<td>1</td>
+<td>none yet</td>
+</tr>
+<tr>
+<td><code>rules</code></td>
+<td>triager</td>
+<td>1</td>
+<td>none yet</td>
 </tr>
 <tr>
 <td><code>sqlite-vec</code></td>

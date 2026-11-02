@@ -103,8 +103,10 @@
     subgraph PARSE[ingest.parse]
         F[Sieve filter] --&gt; I[Index: fields and FTS5] --&gt; Q[Quarantine flagged attachments]
     end
-    Q --&gt;|priority - 1| E[ingest.embed]
-    Q --&gt;|priority - 2| N[ingest.enrich]
+    Q --&gt;|priority - 2| T[ingest.triage]
+    Q --&gt;|priority - 2, no bar| N[ingest.enrich.name]
+    T --&gt;|priority - 1| E[ingest.embed]
+    T --&gt;|priority - 2 - (3 - rating), bar met| N
     E --&gt; V[(vector store)]
     N --&gt; X[(enrichments in raw.db)]
 </pre><noscript><pre><code>flowchart LR
@@ -113,8 +115,10 @@
     subgraph PARSE[ingest.parse]
         F[Sieve filter] --&gt; I[Index: fields and FTS5] --&gt; Q[Quarantine flagged attachments]
     end
-    Q --&gt;|priority - 1| E[ingest.embed]
-    Q --&gt;|priority - 2| N[ingest.enrich]
+    Q --&gt;|priority - 2| T[ingest.triage]
+    Q --&gt;|priority - 2, no bar| N[ingest.enrich.name]
+    T --&gt;|priority - 1| E[ingest.embed]
+    T --&gt;|priority - 2 - (3 - rating), bar met| N
     E --&gt; V[(vector store)]
     N --&gt; X[(enrichments in raw.db)]
 </code></pre></noscript>
@@ -125,21 +129,31 @@ write changes nothing.</li>
 <li><strong>Parse</strong> (<code>ingest.parse</code>). The user's Sieve scripts run <strong>first</strong>, so a message that is
 discarded or marked <code>skip_enrich</code> never reaches the expensive stages. Then the message is
 indexed (fields and FTS5), flagged attachments are written to the quarantine folder, and the
-embed and enrich jobs are queued. From here on the message is <strong>searchable by keyword</strong>.</li>
-<li><strong>Embed</strong> (<code>ingest.embed</code>). Chunk text goes to the embedder and the vectors to the vector store.</li>
-<li><strong>Enrich</strong> (<code>ingest.enrich</code>). Each enricher runs on the cleaned text, and on the message's
-headers and attachment metadata. The first-party ones are <code>summary</code>, <code>triage</code>, <code>actions</code> and
-<code>inspector</code> (see below).</li>
+triage job is queued, with the job of each enricher that has no <code>min_priority</code>. From here on the
+message is <strong>searchable by keyword</strong>. With triage off, parse queues the embed job and every
+enricher's job itself.</li>
+<li><strong>Triage</strong> (<code>ingest.triage</code>). The first step, and independent of enrichment: the <strong>triagers</strong>
+(plugins of their own kind, <code>oaken.triagers</code>) run in <code>rank</code> order and the first verdict wins,
+stored under <code>triage</code>. The default <code>rules</code> triager settles what headers can with no model; the
+<code>ai</code> triager rates the rest. Its priority is known before anything else spends model time. When it finishes (or fails for good on its last attempt) the
+embed job and the jobs of the enrichers its result owes are queued, and <code>MessageTriaged</code> is
+published with the result.</li>
+<li><strong>Embed</strong> (<code>ingest.embed</code>). Chunk text goes to the embedder and the vectors to the vector store.
+It waits for triage, and mail triage rated below <code>ingest.embed_min_priority</code> is not embedded.</li>
+<li><strong>Enrich</strong> (<code>ingest.enrich.&lt;name&gt;</code>, one kind per enricher). Each runs on the cleaned text, and
+on the message's headers and attachment metadata. The first-party ones are <code>summary</code>, <code>actions</code>
+and <code>inspector</code> (see below). A job of the old <code>ingest.enrich</code> kind queues the per-enricher jobs
+for its message and ends; it never calls a model.</li>
 </ol>
 <p>Embedding and enrichment are separate jobs because they are slow, can fail for different reasons,
 and can be switched off on their own. With no embedder configured the pipeline is just store, filter
 and index, and everything keyword-related works.</p>
 </section>
 <section id="priorities-and-backlogs" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Priorities and backlogs</h2></div>
-<p>A job's priority is that of the parse job minus 1 (embed) or minus 2 (enrich). New mail is
+<p>A job's priority is that of the parse job minus 1 (embed) or minus 2 (triage, enrich). New mail is
 priority 50 and a backfill is 10, so a backlog of parsing always runs ahead of a backlog of
 embedding, and new mail overtakes a backfill at every stage. Concurrency per stage is set with
-<code>ingest.embed_concurrency</code> and <code>ingest.enrich_concurrency</code> (default 1: one local GPU).</p>
+<code>ingest.embed_concurrency</code>, <code>ingest.triage_concurrency</code> and <code>ingest.enrich_concurrency</code> (default 1: one local GPU).</p>
 <p><strong>Backpressure.</strong> A first sync of a large mailbox is a <em>backfill</em>. When the queued and running
 <code>ingest.*</code> jobs reach <code>ingest.backfill_queue_cap</code> (default 2000), the backfill pauses, keeping its
 cursor, and picks up on the next sync. The paused state is saved (<code>mail.backfill</code>), so a paused
@@ -243,9 +257,9 @@ refreshes only that enricher's rows.</p>
 <td>One to three sentences and up to five key points. A reply is summarized from its own new text plus the stored summary of the message before it, never that message's body.</td>
 </tr>
 <tr>
-<td><code>triage</code></td>
+<td><code>triage</code> (the <code>rules</code> then <code>ai</code> triagers)</td>
 <td>only if headers cannot say</td>
-<td><code>category</code>, <code>priority</code> 0-3, <code>needs_reply</code>, <code>waiting_on_others</code>, a short <code>reason</code>, and <code>source</code> (<code>rules</code> or <code>llm</code>). <code>Auto-Submitted</code>, <code>Precedence: bulk</code>, <code>List-Id</code>, <code>List-Unsubscribe</code> and a no-reply sender decide the category with no model call.</td>
+<td><code>category</code>, <code>priority</code> 0-3, <code>needs_reply</code>, <code>waiting_on_others</code>, a short <code>reason</code>, and <code>source</code> (<code>rules</code> or <code>llm</code>). <code>Auto-Submitted</code>, <code>Precedence: bulk</code> or <code>junk</code>, a no-reply sender, cron output (<code>X-Cron-Env</code>, a <code>Cron &lt;user@host&gt;</code> subject or a Cron Daemon sender), auto-reply headers and a spam verdict (<code>X-Spam-Flag</code>, <code>X-Spam-Status</code>) decide it with no model call, at priority 0. List headers alone do not: people reply through lists, so list mail goes to the model.</td>
 </tr>
 <tr>
 <td><code>actions</code></td>
@@ -262,8 +276,8 @@ refreshes only that enricher's rows.</p>
 <p>The model-backed ones cut a long message to <code>ai.enrich_max_input_tokens</code> by keeping its head and
 tail with a marker between, and say <code>truncated</code>. <code>summary</code> and <code>actions</code> do not ask a model about
 bulk or automated mail (<code>skip_bulk</code>, on by default): nobody wrote it to the reader, and it is the
-largest saving there is. <code>triage</code> runs first on every message, and <code>[plugins.summary] min_priority</code>
-or <code>[plugins.actions] min_priority</code> (0 ignore, 1 low, 2 normal, 3 soon) skips a message triage
+largest saving there is. <code>triage</code> runs first on every message, and <code>[plugins.enricher.summary] min_priority</code>
+or <code>[plugins.enricher.actions] min_priority</code> (0 ignore, 1 low, 2 normal, 3 soon) skips a message triage
 rated below that number. With no triage result, or no bar set, nothing is skipped. Every model call goes through <code>generate_cached</code>, so mail is only ever
 fenced <code>UntrustedText</code>, answers are validated against a schema, and a rerun is a cache hit.
 Enrichment never marks a message read.</p>
@@ -325,9 +339,14 @@ store can sit behind it later.</p>
 <td>Attempts before a stage job is parked</td>
 </tr>
 <tr>
-<td><code>ingest.embed_concurrency</code> / <code>enrich_concurrency</code></td>
+<td><code>ingest.embed_concurrency</code> / <code>enrich_concurrency</code> / <code>triage_concurrency</code></td>
 <td>1</td>
-<td>Jobs of each stage at once</td>
+<td>Jobs of each stage at once; triage is its own job, queued first</td>
+</tr>
+<tr>
+<td><code>ingest.embed_min_priority</code></td>
+<td>1</td>
+<td>Mail triage rated below this is not embedded (still keyword-searchable). Unrated mail is embedded. Unset embeds everything</td>
 </tr>
 <tr>
 <td><code>ai.enrich_max_input_tokens</code></td>

@@ -85,7 +85,7 @@ llm_backend = "ollama-remote"
 - Structured output uses Ollama's `format` field with the task's JSON schema.
 
 ```toml
-[plugins.ollama]
+[plugins.llm_backend.ollama]
 # base_url defaults to this machine
 keep_alive = "5m"
 batch_size = 32

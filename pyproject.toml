@@ -51,9 +51,12 @@ dependencies = [
 [project.entry-points."oaken.embedders"]
 ollama = "oaken_ollama:OllamaEmbedder"
 
+[project.entry-points."oaken.triagers"]
+rules = "oaken_enrichers:RulesTriager"
+ai = "oaken_enrichers:AITriager"
+
 [project.entry-points."oaken.enrichers"]
 summary = "oaken_enrichers:SummaryEnricher"
-triage = "oaken_enrichers:TriageEnricher"
 actions = "oaken_enrichers:ActionsEnricher"
 inspector = "oaken_enrichers:InspectorEnricher"
 

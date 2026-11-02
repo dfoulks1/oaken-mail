@@ -102,7 +102,7 @@ exposed over MCP; the outbox, audit and confirmation step come in a later prompt
 </section>
 <section id="configure-it" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Configure it</h2></div>
 <p>Add a table to <code>config.toml</code>. There is no password setting, on purpose.</p>
-<div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[plugins.smtp]</span>
+<div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[plugins.provider.smtp]</span>
 <span class="n">host</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"smtp.example.com"</span>
 <span class="n">security</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"starttls"</span><span class="w">        </span><span class="c1"># "starttls" (port 587) or "tls" (port 465); there is no other choice</span>
 <span class="n">username</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"me@example.com"</span><span class="w">  </span><span class="c1"># defaults to from_address</span>
@@ -171,7 +171,7 @@ check notices the new one.</p>
 <p>The plugin's tests run against an in-process fake server, so they prove the protocol handling and
 not that your provider accepts it. To try yours:</p>
 <ol>
-<li>Add <code>[plugins.smtp]</code> and store the password as above.</li>
+<li>Add <code>[plugins.provider.smtp]</code> and store the password as above.</li>
 <li>Run <code>uv run pytest -m live_smtp</code>. By default it connects, requires TLS and logs in, and sends
 nothing.</li>
 <li>To send one short test message, set <code>OAKEN_LIVE_SMTP_TO</code> to an address you own and run it again.</li>

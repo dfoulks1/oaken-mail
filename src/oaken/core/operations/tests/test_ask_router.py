@@ -11,7 +11,7 @@ from oaken.core.operations.tests.conftest import Ops
 from oaken.core.search import route
 from oaken.plugins.base import BaseEnricher
 from oaken.plugins.contracts import AskIntent, EnrichOutput
-from oaken_enrichers import ActionsEnricher, SummaryEnricher, TriageEnricher
+from oaken_enrichers import ActionsEnricher, AITriager, SummaryEnricher
 
 
 @pytest.fixture(autouse=True)
@@ -35,11 +35,19 @@ def first_party_intents(request: pytest.FixtureRequest) -> None:
         )
         for name, cls in (
             ("summary", SummaryEnricher),
-            ("triage", TriageEnricher),
             ("actions", ActionsEnricher),
         )
     }
+    triage = SimpleNamespace(
+        ask_intent=AITriager.ask_intent,
+        needs_llm=False,
+        version="1",
+        rank=90,
+        output_model=None,
+        triage=nothing,
+    )
     ops.svc.need_pipeline().backends.enrichers = lambda: stand_ins
+    ops.svc.need_pipeline().backends.triagers = lambda: {"ai": triage}
 
 
 async def store(ops: Ops, mid: str, enricher: str, data: dict[str, Any]) -> None:

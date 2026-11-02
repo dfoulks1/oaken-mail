@@ -105,7 +105,7 @@ once.</p>
 </section>
 <section id="configure-it" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>Configure it</h2></div>
 <p>Add a table to <code>config.toml</code>. There is no password setting, on purpose.</p>
-<div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[plugins.imap]</span>
+<div class="code"><pre class="highlight"><code class="language-toml"><span class="k">[plugins.provider.imap]</span>
 <span class="n">host</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"imap.example.com"</span>
 <span class="n">username</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"me@example.com"</span>
 <span class="n">security</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"tls"</span><span class="w">             </span><span class="c1"># "tls" (port 993) or "starttls" (port 143); there is no other choice</span>
@@ -222,7 +222,7 @@ missing STARTTLS, an untrusted certificate or a server that is not IMAP is not.<
 <p>The plugin's tests run against an in-process fake server, so they prove the protocol handling and not
 that your provider accepts it. To try yours:</p>
 <ol>
-<li>Add <code>[plugins.imap]</code> and store the password as above.</li>
+<li>Add <code>[plugins.provider.imap]</code> and store the password as above.</li>
 <li>Run <code>uv run pytest -m live_imap</code>. It requires TLS, logs in and reads up to ten messages from
 <code>INBOX</code> (set <code>OAKEN_LIVE_IMAP_FOLDER</code> for another folder). It writes nothing and marks nothing
 read.</li>

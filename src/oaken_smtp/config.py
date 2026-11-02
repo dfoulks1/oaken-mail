@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""``[plugins.smtp]``. Nothing here is a secret: the password lives only in the OS keyring
+"""``[plugins.provider.smtp]``. Nothing here is a secret: the password lives only in the OS keyring
 (service ``oaken``, user ``smtp:<account>``). There is deliberately no way to ask for plaintext."""
 
 from typing import Any, Literal
@@ -36,4 +36,6 @@ class SmtpConfig(BaseModel):
             return cls.model_validate(raw)
         except ValidationError as exc:
             fields = ", ".join(str(e["loc"][0]) for e in exc.errors() if e["loc"])
-            raise PluginError(f"smtp: invalid [plugins.smtp] settings ({fields})") from None
+            raise PluginError(
+                f"smtp: invalid [plugins.provider.smtp] settings ({fields})"
+            ) from None

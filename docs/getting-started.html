@@ -129,7 +129,7 @@ the last home it ran under, or the platform folders if there is none, and tells 
 add. Core cannot export a variable into your shell; it remembers the home in a small pointer file
 outside the home instead.</p>
 <h3 id="plugins-that-are-not-set-up">Plugins that are not set up</h3>
-<p>A plugin that is installed but has no <code>[plugins.&lt;name&gt;]</code> table (Gmail, IMAP, SMTP) is listed as
+<p>A plugin that is installed but has no <code>[plugins.&lt;kind&gt;.&lt;name&gt;]</code> table (Gmail, IMAP, SMTP) is listed as
 &quot;not configured&quot;, not as an error. To turn one off for good, set <code>enabled = false</code> in its table.
 Without restarting core: <code>oaken plugins disable gmail</code>, <code>oaken plugins enable gmail</code>, and
 <code>oaken plugins reload gmail</code> to pick up a change to its table. <code>oaken plugins config gmail</code> shows

@@ -23,7 +23,7 @@ exposed over MCP; the outbox, audit and confirmation step come in a later prompt
 Add a table to `config.toml`. There is no password setting, on purpose.
 
 ```toml
-[plugins.smtp]
+[plugins.provider.smtp]
 host = "smtp.example.com"
 security = "starttls"        # "starttls" (port 587) or "tls" (port 465); there is no other choice
 username = "me@example.com"  # defaults to from_address
@@ -81,7 +81,7 @@ check notices the new one.
 The plugin's tests run against an in-process fake server, so they prove the protocol handling and
 not that your provider accepts it. To try yours:
 
-1. Add `[plugins.smtp]` and store the password as above.
+1. Add `[plugins.provider.smtp]` and store the password as above.
 2. Run `uv run pytest -m live_smtp`. By default it connects, requires TLS and logs in, and sends
    nothing.
 3. To send one short test message, set `OAKEN_LIVE_SMTP_TO` to an address you own and run it again.

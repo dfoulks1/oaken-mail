@@ -2113,6 +2113,18 @@
   "get_plugin_config": {
     "input_schema": {
       "properties": {
+        "kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        },
         "plugin": {
           "title": "Plugin",
           "type": "string"
@@ -2154,6 +2166,11 @@
         "exists": {
           "title": "Exists",
           "type": "boolean"
+        },
+        "kind": {
+          "default": "",
+          "title": "Kind",
+          "type": "string"
         },
         "plugin": {
           "title": "Plugin",
@@ -4815,10 +4832,6 @@
         "stage": {
           "anyOf": [
             {
-              "enum": [
-                "embed",
-                "enrich"
-              ],
               "type": "string"
             },
             {
@@ -5230,6 +5243,13 @@
         "embeddings_stale": {
           "title": "Embeddings Stale",
           "type": "boolean"
+        },
+        "enrichers": {
+          "additionalProperties": {
+            "$ref": "#/$defs/StageOut"
+          },
+          "title": "Enrichers",
+          "type": "object"
         },
         "index_stale": {
           "title": "Index Stale",
@@ -6239,10 +6259,6 @@
         "stage": {
           "anyOf": [
             {
-              "enum": [
-                "embed",
-                "enrich"
-              ],
               "type": "string"
             },
             {
@@ -8054,10 +8070,6 @@
           "type": "integer"
         },
         "stage": {
-          "enum": [
-            "embed",
-            "enrich"
-          ],
           "title": "Stage",
           "type": "string"
         }

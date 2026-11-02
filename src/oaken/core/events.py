@@ -153,7 +153,7 @@ class MessageEnriched(Event):
 
 @dataclass(frozen=True, kw_only=True)
 class MessageTriaged(Event):
-    """The gate enricher stored its result; ``result`` is that result, for triggers (CORE_50)."""
+    """The gate enricher stored its result; ``result`` is that result, for triggers (CORE_51)."""
 
     account_id: AccountId
     message_id: MessageId

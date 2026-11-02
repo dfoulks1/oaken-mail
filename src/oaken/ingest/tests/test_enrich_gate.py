@@ -6,12 +6,12 @@ from typing import Any, cast
 from oaken.core.settings import IngestSettings
 from oaken.ingest.pipeline import EMBED, ENRICH, TRIAGE, MessagePayload, enrich_kind
 from oaken.ingest.tests.conftest import Enricher, Options, mail
-from oaken.plugins.base import BaseEnricher
-from oaken.plugins.contracts import EnrichInput, EnrichOutput
+from oaken.plugins.base import BaseTriager
+from oaken.plugins.contracts import EnrichInput, EnrichOutput, Triager
 
 
-class Rater(BaseEnricher):
-    """A stand-in for triage: priority from the message number in its id order."""
+class Rater(BaseTriager):
+    """A stand-in triager that rates every message with one priority."""
 
     version = "1"
 
@@ -19,7 +19,7 @@ class Rater(BaseEnricher):
         self.priority = priority
         self.calls = 0
 
-    async def enrich(self, msg: EnrichInput) -> EnrichOutput:
+    async def triage(self, msg: EnrichInput) -> EnrichOutput | None:
         self.calls += 1
         return EnrichOutput({"category": "personal", "priority": self.priority})
 
@@ -27,10 +27,8 @@ class Rater(BaseEnricher):
 async def run(rig: Any, priority: int, bar: int | str | None) -> tuple[Rater, int]:
     rater = Rater(priority)
     # sorted by name "triage" would come after "words"; the gate must run it first anyway
-    rig.pipeline.backends.enrichers = lambda: {
-        "words": cast(Enricher, rig.enricher),
-        "triage": cast(Enricher, rater),
-    }
+    rig.pipeline.backends.enrichers = lambda: {"words": cast(Enricher, rig.enricher)}
+    rig.pipeline.backends.triagers = lambda: {"triage": cast(Triager, rater)}
     if bar is not None:
         rig.pipeline.settings.plugins["words"] = {"min_priority": bar}
     rig.provider.add_message(mail(1))
@@ -73,15 +71,15 @@ async def test_a_bar_written_as_a_string_still_gates(make_rig: Any) -> None:
         assert rater.calls == 1 and words == 0
 
 
-class Broken(BaseEnricher):
-    """A triage whose model is down."""
+class Broken(BaseTriager):
+    """A triager whose model is down."""
 
     version = "1"
 
     def __init__(self) -> None:
         self.calls = 0
 
-    async def enrich(self, msg: EnrichInput) -> EnrichOutput:
+    async def triage(self, msg: EnrichInput) -> EnrichOutput | None:
         self.calls += 1
         raise RuntimeError("model down")
 
@@ -103,10 +101,8 @@ async def test_a_legacy_enrich_job_drains_into_triage_and_per_enricher_jobs(make
         await rig.run_sync()
         await rig.drain()
         rater = Rater(2)
-        rig.pipeline.backends.enrichers = lambda: {
-            "words": cast(Enricher, rig.enricher),
-            "triage": cast(Enricher, rater),
-        }
+        rig.pipeline.backends.enrichers = lambda: {"words": cast(Enricher, rig.enricher)}
+        rig.pipeline.backends.triagers = lambda: {"triage": cast(Triager, rater)}
         rig.pipeline.register_enrichers(rig.runner)  # "words" was not there at start
         rig.pipeline.settings.plugins["words"] = {"min_priority": 2}
         await rig.queue.enqueue(ENRICH, MessagePayload(message_id=await rig.mid(pid)))
@@ -119,10 +115,8 @@ async def test_triage_failing_for_good_still_queues_the_gated_enrichers(make_rig
     opts = Options(embedder=False, ingest=IngestSettings(stage_max_attempts=2))
     async with make_rig(opts) as rig:
         broken = Broken()
-        rig.pipeline.backends.enrichers = lambda: {
-            "words": cast(Enricher, rig.enricher),
-            "triage": cast(Enricher, broken),
-        }
+        rig.pipeline.backends.enrichers = lambda: {"words": cast(Enricher, rig.enricher)}
+        rig.pipeline.backends.triagers = lambda: {"triage": cast(Triager, broken)}
         rig.pipeline.settings.plugins["words"] = {"min_priority": 2}
         rig.provider.add_message(mail(1))
         await rig.run_sync()
@@ -140,10 +134,9 @@ async def test_embedding_waits_for_triage_and_follows_it(make_rig: Any) -> None:
 
 async def test_no_embed_job_exists_while_triage_is_still_retrying(make_rig: Any) -> None:
     async with make_rig(Options(ingest=IngestSettings(stage_max_attempts=2))) as rig:
-        rig.pipeline.backends.enrichers = lambda: {
-            "words": cast(Enricher, rig.enricher),
-            "triage": cast(Enricher, Broken()),
-        }
+        broken = Broken()
+        rig.pipeline.backends.enrichers = lambda: {"words": cast(Enricher, rig.enricher)}
+        rig.pipeline.backends.triagers = lambda: {"triage": cast(Triager, broken)}
         rig.provider.add_message(mail(1))
         await rig.run_sync()
         await rig.drain()  # parse, then triage attempt 1 fails and waits out its backoff

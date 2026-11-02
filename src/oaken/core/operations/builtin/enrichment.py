@@ -72,7 +72,7 @@ async def enrich_message(ctx: OpContext, inp: EnrichMessageInput) -> EnrichMessa
     mid = MessageId(inp.message_id)
     await ctx.svc.raw.get_message(mid)
     if inp.enrichers is not None:
-        known = set(pipeline.backends.enrichers())
+        known = set(pipeline.backends.enrichers()) | {"triage"}
         unknown = sorted(set(inp.enrichers) - known)
         if unknown:
             raise InvalidInput(f"no such enricher: {', '.join(unknown)}")

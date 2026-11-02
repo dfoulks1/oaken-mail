@@ -106,7 +106,7 @@ class ImapProvider(BaseProvider):
         "password in the keyring."
     )
     config_example = (
-        "[plugins.imap]\n"
+        "[plugins.provider.imap]\n"
         'host = "imap.example.com"\n'
         'security = "tls"       # or "starttls"\n'
         'username = "you@example.com"\n'
@@ -324,7 +324,7 @@ class ImapProvider(BaseProvider):
         hit = roles.find(everyone, role, configured)
         if hit is None:
             raise ProviderError(
-                f"imap: no {role} folder was found. Name it in [plugins.imap] "
+                f"imap: no {role} folder was found. Name it in [plugins.provider.imap] "
                 f"({role}_folder = ...), or create one the server marks as {role}."
             )
         return hit

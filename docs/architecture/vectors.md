@@ -31,7 +31,7 @@ with a p50 of 548 ms, or 360 ms with a filter that keeps a small share of the ma
 
 `int8` vectors are 4x smaller and a little faster, but recall at 10 fell to 0.89 at 384 dimensions
 (0.98 at 768). **float32 is the default**; int8 is a setting: `dtype = "int8"` in
-`[plugins.sqlite-vec]`. The choice is stored per model, so changing it applies to the next model
+`[plugins.vector_store.sqlite-vec]`. The choice is stored per model, so changing it applies to the next model
 you build (see below), and the old vectors stay as they were.
 
 ## What it stores

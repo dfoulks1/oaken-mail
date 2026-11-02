@@ -308,7 +308,7 @@ class Console:
             saved = await self.op("set_settings", {"section": "ai", "values": {"ask_model": model}})
         else:
             saved = await self.op(
-                "set_plugin_config", {"plugin": plugin, "config": {"model": model}}
+                "set_plugin_config", {"plugin": plugin, "kind": kind, "config": {"model": model}}
             )
         if (why := _problem(saved)) is not None:
             return danger(f"Could not set the model: {why}")
@@ -333,7 +333,10 @@ class Console:
                     return danger(f"{field} must be a number.")
             else:
                 config[field] = raw
-        saved = await self.op("set_plugin_config", {"plugin": plugin, "config": config})
+        payload: dict[str, Any] = {"plugin": plugin, "config": config}
+        if kind := f.one("kind"):
+            payload["kind"] = kind
+        saved = await self.op("set_plugin_config", payload)
         if (why := _problem(saved)) is not None:
             return danger(f"Could not save {plugin}'s settings: {why}")
         return ok(f"{plugin} settings saved to config.toml. Reload the plugin to apply them.")
@@ -346,7 +349,7 @@ class Console:
         row = next((p for p in getattr(out, "plugins", []) if p.name == name), None)
         detail = (row.detail or ("healthy" if row.healthy else "done")) if row else "done"
         if verb == "enable" and row is not None and not row.started and row.detail == "disabled":
-            table = name.split("@")[0]
+            table = f"{row.kind}.{name.split('@')[0]}"
             return warn(
                 f"{name} stays off: its [plugins.{table}] table says enabled = false.",
                 f"Change it with: oaken plugins set {table} enabled=true, then reload.",
@@ -444,4 +447,13 @@ ACTIONS: dict[str, Action] = {
     "config-reload": Console.do_config_reload,
 }
 
-__all__ = ["ACTIONS", "CHART_UMD_JS", "CSS", "CSS_VERSION", "JOBS_CHART_JS", "LOGO", "REFRESH_JS", "Console"]
+__all__ = [
+    "ACTIONS",
+    "CHART_UMD_JS",
+    "CSS",
+    "CSS_VERSION",
+    "JOBS_CHART_JS",
+    "LOGO",
+    "REFRESH_JS",
+    "Console",
+]

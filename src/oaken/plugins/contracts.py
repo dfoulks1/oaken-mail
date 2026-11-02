@@ -31,12 +31,13 @@ if TYPE_CHECKING:  # ``oaken.ai.prompts`` imports this module
 PLUGIN_API_VERSION = 2
 
 PluginKind = Literal[
-    "provider", "embedder", "llm_backend", "enricher", "vector_store", "cache_store"
+    "provider", "embedder", "llm_backend", "triager", "enricher", "vector_store", "cache_store"
 ]
 PLUGIN_KINDS: tuple[PluginKind, ...] = (
     "provider",
     "embedder",
     "llm_backend",
+    "triager",
     "enricher",
     "vector_store",
     "cache_store",
@@ -47,6 +48,7 @@ ENTRY_POINT_GROUPS: dict[str, str] = {
     "provider": "oaken.providers",
     "embedder": "oaken.embedders",
     "llm_backend": "oaken.llm_backends",
+    "triager": "oaken.triagers",
     "enricher": "oaken.enrichers",
     "vector_store": "oaken.vector_stores",
     "cache_store": "oaken.cache_stores",
@@ -62,6 +64,7 @@ CAPABILITIES: dict[str, dict[str, str]] = {
     },
     "embedder": {},
     "llm_backend": {},
+    "triager": {},
     "enricher": {},
     "vector_store": {},
     "cache_store": {},
@@ -72,6 +75,7 @@ REQUIRED_MEMBERS: dict[str, list[str]] = {
     "provider": [],
     "embedder": ["model_id", "dimensions", "embed"],
     "llm_backend": ["model_id", "context_window", "generate"],
+    "triager": ["version", "needs_llm", "rank", "triage"],
     "enricher": ["version", "needs_llm", "enrich"],
     "vector_store": ["upsert", "delete", "query", "stats"],
     "cache_store": ["key", "get", "put", "stats", "clear"],
@@ -573,6 +577,22 @@ class Enricher(Plugin, Protocol):
 
     async def enrich(self, msg: EnrichInput) -> EnrichOutput:
         """Derive this enricher's result for ``msg``."""
+        ...
+
+
+@runtime_checkable
+class Triager(Plugin, Protocol):
+    """The first step of the pipeline: rates one message so core can decide what else it is owed.
+    Triagers run in ``rank`` order (lowest first) and the first verdict wins. ``version`` is part
+    of the cache key: bump it when the output could change."""
+
+    version: str
+    needs_llm: bool
+    rank: int
+    output_schema: dict[str, Any]
+
+    async def triage(self, msg: EnrichInput) -> EnrichOutput | None:
+        """The verdict for ``msg``, or None to leave it to the next triager."""
         ...
 
 

@@ -45,6 +45,7 @@ from oaken.plugins.contracts import (
     PluginStage,
     PluginStageContext,
     Provider,
+    Triager,
     VectorStore,
 )
 from oaken.plugins.validate import (
@@ -276,7 +277,14 @@ class PluginHost:
 
     async def _start_one(self, rec: _Record) -> None:
         base_name = rec.name.partition(ACCOUNT_SEP)[0]
-        config = {**self.settings.plugins.get(base_name, {}), **(rec.overlay or {})}
+        config = {**self.settings.plugin_table(rec.kind, base_name), **(rec.overlay or {})}
+        flat = self.settings.plugins.get(base_name)
+        qualified = self.settings.plugins.get(rec.kind)
+        if isinstance(flat, dict) and not (isinstance(qualified, dict) and base_name in qualified):
+            log.warning(  # the flat form is the exception now: [plugins.<kind>.<name>] is the rule
+                "plugin settings use the old flat table; move it under its kind",
+                plugin=base_name, move_to=f"plugins.{rec.kind}.{base_name}",
+            )  # fmt: skip
         # ``enabled`` and ``capabilities`` are the host's, not the plugin's settings: a plugin never
         # sees them.
         if not self._is_enabled(rec, config) or rec.disabled:
@@ -812,7 +820,7 @@ class PluginHost:
     # -- lookup ------------------------------------------------------------------------------
     def _table(self, rec: _Record) -> dict[str, Any]:
         base = rec.name.partition(ACCOUNT_SEP)[0]
-        return {**self.settings.plugins.get(base, {}), **(rec.overlay or {})}
+        return {**self.settings.plugin_table(rec.kind, base), **(rec.overlay or {})}
 
     def statuses(self) -> list[PluginStatus]:
         return [
@@ -886,6 +894,12 @@ class PluginHost:
         """Every healthy enricher by its entry-point name (the name results are cached under)."""
         usable = self._usable("enricher")
         return {n: cast(Enricher, usable[n].instance) for n in sorted(usable)}
+
+    def named_triagers(self) -> dict[str, Triager]:
+        """Every healthy triager by name, in ``rank`` order (then name): the order they run."""
+        usable = self._usable("triager")
+        order = sorted(usable, key=lambda n: (getattr(usable[n].instance, "rank", 50), n))
+        return {n: cast(Triager, usable[n].instance) for n in order}
 
     def get_started(self, kind: PluginKind, name: str) -> Any:
         """The plugin called ``name`` if it started, healthy or not. For the few things that must

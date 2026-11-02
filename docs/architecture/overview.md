@@ -66,7 +66,8 @@ in-process and are first-party only.
 | Provider | Authenticate, pull mail, write flags back | Gmail |
 | Embedder | Turn text into vectors | Ollama |
 | LLM backend | Run local language models | Ollama |
-| Enricher | Derive summaries, triage, actions, header inspection | Built in |
+| Triager | Rate a message first (rules, then a model) so core knows what else it is owed | Built in |
+| Enricher | Derive summaries, actions, header inspection | Built in |
 | Vector store | Store and search vectors | sqlite-vec |
 
 Plugins are optional-base-class subclasses (or any object with the right members) registered as Python entry points; see [Writing a plugin](../plugins.md).

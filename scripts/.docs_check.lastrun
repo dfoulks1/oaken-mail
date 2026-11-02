@@ -1,8 +1,8 @@
 {
   "label": "docs",
-  "sha": "6c41ad2",
-  "tree": "c1ca2c184238e74e216f979a90882414b476ab17",
-  "timestamp": 1792930965,
+  "sha": "b1c68f8",
+  "tree": "7d77e7887364d7ba08650370db6177032f4ed88d",
+  "timestamp": 1793638400,
   "passed": true,
   "steps": [
     {
@@ -24,7 +24,7 @@
         "docs/tools/build_site.py"
       ],
       "ok": true,
-      "output": "Built 61 files into /home/dfoulks/local/oaken-mail/docs\n"
+      "output": "Built 50 files into /home/dfoulks/local/oaken-mail/docs\n"
     },
     {
       "step": "check docs",

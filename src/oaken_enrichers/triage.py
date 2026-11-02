@@ -13,8 +13,9 @@ from pydantic import BaseModel, Field, field_validator
 
 from oaken.ai.prompts import PromptBuilder, SafeOutput
 from oaken.core.untrusted import UntrustedText
+from oaken.plugins.base import BaseTriager
 from oaken.plugins.contracts import AskIntent, EnrichInput, EnrichOutput
-from oaken_enrichers._common import LLMEnricher, digest, fit, labeled
+from oaken_enrichers._common import LLMTriager, digest, fit, labeled
 from oaken_enrichers.triage_rules import Category, settled
 
 MAX_REASON_WORDS = 20
@@ -65,7 +66,46 @@ TRIAGE = PromptBuilder(
 )
 
 
-class TriageEnricher(LLMEnricher):
+class RulesConfig(BaseModel):
+    skip_rules: list[str] = Field(
+        default_factory=list,
+        description="Rules to switch off, by name: auto_submitted, bulk, no_reply, cron, "
+        "auto_reply, spam, empty.",
+    )
+
+
+class RulesTriager(BaseTriager):
+    """The deterministic triager: headers and the message itself settle it with no model, at
+    priority 0. Mail no rule settles goes on to the next triager."""
+
+    version = "1"
+    rank = 10
+    output_model = TriageResult
+    config_model = RulesConfig
+    ask_intent = None
+
+    async def triage(self, msg: EnrichInput) -> EnrichOutput | None:
+        skip = self.config.skip_rules if isinstance(self.config, RulesConfig) else ()
+        found = settled(msg, skip)
+        if found is None:
+            return None
+        category, rule = found
+        return EnrichOutput(
+            TriageResult(
+                category=category,
+                priority=0,
+                needs_reply=False,
+                waiting_on_others=False,
+                reason=f"Decided by header rule {rule}.",
+                source="rules",
+                rule=rule,
+            ).model_dump(mode="json")
+        )
+
+
+class AITriager(LLMTriager):
+    """The model-backed triager. The chain asks it only for mail the deterministic ones leave."""
+
     version = "1"
     output_model = TriageResult
     prompt = TRIAGE
@@ -75,25 +115,8 @@ class TriageEnricher(LLMEnricher):
         ("category", "priority", "needs_reply", "reason"),
     )
 
-    def needs_model(self, msg: EnrichInput) -> bool:
-        return settled(msg) is None
-
-    async def enrich(self, msg: EnrichInput) -> EnrichOutput:
+    async def triage(self, msg: EnrichInput) -> EnrichOutput | None:
         sender = msg.headers.get("from", UntrustedText("")).unwrap()
-        found = settled(msg)
-        if found is not None:
-            category, rule = found
-            return EnrichOutput(
-                TriageResult(
-                    category=category,
-                    priority=0,
-                    needs_reply=False,
-                    waiting_on_others=False,
-                    reason=f"Decided by header rule {rule}.",
-                    source="rules",
-                    rule=rule,
-                ).model_dump(mode="json")
-            )
         body, truncated = fit(msg.body.unwrap(), self.budget(), self.tokenizer)
         answer = await self.access().generate_cached(
             TRIAGE,

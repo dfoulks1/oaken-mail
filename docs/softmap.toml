@@ -447,7 +447,8 @@ uses = ["safety"]
 untrusted = true
 types = [
   ["SummaryEnricher", "class", "Sentences and key points; a reply is summarized from its new text plus the parent's stored summary."],
-  ["TriageEnricher", "class", "Category, priority and reply flags; header rules decide bulk, automated and no-reply mail with no model call."],
+  ["RulesTriager", "class", "The deterministic triager: header and message rules (bulk, automated, no-reply, cron, auto-reply, spam, empty) rate mail priority 0 with no model call."],
+  ["AITriager", "class", "The model triager: category, priority and reply flags for mail the rules leave."],
   ["ActionsEnricher", "class", "Action items and deadlines; an item whose quote is not in the message is dropped."],
   ["InspectorEnricher", "class", "SPF, DKIM, DMARC, ARC, hops, date, Reply-To, List-* and risky attachments. No model."],
 ]

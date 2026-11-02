@@ -230,7 +230,7 @@
     {% for c in models %}{% if c.config_schema and c.config_schema.properties %}
     <div class="dialog" id="pm-{{ c.kind }}-{{ c.name }}" popover role="dialog" aria-labelledby="pm-{{ c.kind }}-{{ c.name }}-t">
       <form method="post" action="/ui/plugin-settings">
-        {{ m.guard("/stats?tab=ai") }}<input type="hidden" name="plugin" value="{{ c.name }}">
+        {{ m.guard("/stats?tab=ai") }}<input type="hidden" name="plugin" value="{{ c.name }}"><input type="hidden" name="kind" value="{{ c.kind }}">
         <div class="dialog-head"><h2 id="pm-{{ c.kind }}-{{ c.name }}-t">{{ c.label }} settings</h2>
           <button class="btn btn-ghost btn-sm" type="button" popovertarget="pm-{{ c.kind }}-{{ c.name }}" popovertargetaction="hide" aria-label="Close">{{ m.icon("x") }}</button></div>
         <div class="dialog-body">

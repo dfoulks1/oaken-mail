@@ -4,11 +4,11 @@ model. One place for every such check, in order; the first to match wins and tri
 message priority 0 with that rule's category. Mail none of them settles goes to the model.
 
 Add a rule by writing one function from a message to ``(category, rule name)`` or None, and listing
-it in ``RULES``. (CORE_50 turns this set into a standalone triager plugin.)
+it in ``RULES``. (CORE_51 turns this set into a standalone triager plugin.)
 """
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from typing import Literal
 
 from oaken.core.untrusted import UntrustedText
@@ -62,7 +62,9 @@ def auto_reply(msg: EnrichInput) -> Verdict | None:
 def spam(msg: EnrichInput) -> Verdict | None:
     """The spam filter's own verdict."""
     flag = _first(msg, "x-spam-flag").lower()
-    if flag in {"yes", "true"} or any(_first(msg, h).lower().startswith("yes") for h in _SPAM_HEADERS):
+    if flag in {"yes", "true"} or any(
+        _first(msg, h).lower().startswith("yes") for h in _SPAM_HEADERS
+    ):
         return "other", "spam-flag"
     return None
 
@@ -92,9 +94,12 @@ Rule = Callable[[EnrichInput], Verdict | None]
 RULES: tuple[Rule, ...] = (auto_submitted, bulk, no_reply, cron, auto_reply, spam, empty)
 
 
-def settled(msg: EnrichInput) -> Verdict | None:
-    """The category and rule when the first matching rule settles triage with no model."""
+def settled(msg: EnrichInput, skip: Collection[str] = ()) -> Verdict | None:
+    """The category and rule when the first matching rule settles triage with no model. ``skip``
+    names rules (their function names) to leave out."""
     for rule in RULES:
+        if rule.__name__ in skip:
+            continue
         if (found := rule(msg)) is not None:
             return found
     return None

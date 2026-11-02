@@ -24,7 +24,7 @@ once.
 Add a table to `config.toml`. There is no password setting, on purpose.
 
 ```toml
-[plugins.imap]
+[plugins.provider.imap]
 host = "imap.example.com"
 username = "me@example.com"
 security = "tls"             # "tls" (port 993) or "starttls" (port 143); there is no other choice
@@ -130,7 +130,7 @@ missing STARTTLS, an untrusted certificate or a server that is not IMAP is not.
 The plugin's tests run against an in-process fake server, so they prove the protocol handling and not
 that your provider accepts it. To try yours:
 
-1. Add `[plugins.imap]` and store the password as above.
+1. Add `[plugins.provider.imap]` and store the password as above.
 2. Run `uv run pytest -m live_imap`. It requires TLS, logs in and reads up to ten messages from
    `INBOX` (set `OAKEN_LIVE_IMAP_FOLDER` for another folder). It writes nothing and marks nothing
    read.

@@ -146,7 +146,7 @@ written while four readers ran 491 queries with no errors (WAL).</li>
 with a p50 of 548 ms, or 360 ms with a filter that keeps a small share of the mail.</p>
 <p><code>int8</code> vectors are 4x smaller and a little faster, but recall at 10 fell to 0.89 at 384 dimensions
 (0.98 at 768). <strong>float32 is the default</strong>; int8 is a setting: <code>dtype = &quot;int8&quot;</code> in
-<code>[plugins.sqlite-vec]</code>. The choice is stored per model, so changing it applies to the next model
+<code>[plugins.vector_store.sqlite-vec]</code>. The choice is stored per model, so changing it applies to the next model
 you build (see below), and the old vectors stay as they were.</p>
 </section>
 <section id="what-it-stores" class="doc-section"><div class="section-head"><span class="section-num">2</span><h2>What it stores</h2></div>

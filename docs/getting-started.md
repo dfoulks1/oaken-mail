@@ -58,7 +58,7 @@ outside the home instead.
 
 ### Plugins that are not set up
 
-A plugin that is installed but has no `[plugins.<name>]` table (Gmail, IMAP, SMTP) is listed as
+A plugin that is installed but has no `[plugins.<kind>.<name>]` table (Gmail, IMAP, SMTP) is listed as
 "not configured", not as an error. To turn one off for good, set `enabled = false` in its table.
 Without restarting core: `oaken plugins disable gmail`, `oaken plugins enable gmail`, and
 `oaken plugins reload gmail` to pick up a change to its table. `oaken plugins config gmail` shows

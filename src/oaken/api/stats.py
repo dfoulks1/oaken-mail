@@ -181,7 +181,7 @@ class StatsCollector:
                 continue
             rows.append(
                 {
-                    "kind": "enricher",
+                    "kind": e["kind"],
                     "label": e["name"],
                     "name": e["name"],
                     "model": e["config"].get("model") or "",
@@ -201,7 +201,8 @@ class StatsCollector:
         """Group token usage by stage (not stage+model), summing calls and tokens across all
         models for each stage. The component controls (model dropdown, settings) appear on each
         stage's row. Stages with no recorded usage still get a row of zeros."""
-        by_name = {m["name"]: m for m in models if m["kind"] == "enricher"}
+        by_name = {m["name"]: m for m in models if m["kind"] in ("enricher", "triager")}
+        triager = next((m for m in models if m["kind"] == "triager"), None)
         backend = next((m for m in models if m["kind"] == "llm_backend"), None)
         embedder = next((m for m in models if m["kind"] == "embedder"), None)
         ask = next((m for m in models if m["kind"] == "ask"), None)
@@ -210,7 +211,9 @@ class StatsCollector:
             if stage == "llm.ask" or stage.startswith("llm.ask."):
                 return ask
             if stage.startswith("llm.enrich."):
-                return by_name.get(stage.removeprefix("llm.enrich."))
+                name = stage.removeprefix("llm.enrich.")
+                # the triage prompt's stage is llm.enrich.triage, whichever triager ran it
+                return triager if name == "triage" else by_name.get(name)
             if stage.startswith("llm."):
                 return backend
             return embedder if stage == "embed" else None
@@ -240,7 +243,11 @@ class StatsCollector:
             by_stage[key]["tokens_saved"] += u["tokens_saved"]
 
         rows = list(by_stage.values())
-        seen = {(r["component"]["kind"], r["component"]["name"]) for r in rows if r["component"] is not None}
+        seen = {
+            (r["component"]["kind"], r["component"]["name"])
+            for r in rows
+            if r["component"] is not None
+        }
 
         # add stages with no usage yet
         for comp in models:
@@ -386,11 +393,12 @@ class StatsCollector:
             return []
         out: list[dict[str, Any]] = []
         for s in self._svc.plugins.statuses():
-            if s.kind != "enricher":
+            if s.kind not in ("enricher", "triager"):
                 continue
-            cfg = await self._run_op("get_plugin_config", {"plugin": s.name})
+            cfg = await self._run_op("get_plugin_config", {"plugin": s.name, "kind": s.kind})
             out.append(
                 {
+                    "kind": s.kind,
                     "name": s.name,
                     "enabled": s.enabled,
                     "config": cfg.config if cfg else {},

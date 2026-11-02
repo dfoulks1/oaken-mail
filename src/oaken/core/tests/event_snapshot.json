@@ -99,6 +99,13 @@
     "is_new",
     "changed"
   ],
+  "MessageTriaged": [
+    "ts",
+    "event_id",
+    "account_id",
+    "message_id",
+    "result"
+  ],
   "PluginEvent": [
     "ts",
     "event_id",

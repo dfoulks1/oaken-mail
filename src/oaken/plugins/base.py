@@ -116,7 +116,7 @@ def command(
     return wrap
 
 
-class _Base:
+class BasePlugin:
     kind: ClassVar[PluginKind]
     api_version: ClassVar[int] = PLUGIN_API_VERSION
     version: ClassVar[str] = ""
@@ -144,7 +144,7 @@ class _Base:
             except ValidationError as exc:
                 fields = ", ".join(str(e["loc"][0]) for e in exc.errors() if e["loc"])
                 raise PluginError(
-                    f"{ctx.name}: invalid [plugins.{ctx.name}] settings ({fields})"
+                    f"{ctx.name}: invalid [plugins.{ctx.kind}.{ctx.name}] settings ({fields})"
                 ) from None
 
     async def stop(self) -> None:
@@ -178,7 +178,10 @@ class _Base:
         return found
 
 
-class BaseProvider(_Base):
+_Base = BasePlugin  # the name before it was public
+
+
+class BaseProvider(BasePlugin):
     """Override ``pull`` (a mail source) or ``send`` (a sender) at least. Add ``authenticate`` and
     ``set_flags`` as the service allows.
 
@@ -303,7 +306,7 @@ class BaseProvider(_Base):
         return AuthStatusOut(account_id=inp.account_id, state=state, detail=detail)
 
 
-class BaseEmbedder(_Base):
+class BaseEmbedder(BasePlugin):
     kind: ClassVar[PluginKind] = "embedder"
     model_id: str = ""
     dimensions: int = 0
@@ -314,7 +317,7 @@ class BaseEmbedder(_Base):
         raise NotImplementedError
 
 
-class BaseLLMBackend(_Base):
+class BaseLLMBackend(BasePlugin):
     kind: ClassVar[PluginKind] = "llm_backend"
     model_id: str = ""
     context_window: int = 0
@@ -341,7 +344,7 @@ class BaseLLMBackend(_Base):
         return [self.model_id] if self.model_id else []
 
 
-class BaseEnricher(_Base):
+class BaseEnricher(BasePlugin):
     """Set ``version`` and, ideally, ``output_model`` (a pydantic model): the host then checks the
     result against it and publishes its JSON schema. Override ``enrich``."""
 
@@ -362,7 +365,31 @@ class BaseEnricher(_Base):
         raise NotImplementedError
 
 
-class BaseVectorStore(_Base):
+class BaseTriager(BasePlugin):
+    """The first step of the pipeline: rate a message so core can decide what else it is owed.
+    This is the deterministic kind: override ``triage`` to return the verdict (an
+    ``EnrichOutput``), or None to leave the message to the next triager. One that asks a model
+    extends ``LLMTriager``. Triagers run in ``rank`` order (lowest first) and the first verdict
+    wins, so the model is asked only for what the cheaper ones leave. Set ``output_model`` as for
+    an enricher."""
+
+    kind: ClassVar[PluginKind] = "triager"
+    version: ClassVar[str] = "1"
+    rank: ClassVar[int] = 50
+    needs_llm: bool = False
+    output_model: ClassVar[type[BaseModel] | None] = None
+    ask_intent: ClassVar[AskIntent | None] = None
+
+    @property
+    def output_schema(self) -> dict[str, Any]:
+        return self.output_model.model_json_schema() if self.output_model else {}
+
+    @_default
+    async def triage(self, msg: EnrichInput) -> EnrichOutput | None:
+        raise NotImplementedError
+
+
+class BaseVectorStore(BasePlugin):
     kind: ClassVar[PluginKind] = "vector_store"
 
     @_default
@@ -384,7 +411,7 @@ class BaseVectorStore(_Base):
         raise NotImplementedError
 
 
-class BaseCache(_Base):
+class BaseCache(BasePlugin):
     """The LLM answer cache. Override all five members; ``key`` may return any tuple of strings."""
 
     kind: ClassVar[PluginKind] = "cache_store"

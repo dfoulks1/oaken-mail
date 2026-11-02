@@ -211,6 +211,8 @@ Grouped by track; the number is the permanent ID, so it runs across all tables.
 | 47 | CORE_47-split-enrich | **Written** | One job kind per enricher (`ingest.enrich.<name>`): triage runs first and only the enrichers whose `min_priority` it meets are queued; the old `ingest.enrich` job becomes a converter that drains the backlog cheaply. An agent's payload carries one enricher, not three. Plan only |
 | 48 | CORE_48-ask-router | **Built** | `ask` works out what was asked with a small model that sees only the question, then runs the matching read path: `find`, `qa`, and one intent per enricher that declares an `AskIntent` (`summary`, `triage`, `actions`, `inspector` ship with one). Shows how it read the request. Rules decide if the model fails. Not built: running an enricher on demand from `ask`, account-name resolution |
 | 50 | CORE_50-console-without-script | **Written** | The console as plain HTML and one local stylesheet: no Bootstrap, no CDN, no script except an optional refresh file. Nine palettes (maple, birch, oak, acorn, moss, stone, sky, stream, contrast), each light and dark, as CSS variables; every action a form with redirect and flash message; menus and dialogs from `popover`. Plan only |
+| 51 | CORE_51-triage-labels-and-automations | **Written** | Custom triage labels and rules that launch automations from a label, on top of the triager kind built in CORE_47; triagers and rules operable from the CLI and over MCP. Draft: needs an ADR first |
+| 52 | CORE_52-console-by-stage | **Written** | The console by stage: status on `/`, General (Ingest, Audit log, Reference), one tab per plugin kind with its stage controls and plugin table, and per-plugin pause. The config-beside-the-thing idea is parked in the prompt. Draft |
 
 **CLI**
 

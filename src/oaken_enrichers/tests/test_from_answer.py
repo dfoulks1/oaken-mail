@@ -3,7 +3,7 @@
 
 from typing import Any
 
-from oaken_enrichers import ActionsEnricher, SummaryEnricher, TriageEnricher
+from oaken_enrichers import ActionsEnricher, AITriager, SummaryEnricher
 from oaken_enrichers.tests.conftest import Rig, message
 
 TRIAGE = {
@@ -19,13 +19,14 @@ SUMMARY = {"summary": "A script reports an event.", "key_points": ["automated"]}
 async def native(rig: Rig, enricher: Any, reply: dict[str, Any], msg: Any) -> dict[str, Any]:
     rig.llm.reply(reply)
     started = await rig.start(enricher)
-    return dict((await started.enrich(msg)).data)
+    run = getattr(started, "enrich", None) or started.triage  # a triager has no enrich
+    return dict((await run(msg)).data)
 
 
 async def test_triage_from_an_answer_has_a_source_and_matches_the_native_result(rig: Rig) -> None:
     msg = message()
-    expected = await native(rig, TriageEnricher(), TRIAGE, msg)
-    started = await rig.start(TriageEnricher())
+    expected = await native(rig, AITriager(), TRIAGE, msg)
+    started = await rig.start(AITriager())
     answer = started.prompt.output.model_validate(TRIAGE)  # the shape the claim offered
     assert dict(started.from_answer(msg, answer).data) == expected
     assert expected["source"] == "llm"
