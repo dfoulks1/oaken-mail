@@ -4,7 +4,7 @@
 from typing import Any, cast
 
 from oaken.core.settings import IngestSettings
-from oaken.ingest.pipeline import ENRICH, TRIAGE, MessagePayload
+from oaken.ingest.pipeline import EMBED, ENRICH, TRIAGE, MessagePayload
 from oaken.ingest.tests.conftest import Enricher, Options, mail
 from oaken.plugins.base import BaseEnricher
 from oaken.plugins.contracts import EnrichInput, EnrichOutput
@@ -126,3 +126,24 @@ async def test_triage_failing_for_good_still_queues_the_gated_enrichers(make_rig
         await rig.drain(rounds=4)
         assert broken.calls == 2  # both attempts, and the enrich job did not try it a third time
         assert len(rig.enricher.seen) == 1
+
+
+async def test_embedding_waits_for_triage_and_follows_it(make_rig: Any) -> None:
+    async with make_rig(Options()) as rig:
+        rater, _ = await run(rig, priority=2, bar=None)
+        assert rater.calls == 1
+        assert len(await rig.queue.query(kind=EMBED, status="succeeded")) == 1
+
+
+async def test_no_embed_job_exists_while_triage_is_still_retrying(make_rig: Any) -> None:
+    async with make_rig(Options(ingest=IngestSettings(stage_max_attempts=2))) as rig:
+        rig.pipeline.backends.enrichers = lambda: {
+            "words": cast(Enricher, rig.enricher),
+            "triage": cast(Enricher, Broken()),
+        }
+        rig.provider.add_message(mail(1))
+        await rig.run_sync()
+        await rig.drain()  # parse, then triage attempt 1 fails and waits out its backoff
+        assert await rig.queue.query(kind=EMBED) == []
+        await rig.drain(rounds=2)  # attempt 2 is the last: embed is queued anyway
+        assert len(await rig.queue.query(kind=EMBED, status="succeeded")) == 1

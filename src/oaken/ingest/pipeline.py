@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """The stages that run for every new or changed message, as jobs.
 
-    stored (SyncRunner) -> ingest.parse -> ingest.embed
-                                        \\-> ingest.enrich
+    stored (SyncRunner) -> ingest.parse -> ingest.triage -> ingest.embed
+                                                        \\-> ingest.enrich
+
+With triage off, ``ingest.parse`` queues ``ingest.embed`` and ``ingest.enrich`` itself.
 
 ``ingest.parse`` is the cheap, CPU-only stage: Sieve, then parse/clean/chunk/FTS, then the
 quarantine of flagged attachments. When it is done the message is keyword-searchable, whatever
@@ -278,12 +280,13 @@ class Pipeline:
         await self._filter(mid, p.changed)
         res = await self.indexer.index_one(mid)
         await self._quarantine(mid, msg.account_id)
-        if self.embedding_enabled():
-            await self._enqueue_stage(EMBED, EMBED_STEP, mid, msg.account_id, p.backfill)
-        if self._triage_on():
+        if self._triage_on():  # embedding and the other enrichers wait for its result
             await self._enqueue_stage(TRIAGE, ENRICH_STEP, mid, msg.account_id, p.backfill)
-        elif self.backends.enrichers():
-            await self._enqueue_stage(ENRICH, ENRICH_STEP, mid, msg.account_id, p.backfill)
+        else:
+            if self.embedding_enabled():
+                await self._enqueue_stage(EMBED, EMBED_STEP, mid, msg.account_id, p.backfill)
+            if self.backends.enrichers():
+                await self._enqueue_stage(ENRICH, ENRICH_STEP, mid, msg.account_id, p.backfill)
         changed = res is not None and res.changed
         return StageJobResult(done=int(changed), skipped=int(not changed))
 
@@ -418,9 +421,9 @@ class Pipeline:
 
     # -- ingest.triage ----------------------------------------------------------------------
     async def _triage_job(self, p: MessagePayload, job: Job) -> StageJobResult:
-        """Triage alone. Its priority decides what else is owed, so ENRICH is queued once it has
-        a result. On the last attempt a failure still queues ENRICH, with the gate open, so one
-        model outage cannot strand mail."""
+        """Triage alone. Its priority decides what else is owed, so embedding and ENRICH are
+        queued once it has a result. On the last attempt a failure still queues them, with the
+        gate open, so one model outage cannot strand mail."""
         mid = MessageId(p.message_id)
         doc = await self.index.get_doc(mid)
         if doc is None:
@@ -430,12 +433,20 @@ class Pipeline:
             r = await self._enrich_message(mid, only={GATE}, force=False)
         except Exception:
             if job.attempts >= job.max_attempts:
-                await self._enqueue_stage(
-                    ENRICH, ENRICH_STEP, mid, account, p.backfill, triage_failed=True
-                )
+                await self._after_triage(mid, account, p.backfill, failed=True)
             raise
-        await self._enqueue_stage(ENRICH, ENRICH_STEP, mid, account, p.backfill)
+        await self._after_triage(mid, account, p.backfill)
         return StageJobResult(done=r.ran, skipped=r.cached)
+
+    async def _after_triage(
+        self, mid: MessageId, account: AccountId, backfill: bool, *, failed: bool = False
+    ) -> None:
+        """Queue what waits on triage: embedding, and the enrichers it gates."""
+        if self.embedding_enabled():
+            await self._enqueue_stage(EMBED, EMBED_STEP, mid, account, backfill)
+        await self._enqueue_stage(
+            ENRICH, ENRICH_STEP, mid, account, backfill, triage_failed=failed
+        )
 
     def _triage_on(self) -> bool:
         return GATE in self.backends.enrichers() and (

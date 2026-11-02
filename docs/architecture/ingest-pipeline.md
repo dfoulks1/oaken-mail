@@ -17,8 +17,9 @@ flowchart LR
     subgraph PARSE[ingest.parse]
         F[Sieve filter] --> I[Index: fields and FTS5] --> Q[Quarantine flagged attachments]
     end
-    Q -->|priority - 1| E[ingest.embed]
-    Q -->|priority - 2| N[ingest.enrich]
+    Q -->|priority - 2| T[ingest.triage]
+    T -->|priority - 1| E[ingest.embed]
+    T -->|priority - 2| N[ingest.enrich]
     E --> V[(vector store)]
     N --> X[(enrichments in raw.db)]
 ```
@@ -29,10 +30,14 @@ flowchart LR
 2. **Parse** (`ingest.parse`). The user's Sieve scripts run **first**, so a message that is
    discarded or marked `skip_enrich` never reaches the expensive stages. Then the message is
    indexed (fields and FTS5), flagged attachments are written to the quarantine folder, and the
-   embed and enrich jobs are queued. From here on the message is **searchable by keyword**.
-3. **Embed** (`ingest.embed`). Chunk text goes to the embedder and the vectors to the vector store.
-4. **Enrich** (`ingest.enrich`). Each enricher runs on the cleaned text, and on the message's
-   headers and attachment metadata. The first-party ones are `summary`, `triage`, `actions` and
+   triage job is queued. From here on the message is **searchable by keyword**. With triage off,
+   parse queues the embed and enrich jobs itself.
+3. **Triage** (`ingest.triage`). The `triage` enricher alone, so its priority is known before
+   anything else spends model time. When it finishes (or fails for good on its last attempt) the
+   embed and enrich jobs are queued.
+4. **Embed** (`ingest.embed`). Chunk text goes to the embedder and the vectors to the vector store.
+5. **Enrich** (`ingest.enrich`). The other enrichers run on the cleaned text, and on the message's
+   headers and attachment metadata. The first-party ones are `summary`, `actions` and
    `inspector` (see below).
 
 Embedding and enrichment are separate jobs because they are slow, can fail for different reasons,
@@ -41,10 +46,10 @@ and index, and everything keyword-related works.
 
 ## Priorities and backlogs
 
-A job's priority is that of the parse job minus 1 (embed) or minus 2 (enrich). New mail is
+A job's priority is that of the parse job minus 1 (embed) or minus 2 (triage, enrich). New mail is
 priority 50 and a backfill is 10, so a backlog of parsing always runs ahead of a backlog of
 embedding, and new mail overtakes a backfill at every stage. Concurrency per stage is set with
-`ingest.embed_concurrency` and `ingest.enrich_concurrency` (default 1: one local GPU).
+`ingest.embed_concurrency`, `ingest.triage_concurrency` and `ingest.enrich_concurrency` (default 1: one local GPU).
 
 **Backpressure.** A first sync of a large mailbox is a *backfill*. When the queued and running
 `ingest.*` jobs reach `ingest.backfill_queue_cap` (default 2000), the backfill pauses, keeping its
