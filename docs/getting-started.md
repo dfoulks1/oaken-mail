@@ -63,8 +63,8 @@ A plugin that is installed but has no `[plugins.<kind>.<name>]` table (Gmail, IM
 Without restarting core: `oaken plugins disable gmail`, `oaken plugins enable gmail`, and
 `oaken plugins reload gmail` to pick up a change to its table. `oaken plugins config gmail` shows
 its settings and `oaken plugins set gmail page_size=200` changes one (your comments in `config.toml`
-are kept; reload to apply). The stats page (`/stats`, Plugins tab) has an enable switch and a Reload
-button.
+are kept; reload to apply). Each plugin kind has a tab on the General page (`/stats`) with an enable
+switch and a Reload button.
 
 ## 3. Get the local models
 

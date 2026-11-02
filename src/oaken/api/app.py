@@ -291,6 +291,10 @@ class Api:
             context = welcome_context(
                 version=self.client.svc.version, port=self._port, status=status
             )
+            try:
+                context.update(await self._stats_collector().front())
+            except Exception:  # noqa: BLE001 - counts are a nicety; the home page still answers
+                log.error("front page counts failed")
             return self.console.render(request, "welcome.html", "home", context)
         except Exception:  # noqa: BLE001 - the home page must never 500; fall back to plain text
             log.error("welcome render failed; serving placeholder")
@@ -394,7 +398,9 @@ class Api:
 
     async def asset_chart(self, request: Request) -> Response:
         return Response(
-            CHART_UMD_JS, media_type="text/javascript", headers={"cache-control": "public, max-age=31536000, immutable"}
+            CHART_UMD_JS,
+            media_type="text/javascript",
+            headers={"cache-control": "public, max-age=31536000, immutable"},
         )
 
     async def list_operations(self, request: Request) -> Response:

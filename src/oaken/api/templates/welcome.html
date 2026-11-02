@@ -10,11 +10,41 @@
   <p class="tagline">Your mail, kept close.</p>
   <p class="state"><span class="dot"></span>All quiet. Oaken is running.</p>
   <nav class="links" aria-label="Pages">
-    <a href="/stats">Status</a>
+    <a href="/stats">General</a>
     <a href="/getting_started">Getting started</a>
     <a href="/jobs">Jobs</a>
     <a href="{{ docs_url }}" target="_blank" rel="noopener">Docs ↗</a>
   </nav>
+  {% if mail %}
+  <section class="status" aria-label="Status">
+    <div class="tiles">
+      <div class="tile"><span class="label">Accounts</span><span class="value">{{ mail.accounts }}</span></div>
+      <div class="tile"><span class="label">Messages</span><span class="value">{{ "{:,}".format(mail.messages) }}</span></div>
+      <div class="tile"><span class="label">Indexed</span><span class="value">{{ "{:,}".format(mail.indexed) }}</span>
+        <span class="note">index {% if mail.index_stale %}<span class="badge badge-danger">stale</span>{% else %}<span class="badge badge-ok">fresh</span>{% endif %}</span></div>
+      <div class="tile"><span class="label">Queue depth</span><span class="value">{{ mail.queue_depth if mail.queue_depth is not none else "—" }}</span></div>
+    </div>
+    <div class="card">
+      <div class="card-head">Connected accounts</div>
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>Account</th><th>Provider</th><th>Sync</th></tr></thead>
+        <tbody>
+        {% for a in accounts %}
+          <tr>
+            <td>{{ a.display_name }}<div class="muted mono small">{{ a.account_id }}</div></td>
+            <td>{{ a.provider }}</td>
+            <td>{% if a.paused %}<span class="badge badge-warn">paused</span>
+                {%- elif a.failures %}<span class="badge badge-danger">{{ a.failures }} failing</span>
+                {%- else %}<span class="badge badge-ok">ok</span>{% endif %}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3" class="muted">No accounts configured.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+  {% endif %}
   <section class="env">
     <h2>Daemon environment</h2>
     <div><span>Version</span><code>{{ version }}</code></div>

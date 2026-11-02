@@ -1,6 +1,7 @@
 # 52 — The console by stage: status on `/`, a tab per kind (DRAFT)
 
-**Status:** draft. Answer the open questions, then build in the slices below.
+**Status:** slices A and B built (defaults taken for Q1 to Q3). Remaining: the tab names and
+layout are open to your review.
 **Read first:** `00-context.md`, `CORE_50-console-without-script.md` (no script, no CDN: forms,
 redirects and `popover` only), `CORE_41-stats-controls.md`, `CORE_47-split-enrich.md`.
 **Depends on:** 41, 47, 50. Nothing unbuilt.

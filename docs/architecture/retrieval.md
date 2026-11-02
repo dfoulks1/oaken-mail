@@ -85,7 +85,7 @@ model is missing or wrong, plain words decide: "summarize", "urgent", "to-do", "
 intent, a question picks `qa`, and anything else is a listing. Routing never fails an `ask`.
 
 `ask` has its own model: `[ai] ask_model` (empty means the backend's own), used for both the
-routing call and the cited answer, and chosen from a dropdown on the AI & Models tab of `/stats`.
+routing call and the cited answer, and chosen from a dropdown on the AI & Models tab of the General page (`/stats`).
 
 `find` and the enricher intents search every account and make no model call to answer. Only `qa`
 asks the model about mail, one account at a time.

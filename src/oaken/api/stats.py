@@ -59,6 +59,15 @@ class StatsCollector:
         }
         return data
 
+    async def front(self) -> dict[str, Any]:
+        """What the front page (``/``) shows beside the daemon's environment: counts and the
+        accounts, no mail text."""
+        return {
+            "core": self._core(self._clock.now()),
+            "mail": await self._mail(),
+            "accounts": await self._accounts(),
+        }
+
     def _core(self, now: datetime) -> dict[str, Any]:
         started = self._started_at
         uptime = (now - started).total_seconds() if started is not None else None

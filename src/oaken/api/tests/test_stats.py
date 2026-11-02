@@ -119,15 +119,18 @@ def test_ask_has_its_own_model_row_and_its_usage_lands_on_it() -> None:
         [use("llm.ask"), use("llm.ask.route"), use("llm.other")], [backend, ask]
     )
     owners = [(r["stage"], (r["component"] or {}).get("label")) for r in rows]
-    assert owners == [("llm.ask", "ask"), ("llm.ask.route", None), ("llm.other", "Language model")]
+    # the routing call runs on the ask model too, so it lands on the ask row
+    assert owners == [("llm.ask", "ask"), ("llm.ask.route", "ask"), ("llm.other", "Language model")]
 
 
 async def test_stats_shows_counts_and_health(rig: Rig) -> None:
     body = (await rig.http.get("/stats")).text
     for marker in (
-        "Connected accounts",
         "Pipeline",
-        "Plugins",
+        "Providers",
+        "Triagers",
+        "Embedders",
+        "Enrichers",
         "Recent audit log",
         "Operations reference",
         "MCP workspaces",
@@ -140,8 +143,25 @@ async def test_stats_shows_counts_and_health(rig: Rig) -> None:
 async def test_the_tab_in_the_link_is_the_tab_that_opens(rig: Rig) -> None:
     body = (await rig.http.get("/stats?tab=ai")).text
     assert 'id="t-ai" aria-label="AI &amp; Models" checked' in body
-    assert 'id="t-general" aria-label="General" checked' not in body
-    assert 'id="t-general" aria-label="General" checked' in (await rig.http.get("/stats")).text
+    assert 'id="t-ingest" aria-label="Ingest" checked' not in body
+    assert 'id="t-ingest" aria-label="Ingest" checked' in (await rig.http.get("/stats")).text
+    assert (
+        'id="t-triager" aria-label="Triagers" checked'
+        in (await rig.http.get("/stats?tab=triager")).text
+    )
+
+
+async def test_the_front_page_shows_status_and_the_daemon_environment(rig: Rig) -> None:
+    body = (await rig.http.get("/")).text
+    for marker in ("Connected accounts", "Queue depth", "Daemon environment", "OAKEN_HOME"):
+        assert marker in body, f"missing from the front page: {marker}"
+
+
+async def test_a_kind_tab_has_its_plugins_and_no_kind_column(rig: Rig) -> None:
+    body = (await rig.http.get("/stats?tab=enricher")).text
+    pane = body[body.index('id="p-enricher"') : body.index('id="p-llm_backend"')]
+    assert "<th>Plugin</th>" in pane and "<th>Kind</th>" not in pane
+    assert 'name="stage" value="enrich"' in pane  # the stage's own pause and limit
 
 
 async def test_uptime_moves_with_the_clock(rig: Rig) -> None:

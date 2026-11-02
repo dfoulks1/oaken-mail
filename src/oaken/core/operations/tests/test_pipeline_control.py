@@ -102,7 +102,7 @@ async def test_one_stage_can_be_paused_alone_and_the_status_says_so(ops: Ops) ->
     again = await ops.out("resume_backfill", {"stage": "enrich"})
     assert again.paused_stages == []
     with pytest.raises(Exception, match="stage"):
-        await ops.call("pause_backfill", {"stage": "parse"})
+        await ops.call("pause_backfill", {"stage": "nope"})
 
 
 async def test_resuming_one_stage_while_everything_is_paused_keeps_the_other_paused(

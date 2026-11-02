@@ -193,6 +193,7 @@ small, .small { font-size: .85rem; }
 .card { margin: 0 0 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-1); }
 .card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; padding: .8rem 1.2rem; border-bottom: 1px solid var(--border); font-weight: 600; }
 .card-body { padding: 1rem 1.2rem; }
+.chart-box { position: relative; height: 350px; }
 .card-foot { padding: .65rem 1.2rem; border-top: 1px solid var(--border); color: var(--muted); font-size: .86rem; }
 .table-wrap { overflow: visible; }
 @media (max-width: 60rem) { .table-wrap { overflow-x: auto; } }
@@ -228,6 +229,12 @@ small, .small { font-size: .85rem; }
 #t-audit:focus-visible ~ .tabbar [for="t-audit"], #t-ref:focus-visible ~ .tabbar [for="t-ref"],
 #t-pipeline:focus-visible ~ .tabbar [for="t-pipeline"], #t-queue:focus-visible ~ .tabbar [for="t-queue"],
 #t-trends:focus-visible ~ .tabbar [for="t-trends"] { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* The tab per plugin kind (a kind is a stage). */
+#t-provider:checked ~ #p-provider, #t-triager:checked ~ #p-triager, #t-embedder:checked ~ #p-embedder, #t-enricher:checked ~ #p-enricher, #t-llm_backend:checked ~ #p-llm_backend, #t-vector_store:checked ~ #p-vector_store, #t-cache_store:checked ~ #p-cache_store { display: block; }
+#t-provider:checked ~ .tabbar [for="t-provider"], #t-triager:checked ~ .tabbar [for="t-triager"], #t-embedder:checked ~ .tabbar [for="t-embedder"], #t-enricher:checked ~ .tabbar [for="t-enricher"], #t-llm_backend:checked ~ .tabbar [for="t-llm_backend"], #t-vector_store:checked ~ .tabbar [for="t-vector_store"], #t-cache_store:checked ~ .tabbar [for="t-cache_store"] { color: var(--text); border-bottom-color: var(--brand); }
+#t-provider:focus-visible ~ .tabbar [for="t-provider"], #t-triager:focus-visible ~ .tabbar [for="t-triager"], #t-embedder:focus-visible ~ .tabbar [for="t-embedder"], #t-enricher:focus-visible ~ .tabbar [for="t-enricher"], #t-llm_backend:focus-visible ~ .tabbar [for="t-llm_backend"], #t-vector_store:focus-visible ~ .tabbar [for="t-vector_store"], #t-cache_store:focus-visible ~ .tabbar [for="t-cache_store"] { outline: 3px solid var(--focus); outline-offset: 2px; }
+.nowrap th, .nowrap td { white-space: nowrap; }
 
 /* ---- Buttons, forms, switches ---------------------------------------------------------------- */
 .btn { display: inline-flex; align-items: center; gap: .4rem; padding: .4rem .9rem; font: inherit; font-size: .88rem; font-weight: 500; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; text-decoration: none; }

@@ -138,11 +138,14 @@ Operations are not routed by hand. `GET /v1/operations` lists the registry with 
 - `GET /stats`: a read-only status page, HTML (see below). Like `/v1/health` it needs no token —
   it is loopback-only and shows counts and health, never mail.
 
-## The status page
+## The status pages
 
-`GET /stats` is a browser-openable dashboard: version and uptime, account/message/index counts,
-queue depth, per-stage pipeline throughput and parked jobs, token usage and savings, per-account
-sync state, and plugin health. It is **unauthenticated on purpose** — it is reachable only from this
+`GET /` is the front page: version, account/message/index counts, queue depth, per-account sync
+state and the daemon's environment (paths, port). `GET /stats` is **General**: a tab for the
+pipeline (every stage, with its own pause and concurrency), one tab per plugin kind (a kind is a
+stage: providers, triagers, embedders, enrichers, LLM backends, vector stores, caches) with that
+stage's controls and its plugins (enable switch, model, settings, reload, and a pause for each
+enricher), token usage and savings, the audit log and the reference. It is **unauthenticated on purpose** — it is reachable only from this
 machine (the Host guard still refuses a forged name), and it carries **counts and health only**: no
 message text, no addresses, no tokens, and not the audit log. Open `http://127.0.0.1:<port>/stats`
 (the port is in `runtime.json`; set `[api] port` to pin it). The page is self-contained — inline

@@ -28,6 +28,7 @@ from oaken.readstate.audit import AuditLog, new_audit_id
 LLM_STAGES: frozenset[str] = frozenset({"ingest.embed", "ingest.triage", "ingest.enrich"})
 # The stage names a person uses, and the job kind each one runs.
 STAGES: dict[str, str] = {
+    "parse": "ingest.parse",
     "embed": "ingest.embed",
     "triage": "ingest.triage",
     "enrich": "ingest.enrich",
@@ -43,9 +44,9 @@ def stage_kind(stage: str) -> str:
     name = stage.removeprefix(ENRICHER_STAGE)
     if stage.startswith(ENRICHER_STAGE) and name.replace("_", "").replace("-", "").isalnum():
         return "ingest." + stage
-    raise InvalidInput(
-        f"unknown stage {stage!r}; one of {', '.join(STAGES)}, or enrich.<enricher>"
-    )
+    raise InvalidInput(f"unknown stage {stage!r}; one of {', '.join(STAGES)}, or enrich.<enricher>")
+
+
 MAX_CONCURRENCY = 64  # the same ceiling as ``[jobs] workers``
 
 
@@ -130,7 +131,7 @@ class PipelineControl:
                             " updated_by = ? WHERE id = 0",
                             (now, who),
                         )
-                        for other in STAGES.values():
+                        for other in sorted(LLM_STAGES):
                             if other != kind:
                                 await tx.execute(
                                     "INSERT OR REPLACE INTO pipeline_stage_pause"

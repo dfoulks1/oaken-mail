@@ -1,7 +1,8 @@
 # 51 — Pluggable triagers: custom labels, and rules that launch automations (DRAFT)
 
 **Status:** draft. Harden it (questions, ADR) before anyone builds it.
-**Depends on:** 47 (triage is its own kind; fan-out asks one predicate; `MessageTriaged` exists).
+**Depends on:** 47 (built: triage is its own kind, `BaseTriager`/`LLMTriager`, `rules` and `ai`, the
+fan-out asks one predicate, `MessageTriaged` exists). Goal 1's `BaseTriager` text below is done.
 **Track:** CORE. Changes the plugin contract, so it needs an ADR first.
 
 ## Why
@@ -41,6 +42,13 @@ label start an automation. oaken-mail is not only for enrichment.
    model so a new triager gets the form and the command with no extra code. The CLI
    (`oaken plugins config <name> [key=value ...]`) and the console form call the same operations.
    Secrets go to the keyring, never to the config file or the audit row.
+
+6. **One demonstration plugin ships, in addition to `rules` and `ai`**: a small triager that shows
+   how to use the hook to automate something else. It labels one narrow kind of mail (a system
+   notice, for example) and a rule launches an automation from that label (a plugin job kind that,
+   say, files the message or posts a notice). It is the worked example for `docs/plugins.md`: a
+   plugin author copies it. It mutates no mail without the confirm gate, and it is switched off by
+   default (`enabled_default = False`).
 
 ## Constraints (from `00-context.md`)
 

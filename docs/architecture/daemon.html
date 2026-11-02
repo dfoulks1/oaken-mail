@@ -83,7 +83,7 @@
       <a class="nav-link" href="#what-a-request-passes-through"><span class="num">5</span>What a request passes through</a>
       <a class="nav-link" href="#who-is-calling"><span class="num">6</span>Who is calling</a>
       <a class="nav-link" href="#the-routes"><span class="num">7</span>The routes</a>
-      <a class="nav-link" href="#the-status-page"><span class="num">8</span>The status page</a>
+      <a class="nav-link" href="#the-status-pages"><span class="num">8</span>The status pages</a>
       <a class="nav-link" href="#threat-model"><span class="num">9</span>Threat model</a>
       <a class="nav-link" href="#not-built-yet"><span class="num">10</span>Not built yet</a>
     </nav></div>
@@ -252,10 +252,13 @@ A quiet stream sends a <code>: heartbeat</code> comment.</li>
 it is loopback-only and shows counts and health, never mail.</li>
 </ul>
 </section>
-<section id="the-status-page" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>The status page</h2></div>
-<p><code>GET /stats</code> is a browser-openable dashboard: version and uptime, account/message/index counts,
-queue depth, per-stage pipeline throughput and parked jobs, token usage and savings, per-account
-sync state, and plugin health. It is <strong>unauthenticated on purpose</strong> — it is reachable only from this
+<section id="the-status-pages" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>The status pages</h2></div>
+<p><code>GET /</code> is the front page: version, account/message/index counts, queue depth, per-account sync
+state and the daemon's environment (paths, port). <code>GET /stats</code> is <strong>General</strong>: a tab for the
+pipeline (every stage, with its own pause and concurrency), one tab per plugin kind (a kind is a
+stage: providers, triagers, embedders, enrichers, LLM backends, vector stores, caches) with that
+stage's controls and its plugins (enable switch, model, settings, reload, and a pause for each
+enricher), token usage and savings, the audit log and the reference. It is <strong>unauthenticated on purpose</strong> — it is reachable only from this
 machine (the Host guard still refuses a forged name), and it carries <strong>counts and health only</strong>: no
 message text, no addresses, no tokens, and not the audit log. Open <code>http://127.0.0.1:&lt;port&gt;/stats</code>
 (the port is in <code>runtime.json</code>; set <code>[api] port</code> to pin it). The page is self-contained — inline
