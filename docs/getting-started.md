@@ -15,7 +15,7 @@ Oaken is in beta. Everything below stays on your machine.
 You need Python 3.11 or newer and uv.
 
 ```bash
-pip install oaken-core        # into a virtual environment you keep for it
+python3 -m pip install oaken-core   # into a virtual environment you keep for it
 oaken --help
 ```
 

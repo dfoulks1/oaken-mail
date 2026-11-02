@@ -16,7 +16,7 @@ description = "A local-first, AI-native mail client: your mail, processed and se
 - **Extensible.** Mail providers, embedding models, language models and enrichers are plugins behind small, declared contracts.
 
 ::: callout
-**Where things stand.** Oaken Mail is in beta (0.1.x) and is built in the open. The engine, the CLI, the MCP server and the Gmail, IMAP and SMTP providers work; install it with `pip install oaken-core`. Sending mail, the contacts view and several settings screens are still to come. Start with [Set up Oaken from scratch](getting-started.md).
+**Where things stand.** Oaken Mail is in beta (0.1.x) and is built in the open. The engine, the CLI, the MCP server and the Gmail, IMAP and SMTP providers work; install it with `python3 -m pip install oaken-core`. Sending mail, the contacts view and several settings screens are still to come. Start with [Set up Oaken from scratch](getting-started.md).
 :::
 
 ## The documents
