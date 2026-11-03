@@ -196,7 +196,7 @@ timeout = 180.0
 # embedder = &#34;ollama&#34;
 # embed_model = &#34;nomic-embed-text&#34;
 # llm_backend = &#34;ollama&#34;
-# llm_model = &#34;qwen2.5:3b&#34;     # small on purpose; set a larger model for better analysis
+llm_model = &#34;qwen3.5:4b&#34;   # the one place the chat model is named
 # allow_remote = false         # a backend talking to a non-loopback address refuses unless true
 # vector_store = &#34;sqlite-vec&#34;
 # enrich_max_input_tokens = 3000
@@ -235,7 +235,21 @@ model = &#34;&#34;
 min_priority = &#34;2&#34;
 
 [plugins.llm_backend.ollama]
-model = &#34;qwen2.5:0.5b&#34;
+# model now lives in [ai].llm_model (the one place a model is named); see below.
+
+# --- ClamAV attachment scanner (CORE_57, ADR 0020) ------------------------------------
+# Scans quarantined attachments with a running clamd; only a clean verdict releases a file.
+# Works ONLY while clamd is running (this plugin talks to clamd, it does not run ClamAV itself).
+# While clamd is down the plugin is unhealthy and every scan is an `error` (files stay held).
+# After enabling, rescan files already held with `oaken reprocess scan`.
+[plugins.action.clamav]
+enabled = true
+socket = &#34;/var/lib/clamav/&#34;   # unix socket; or set host/port instead for TCP clamd
+# host = &#34;127.0.0.1&#34;
+# port = 3310
+timeout_seconds = 120.0
+host = &#34;&#34;
+port = 3310
 [api]
 mcp = true                   # mount the MCP server at /mcp on this listener (its own token/limits)
 # port = 0                     # 0 = pick a free port; the runtime file records the chosen one

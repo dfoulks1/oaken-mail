@@ -23,6 +23,10 @@ All notable changes to Oaken are recorded here. The format follows
   tunes the connection); a `model` there is now a config error. A per-task analyzer (`enricher`,
   `triager`) may still set `model` as an override. A `config.toml` that set
   `[plugins.llm_backend.ollama] model` must move it to `[ai] llm_model`.
+- **Disabled plugins move out of the way in the console.** Each kind's table now shows the active
+  plugins with their controls; the disabled ones drop into a folded "inactive" table at the bottom.
+  A new `/table_refresh` endpoint renders that fold, and the optional refresh script swaps it in
+  live, so enabling or disabling a plugin (here or from the CLI) shows up without a reload.
 
 ## [0.2.0] — 2026-11-03
 

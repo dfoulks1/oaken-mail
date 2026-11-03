@@ -46,6 +46,7 @@ from oaken.core.logging import get_logger
 from oaken.core.operations.caller import CallerContext
 from oaken.core.operations.client import CallResult, CoreClient
 from oaken.core.operations.registry import AnyOperation
+from oaken.plugins.contracts import PLUGIN_KINDS
 
 log = get_logger("oaken.api")
 
@@ -261,6 +262,7 @@ class Api:
             Route("/v1/agent/jobs/{job_id}/fail", safe(self.fail), methods=["POST"]),
             Route("/general", safe(self.general), methods=["GET"]),
             Route("/general.json", safe(self.general_json), methods=["GET"]),
+            Route("/table_refresh", safe(self.table_refresh), methods=["GET"]),
             Route("/config", safe(self.config_editor), methods=["GET"]),
             Route("/getting-started", safe(self.getting_started), methods=["GET"]),
             # Older paths still lead somewhere: the page moved, or got a tidier name.
@@ -587,8 +589,27 @@ class Api:
             data = await self._stats_collector().collect()
         return _json(data)
 
-    # The stylesheet, the logo and the optional script are served from the package, so the pages
-    # load nothing from another origin.
+    async def table_refresh(self, request: Request) -> Response:
+        """The plugin tables (active and inactive) for one kind, rendered as HTML the script swaps
+        into place. One render path: the same row markup the page uses, so the live view cannot
+        drift from the full render. Cheap and authoritative: after any enable/disable (a form POST
+        that writes config and reloads the plugin) the next fetch is the true state. Loopback-only
+        and unauthenticated like `/general`."""
+        kind = request.query_params.get("kind", "")
+        if kind not in PLUGIN_KINDS:
+            return Response("unknown kind", status_code=404)
+        data = await self._stats_collector().collect({"plugins"})
+        return self.console.render(
+            request,
+            "_plugin_tables.html",
+            "",
+            {
+                "plugins": data.get("plugins", []),
+                "kind": kind,
+                "back": request.query_params.get("back", "/general"),
+            },
+        )
+
     async def asset_css(self, request: Request) -> Response:
         return Response(
             CSS,

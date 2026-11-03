@@ -18,9 +18,37 @@
     });
   });
 
+  var every = parseInt(body.getAttribute("data-refresh-seconds") || "15", 10) * 1000;
+
+  // Live plugin tables (independent of the numbers refresh below). A <div data-plugin-tables=
+  // "<kind>"> is replaced with freshly server-rendered HTML from /table_refresh, so enabling or
+  // disabling a plugin (here, another tab, or the CLI) shows up without a reload, and the markup is
+  // the server's own, never rebuilt in JS. Opt-in: a page with no such div fetches nothing.
+  var back = window.location.pathname + window.location.search;
+  function refreshTables() {
+    document.querySelectorAll("[data-plugin-tables]").forEach(function (el) {
+      var kind = el.getAttribute("data-plugin-tables");
+      var url = "/table_refresh?kind=" + encodeURIComponent(kind) + "&back=" + encodeURIComponent(back);
+      fetch(url, { headers: { Accept: "text/html" }, cache: "no-store" })
+        .then(function (r) { return r.ok ? r.text() : null; })
+        .then(function (html) {
+          if (html == null) return;  // a missed refresh is harmless: the last table stands
+          var open = el.querySelector("details.fold");
+          var wasOpen = open && open.open;   // keep the inactive fold open if the user opened it
+          el.innerHTML = html;
+          var now = el.querySelector("details.fold");
+          if (now && wasOpen) now.open = true;
+        })
+        .catch(function () { /* keep the last table on error */ });
+    });
+  }
+  if (document.querySelector("[data-plugin-tables]")) {
+    // the server already rendered the current state on load; poll only for a change made elsewhere.
+    setInterval(refreshTables, every);
+  }
+
   var url = body.getAttribute("data-refresh");
   if (!url) return;
-  var every = parseInt(body.getAttribute("data-refresh-seconds") || "15", 10) * 1000;
 
   function pick(data, path) {
     return path.split(".").reduce(function (node, key) { return node == null ? node : node[key]; }, data);

@@ -105,9 +105,10 @@
       <thead><tr><th>Plugin</th><th>Version</th>{% if kind == "enricher" %}<th>At once</th>{% endif %}<th>Health</th>{% if stage %}<th>Model</th>{% endif %}<th>Enabled</th>{% if kind == "enricher" %}<th>Pause</th>{% endif %}<th class="right">Actions</th></tr></thead>
       <tbody>
       {% set names = plugins | map(attribute="name") | list %}
-      {# A provider runs one instance per account, named plugin@account. Those are listed under the
-         provider, not as plugins of their own. An instance whose provider is gone is still shown. #}
-      {% for p in plugins if p.kind == kind and ("@" not in p.name or p.name.split("@")[0] not in names) %}
+      {# The active table: enabled plugins, with their full controls (model, config, pause). A
+         provider runs one instance per account, named plugin@account, listed under its provider.
+         Disabled plugins are not here; they drop to the inactive fold below. #}
+      {% for p in plugins if p.kind == kind and p.enabled and ("@" not in p.name or p.name.split("@")[0] not in names) %}
         {% set cs = models | selectattr("kind", "equalto", p.kind) | selectattr("name", "equalto", p.name) | list %}
         {% set c = cs[0] if cs else none %}
         {% set sr = (settings_rows | selectattr("kind", "equalto", p.kind) | selectattr("name", "equalto", p.name) | list) if settings_rows is defined else [] %}
@@ -145,10 +146,17 @@
         </tr>
         {% endfor %}
       {% else %}
-        <tr><td colspan="8" class="muted">{% if kind == "cache_store" %}No cache plugin installed. Core's own SQLite cache (in raw.db) is in use.{% else %}No {{ label | lower }} installed.{% endif %}</td></tr>
+        <tr><td colspan="8" class="muted">{% if kind == "cache_store" %}No active cache plugin. Core's own SQLite cache (in raw.db) is in use.{% else %}No active {{ label | lower }}.{% endif %}</td></tr>
       {% endfor %}
       </tbody>
     </table></div>
+    {# The inactive (disabled) plugins of this kind, folded out of the way at the bottom, with just
+       the essentials (health, and the switch to turn one back on). Its own render path, server-
+       rendered, so refresh.js can swap it live from /table_refresh without touching the active
+       controls above. #}
+    <div data-plugin-tables="{{ kind }}">
+      {% include "_plugin_tables.html" %}
+    </div>
     {% if kind != "enricher" %}<div class="card-foot">Turn a plugin off to take it out of the pipeline for now; turn it on to put it back.</div>{% endif %}
   </div>
 {% endmacro %}
