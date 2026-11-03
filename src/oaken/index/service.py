@@ -9,14 +9,14 @@ Nothing here calls a model, and message text never reaches a log.
 
 import asyncio
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
 from pydantic import BaseModel
 
 from oaken.core.actors import SYSTEM, Actor
-from oaken.core.attrs import AttrStore
+from oaken.core.attrs import Attr, AttrStore
 from oaken.core.clock import Clock, fmt_ts, parse_ts
 from oaken.core.events import (
     EventBus,
@@ -53,6 +53,30 @@ class RebuildResult:
     errors: list[str] = field(default_factory=list)
 
 
+def organize(attrs: Sequence[Attr]) -> tuple[str, list[str], str | None]:
+    """``(disposition, labels, location)`` from a message's attributes. A disposition or location
+    set by anything other than a script (the user) wins over the script's. ``location`` is None
+    unless the message is filed into a folder."""
+    dispositions: dict[str, str] = {}
+    locations: dict[str, str] = {}
+    labels: set[str] = set()
+    for a in attrs:
+        if a.kind == "label":
+            labels.add(a.value)
+        elif a.kind == "disposition" and a.value in DISPOSITIONS:
+            dispositions[a.source] = a.value
+        elif a.kind == "location":
+            locations[a.source] = a.value
+    chosen = next(
+        (v for s, v in sorted(dispositions.items()) if s != "sieve"),
+        dispositions.get("sieve", "inbox"),
+    )
+    location = next(
+        (v for s, v in sorted(locations.items()) if s != "sieve"), locations.get("sieve")
+    )
+    return chosen, sorted(labels), location
+
+
 class Indexer:
     def __init__(
         self,
@@ -77,28 +101,8 @@ class Indexer:
 
     # -- one message ------------------------------------------------------------------------
     async def organization(self, message_id: MessageId) -> tuple[str, list[str], str | None]:
-        """``(disposition, labels, location)`` from the message's attributes in ``raw.db``. A
-        disposition or location set by anything other than a script (the user, later) wins over
-        the script's. ``location`` is None unless the message is filed into a folder."""
-        dispositions: dict[str, str] = {}
-        locations: dict[str, str] = {}
-        labels: set[str] = set()
-        for a in await self.attrs.get(message_id):
-            if a.kind == "label":
-                labels.add(a.value)
-            elif a.kind == "disposition" and a.value in DISPOSITIONS:
-                dispositions[a.source] = a.value
-            elif a.kind == "location":
-                locations[a.source] = a.value
-        chosen = next(
-            (v for s, v in sorted(dispositions.items()) if s != "sieve"),
-            dispositions.get("sieve", "inbox"),
-        )
-        location = next(
-            (v for s, v in sorted(locations.items()) if s != "sieve"),
-            locations.get("sieve"),
-        )
-        return chosen, sorted(labels), location
+        """``(disposition, labels, location)`` from the message's attributes in ``raw.db``."""
+        return organize(await self.attrs.get(message_id))
 
     async def index_one(self, message_id: MessageId, *, force: bool = False) -> IndexResult | None:
         """Parse, clean, chunk and index one message. A deleted message is removed from the index

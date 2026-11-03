@@ -21,7 +21,7 @@ from oaken.core.errors import ConfigError
 
 # Keys of a ``[plugins.<name>]`` table that belong to the host, not the plugin (see
 # ``PluginHost``): a form edits them with its own controls, so the plugin's text leaves them out.
-HOST_KEYS = ("enabled", "capabilities")
+HOST_KEYS = ("enabled", "capabilities", "when", "unless")
 
 # A secret never goes in config.toml: it lives in the OS keyring. A form that tries to save one
 # here is refused, not trusted to be careful. The guess is made on the words of the key, so that

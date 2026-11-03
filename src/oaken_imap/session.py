@@ -229,6 +229,15 @@ class Session:
         got = await self._run(self.client.fetch, uids, ["FLAGS", "INTERNALDATE", "BODY.PEEK[]"])
         return [m for m in (to_fetched(uid, d) for uid, d in got.items()) if m.raw is not None]
 
+    async def fetch_structures(self, uids: list[int]) -> dict[int, Any]:
+        """The server's parsed ``BODYSTRUCTURE`` of each UID: the shape of the message, none of
+        its content."""
+        out: dict[int, Any] = {}
+        for i in range(0, len(uids), FLAG_CHUNK):
+            got = await self._run(self.client.fetch, uids[i : i + FLAG_CHUNK], ["BODYSTRUCTURE"])
+            out |= {uid: d[b"BODYSTRUCTURE"] for uid, d in got.items() if b"BODYSTRUCTURE" in d}
+        return out
+
     async def store(self, uids: list[int], flags: list[str], *, add: bool) -> None:
         if not flags:
             return

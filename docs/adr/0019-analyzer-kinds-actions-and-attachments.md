@@ -4,7 +4,7 @@
 - Date: 2026-11-03
 - Rests on: ADR 0017 (the separation, `BaseAnalyzer`, triage as a core concept)
 - Amends: ADR 0012 (a third pipeline kind, with effects outside the mail store)
-- Built: 2026-11-03, not yet verified by the owner's checks: decisions 1 to 4a, 4b2 to 4b4, 4c and
+- Built: 2026-11-03 (decision 5 reworked the same day, see ADR 0020), not yet verified by the owner's checks: decisions 1 to 4a, 4b2 to 4b4, 4c and
   4e (the kind, `route`, `approval`, parked jobs, `action_results`, `get_action`, `list_actions`,
   `approve_action`, `oaken action`, the Action tab). Built later the same day: decision 5 (the `attachment` plugin in `oaken_actions`, the byte reader
   `PluginContext.attachments`, the quarantine writer moved out of core, the `quarantine` route
@@ -94,16 +94,14 @@ Premises, checked 2026-11-03:
    *Cited:* "each kind gets its own tab in the UI (we'll need to add actions to the navbar). kind
    settings ... at the top with each plugin getting a row in the plugins table with a reload and
    settings button."
-5. **Attachment handling is an action, the `attachment` plugin** (`[plugins.action.attachment]`). It
-   strips an attachment off a message and saves it to a folder; quarantine is a route it answers to
-   (into its own provisioned `quarantine` folder, ADR 0016) beside others that save to a granted
-   destination. A virus scan, or other work on attachments, may be a separate action later. It is an
-   action plugin, and replaces the current attachment handler: the parser
-   records metadata only and the quarantine writer and the unused `AttachmentExtractor` interface
-   (`mail/attachments.py`, `ingest/quarantine.py`). Triage routes by the rule's `has_attachment`
-   condition. How an action reads attachment bytes, and how quarantine's rule survives (a flagged
-   attachment is extracted only by a deliberate, approved action), are not ruled. A separate
-   attachment queue is not assumed; the design is to be as extensible as possible.
+5. **Attachment handling is an action, the `attachment` plugin** (`[plugins.action.attachment]`),
+   over a core quarantine (ADR 0020). Core moves every attachment out of `raw.db` into a mode-0000
+   folder when mail is stored; a scanner (an action on the `scan` route) must say `clean` before
+   anything is released. The `attachment` action's `save` route copies clean files to a folder through
+   `PluginContext.attachments.copy_to`; plugins never hold attachment bytes in memory. A virus scan
+   is a separate action. The parser records metadata and reads the stub. The `quarantine` route, its
+   writer and the unused `AttachmentExtractor` are gone. Triage routes by the rule's `has_attachment`
+   condition.
    *Cited:* "perhaps a handle attachment router? (strip it off and save it $here, it would replace
    the current attachment handler mechanism)"; "attachment for stripping attachments. action _may_
    be used to run a virus scan or something else later."
@@ -122,6 +120,9 @@ Premises, checked 2026-11-03:
 - **Scope for 0.2.0:** the kind, its loop, its store and one worked example, or more.
 
 ## History
+
+- 2026-11-03 (before ratification): decision 5 rewritten in place for the core quarantine, ADR 0020. It had
+  a plugin-side quarantine route and an unruled byte reader; `read` became `copy_to` plus the scan door.
 
 - 2026-11-03: drafted from the owner's answers in a working session. Not ratified. Only the owner
   ratifies.

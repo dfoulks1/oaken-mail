@@ -205,6 +205,29 @@ def plugin_folders(kind: str, name: str, declared: Sequence[str]) -> dict[str, P
     return {_ident(f, "folder"): paths._ensure(root / f) for f in declared}  # noqa: SLF001
 
 
+def _swap_config(
+    kind: str, name: str, draft: dict[str, Any], config_path: Path, backup_stamp: str
+) -> Path | None:
+    """Write the draft into the plugin's table of ``config.toml``, after one backup. Blocking file
+    work: call it in a thread."""
+    text = config_path.read_text(encoding="utf-8") if config_path.is_file() else ""
+    saved = config_edit.get_table(text, ["plugins", kind, name])
+    kept = {k: saved[k] for k in config_edit.HOST_KEYS if k in saved and k not in draft}
+    edited = config_edit.set_table(text, ["plugins", kind, name], {**kept, **draft})
+    backup = None
+    if config_path.is_file():
+        backup = config_path.with_name(f"{config_path.name}.bak.{backup_stamp}")
+        n = 1
+        while backup.exists():
+            backup = config_path.with_name(f"{config_path.name}.bak.{backup_stamp}-{n}")
+            n += 1
+        backup.write_text(text, encoding="utf-8")
+        backup.chmod(0o600)
+    config_path.write_text(edited, encoding="utf-8")
+    config_path.chmod(0o600)
+    return backup
+
+
 def config_path() -> Path:
     return paths.config_dir() / CONFIG_FILE
 
@@ -264,21 +287,7 @@ class PluginDrafts:
         draft = await self.get(kind, name)
         if draft is None:
             raise NotFound(f"no staged config for {kind} {name}")
-        text = config_path.read_text(encoding="utf-8") if config_path.is_file() else ""
-        saved = config_edit.get_table(text, ["plugins", kind, name])
-        kept = {k: saved[k] for k in config_edit.HOST_KEYS if k in saved and k not in draft}
-        edited = config_edit.set_table(text, ["plugins", kind, name], {**kept, **draft})
-        backup = None
-        if config_path.is_file():
-            backup = config_path.with_name(f"{config_path.name}.bak.{backup_stamp}")
-            n = 1
-            while backup.exists():
-                backup = config_path.with_name(f"{config_path.name}.bak.{backup_stamp}-{n}")
-                n += 1
-            backup.write_text(text, encoding="utf-8")
-            backup.chmod(0o600)
-        config_path.write_text(edited, encoding="utf-8")
-        config_path.chmod(0o600)
+        backup = await asyncio.to_thread(_swap_config, kind, name, draft, config_path, backup_stamp)
         await self.discard(kind, name)
         return backup
 

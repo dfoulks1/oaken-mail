@@ -24,6 +24,7 @@ from oaken.core.settings import (
 from oaken.index import Indexer, IndexStore
 from oaken.ingest import Backends, Pipeline, SyncRunner, UsageStore
 from oaken.mail.filtering import FilterEngine
+from oaken.mail.quarantine import Vault
 from oaken.plugins.contracts import Embedder, Enricher
 from oaken.testing.fakes import (
     FakeEmbedder,
@@ -69,6 +70,7 @@ class Rig:
     engine: FilterEngine
     sieve_dir: Path
     events: list[Any] = field(default_factory=list)
+    quarantine: Path = Path()  # the attachment action's quarantine folder, when it is installed
 
     async def run_sync(self) -> Any:
         return await self.sync.sync(ACCT, self.provider)
@@ -96,6 +98,7 @@ class Options:
     embedder: bool = True
     enrich: bool = True
     quarantine: bool = True
+    vault: bool = False  # quarantine attachments (core does it, when quarantine is on)
     ingest: IngestSettings = field(default_factory=IngestSettings)
     provider_batch: int = 100
     extra: dict[str, Any] = field(default_factory=dict)
@@ -112,7 +115,8 @@ async def build(tmp: Path, opts: Options, *, with_filters: bool = True) -> Async
     )
     async with await Database.open(tmp / "raw.db", read_pool_size=2) as raw_db:
         await migrate(raw_db, MIGRATIONS)
-        raw = RawStore(raw_db, clock, tmp / "lfs", bus=bus)
+        vault = Vault(tmp / "quarantine", raw_db, clock, settings.mail) if opts.vault and opts.quarantine else None
+        raw = RawStore(raw_db, clock, tmp / "lfs", bus=bus, detacher=vault)
         await raw.create_account(ACCT, "fake", "Main")
         attrs = AttrStore(raw_db, clock)
         index = await IndexStore.open(tmp / "index.db", clock, raw_store_id=await raw.store_id())
@@ -150,7 +154,7 @@ async def build(tmp: Path, opts: Options, *, with_filters: bool = True) -> Async
         rig = Rig(
             tmp, clock, bus, raw_db, raw, attrs, index, indexer, queue, runner, usage, pipeline,
             sync, FakeProvider(batch_size=opts.provider_batch), embedder, enricher, llm, store,
-            engine, sieve_dir,
+            engine, sieve_dir, quarantine=tmp / "quarantine",
         )  # fmt: skip
 
         async def record(event: Any) -> None:

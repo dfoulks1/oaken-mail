@@ -57,11 +57,11 @@ class GetSettingsOutput(BaseModel):
 
 
 def _section_out(sec: settings_edit.Section, current: Settings, text: str) -> SectionOut:
-    model = getattr(current, sec.table)
+    model = settings_edit.settings_of(sec, current)
     props: dict[str, Any] = type(model).model_json_schema().get("properties", {})
     defaults = type(model)().model_dump(mode="json")
     values = model.model_dump(mode="json")
-    in_file = config_edit.get_table(text, [sec.table])
+    in_file = config_edit.get_table(text, settings_edit.table_path(sec))
     env = settings_edit.env_overrides(sec)
     rows = []
     for key, spec in sec.keys.items():
@@ -157,9 +157,11 @@ def _plan(inp: SettingsChange) -> _Plan:
                 FieldError(key=key, message=spec.note or "change it in config.toml by hand")
             )
     text = _config_text()
-    model_cls = type(getattr(Settings(), sec.table))
-    saved = config_edit.get_table(text, [sec.table])
-    merged = config_edit.edited_table(text, [sec.table], config=inp.values, unset=inp.unset)
+    model_cls = type(settings_edit.settings_of(sec, Settings()))
+    saved = config_edit.get_table(text, settings_edit.table_path(sec))
+    merged = config_edit.edited_table(
+        text, settings_edit.table_path(sec), config=inp.values, unset=inp.unset
+    )
     try:
         before = model_cls.model_validate(saved).model_dump(mode="json")
     except ValidationError:
@@ -254,9 +256,9 @@ async def set_settings(ctx: OpContext, inp: SettingsChange) -> SettingsSaved:
     try:
         text = config_edit.set_table(
             _config_text(),
-            [plan.sec.table],
+            settings_edit.table_path(plan.sec),
             config_edit.edited_table(
-                _config_text(), [plan.sec.table], config=inp.values, unset=inp.unset
+                _config_text(), settings_edit.table_path(plan.sec), config=inp.values, unset=inp.unset
             ),
         )
     except ConfigError as exc:

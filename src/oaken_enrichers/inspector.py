@@ -19,8 +19,8 @@ from pydantic import BaseModel, Field
 
 from oaken.plugins.base import BaseEnricher
 from oaken.plugins.contracts import (
-    EnrichAttachment,
     CleanMessage,
+    EnrichAttachment,
     EnrichOutput,
     PluginContext,
 )

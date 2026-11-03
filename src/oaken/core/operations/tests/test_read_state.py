@@ -35,6 +35,8 @@ def examples(a: MessageId, job_id: str = "none") -> dict[str, Any]:
         "revoke_agent": {"agent_id": "none"},
         "get_enrichment": {"message_id": a}, "enrich_message": {"message_id": a},
         "try_triage": {"message_id": a}, "get_triage": {"message_id": a},
+        "get_action": {"message_id": a}, "list_actions": {},
+        "approve_action": {"message_id": a, "action": "none", "route": "none"},  # NotFound
         "triage_message": {"message_id": a}, "trace_status": {}, "trace_tail": {},
         "sieve_check": {"script": 'keep;'}, "sieve_list": {},
         "sieve_test": {"script": "keep;", "message_id": a},
@@ -106,6 +108,7 @@ async def test_no_operation_that_does_not_mark_read_changes_read_state(ops: Ops)
                 "revoke_agent", "remove_account", "sieve_get",
                 "plugin_disable", "plugin_enable", "plugin_reload",
                 "get_plugin_config", "check_plugin_config", "set_plugin_config", "remove_workspace",
+                "approve_action",
             }  # fmt: skip
         assert await ops.read_count() == 0, f"{name} changed read state"
         assert ops.rs.writes() == [], f"{name} wrote a flag to the server"

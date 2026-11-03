@@ -35,7 +35,6 @@
   {% else %}<div class="card-body"><p class="muted">No action has run yet.</p></div>{% endif %}
 </div>
 {% endif %}
-{% if stage_fields %}{{ pl.setting_card(stage_label ~ " settings", "/" ~ stage_name, stage_fields) }}{% endif %}
 {{ pl.usage_card(usage_rows, "/" ~ stage_name, "Model & token usage") }}
 {{ pl.agents_card(agents, "/" ~ stage_name, "Agents working " ~ (stage_label | lower)) }}
 {{ pl.dialogs("/" ~ stage_name) }}

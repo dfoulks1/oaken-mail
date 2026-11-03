@@ -27,6 +27,35 @@ KINDS = ("disposition", "location", "label", "flag", "intent", "analysis", "enri
 # unique index and checked here for a friendly error.
 SINGLE_VALUED = ("disposition", "location")
 
+# Sources are scopes. ``sieve`` and ``user`` may write anything; ``triage`` only adds labels: it
+# never files, flags or discards, and never removes another scope's label.
+SIEVE, USER, TRIAGE = "sieve", "user", "triage"
+SCOPES = (SIEVE, TRIAGE, USER)
+SOURCE_KINDS = {TRIAGE: ("label",)}
+
+
+def _check(source: str, a: "Attr") -> None:
+    if a.kind not in KINDS:
+        raise ValueError(f"unknown attribute kind {a.kind!r}")
+    allowed = SOURCE_KINDS.get(source)
+    if allowed is not None and a.kind not in allowed:
+        raise ValueError(f"source {source!r} may only write {', '.join(allowed)}, not {a.kind!r}")
+
+
+def scoped_labels(attrs: Sequence["Attr"]) -> dict[str, tuple[str, ...]]:
+    """The labels grouped by the scope (source) that applied them."""
+    out: dict[str, set[str]] = {}
+    for a in attrs:
+        if a.kind == "label":
+            out.setdefault(a.source, set()).add(a.value)
+    return {s: tuple(sorted(v)) for s, v in sorted(out.items())}
+
+
+def filepath(attrs: Sequence["Attr"]) -> str | None:
+    """The one folder the message is filed in: what the user chose, else what Sieve decided."""
+    by = {a.source: a.value for a in attrs if a.kind == "location"}
+    return by.get(USER) or by.get(SIEVE)
+
 
 @dataclass(frozen=True, slots=True)
 class Attr:
@@ -61,8 +90,7 @@ class AttrStore:
         """Make ``attrs`` the whole truth of ``source`` for this message. All or nothing."""
         seen_single: dict[str, str] = {}
         for a in attrs:
-            if a.kind not in KINDS:
-                raise ValueError(f"unknown attribute kind {a.kind!r}")
+            _check(source, a)
             if a.kind in SINGLE_VALUED:
                 prior = seen_single.get(a.kind)
                 if prior is not None and prior != a.value:
@@ -95,6 +123,21 @@ class AttrStore:
                         json.dumps(list(errors)),
                     ),
                 )
+
+    async def add(self, message_id: MessageId, source: str, attrs: Sequence[Attr]) -> None:
+        """Add to what ``source`` already holds for this message. Nothing is ever removed."""
+        for a in attrs:
+            _check(source, a)
+        if not attrs:
+            return
+        async with self.db.transaction() as tx:
+            if not await tx.fetchone("SELECT 1 FROM messages WHERE id = ?", (message_id,)):
+                raise NotFound(f"no such message: {message_id}")
+            await tx.executemany(
+                "INSERT OR IGNORE INTO message_attrs (message_id, kind, value, source, rule)"
+                " VALUES (?,?,?,?,?)",
+                [(message_id, a.kind, a.value, source, a.rule) for a in attrs],
+            )
 
     async def get(self, message_id: MessageId) -> list[Attr]:
         rows = await self.db.fetchall(

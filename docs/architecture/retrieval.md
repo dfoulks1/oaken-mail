@@ -1,15 +1,12 @@
 +++
-title = "Retrieval and ask"
-subtitle = "Hybrid search, a token-budgeted context and answers that quote their sources"
-lead = "Search runs the keyword index and the vector store side by side and merges them. Ask builds a small context from the best hits and holds the model to it: every claim must quote the message it came from, and a quote that is not really there is dropped."
+title = "Retrieval"
+subtitle = "Hybrid keyword and vector search, merged by rank fusion"
+lead = "Search runs the keyword index and the vector store side by side and merges what they find. It returns references to messages, never an answer, and it keeps working when the vector side is down."
 badges = [["text-bg-warning", "Pre-alpha"]]
 group = "concepts"
 order = 55
-description = "How hybrid search merges BM25 and vector results with rank fusion, how the context is built within a token budget, how cited answers are verified, what happens when the vector side is down, and how it is measured."
+description = "How hybrid search merges BM25 and vector results with rank fusion, what happens when the vector side is down, how queries are read, and how retrieval is measured."
 +++
-
-> **`ask` was removed in 0.2.0** (ADR 0017, decision 2c). The parts of this page that describe it,
-> the context builder, the cited answer and the router, are history; search is current.
 
 
 ## Search
@@ -70,63 +67,6 @@ treated like a missing one rather than mixed in.
 A result is a reference. Opening a message is what changes read state, and that is a separate,
 user-initiated operation.
 
-## Ask
-
-### What an `ask` is asking for
-
-`ask` first works out the intent. A small model reads only the question, never any mail, and picks
-from a menu: `find` (show messages), `qa` (a factual question, below) and one intent for each
-installed enricher that declares one, so out of the box `summary`, `triage` (what needs me, most
-important first), `actions` (to-dos and deadlines) and `inspector` (is this suspicious). It also
-picks a sender, a period in days and unread-only when the question names them, and core does the
-dates and the lookups. The result begins with how it was read ("read as: ..."), and a message
-with no stored result for that enricher is listed as `not enriched` rather than dropped.
-
-The menu is built from the enrichers that are running, so a new enricher teaches `ask` a new skill
-with no core change (see [Plugins](../plugins.html)). The model's system prompt is a fixed template
-plus that menu, which is plugin code checked when it loads, so mail text never reaches it. If the
-model is missing or wrong, plain words decide: "summarize", "urgent", "to-do", "spam" pick an
-intent, a question picks `qa`, and anything else is a listing. Routing never fails an `ask`.
-
-`ask` has its own model: `[ai] ask_model` (empty means the backend's own), used for both the
-routing call and the cited answer, and chosen from a dropdown on the AI & Models tab of the General page (`/general`).
-
-`find` and the enricher intents search every account and make no model call to answer. Only `qa`
-asks the model about mail, one account at a time.
-
-### Cited answers (`qa`)
-
-`ask(question, filters)` retrieves, builds a context, and asks the model to answer in **claims**.
-Each claim has the excerpt it rests on and the exact words it quotes.
-
-1. A question has its stop words removed for the keyword side, which then matches messages
-   containing at least half of what is left; the vector side gets the question as written.
-2. The context builder spends `ai.ask_context_tokens` (3,000 by default) in tiers, across all
-   hits in rank order before going deeper into any: a header line and the stored summary for each
-   hit; the matched chunks for the first `ask_chunk_hits`; the neighbouring chunks and the
-   summaries of the rest of the thread for the first `ask_neighbor_hits`.
-3. Near-identical chunks are sent once, and words a neighbouring chunk already shows are cut. The
-   total is counted again at the end and trimmed, so the budget is a limit and not a target.
-4. The mail goes to the model as `UntrustedText`, one block per message, behind the usual data
-   rules (see [AI safety](ai-safety.md)).
-5. Core keeps a claim only if its excerpt was in the context and its quote really is in that
-   chunk's stored text (whitespace may differ, nothing else may). Claims that fail are dropped and
-   counted. If any were dropped, confidence is `low`: a model that invented something is not
-   trusted to rate itself. If none are left, the answer is `insufficient_evidence`, and the text
-   says so instead of guessing.
-
-The result has `answer`, `citations` (message, chunk ordinal, the quote as it stands in the
-message, and its offsets), `confidence`, `insufficient_evidence`, `dropped_claims`, `degraded`
-and the token figures: `evidence_tokens` and `full_body_tokens`, the cost of sending every hit
-whole, so the saving is visible on every call. When nothing is found there is no model call at all.
-
-Mail from more than one account is never put in one prompt, because an account decides which
-workspace, and so which models, may see it. A question that finds mail in several accounts is
-refused with a request to name one. `ask` does not mark anything read.
-
-`ask` is off over MCP by default. It would let an agent read mail by asking questions, so the
-user turns it on, like any operation (see [Operations](operations.md)).
-
 ## How it is measured
 
 `uv run python -m oaken.evals retrieval` builds a seeded synthetic mailbox of about a thousand
@@ -136,8 +76,7 @@ corpus has four kinds of answerable question and one kind that the mail does not
 that keyword search and vector search each fail on one of them. That is why hybrid wins by a wide
 margin offline, and why the numbers say little about real mail.
 
-Offline, the embedder and the reader are stand-ins: a small concept embedder and an extractive
-reader that quotes the sentence closest to the question. The run is deterministic, and a smaller
+Offline, the embedder is a stand-in: a small concept embedder. The run is deterministic, and a smaller
 run is a test, which asserts that hybrid is at least as good as each single retriever. A run with
 a real embedder and model (`--live`) is manual and is not part of CI.
 

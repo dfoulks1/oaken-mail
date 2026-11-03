@@ -151,6 +151,8 @@ src = ["src", "apps/cli/src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "CPY"]
+# Long lines are fine: the formatter wraps code at 100, and a long comment, string or URL is not worth breaking.
+ignore = ["E501"]
 preview = true
 explicit-preview-rules = true
 
@@ -163,13 +165,13 @@ min-file-size = 0
 "tests/**" = ["S101"]
 "src/oaken/testing/contracts.py" = ["S101"]  # the suites are assertions
 "docs/spikes/**" = ["S311", "S608"]  # measurement scripts: seeded random data, fixed SQL
-"docs/tools/pagebase.py" = ["E501"]  # embedded CSS
-"docs/tools/softmap.py" = ["E501"]  # embedded CSS, JS and HTML
 
 [tool.mypy]
 strict = true
 files = ["src", "apps/cli/src", "tests", "docs/tools"]
 mypy_path = "docs/tools:apps/cli/src"
+# Two bare "conftest" modules (here and docs/tools/tests) collide; this one only isolates the test home.
+exclude = ["^conftest\\.py$"]
 
 # Import boundaries (ADR 0002, 0006, 0007, 0010). Enforced by import-linter: `uv run lint-imports`.
 # The rules encode the *intended* seams the code already relies on: core never imports a feature

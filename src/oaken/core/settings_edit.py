@@ -22,6 +22,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Literal
 
+from pydantic import BaseModel
+
 from oaken.core.errors import NotFound
 
 Effect = Literal["reload", "reindex", "restart"]
@@ -119,6 +121,13 @@ SECTIONS: tuple[Section, ...] = (
         _keys("embed_min_priority", "stage_max_attempts", "backfill_queue_cap"),
     ),
     Section(
+        "attachments",
+        "mail.attachments",
+        "Where attachments are kept. Core moves every one out of the message into this folder when "
+        "mail is stored. Whether quarantine is on is set by hand in config.toml.",
+        _keys("quarantine_dir"),
+    ),
+    Section(
         "mcp",
         "mcp",
         "Whether MCP is on at all, and which workspaces a client may reach. Which operations it may call is set per "
@@ -150,13 +159,27 @@ def section(name: str) -> Section:
     return found
 
 
+def table_path(sec: Section) -> list[str]:
+    """The table's place in config.toml: ``["mail", "attachments"]`` for ``mail.attachments``."""
+    return sec.table.split(".")
+
+
+def settings_of(sec: Section, current: object) -> BaseModel:
+    """The settings model of a section, found by walking ``mail.attachments`` down from ``Settings``."""
+    for part in table_path(sec):
+        current = getattr(current, part)
+    if not isinstance(current, BaseModel):
+        raise TypeError(f"{sec.table} is not a settings model")
+    return current
+
+
 def known() -> list[str]:
     return [s.name for s in SECTIONS]
 
 
 def env_var(sec: Section, key: str) -> str:
     """The environment variable that overrides ``key`` (``OAKEN_AI__CHUNK_TOKENS``)."""
-    return f"OAKEN_{sec.table}__{key}".upper()
+    return f"OAKEN_{sec.table.replace('.', '__')}__{key}".upper()
 
 
 def env_overrides(sec: Section, environ: Mapping[str, str] | None = None) -> dict[str, str]:

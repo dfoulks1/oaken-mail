@@ -30,16 +30,18 @@ async def test_storage_numbers_are_the_files_on_disk(ops: Ops) -> None:
 
 
 async def test_the_quarantine_folder_and_its_files_are_counted(ops: Ops) -> None:
-    from oaken.core.plugin_store import folder_stats
-
     before = await ops.out("storage_info", {})
-    root = folder_stats("action", "attachment", "quarantine")[0]
-    (root / "m1").mkdir(parents=True)
-    (root / "m1" / "a.bin").write_bytes(b"x" * 100)
+    await ops.svc.raw.db.execute(
+        "INSERT INTO quarantined_files (sha256, rel_path, size, content_type, created_at)"
+        " VALUES (?,?,?,?,?)",
+        ("a" * 64, "aa/" + "a" * 64 + ".quarantined", 100, "application/pdf", "2026-01-01T00:00:00Z"),
+    )
     after = await ops.out("storage_info", {})
-    assert after.quarantine_dir == str(root)
+    assert after.quarantine_dir == str(Path(after.data_dir) / "quarantine")
     assert after.quarantined_files == before.quarantined_files + 1
     assert after.quarantine_bytes == before.quarantine_bytes + 100
+
+
 async def test_vacuum_refuses_while_a_rebuild_runs(ops: Ops) -> None:
     await enqueue_rebuild(ops.svc.queue, RebuildPayload())
     with pytest.raises(Conflict, match="rebuild is running"):

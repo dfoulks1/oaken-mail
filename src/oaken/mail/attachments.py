@@ -56,6 +56,7 @@ class AttachmentInfo:
     inline: bool
     quarantine: bool
     part_path: str  # where the part sits: "0.1" is the second child of the root; see parse.py
+    file_sha256: str | None = None  # set when the body was moved to quarantine
 
 
 def is_quarantined(

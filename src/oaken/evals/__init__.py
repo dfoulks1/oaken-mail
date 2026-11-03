@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from oaken.core.untrusted import UntrustedText
-from oaken.plugins.contracts import EnrichAttachment, CleanMessage
+from oaken.plugins.contracts import CleanMessage, EnrichAttachment
 
 
 @dataclass(frozen=True)

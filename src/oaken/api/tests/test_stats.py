@@ -329,6 +329,13 @@ async def test_the_pipeline_page_has_a_tab_per_kind_behind_the_stages(rig: Rig) 
         assert "<th>Plugin</th>" in body and "<th>Kind</th>" not in body
 
 
+async def test_a_bare_pipeline_page_opens_on_providers(rig: Rig) -> None:
+    body = (await rig.http.get("/pipeline")).text
+    assert 'href="/pipeline?tab=provider" aria-current="page"' in body
+    assert "<th>Plugin</th>" in body
+    assert 'aria-current="page">Providers' in (await rig.http.get("/pipeline?tab=nope")).text
+
+
 async def test_a_stage_page_can_change_its_own_core_settings(rig: Rig) -> None:
     triage = (await rig.http.get("/triage")).text
     assert 'name="key" value="triage_gate"' in triage

@@ -32,12 +32,12 @@ from oaken.core.settings import Settings
 from oaken.core.untrusted import UntrustedText
 from oaken.plugins.adapt import (
     iter_pull,
-    to_enrich_output,
     to_action_result,
+    to_enrich_output,
     to_hits,
-    to_triage_verdict,
     to_llm_response,
     to_stats,
+    to_triage_verdict,
     to_vectors,
 )
 from oaken.plugins.contracts import (
@@ -140,12 +140,20 @@ async def check_provider_flags(provider: Any, ids: set[str]) -> None:
         await provider.set_flags([], set(), set())  # an empty change is a no-op, not an error
 
 
+async def check_provider_detects_attachments(provider: Any, ids: set[str]) -> None:
+    if "attachments.detect" in declared_capabilities(provider, "provider"):
+        found = await provider.has_attachments(sorted(ids))
+        assert set(found) <= ids and all(isinstance(v, bool) for v in found.values())
+        assert await provider.has_attachments([]) == {}
+
+
 PROVIDER_CHECKS = (
     check_provider_valid,
     check_provider_authenticates,
     check_provider_pulls_everything,
     check_provider_resumes_from_cursor,
     check_provider_flags,
+    check_provider_detects_attachments,
 )
 
 

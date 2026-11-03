@@ -60,7 +60,7 @@
       <a class="doc-link" href="architecture/read-state.html">Read state</a>
       <a class="doc-link" href="architecture/sync-schedule.html">Sync schedule</a>
       <a class="doc-link" href="architecture/operations.html">Operations</a>
-      <a class="doc-link" href="architecture/retrieval.html">Retrieval and ask</a>
+      <a class="doc-link" href="architecture/retrieval.html">Retrieval</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="reference/plugin-contracts.html">Plugin contracts</a>
       <a class="doc-link" href="reference/operations.html">Operations</a>
@@ -123,22 +123,27 @@
 <tr>
 <td><code>BaseEmbedder</code></td>
 <td><code>oaken.embedders</code></td>
-<td>Text → vectors (feeds search and <code>ask</code>)</td>
+<td>Text → vectors (feeds search)</td>
 </tr>
 <tr>
 <td><code>BaseLLMBackend</code></td>
 <td><code>oaken.llm_backends</code></td>
-<td>Language model calls (enrichers, <code>ask</code>, workspaces)</td>
+<td>Language model calls (enrichers, triagers, workspaces)</td>
 </tr>
 <tr>
 <td><code>BaseTriager</code></td>
 <td><code>oaken.triagers</code></td>
-<td>The first pipeline step: rates a message (<code>rules</code>, <code>ai</code>, custom). Deterministic; <code>LLMTriager</code> in <code>oaken_enrichers</code> adds a model</td>
+<td>The first pipeline step: rates a message (<code>rules</code>, <code>ai</code>, custom). Deterministic; <code>LLMTriager</code> in <code>oaken_triagers</code> adds a model. Not an enricher: its own base, verdict (<code>TriageVerdict</code>) and store</td>
 </tr>
 <tr>
 <td><code>BaseEnricher</code></td>
 <td><code>oaken.enrichers</code></td>
 <td>Per-message derivation (summary, actions, custom)</td>
+</tr>
+<tr>
+<td><code>BaseAction</code></td>
+<td><code>oaken.actions</code></td>
+<td>Does something about a message triage routed to it (save a file, open a ticket). Waits for a yes by default</td>
 </tr>
 <tr>
 <td><code>BaseVectorStore</code></td>
@@ -157,8 +162,8 @@
 LM Studio, vLLM, or any other model server. The one required attribute is <code>locality</code>: set it to
 <code>&quot;local&quot;</code> (this machine) or <code>&quot;remote&quot;</code>. A <code>secure</code> workspace refuses any backend not marked
 <code>&quot;local&quot;</code>, so forgetting it is treated as remote. Register the class under <code>oaken.llm_backends</code>
-and set <code>ai.llm_backend</code> in <code>config.toml</code> to activate it. No enricher or <code>ask</code> logic changes.</p>
-<p><strong><code>BaseEmbedder</code> feeds both search and <code>ask</code>.</strong> It is global, not per-workspace. Switching it
+and set <code>ai.llm_backend</code> in <code>config.toml</code> to activate it. No enricher logic changes.</p>
+<p><strong><code>BaseEmbedder</code> feeds search.</strong> It is global, not per-workspace. Switching it
 triggers a re-index: the vector partition is keyed to <code>model_id</code>, so vectors from the old model
 are never mixed with the new ones. Name <code>model_id</code> specifically enough to be unique
 (<code>lmstudio:nomic-embed-text-v1.5</code>, not just <code>nomic-embed-text</code>).</p>
@@ -201,12 +206,17 @@ always valid.</p>
 <tr>
 <td>Triager</td>
 <td><code>oaken.triagers</code></td>
-<td>Rates one message first, so core can decide what else it is owed. Runs in <code>rank</code> order; the first verdict wins and is stored under <code>triage</code>. Implement <code>async triage(msg)</code>: return an <code>EnrichOutput</code>, or None to leave it to the next.</td>
+<td>Rates one message first, so core can decide what else it is owed. Runs in <code>rank</code> order; the first verdict wins and is stored as the message's triage verdict (read it with <code>get_triage</code>). Implement <code>async triage(msg)</code>: return a <code>TriageVerdict</code>, or None to leave it to the next.</td>
 </tr>
 <tr>
 <td>Enricher</td>
 <td><code>oaken.enrichers</code></td>
 <td>Derives something from one message (a summary, a category, actions).</td>
+</tr>
+<tr>
+<td>Action</td>
+<td><code>oaken.actions</code></td>
+<td>Does something about a message a triager routed to it. Set <code>routes</code> to the route names it answers to and implement <code>async act(msg, route)</code>: return an <code>ActionResult</code>, or None for nothing to do; raise to fail. It should be idempotent. The reader's <code>approval = &quot;ask&quot; | &quot;auto&quot;</code> in <code>[plugins.action.&lt;name&gt;]</code> decides whether it waits for a yes (default <code>ask</code>; <code>oaken action approve</code>). A route no action answers parks the job.</td>
 </tr>
 <tr>
 <td>Vector store</td>
@@ -264,6 +274,10 @@ is no second list to keep in step:</p>
 <tr>
 <td><code>set_flags(provider_ids, add, remove)</code></td>
 <td><code>flags.write</code>, so a read in Oaken becomes a read on the server</td>
+</tr>
+<tr>
+<td><code>has_attachments(provider_ids)</code></td>
+<td><code>attachments.detect</code>: which messages have an attachment, answered from the service's own structure (IMAP <code>BODYSTRUCTURE</code>, Gmail part list) without downloading the message. Leave out an id you cannot answer for</td>
 </tr>
 <tr>
 <td><code>send(raw_bytes)</code></td>
@@ -331,7 +345,7 @@ schema. Change the <code>version</code> whenever the output could change: it is 
 new version re-runs the enricher and an unchanged one never does. An enricher that needs a model
 sets <code>needs_llm=True</code>.</p>
 <h3 id="what-an-enricher-is-given">What an enricher is given</h3>
-<p>An <code>EnrichInput</code> has the message's cleaned text (<code>body</code>), <code>subject</code>, a few display <code>headers</code>, every
+<p>An <code>CleanMessage</code> has the message's cleaned text (<code>body</code>), <code>subject</code>, a few display <code>headers</code>, every
 header in <code>raw_headers</code> (lower-case names, all values), the attachments' metadata (<code>attachments</code>:
 name, type, size, whether core flagged it; never the bytes), the <code>date</code>, whether it <code>is_reply</code>, and,
 for a reply, the stored <code>parent_summary</code> of the message before it. Everything derived from the mail
@@ -357,26 +371,9 @@ is <code>UntrustedText</code>.</p>
 repeated question from its cache, validates the reply against <code>Answer</code> and records the tokens.
 The instructions are a literal in your source; the mail goes in as <code>UntrustedText</code> parts, and a
 lint test fails a module that builds a request any other way. The first-party enrichers
-(<code>oaken_enrichers</code>: <code>summary</code>, <code>triage</code>, <code>actions</code>, <code>inspector</code>) are the worked examples. Turn one
+(<code>oaken_enrichers</code>: <code>summary</code>, <code>actions</code>, <code>inspector</code>) and the first-party triagers (<code>oaken_triagers</code>: <code>spamcheck</code>, <code>rules</code>, <code>ai</code>) are the worked examples. Turn one
 off with <code>[plugins.enricher.&lt;name&gt;] enabled = false</code>; <code>summary</code> and <code>actions</code> skip bulk mail unless you set
 <code>skip_bulk = false</code>.</p>
-<h3 id="teaching-ask-what-an-enricher-knows">Teaching <code>ask</code> what an enricher knows</h3>
-<p>An enricher can declare an <code>ask_intent</code>, so a person's question like &quot;any deadlines this week?&quot; or
-&quot;how upbeat was that thread?&quot; is understood and answered from what the enricher has stored:</p>
-<div class="code"><pre class="highlight"><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">oaken.plugins.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseEnricher</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">oaken.plugins.contracts</span><span class="w"> </span><span class="kn">import</span> <span class="n">AskIntent</span>
-
-
-<span class="k">class</span><span class="w"> </span><span class="nc">Sentiment</span><span class="p">(</span><span class="n">BaseEnricher</span><span class="p">):</span>
-    <span class="n">ask_intent</span> <span class="o">=</span> <span class="n">AskIntent</span><span class="p">(</span>
-        <span class="s2">"sentiment"</span><span class="p">,</span>  <span class="c1"># the name the router may choose: lowercase letters and _</span>
-        <span class="s2">"The reader asks how upbeat or upset a message is."</span><span class="p">,</span>  <span class="c1"># one plain sentence, 120 characters</span>
-        <span class="p">(</span><span class="s2">"score"</span><span class="p">,),</span>  <span class="c1"># the keys of your stored result worth showing; empty means all of it</span>
-    <span class="p">)</span>
-</code></pre></div>
-<p>The description is written into the router's prompt, so keep it plain and about what a person would
-say. It is checked when your class is defined (a bad name or a long description is an error naming
-the field). It must never contain mail text.</p>
 </section>
 <section id="a-cache" class="doc-section"><div class="section-head"><span class="section-num">7</span><h2>A cache</h2></div>
 <p>The cache holds validated model answers. Core hands it the facts of a question and the cache builds
@@ -443,7 +440,7 @@ operations are available to any client (<code>plugin_enable</code>, <code>plugin
 <code>get_plugin_config</code>, <code>check_plugin_config</code>, <code>set_plugin_config</code>).</p>
 </section>
 <section id="what-a-person-can-say-about-your-plugin" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>What a person can say about your plugin</h2></div>
-<p>Every plugin's <code>[plugins.&lt;kind&gt;.&lt;name&gt;]</code> table takes two keys that belong to the host, not to you, so your
+<p>Every plugin's <code>[plugins.&lt;kind&gt;.&lt;name&gt;]</code> table takes keys that belong to the host, not to you, so your
 <code>ctx.config</code> never contains them:</p>
 <ul>
 <li><code>enabled = false</code> keeps the plugin off. A plugin that should be opt-in (it costs money, or reaches
@@ -454,7 +451,18 @@ over the default, and over <code>plugins enable</code>.</li>
 your plugin does not implement does nothing, a name that does not exist is an error at start, and
 a list that leaves only <code>auth</code> is refused. <code>auth</code> left off hides the plugin's sign-in command.
 This is how a person makes Gmail receive-only at the plugin level.</li>
+<li><code>when = [&quot;sieve:vip&quot;, &quot;triage:invoice&quot;]</code> and <code>unless = [&quot;user:muted&quot;]</code> choose which messages an
+enricher or an action sees, by label. A label is <code>scope:label</code> (the scope is <code>sieve</code>, <code>triage</code> or
+<code>user</code>) or a bare label, which matches in any scope. <code>when</code> is any-of (absent: every message);
+<code>unless</code> drops a message carrying any of its labels. An action that every selector passes over
+for a route does not park the message.</li>
 </ul>
+<p>A message's labels are kept by scope: <code>sieve</code> (set by the reader's scripts and replaced when they
+change), <code>triage</code> (added by triagers, and only ever added) and <code>user</code>. A triager or enricher reads
+them in <code>CleanMessage.labels</code>, and the one folder the message is filed in in <code>CleanMessage.filepath</code>
+(the user's choice, else Sieve's). A triager adds labels by putting a <code>labels</code> list in its
+verdict; it cannot file, flag, discard or remove anything. What a provider does with <code>filepath</code>
+(a folder move, a Gmail label) is the provider's business.</p>
 <p><code>list_plugins</code> reports <code>enabled</code>, <code>enabled_default</code> and <code>allowed_capabilities</code> for each plugin.
 To try settings before saving them, <code>oaken plugins check</code> (the operation <code>check_plugin_config</code>)
 validates them against your <code>config_model</code> and then starts a throwaway instance on them and asks its <code>health()</code>. It never
@@ -539,8 +547,9 @@ rerun or a <code>reprocess</code> is a cache hit.</p>
 
 
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">tag</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">PluginStageContext</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span> <span class="n">PluginStageInput</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
-    <span class="c1"># msg.enrichments holds this message's enricher results (summary, triage, ...)</span>
-    <span class="n">priority</span> <span class="o">=</span> <span class="n">msg</span><span class="o">.</span><span class="n">enrichments</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"triage"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"priority"</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="c1"># msg.enrichments holds this message's enricher results (summary, actions, ...);</span>
+    <span class="c1"># msg.triage is its triage verdict, or None when it is unrated</span>
+    <span class="n">priority</span> <span class="o">=</span> <span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">triage</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"priority"</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
     <span class="k">return</span> <span class="p">{</span><span class="s2">"tag"</span><span class="p">:</span> <span class="s2">"urgent"</span> <span class="k">if</span> <span class="n">priority</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="s2">"normal"</span><span class="p">}</span>
 
 
@@ -668,7 +677,7 @@ reach. They are not sandboxed in version 1. The contract keeps the code tidy and
 boundaries clear; it does not contain a hostile plugin. Only install plugins you trust, as you
 would any Python package.</p>
 </section>
-  <footer>Oaken Mail 0.1.1 · Apache-2.0</footer>
+  <footer>Oaken Mail 0.2.0 · Apache-2.0</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

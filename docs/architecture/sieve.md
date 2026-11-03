@@ -113,7 +113,7 @@ backup of `raw.db` should keep it.
 | --- | --- |
 | `kind` | `disposition`, `location`, `label`, `flag`, `intent`, `analysis` or `enrichment` |
 | `value` | `filed`, `Work` (a folder), `Lists` (a label), `\Seen`, `redirect x@example.net`, `skip_enrich` |
-| `source` | `sieve` (a person's own attributes can use another source later) |
+| `source` | the scope: `sieve`, `triage` or `user` |
 | `rule` | `10-lists.sieve:4`, the file and line, so a UI can say **why** |
 
 A **location** is the folder a filed message is organized into (single-valued per source, like the
@@ -121,6 +121,12 @@ disposition); a **label** is a search tag (many per message). They are distingui
 UI can show folders apart from tags (see [ADR 0008](../adr/index.html)). The `enrichment` kind is a
 namespaced escape hatch (`<producer>:<key>=<data>`) for enrichers and plugins to attach their own
 data without a schema change.
+
+The source is the scope. `fileinto` sets the one **filepath** (the `location`); the user's choice beats
+Sieve's. A triager adds labels in the `triage` scope and can write nothing else: it cannot file,
+flag or discard, and it never removes another scope's label. Enrichers and actions pick messages by
+`scope:label` with `when` and `unless` in their plugin table (see [plugins](../plugins.html)).
+What a provider does with the filepath is up to the provider plugin; Sieve never sees it.
 
 A re-run replaces only the `sieve` rows of that message, in one transaction. `message_filters`
 records the hash of the script set that last ran on each message. Edit a script and the hash changes,

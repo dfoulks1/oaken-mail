@@ -4,7 +4,8 @@
 Shared runner for oaken-trunk dev checks.
 
 Usage (from the repo root, via uv run):
-    uv run scripts/run_check.py <dotfile> <label> -- <step_label> <cmd...> [-- <step_label> <cmd...> ...]
+    uv run scripts/run_check.py <dotfile> <label> -- <step_label> <cmd...> [-- <step_label> <cmd...>
+    ...]
 
 Each "--"-delimited group after the leading "--" is one step:
     step_label  human-readable name printed as "==> <label>"
@@ -22,11 +23,13 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
-
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -40,8 +43,8 @@ def _elapsed_str(seconds: int) -> str:
 
 def _git_sha() -> str:
     try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
+        result = subprocess.run(  # noqa: S603 - a fixed git command
+            ["git", "rev-parse", "--short", "HEAD"],  # noqa: S607
             capture_output=True, text=True, check=True,
         )
         return result.stdout.strip()
@@ -49,26 +52,42 @@ def _git_sha() -> str:
         return "unknown"
 
 
+def _git(*args: str, env: dict[str, str] | None = None) -> str:
+    result = subprocess.run(  # noqa: S603 - a fixed git command
+        ["git", *args],  # noqa: S607
+        capture_output=True, text=True, check=True, env=env,
+    )
+    return result.stdout.strip()
+
+
 def _git_tree() -> str:
-    """Root tree SHA for HEAD — changes whenever any tracked file changes."""
+    """Tree SHA of the working tree: committed, modified and new (untracked, not ignored) files.
+    Taken in a scratch copy of the index, so the real index is never touched. A check that passed
+    is skipped only when this is unchanged, so an uncommitted edit always counts. Empty on error."""
     try:
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD^{tree}"],
-            capture_output=True, text=True, check=True,
-        )
-        return result.stdout.strip()
+        index = Path(_git("rev-parse", "--absolute-git-dir")) / "index"
+        with tempfile.TemporaryDirectory() as scratch:
+            copy = Path(scratch) / "index"
+            if index.exists():
+                shutil.copy(index, copy)  # keeps the stat cache, so this stays quick
+            env = {**os.environ, "GIT_INDEX_FILE": str(copy)}
+            if not index.exists():
+                _git("read-tree", "HEAD", env=env)
+            _git("add", "-A", env=env)
+            return _git("write-tree", env=env)
     except Exception:
         return ""
 
 
-def _read_lastrun(dotfile: Path) -> dict | None:
+def _read_lastrun(dotfile: Path) -> dict[str, Any] | None:
     try:
-        return json.loads(dotfile.read_text())
+        data: dict[str, Any] = json.loads(dotfile.read_text())
+        return data
     except Exception:
         return None
 
 
-def _write_lastrun(dotfile: Path, data: dict) -> None:
+def _write_lastrun(dotfile: Path, data: dict[str, Any]) -> None:
     dotfile.write_text(json.dumps(data, indent=2) + "\n")
 
 
@@ -78,13 +97,14 @@ def _run_step(label: str, cmd: list[str]) -> tuple[bool, str]:
     sys.stdout.flush()
     lines: list[str] = []
     try:
-        proc = subprocess.Popen(
+        proc = subprocess.Popen(  # noqa: S603 - the steps are this repo's own check commands
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
         )
-        assert proc.stdout is not None
+        if proc.stdout is None:
+            raise RuntimeError("no output pipe")
         for line in proc.stdout:
             print(line, end="")
             sys.stdout.flush()
@@ -118,13 +138,13 @@ def _parse_args(argv: list[str]) -> tuple[Path, str, list[tuple[str, list[str]]]
 
     steps: list[tuple[str, list[str]]] = []
     current: list[str] = []
-    for token in rest:
-        if token == "--":
+    for arg in rest:
+        if arg == "--":
             if current:
                 steps.append((current[0], current[1:]))
             current = []
         else:
-            current.append(token)
+            current.append(arg)
     if current:
         steps.append((current[0], current[1:]))
 
@@ -151,11 +171,11 @@ def run(dotfile: Path, label: str, steps: list[tuple[str, list[str]]]) -> None:
 
         # early exit if nothing has changed since the last passing run
         if last.get("passed") and last.get("tree") and last["tree"] == _git_tree():
-            print(f"==> no changes since last run, skipping.")
+            print("==> no changes since last run, skipping.")
             sys.exit(0)
 
     # -- run steps -------------------------------------------------------------
-    results: list[dict] = []
+    results: list[dict[str, Any]] = []
     failed = False
     for step_label, cmd in steps:
         ok, output = _run_step(step_label, cmd)

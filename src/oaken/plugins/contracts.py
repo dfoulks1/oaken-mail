@@ -12,10 +12,11 @@ tuples are accepted and coerced into these types) and strict about what it hands
 
 import re
 from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Mapping, Sequence
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, BinaryIO, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
@@ -64,6 +65,7 @@ CAPABILITIES: dict[str, dict[str, str]] = {
         "auth": "authenticate",
         "sync.pull": "pull",
         "flags.write": "set_flags",
+        "attachments.detect": "has_attachments",
         "send": "send",
     },
     "embedder": {},
@@ -158,24 +160,45 @@ class PluginStore(Protocol):
 
 @dataclass(frozen=True)
 class AttachmentRef:
-    """One attachment of a message, as an action sees it: where it sits and what it is called. The
-    bytes come from ``PluginAttachments.read``. ``quarantine`` says core flagged it as risky."""
+    """One attachment of a message, as an action sees it: where it sits and what it is called.
+    ``quarantine`` says core flagged it as risky by its name or type. ``scan`` is what a scanner has
+    said of the quarantined file (``pending``, ``clean``, ``infected`` or ``error``), or empty for an
+    attachment still inline in older mail."""
 
     part_path: str
     filename: str | None
     content_type: str
     size: int
     quarantine: bool
+    scan: str = ""
 
 
 class PluginAttachments(Protocol):
-    """An action's door to attachment bytes (ADR 0019). Only action plugins have it. A flagged
-    attachment is readable only while the running job is the ``quarantine`` route, so a flagged
-    file is never extracted by anything but that deliberate, approved step."""
+    """An action's door to attachments (ADR 0019). Only action plugins have it. Attachments live in
+    core's quarantine, mode 0000, not in the database. Two things can be done with one: release it
+    (``copy_to``, which needs a ``clean`` scan) and, on the ``scan`` route only, open it for a scan
+    (``scanning``) and record the verdict (``record_scan``)."""
 
     async def list(self, message_id: str) -> list[AttachmentRef]: ...
 
-    async def read(self, message_id: str, part_path: str) -> bytes: ...
+    async def copy_to(
+        self, message_id: str, part_path: str, out: BinaryIO, *, max_bytes: int = 0
+    ) -> int | None:
+        """Release the decoded attachment into ``out``; it is never held in memory. Returns the
+        bytes written, or None when over ``max_bytes`` (0: no limit). Refused unless its scan is
+        ``clean``."""
+        ...
+
+    def scanning(self, message_id: str, part_path: str) -> AbstractAsyncContextManager[Path]:
+        """The quarantined file's path, readable only inside the block (``async with``), then locked
+        again. Only while the running job is the ``scan`` route."""
+        ...
+
+    async def record_scan(
+        self, message_id: str, part_path: str, status: str, detail: str = "", scanner: str = ""
+    ) -> None:
+        """Record what a scan found: ``clean``, ``infected`` or ``error``. ``scan`` route only."""
+        ...
 
 
 class PluginDraft(Protocol):
@@ -377,7 +400,8 @@ class UiPage:
     ``load`` is a read operation of the plugin with no input; it returns
     ``{"values": {field: value}, "messages": [str], "rows": [{"id", "label"}]}`` (each part
     optional). ``test`` (read) and ``submit`` (the plugin's own, a mutate is confirmed) take the
-    typed fields as input. With ``order`` set, the page lists ``rows`` in order, each with a position
+    typed fields as input. With ``order`` set, the page lists ``rows`` in order, each with a
+    position
     box (1 to n), and Update calls the operation ``order`` with ``{"order": [row ids]}``: a row
     whose number changed goes there and the others shift to make room (ADR 0018, 4a)."""
 
@@ -573,7 +597,8 @@ class PullBatch:
 @runtime_checkable
 class Provider(Plugin, Protocol):
     """A mail source or a way to send. Capabilities: ``auth``, ``sync.pull``, ``flags.write``,
-    ``send``. A provider declares at least ``sync.pull`` or ``send``: a send-only provider (an SMTP
+    ``attachments.detect``, ``send``. A provider declares at least ``sync.pull`` or ``send``: a
+    send-only provider (an SMTP
     server) has no mail to pull."""
 
     async def authenticate(self, ctx: PluginContext) -> None:
@@ -594,6 +619,12 @@ class Provider(Plugin, Protocol):
         self, provider_ids: Sequence[str], add: Collection[str], remove: Collection[str]
     ) -> None:
         """Write flags back to the server (capability ``flags.write``)."""
+        ...
+
+    async def has_attachments(self, provider_ids: Sequence[str]) -> dict[str, bool]:
+        """Whether each message has an attachment, asked of the service's own view of the message
+        structure and never by downloading the message (capability ``attachments.detect``). An id
+        the service cannot answer for (gone, wrong folder) is left out, not guessed at."""
         ...
 
     async def send(self, raw_bytes: bytes) -> str:
@@ -702,6 +733,10 @@ class CleanMessage:
     date: datetime | None = None
     is_reply: bool = False
     parent_summary: UntrustedText | None = None
+    # Labels by the scope that applied them (``sieve``, ``triage``, ``user``) and the one folder the
+    # message is filed in. A triager may add labels to its own scope; it never removes one.
+    labels: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    filepath: str | None = None
 
 
 _INTENT_NAME = re.compile(r"^[a-z][a-z_]{0,31}$")

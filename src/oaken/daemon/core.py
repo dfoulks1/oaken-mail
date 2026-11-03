@@ -6,6 +6,7 @@ Stopping is the reverse, so nothing is closed while something that uses it still
 """
 
 from pathlib import Path
+from typing import Any
 
 import oaken
 from oaken.ai import LLMCache, LLMService, Workspaces
@@ -15,6 +16,7 @@ from oaken.api.mcp_server import McpServer
 from oaken.api.runtime import MCP_TOKEN_FILE, TOKEN_FILE, load_or_create_token
 from oaken.core import paths
 from oaken.core.agents import AgentRegistry
+from oaken.core.attachment_access import AttachmentAccess
 from oaken.core.attrs import AttrStore
 from oaken.core.clock import Clock, SystemClock
 from oaken.core.db import Database, migrate
@@ -27,17 +29,17 @@ from oaken.core.maintenance import register_maintenance_jobs
 from oaken.core.operations import CoreClient, Services
 from oaken.core.operations.builtin import agent_registry, core_registry
 from oaken.core.operations.plugin_ops import plugin_operations
+from oaken.core.plugin_store import PluginServices
 from oaken.core.rawstore import RawStore
 from oaken.core.scheduler import Scheduler
 from oaken.core.settings import Settings
 from oaken.core.trace import Tracer
 from oaken.index import Indexer, IndexStore
 from oaken.ingest import Backends, Pipeline, SyncRunner, UsageStore
-from oaken.core.attachment_access import AttachmentAccess
-from oaken.core.plugin_store import PluginServices
 from oaken.ingest.pipeline_control import PipelineControl
 from oaken.ingest.schedule import SyncService
 from oaken.mail.filtering import FilterEngine, scripts_dir
+from oaken.mail.quarantine import Vault
 from oaken.plugins.accounts import AccountProviders
 from oaken.plugins.contracts import Cache
 from oaken.plugins.host import PluginHost
@@ -75,6 +77,7 @@ class Core:
         self.mcp_token_path = mcp_token_path or self.token_path.with_name(MCP_TOKEN_FILE)
         self._discover = discover
         self._open = False
+        self.vault: Vault | None = None
         self._started: list[str] = []
 
     def reconfigured(self, settings: Settings) -> "Core":
@@ -99,7 +102,14 @@ class Core:
         )  # fmt: skip
         try:
             await migrate(self.raw_db, MIGRATIONS)
-            self.raw = RawStore(self.raw_db, clock, _under_data(st.lfs_dir), st, bus)
+            self.vault = (
+                Vault(_under_data(s.mail.attachments.quarantine_dir), self.raw_db, clock, s.mail)
+                if s.mail.attachments.quarantine
+                else None
+            )
+            self.raw = RawStore(
+                self.raw_db, clock, _under_data(st.lfs_dir), st, bus, detacher=self.vault
+            )
             self.attrs = AttrStore(self.raw_db, clock)
             self.index = await IndexStore.open(
                 _under_data(st.index_db), clock, raw_store_id=await self.raw.store_id(),
@@ -131,7 +141,7 @@ class Core:
         kwargs = {} if self._discover is None else {"discover": self._discover}
         self.host = PluginHost(s, clock, bus, **kwargs)  # type: ignore[arg-type]
         self.plugin_services = PluginServices(
-            self.raw_db, clock, self.host, AttachmentAccess(self.raw, s)
+            self.raw_db, clock, self.host, AttachmentAccess(self.raw, s, self.vault)
         )
         self.host.provision = self.plugin_services.provision
         self.host.runtime_config = self._runtime_config
@@ -261,6 +271,8 @@ class Core:
         ``except`` then closes the stores too, so a failed startup leaves nothing open.
         """
         try:
+            if self.vault is not None:  # a crash inside an open attachment leaves it readable
+                await self.vault.lock_all()
             await self._lifecycle.start(self._started)
         except BaseException:
             await self._close_stores()

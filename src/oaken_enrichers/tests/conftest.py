@@ -14,7 +14,7 @@ from oaken.core.logging import get_logger
 from oaken.core.settings import Settings
 from oaken.core.untrusted import UntrustedText
 from oaken.ingest.usage import UsageStore
-from oaken.plugins.contracts import EnrichAttachment, CleanMessage, PluginContext
+from oaken.plugins.contracts import CleanMessage, EnrichAttachment, PluginContext
 from oaken.testing.fakes import FakeLLM
 
 MIGRATIONS = Path(__file__).resolve().parents[2] / "oaken" / "core" / "migrations"
@@ -117,7 +117,7 @@ def with_llm(cls: type) -> Any:
 
 _FILL: dict[str, dict[str, Any]] = {
     "enrich.summary": {"summary": "A summary.", "key_points": ["one"]},
-    "enrich.triage": {
+    "triage": {
         "category": "work",
         "priority": 1,
         "needs_reply": False,

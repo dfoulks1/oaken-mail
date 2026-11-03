@@ -93,7 +93,7 @@ ALIASES: dict[str, tuple[str, frozenset[str]]] = {
         "The Oaken core daemon: run it, configure it, look after its storage.",
         frozenset(
             "start stop restart reload status config settings plugins mcp storage vacuum cache "
-            "events rule level help".split()
+            "events help".split()
         ),
     ),
     "sawyer": (

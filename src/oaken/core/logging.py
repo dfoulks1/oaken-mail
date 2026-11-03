@@ -131,7 +131,8 @@ def configure_logging(settings: LogSettings, stream: TextIO | None = None) -> No
         as_json = structlog.processors.JSONRenderer()
 
         def to_file(_: WrappedLogger, __: str, event_dict: EventDict) -> EventDict:
-            file.write(f"{as_json(_, __, event_dict)}\n")
+            line = as_json(_, __, event_dict)
+            file.write((line.decode() if isinstance(line, bytes) else line) + "\n")
             return event_dict
 
         sink = [to_file]

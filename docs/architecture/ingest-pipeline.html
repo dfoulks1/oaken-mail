@@ -60,7 +60,7 @@
       <a class="doc-link" href="read-state.html">Read state</a>
       <a class="doc-link" href="sync-schedule.html">Sync schedule</a>
       <a class="doc-link" href="operations.html">Operations</a>
-      <a class="doc-link" href="retrieval.html">Retrieval and ask</a>
+      <a class="doc-link" href="retrieval.html">Retrieval</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
       <a class="doc-link" href="../reference/operations.html">Operations</a>
@@ -83,7 +83,7 @@
       <a class="nav-link" href="#reprocessing"><span class="num">5</span>Reprocessing</a>
       <a class="nav-link" href="#token-accounting"><span class="num">6</span>Token accounting</a>
       <a class="nav-link" href="#the-enrichers"><span class="num">7</span>The enrichers</a>
-      <a class="nav-link" href="#the-quarantine-folder"><span class="num">8</span>The quarantine folder</a>
+      <a class="nav-link" href="#the-quarantine"><span class="num">8</span>The quarantine</a>
       <a class="nav-link" href="#plugins-and-events"><span class="num">9</span>Plugins and events</a>
       <a class="nav-link" href="#settings"><span class="num">10</span>Settings</a>
     </nav></div>
@@ -98,29 +98,35 @@
 
 <section id="the-stages" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>The stages</h2></div>
 <pre class="mermaid">flowchart LR
-    S[Provider sync] --&gt;|raw.put| R[(raw.db)]
+    S[Provider sync] --&gt;|"raw.put: attachments move out"| R[(raw.db)]
+    S -.-&gt;|"attachments, mode 0000"| Q[(quarantine folder)]
     R --&gt; F
     subgraph PARSE[ingest.parse]
-        F[Sieve filter] --&gt; I[Index: fields and FTS5] --&gt; Q[Quarantine flagged attachments]
+        F[Sieve filter] --&gt; I[Index: fields and FTS5]
     end
-    Q --&gt;|priority - 2| T[ingest.triage]
-    Q --&gt;|priority - 2, no bar| N[ingest.enrich.name]
-    T --&gt;|priority - 1| E[ingest.embed]
-    T --&gt;|priority - 2 - (3 - rating), bar met| N
+    I --&gt;|"priority - 2"| T[ingest.triage]
+    I --&gt;|"priority - 2, no bar"| N[ingest.enrich.name]
+    I --&gt;|"quarantined attachments"| A[ingest.action.scan]
+    T --&gt;|"priority - 1"| E[ingest.embed]
+    T --&gt;|"priority - 2 - (3 - rating), bar met"| N
     E --&gt; V[(vector store)]
     N --&gt; X[(enrichments in raw.db)]
+    A --&gt;|"verdict"| Q
 </pre><noscript><pre><code>flowchart LR
-    S[Provider sync] --&gt;|raw.put| R[(raw.db)]
+    S[Provider sync] --&gt;|"raw.put: attachments move out"| R[(raw.db)]
+    S -.-&gt;|"attachments, mode 0000"| Q[(quarantine folder)]
     R --&gt; F
     subgraph PARSE[ingest.parse]
-        F[Sieve filter] --&gt; I[Index: fields and FTS5] --&gt; Q[Quarantine flagged attachments]
+        F[Sieve filter] --&gt; I[Index: fields and FTS5]
     end
-    Q --&gt;|priority - 2| T[ingest.triage]
-    Q --&gt;|priority - 2, no bar| N[ingest.enrich.name]
-    T --&gt;|priority - 1| E[ingest.embed]
-    T --&gt;|priority - 2 - (3 - rating), bar met| N
+    I --&gt;|"priority - 2"| T[ingest.triage]
+    I --&gt;|"priority - 2, no bar"| N[ingest.enrich.name]
+    I --&gt;|"quarantined attachments"| A[ingest.action.scan]
+    T --&gt;|"priority - 1"| E[ingest.embed]
+    T --&gt;|"priority - 2 - (3 - rating), bar met"| N
     E --&gt; V[(vector store)]
     N --&gt; X[(enrichments in raw.db)]
+    A --&gt;|"verdict"| Q
 </code></pre></noscript>
 <ol>
 <li><strong>Store.</strong> The sync runner writes the exact bytes to <code>raw.db</code> and queues a parse job. The cursor
@@ -128,8 +134,8 @@ is saved only after the whole batch is stored, so a crash re-pulls the batch and
 write changes nothing.</li>
 <li><strong>Parse</strong> (<code>ingest.parse</code>). The user's Sieve scripts run <strong>first</strong>, so a message that is
 discarded or marked <code>skip_enrich</code> never reaches the expensive stages. Then the message is
-indexed (fields and FTS5), flagged attachments are written to the quarantine folder, and the
-triage job is queued, with the job of each enricher that has no <code>min_priority</code>. From here on the
+indexed (fields and FTS5), a message with quarantined attachments is queued to the <code>scan</code> route of any
+scanner action, and the triage job is queued, with the job of each enricher that has no <code>min_priority</code>. From here on the
 message is <strong>searchable by keyword</strong>. With triage off, parse queues the embed job and every
 enricher's job itself.</li>
 <li><strong>Triage</strong> (<code>ingest.triage</code>). The first step, and independent of enrichment: the <strong>triagers</strong>
@@ -285,20 +291,36 @@ Enrichment never marks a message read.</p>
 <code>uv run python -m oaken.evals enrich [--enricher NAME]</code>. It scores properties of the result, not
 exact words.</p>
 </section>
-<section id="the-quarantine-folder" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>The quarantine folder</h2></div>
-<p>Attachments flagged by name or type (executables, scripts, archives that hide them) are written to
-<code>quarantine/</code> inside the data folder by the parse stage:</p>
+<section id="the-quarantine" class="doc-section"><div class="section-head"><span class="section-num">8</span><h2>The quarantine</h2></div>
+<p>Attachments do not live in <code>raw.db</code>. On the way in, <strong>core</strong> moves every attachment body out of the
+message into the quarantine folder, and a short stub takes its place in the stored message. This
+happens when the message is stored, before Sieve or any plugin sees it, so nothing can skip it.</p>
 <ul>
-<li>The folder is mode 0700 and the files 0600, with no execute bit, named
-<code>&lt;part&gt;_&lt;safe-name&gt;.quarantined</code> so the name cannot escape the folder or mean anything to a shell.</li>
-<li>Core <strong>only writes</strong> there. It never opens, parses, analyses or runs what it wrote.</li>
-<li>Writing is atomic (a temporary <code>.part</code> file, then a rename) and idempotent.</li>
-<li>An attachment over <code>mail.attachments.quarantine_max_bytes</code> (50 MiB) is left in the message, which
-<code>raw.db</code> keeps whole.</li>
-<li>Turn it off with <code>mail.attachments.quarantine = false</code>. Unflagged attachments are never
-extracted.</li>
+<li><strong>One file per distinct content</strong>, named by its sha256 (<code>ab/ab12….quarantined</code>), so the name cannot
+mean anything to a shell and the same attachment is stored once. The folder is mode 0700 and each
+file is <strong>mode 0000</strong>: nothing can read or run it.</li>
+<li>The stored message keeps its headers, each part's own headers and its filename. The body is a stub
+(<code>X-Oaken-Detached: {&quot;sha256&quot;: ..., &quot;size&quot;: ..., &quot;path&quot;: ...}</code>), so the message still parses and
+the attachment's real size and hash are known.</li>
+<li>The move is <strong>streamed</strong>: the body is decoded a line at a time into a scratch file, flushed to disk
+and hashed, then renamed into place. Nothing holds an attachment in memory, and a crash leaves at
+worst an unused file, since the provider still has the original.</li>
+<li>Re-syncing the same mail stores the same bytes, so nothing changes.</li>
+<li>A forwarded message (<code>message/rfc822</code>) stays readable, since its text is part of the message. Its own
+attachments are quarantined.</li>
+<li>A part core cannot locate in the MIME structure is left in the message and logged. The provider still
+holds the original, and failing the ingest would lose the mail.</li>
+<li>An attachment is flagged by its name and type (executables, scripts, archives that hide them), which
+only labels it. All attachments are quarantined.</li>
+<li>Turn it off with <code>mail.attachments.quarantine = false</code> (the attachments then stay inline, unchecked).
+The folder is <code>mail.attachments.quarantine_dir</code>.</li>
 </ul>
-<p><code>Quarantine.problems()</code> reports loose permissions from file modes alone.</p>
+<p><strong>Scanning and release.</strong> An attachment stays in quarantine until a scanner says <code>clean</code>. A scanner is
+an <strong>action</strong> on the <code>scan</code> route, which core queues for any message with quarantined files. While the
+job runs, the file is readable (0400) for one block and then locked again, and the verdict is recorded
+(<code>clean</code>, <code>infected</code> or <code>error</code>). The <code>attachment</code> action's <code>save</code> route copies <strong>clean</strong> attachments
+into a folder. With no scanner installed nothing is ever released. Mail stored before the quarantine
+keeps its attachments inline; an unflagged one can still be saved, a flagged one never.</p>
 </section>
 <section id="plugins-and-events" class="doc-section"><div class="section-head"><span class="section-num">9</span><h2>Plugins and events</h2></div>
 <p>Each step publishes an event (<code>MessageIndexed</code>, <code>MessageEmbedded</code>, <code>MessageEnriched</code>,
@@ -376,22 +398,22 @@ store can sit behind it later.</p>
 <tr>
 <td><code>mail.attachments.quarantine</code></td>
 <td>true</td>
-<td>Write flagged attachments to the quarantine folder</td>
+<td>Move attachments out of <code>raw.db</code> into quarantine (core does it)</td>
 </tr>
 <tr>
 <td><code>mail.attachments.quarantine_dir</code></td>
 <td><code>quarantine</code></td>
-<td>Folder, relative to the data folder</td>
+<td>Folder, relative to the data folder unless absolute</td>
 </tr>
 <tr>
-<td><code>mail.attachments.quarantine_max_bytes</code></td>
-<td>50 MiB</td>
-<td>Largest attachment to write</td>
+<td><code>plugins.action.attachment.max_bytes</code></td>
+<td>0 (no limit)</td>
+<td>Largest attachment the attachment action copies</td>
 </tr>
 </tbody>
 </table></div>
 </section>
-  <footer>Oaken Mail 0.1.1 · Apache-2.0</footer>
+  <footer>Oaken Mail 0.2.0 · Apache-2.0</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

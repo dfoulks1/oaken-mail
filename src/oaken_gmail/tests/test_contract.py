@@ -30,5 +30,6 @@ def test_it_declares_everything_it_does_and_nothing_else() -> None:
         "auth",
         "sync.pull",
         "flags.write",
+        "attachments.detect",
         "send",
     }

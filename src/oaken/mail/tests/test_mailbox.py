@@ -154,3 +154,22 @@ def test_the_new_operations_are_registered_and_not_offered_to_ai_yet() -> None:
     for name in ("create_folder", "create_label", "move_to_folder", "set_labels"):
         assert reg[name].permission == "mutate" and reg[name].mcp == "never"
     assert reg["list_mailbox"].permission == "read"
+
+
+async def test_triage_only_adds_labels_and_never_files(rig: Rig) -> None:
+    from oaken.core.attrs import TRIAGE, Attr
+
+    mid = await rig.put("t1")
+    await rig.attrs.replace(mid, "sieve", [Attr("label", "vip", "sieve")])
+    await rig.attrs.add(mid, TRIAGE, [Attr("label", "invoice", TRIAGE)])
+    await rig.attrs.add(mid, TRIAGE, [Attr("label", "invoice", TRIAGE), Attr("label", "q4", TRIAGE)])
+    got = {(a.source, a.value) for a in await rig.attrs.get(mid)}
+    assert got == {("sieve", "vip"), ("triage", "invoice"), ("triage", "q4")}
+    for bad in (Attr("location", "Work", TRIAGE), Attr("disposition", "discarded", TRIAGE)):
+        with pytest.raises(ValueError):
+            await rig.attrs.add(mid, TRIAGE, [bad])
+    await rig.attrs.replace(mid, "sieve", [])  # a sieve re-run clears only its own scope
+    assert {(a.source, a.value) for a in await rig.attrs.get(mid)} == {
+        ("triage", "invoice"),
+        ("triage", "q4"),
+    }

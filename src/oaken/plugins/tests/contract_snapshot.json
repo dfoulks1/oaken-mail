@@ -6,6 +6,7 @@
     "enricher": {},
     "llm_backend": {},
     "provider": {
+      "attachments.detect": "has_attachments",
       "auth": "authenticate",
       "flags.write": "set_flags",
       "send": "send",
@@ -88,6 +89,7 @@
       "dimensions",
       "embed",
       "enabled_default",
+      "folders",
       "health",
       "kind",
       "max_input_tokens",
@@ -97,7 +99,9 @@
       "setup_help",
       "start",
       "stop",
+      "tables",
       "trace",
+      "ui",
       "version"
     ],
     "BaseEnricher": [
@@ -108,6 +112,7 @@
       "ctx",
       "enabled_default",
       "enrich",
+      "folders",
       "health",
       "kind",
       "needs_llm",
@@ -118,7 +123,9 @@
       "setup_help",
       "start",
       "stop",
+      "tables",
       "trace",
+      "ui",
       "version"
     ],
     "BaseLLMBackend": [
@@ -130,6 +137,7 @@
       "context_window",
       "ctx",
       "enabled_default",
+      "folders",
       "generate",
       "health",
       "kind",
@@ -140,8 +148,10 @@
       "setup_help",
       "start",
       "stop",
+      "tables",
       "thinking_for",
       "trace",
+      "ui",
       "version"
     ],
     "BaseProvider": [
@@ -153,6 +163,8 @@
       "config_model",
       "ctx",
       "enabled_default",
+      "folders",
+      "has_attachments",
       "health",
       "kind",
       "operations",
@@ -164,7 +176,9 @@
       "start",
       "stop",
       "supports_folders",
+      "tables",
       "trace",
+      "ui",
       "version"
     ],
     "BaseVectorStore": [
@@ -175,6 +189,7 @@
       "ctx",
       "delete",
       "enabled_default",
+      "folders",
       "health",
       "kind",
       "operations",
@@ -184,7 +199,9 @@
       "start",
       "stats",
       "stop",
+      "tables",
       "trace",
+      "ui",
       "upsert",
       "version"
     ]
@@ -200,7 +217,9 @@
       "attachments",
       "date",
       "is_reply",
-      "parent_summary"
+      "parent_summary",
+      "labels",
+      "filepath"
     ],
     "EnrichAttachment": [
       "filename",
@@ -262,6 +281,10 @@
       "llm",
       "trace",
       "tracing",
+      "store",
+      "folders",
+      "draft",
+      "attachments",
       "_subscriptions"
     ],
     "PluginInfo": [
@@ -291,7 +314,10 @@
       "actor",
       "config",
       "clock",
-      "log"
+      "log",
+      "store",
+      "folders",
+      "draft"
     ],
     "PluginOperation": [
       "name",
@@ -401,6 +427,7 @@
     ],
     "Provider": [
       "authenticate",
+      "has_attachments",
       "health",
       "pull",
       "send",

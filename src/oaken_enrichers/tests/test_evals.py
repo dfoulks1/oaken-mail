@@ -10,8 +10,8 @@ import pytest
 from oaken.evals import Fixture, build_input, load_fixtures, score
 from oaken.evals.__main__ import default_fixture_root, first_verdict, main
 from oaken_enrichers import ActionsEnricher, InspectorEnricher, SummaryEnricher
-from oaken_triagers import AITriager, SpamCheckTriager
 from oaken_enrichers.tests.conftest import Rig
+from oaken_triagers import AITriager, SpamCheckTriager
 
 ROOT = Path(__file__).parent / "evals"
 FIXTURES = load_fixtures(ROOT)

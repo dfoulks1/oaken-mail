@@ -40,6 +40,7 @@ from oaken_imap.session import (
     Session,
     keyword_ok,
 )
+from oaken_imap.structure import has_attachment
 
 log = get_logger("oaken.imap")
 SEEN, FLAGGED = "\\Seen", "\\Flagged"
@@ -295,6 +296,31 @@ class ImapProvider(BaseProvider):
                 await session.store(chunk, to_remove, add=False)
 
         await self._each_folder(ids, "changing flags", work)
+
+    async def has_attachments(self, provider_ids: Sequence[str]) -> dict[str, bool]:
+        """From ``BODYSTRUCTURE``, folder by folder, read-only. An id in a folder that is gone or
+        renumbered is left out."""
+        by_folder: dict[tuple[str, int], list[tuple[int, str]]] = {}
+        for pid in dict.fromkeys(provider_ids):
+            if (parsed := parse_provider_id(pid)) is not None:
+                uid, validity, name = parsed
+                by_folder.setdefault((name, validity), []).append((uid, pid))
+        found: dict[str, bool] = {}
+        if not by_folder:
+            return found
+        session = await self._open()
+        try:
+            everyone = {f.name: f for f in await session.folders()}
+            for (name, validity), items in by_folder.items():
+                if (folder := everyone.get(name)) is None:
+                    continue
+                if (await session.select(folder)).validity != validity:
+                    continue
+                shapes = await session.fetch_structures([u for u, _ in items])
+                found |= {pid: has_attachment(shapes[u]) for u, pid in items if u in shapes}
+        finally:
+            await session.close()
+        return found
 
     async def trash(self, provider_ids: Sequence[str]) -> None:
         await self._relocate(

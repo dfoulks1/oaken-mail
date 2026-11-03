@@ -162,6 +162,13 @@ def _flags_of(labels: Collection[str]) -> frozenset[str]:
     return frozenset(out)
 
 
+def _has_file(part: dict[str, Any]) -> bool:
+    """A named part whose bytes live behind an ``attachmentId``, at any depth."""
+    if part.get("filename") and (part.get("body") or {}).get("attachmentId"):
+        return True
+    return any(_has_file(p) for p in part.get("parts") or ())
+
+
 def _decode(raw: str) -> bytes:
     try:
         return base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
@@ -453,6 +460,30 @@ class GmailProvider(BaseProvider):
 
         found = await asyncio.gather(*(one(p) for p in ids))
         return tuple(m for m in found if m is not None)
+
+    async def has_attachments(self, provider_ids: Sequence[str]) -> dict[str, bool]:
+        """From the message's part list (``format=full`` keeps an attachment's bytes out, giving
+        an ``attachmentId``). A message that has vanished is left out."""
+
+        async def one(pid: str) -> bool | None:
+            try:
+                data = await self.api.request(
+                    "GET", f"/messages/{pid}", params={"format": "full", "fields": "payload"}
+                )
+            except NotFound:
+                return None
+            return _has_file(data.get("payload") or {})
+
+        ids = list(dict.fromkeys(provider_ids))
+        results = await asyncio.gather(*(one(p) for p in ids), return_exceptions=True)
+        found: dict[str, bool] = {}
+        for pid, res in zip(ids, results, strict=True):
+            if isinstance(res, BaseException):
+                if not isinstance(res, Exception) or _fatal(res):
+                    raise res
+            elif res is not None:
+                found[pid] = res
+        return found
 
     # -- labels ----------------------------------------------------------------------------
     async def _label_map(self) -> dict[str, str]:

@@ -1,8 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """Skipping, quarantine, the enrichment cache, sync errors, flags and usage."""
 
+import base64
+import os
+import stat
 from email.message import EmailMessage
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -46,41 +49,63 @@ async def test_skip_enrich_keeps_a_message_out_of_embedding_and_enrichment(rig: 
 
 
 # -- quarantine ----------------------------------------------------------------------------------
-# The writer is the `attachment` action's (oaken_actions); core only queues the route (ADR 0019).
-async def test_a_flagged_attachment_is_routed_to_quarantine_when_an_action_answers(rig: Rig) -> None:
+# Core moves every attachment out of the message on the way in. A scanner is an action on the `scan`
+# route; core only queues it. Nothing here depends on an action being installed (ADR 0019).
+EXE = ("application", "x-msdownload")
+
+
+async def test_an_attachment_never_enters_raw_db_and_is_routed_to_scan(make_rig: Any) -> None:
     from oaken.plugins.base import BaseAction
     from oaken.plugins.contracts import ActionResult
 
-    class Keeper(BaseAction):
-        routes = ("quarantine",)
-        auto_routes = ("quarantine",)
+    class Scanner(BaseAction):
+        routes = ("scan",)
+        auto_routes = ("scan",)
 
         def __init__(self) -> None:
             self.seen: list[str] = []
 
         async def act(self, msg: Any, route: str) -> ActionResult | None:
             self.seen.append(msg.message_id)
-            return ActionResult({"quarantined": 1})
+            return ActionResult({"scanned": 1})
 
-    keeper = Keeper()
-    rig.pipeline.backends.actions = lambda: {"keeper": keeper}
-    rig.pipeline.register_actions(rig.runner)
-    bad = rig.provider.add_message(
-        with_attachment(1, "invoice.exe", b"MZ-not-run", ("application", "octet-stream"))
-    )
-    rig.provider.add_message(with_attachment(2, "notes.txt", b"just text", ("text", "plain")))
-    await rig.run_sync()
-    await rig.drain(rounds=4)
-    assert keeper.seen == [await rig.mid(bad)]  # unflagged mail is not routed; no yes was needed
+    async with make_rig(Options(vault=True)) as rig:
+        scanner = Scanner()
+        rig.pipeline.backends.actions = lambda: {"scanner": cast(Any, scanner)}
+        rig.pipeline.register_actions(rig.runner)
+        bad = rig.provider.add_message(with_attachment(1, "invoice.exe", b"MZ-not-run", EXE))
+        txt = rig.provider.add_message(
+            with_attachment(2, "notes.txt", b"just text", ("text", "plain"))
+        )
+        await rig.run_sync()
+        await rig.drain(rounds=4)
+        for pid, payload in ((bad, b"MZ-not-run"), (txt, b"just text")):
+            raw = await rig.raw.get_raw(await rig.mid(pid))
+            assert payload not in raw and base64.b64encode(payload) not in raw  # not in raw.db
+            stub = b"X-Oaken-Detache"  # a stub is there, plain or base64 like its part
+            assert stub in raw or base64.b64encode(stub) in raw
+        files = list(rig.quarantine.rglob("*.quarantined"))
+        assert len(files) == 2
+        if os.name != "nt":
+            assert all(stat.S_IMODE(f.stat().st_mode) == 0 for f in files)  # nothing can open it
+        assert sorted(scanner.seen) == sorted([str(await rig.mid(bad)), str(await rig.mid(txt))])
+        row = await rig.raw.db.fetchone(
+            "SELECT COUNT(*) AS n FROM quarantined_files WHERE scan_status = 'pending'"
+        )
+        assert row is not None and row["n"] == 2  # held until a scanner says clean
 
 
-async def test_nothing_is_routed_when_no_action_answers_quarantine(rig: Rig) -> None:
-    rig.provider.add_message(
-        with_attachment(1, "invoice.exe", b"MZ-not-run", ("application", "octet-stream"))
-    )
-    await rig.run_sync()
-    await rig.drain(rounds=3)
-    assert await rig.pipeline.waiting_actions() == []  # no parked job either
+async def test_a_message_is_still_stored_and_searchable_with_no_scanner_installed(
+    make_rig: Any,
+) -> None:
+    async with make_rig(Options(vault=True)) as rig:
+        rig.provider.add_message(with_attachment(1, "invoice.exe", b"MZ-not-run", EXE))
+        await rig.run_sync()
+        await rig.drain(rounds=3)
+        assert await rig.pipeline.waiting_actions() == []  # no parked job
+        assert len(list(rig.quarantine.rglob("*.quarantined"))) == 1  # still moved out
+        hits = await rig.index.keyword_search("attached", SearchFilters(), k=10)
+        assert len(hits.hits) == 1
 
 
 # -- enrichment cache --------------------------------------------------------------------------
@@ -95,6 +120,17 @@ async def test_identical_content_is_enriched_once_and_copied(rig: Rig) -> None:
         assert (await rig.pipeline.enrichment(mid, "words")) is not None
     rows = {r.stage: r for r in await rig.usage.usage_summary()}
     assert rows["enrich"].cached_calls == 1 and rows["enrich"].tokens_saved > 0
+
+
+async def test_every_redo_is_a_reprocess_stage(rig: Rig) -> None:
+    rig.provider.add_message(mail(1))
+    await rig.run_sync()
+    await rig.drain()
+    for stage in ("start", "triage", "scan"):
+        await rig.pipeline.reprocess(stage)
+        await rig.drain()
+    with pytest.raises(ValueError, match="route"):
+        await rig.pipeline.reprocess("action")
 
 
 async def test_a_new_enricher_version_reruns_only_on_reprocess(
@@ -157,10 +193,8 @@ async def test_usage_summary_groups_by_stage_and_model_and_filters_by_time(rig: 
 
 @pytest.mark.parametrize("flag", [True, False])
 async def test_quarantine_can_be_switched_off(make_rig: Any, flag: bool) -> None:
-    async with make_rig(Options(quarantine=flag)) as rig:
-        rig.provider.add_message(
-            with_attachment(1, "a.exe", b"MZ", ("application", "x-msdownload"))
-        )
+    async with make_rig(Options(quarantine=flag, vault=True)) as rig:
+        rig.provider.add_message(with_attachment(1, "a.exe", b"MZ", EXE))
         await rig.run_sync()
         await rig.drain()
-        assert bool(list(rig.quarantine.root.rglob("*.quarantined"))) is flag
+        assert bool(list(rig.quarantine.rglob("*.quarantined"))) is flag

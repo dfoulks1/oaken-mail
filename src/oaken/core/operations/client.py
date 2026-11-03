@@ -19,7 +19,6 @@ from oaken.core.operations import savings
 from oaken.core.operations.caller import CallerContext
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.exposure import ExposureStore
-from oaken.core.operations.scope import McpScope
 from oaken.core.operations.gate import (
     Binding,
     InMemoryProposals,
@@ -29,6 +28,7 @@ from oaken.core.operations.gate import (
 )
 from oaken.core.operations.limits import Limits
 from oaken.core.operations.registry import AnyOperation, OperationRegistry, Preview
+from oaken.core.operations.scope import McpScope
 from oaken.core.operations.services import Services
 from oaken.readstate.audit import new_audit_id
 

@@ -223,6 +223,15 @@ small, .small { font-size: .85rem; }
 .tile .label { display: block; color: var(--muted); font-weight: 500; }
 .tile .value { display: block; margin-top: .1rem; font: 600 1.9rem/1.2 var(--serif); font-variant-numeric: tabular-nums; }
 .tile .note { display: block; font-size: .84rem; color: var(--muted); }
+.tile.bad { border-top-color: var(--danger); }
+.tile.bad .value { color: var(--danger); }
+.tiles-flush { margin-bottom: 0; }
+.card-body.setting-row { border-top: 1px solid var(--border); }
+/* A setting is a column: its name, then the field and its button, then what it means. */
+.card-body.setting-row form { display: grid; grid-template-columns: max-content max-content 1fr; align-items: center; gap: .35rem .6rem; }
+.card-body.setting-row label, .card-body.setting-row .hint { grid-column: 1 / -1; }
+.card-body.setting-row .hint { margin: 0; }
+.card-body.flow { background: var(--surface-2); }
 .plain { list-style: none; margin: 0; padding: 0; }
 .form-grid { display: grid; grid-template-columns: minmax(9rem, 14rem) 1fr; gap: .6rem 1rem; align-items: center; margin: 0 0 1rem; }
 @media (max-width: 40rem) { .form-grid { grid-template-columns: 1fr; } }

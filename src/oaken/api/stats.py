@@ -57,42 +57,54 @@ class StatsCollector:
 
         now = self._clock.now()
         data: dict[str, Any] = {"generated_at": now.isoformat(), "core": self._core(now)}
+        # The parts do not depend on one another (``usage`` needs the model list, so that pair
+        # stays in order), so they run together: the page waits for the slowest, not the sum.
+        async def with_models() -> tuple[dict[str, Any] | None, list[Any], Any]:
+            llm = await self._llm()
+            models = await self._models(llm)
+            return llm, models, (await self._usage() if want("usage") else None)
+
+        jobs: dict[str, Any] = {}
         if want("mail"):
-            data["mail"] = await self._mail()
+            jobs["mail"] = self._mail()
         if want("pipeline"):
-            data["pipeline"] = await self._pipeline(stages, counts)
-        llm = await self._llm() if want("usage") or want("models") else None
-        models = await self._models(llm) if want("usage") or want("models") else []
-        if want("usage"):
-            usage = await self._usage()
-            data["usage"] = usage
-            data["usage_rows"] = self._usage_view(usage, models)
-        if want("accounts"):
-            data["accounts"] = await self._accounts()
+            jobs["pipeline"] = self._pipeline(stages, counts)
+        if want("usage") or want("models"):
+            jobs["models"] = with_models()
+        if want("models"):
+            jobs["enrichers"] = self._enrichers()
+        for key, part, make in (
+            ("accounts", "accounts", self._accounts), ("audit", "audit", self._audit),
+            ("mcp", "mcp", self._mcp), ("agents", "agents", self._agents),
+            ("schedules", "schedules", self._schedules),
+            ("settings_rows", "settings", self._settings_rows),
+            ("operations", "operations", self._operations_via_op),
+        ):  # fmt: skip
+            if want(part):
+                jobs[key] = make()
+        got = dict(zip(jobs, await asyncio.gather(*jobs.values()), strict=True))
+        for key in ("mail", "pipeline", "accounts", "audit", "operations", "mcp", "agents",
+                    "schedules", "settings_rows"):  # fmt: skip
+            if key in got:
+                data[key] = got[key]
         if want("plugins"):
             data["plugins"] = self._plugins()
-        if want("audit"):
-            data["audit"] = await self._audit()
-        if want("operations"):
-            data["operations"] = await self._operations_via_op()
-        if want("mcp"):
-            data["mcp"] = await self._mcp()
-        if want("agents"):
-            data["agents"] = await self._agents()
         if want("stage_settings"):
             s = self._svc.settings
             data["stage_settings"] = {
                 "triage_gate": s.ai.triage_gate,
                 "embed_min_priority": s.ingest.embed_min_priority,
+                "quarantine_dir": s.mail.attachments.quarantine_dir,
             }
-        if want("schedules"):
-            data["schedules"] = await self._schedules()
-        if want("settings"):
-            data["settings_rows"] = await self._settings_rows()
-        if want("models"):
-            data["enrichers"] = await self._enrichers()
-            data["llm"] = llm
-            data["models"] = models
+        if "models" in got:
+            llm, models, usage = got["models"]
+            if want("usage"):
+                data["usage"] = usage
+                data["usage_rows"] = self._usage_view(usage, models)
+            if want("models"):
+                data["enrichers"] = got["enrichers"]
+                data["llm"] = llm
+                data["models"] = models
         return data
 
     async def front(self) -> dict[str, Any]:

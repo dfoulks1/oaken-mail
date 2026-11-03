@@ -25,8 +25,8 @@ from typing import Any, ClassVar, Literal, TypeVar
 from pydantic import BaseModel, Field, ValidationError
 
 from oaken.core.errors import InvalidInput, OakenError, PluginError
-from oaken.core.triage import BUILTIN_LEVELS
 from oaken.core.trace import brief, trace_context
+from oaken.core.triage import BUILTIN_LEVELS
 from oaken.plugins.adapt import to_enrich_output
 from oaken.plugins.authorize import Authorizations
 from oaken.plugins.contracts import (
@@ -46,9 +46,9 @@ from oaken.plugins.contracts import (
     PluginOpContext,
     PluginOperation,
     PluginTable,
-    UiSpec,
     PullBatch,
     TriageVerdict,
+    UiSpec,
     VectorItem,
     VectorStats,
 )
@@ -288,7 +288,7 @@ _Base = BasePlugin  # the name before it was public
 
 class BaseProvider(BasePlugin):
     """Override ``pull`` (a mail source) or ``send`` (a sender) at least. Add ``authenticate`` and
-    ``set_flags`` as the service allows.
+    ``set_flags`` and ``has_attachments`` as the service allows.
 
     Capabilities come from what you override (``pull`` is ``sync.pull``, ``set_flags`` is
     ``flags.write``). To state them yourself, set ``capabilities = frozenset({...})``; the host
@@ -316,6 +316,10 @@ class BaseProvider(BasePlugin):
     async def set_flags(
         self, provider_ids: Sequence[str], add: Collection[str], remove: Collection[str]
     ) -> None:
+        raise NotImplementedError
+
+    @_default
+    async def has_attachments(self, provider_ids: Sequence[str]) -> dict[str, bool]:
         raise NotImplementedError
 
     @_default

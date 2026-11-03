@@ -251,19 +251,28 @@ def test_a_reload_keeps_the_port_when_none_was_configured(home: Path) -> None:
     config = home / "config" / "config.toml"
     config.parent.mkdir(parents=True, exist_ok=True)
     config.write_text("[ui]\nmark_read_delay_ms = 2000\n")
+    err = home / "daemon.err"
     proc = subprocess.Popen(  # noqa: S603
         [PYTHON, "-m", "oaken.daemon"], env=child_env(home), stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stderr=err.open("wb"),
     )  # fmt: skip
     try:
         port = wait_for_port(runtime, proc)["port"]
         config.write_text("[ui]\nmark_read_delay_ms = 3000\n")  # a real change, no port asked for
         proc.send_signal(signal.SIGHUP)
-        time.sleep(2.0)
-        assert proc.poll() is None
+        time.sleep(2.0)  # let the old core go down, or the old one answers
+        status = 0
+        for _ in range(60):  # a rebuild takes as long as a start: wait for it, up to 15 s
+            time.sleep(0.25)
+            try:
+                status = httpx2.get(f"http://127.0.0.1:{port}/v1/health").status_code
+                break
+            except httpx2.TransportError:
+                continue
+        assert proc.poll() is None, err.read_text()[-3000:]
         info = read_runtime(runtime)
         assert info is not None and info["port"] == port
-        assert httpx2.get(f"http://127.0.0.1:{port}/v1/health").status_code == 200
+        assert status == 200, err.read_text()[-3000:]
         proc.send_signal(signal.SIGTERM)
         assert proc.wait(timeout=60) == 0
     finally:

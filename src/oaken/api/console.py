@@ -623,6 +623,7 @@ class Console:
     STAGE_SETTINGS: ClassVar[dict[tuple[str, str], str]] = {
         ("ai", "triage_gate"): "text",
         ("ingest", "embed_min_priority"): "int",
+        ("attachments", "quarantine_dir"): "text",
     }
 
     async def do_stage_setting(self, f: Form) -> Flash:

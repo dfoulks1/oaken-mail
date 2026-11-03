@@ -104,7 +104,7 @@ async def test_a_rerun_is_all_cache_hits_and_asks_the_model_nothing(rig: Rig) ->
     await rig.drain()
     assert len(rig.llm.requests) == asked
     enrich = [r for r in await rig.usage.usage_summary() if r.stage == "enrich"]
-    assert sum(r.cached_calls for r in enrich) >= 4  # every enricher, from the stored rows
+    assert sum(r.cached_calls for r in enrich) >= 3  # every enricher (triage is not one now)
     assert sum(r.tokens_saved for r in enrich) > 0
 
 

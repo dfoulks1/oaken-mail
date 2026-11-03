@@ -3,7 +3,8 @@
 
 A triager rates a message: a category, a level (``priority``) and whether a reply is owed. Core,
 not any plugin, says what that shape is, because core reads it: search filters on it, a job's
-urgency follows the level, an enricher's ``min_priority`` bars on it, and ``route`` names the actions
+urgency follows the level, an enricher's ``min_priority`` bars on it, and ``route`` names the
+actions
 a message goes to (ADR 0019). Plugins produce a verdict of this shape; nothing here imports one.
 """
 
@@ -56,3 +57,5 @@ class TriageResult(BaseModel):
     injection_suspected: bool = False
     # The actions this message goes to, by name (ADR 0019). Empty: it goes to none.
     route: list[str] = Field(default_factory=list)
+    # Labels this verdict adds, in the ``triage`` scope. They only ever add.
+    labels: list[str] = Field(default_factory=list)

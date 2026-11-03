@@ -72,7 +72,7 @@ A message belongs to the workspace of its account. With a restricted list, an MC
 mail outside it (a message id, or an `account_id`) is refused, `list_accounts` leaves those accounts
 out, and `status` and the MCP instructions report the listed names, never mail. A call that reads
 across every account and cannot be narrowed (`list_labels`, `list_mailbox`, and `search`,
-`list_messages`, `ask`, `get_thread` or `mailbox_counts` with no account) is refused rather than let
+`list_messages`, `get_thread` or `mailbox_counts` with no account) is refused rather than let
 through: name an account in scope. When the list covers every account, as on a default install, none
 of this changes anything. The CLI and the console are not scoped; the list only limits MCP clients.
 
@@ -123,7 +123,7 @@ the same ceiling rules, with these differences:
 
 - A **generic plugin settings store** for the UI. `list_plugins` shows each plugin's settings
   schema, but nothing yet writes them.
-- `search` is on over MCP and `ask` is off until the user turns it on; both read through
+- `search` is on over MCP and reads through
   [retrieval](retrieval.md), which the [daemon](daemon.md) attaches to the registry along with the index, vectors and model
   service.
 - **Summaries run inline**, one after another, capped per call. They are not a job.

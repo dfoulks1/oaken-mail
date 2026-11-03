@@ -414,6 +414,19 @@ class Api:
                 }
             )
         if stage == "action":
+            fields.append(
+                {
+                    "section": "attachments",
+                    "key": "quarantine_dir",
+                    "label": "Quarantine folder",
+                    "choices": None,
+                    "type": "text",
+                    "value": have.get("quarantine_dir"),
+                    "hint": "Where attachments are kept, locked. Core moves every one here when mail "
+                    "is stored. Relative to the data folder unless it is an absolute path. Applies "
+                    "to new mail after a reload; files already there are not moved.",
+                }
+            )
             listed = await self.console.op("list_actions", {})
             data["action_waiting"], data["action_recent"] = listed.waiting, listed.recent
         data.update(
@@ -496,6 +509,7 @@ class Api:
         tab = request.query_params.get("tab", "provider")
         tab = tab if tab in self.PIPELINE_PARTS else "provider"
         data = await self._stats_collector().collect(self.PIPELINE_PARTS[tab])
+        data["tab"] = tab  # the page's own default, not the console's ("ingest" is not a tab here)
         data["usage_rows"] = [
             r for r in data.get("usage_rows", []) if self._usage_stage(r["stage"]) == "pipeline"
         ]
@@ -522,6 +536,7 @@ class Api:
             self.GENERAL_PARTS[tab],
             counts=tab != "ingest",  # Ingest paints first, then fills
         )
+        data["tab"] = tab
         if tab == "queue":
             # The default view is the jobs that matter (running, queued, failed): a status filter
             # is an index lookup, while "all" sorts every job ever run. "all" is still one click.

@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
-from oaken_triagers import CustomRulesTriager
 from oaken_enrichers.tests.conftest import Rig, message
+from oaken_triagers import CustomRulesTriager
 from oaken_triagers.triage_custom import When, first_match, matches
 
 
@@ -81,13 +81,6 @@ async def test_the_old_rules_table_is_reported_not_ignored(rig: Rig) -> None:
         await rig.start(CustomRulesTriager(), config={"skip_rules": ["cron"]})
 
 
-async def test_the_old_rules_table_is_reported_not_ignored(rig: Rig) -> None:
-    from oaken.core.errors import PluginError
-
-    with pytest.raises(PluginError, match="skip_rules"):  # moved to [plugins.triager.spamcheck]
-        await rig.start(CustomRulesTriager(), config={"skip_rules": ["cron"]})
-
-
 # -- the plugin's own operations (ADR 0016) -----------------------------------------------------
 class _Draft:
     def __init__(self) -> None:
@@ -123,12 +116,14 @@ class _Store:
 
 
 def _ctx(plugin: Any) -> tuple[Any, _Draft]:
+    from dataclasses import replace
+
     from oaken.plugins.contracts import PluginOpContext
 
     draft = _Draft()
     ctx = PluginOpContext(plugin="rules", client="cli", actor="t", config={}, clock=None,  # type: ignore[arg-type]
                           log=None, store=_Store(), draft=draft)  # type: ignore[arg-type]  # fmt: skip
-    plugin.ctx = ctx  # the level table reads the plugin's own store
+    plugin.ctx = replace(plugin.ctx, store=ctx.store)  # the level table reads the plugin's store
     return ctx, draft
 
 
@@ -163,9 +158,9 @@ async def test_a_rule_needs_a_condition_a_defined_level_and_a_new_name(rig: Rig)
     with pytest.raises(InvalidInput):
         await plugin._add(ctx, AddIn(name="x"))  # no condition
     with pytest.raises(InvalidInput):
-        await plugin._add(ctx, AddIn(name="x", level=7, **{"from": "z"}))  # level 7 not defined
+        await plugin._add(ctx, AddIn.model_validate({"name": "x", "level": 7, "from": "z"}))  # level 7 not defined
     with pytest.raises(InvalidInput):
-        await plugin._add(ctx, AddIn(name="a", **{"from": "z"}))  # the name is taken
+        await plugin._add(ctx, AddIn.model_validate({"name": "a", "from": "z"}))  # the name is taken
 
 
 async def test_the_page_declaration_is_sound() -> None:

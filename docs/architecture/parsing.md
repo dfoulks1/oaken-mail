@@ -94,12 +94,16 @@ Oaken analyses email, not attachments. The parser records each attachment's file
 `Content-ID`, whether it is inline, and where it sits in the message (`part_path`). It does not
 decode or extract any bytes.
 
-- **No copy.** The bytes are already inside the raw message, in `raw.db` or in the LFS folder.
-  `read_attachment(raw, part_path)` is the explicit door to them, and nothing in ingest calls it.
+- **Not kept.** The parser records an attachment and never extracts it. When the message is stored,
+  core moves each attachment body into the locked quarantine (`oaken.mail.quarantine`, streamed, so a
+  large attachment is never held in memory) and leaves a stub, which the parser reads for the real
+  size and hash. `read_attachment(raw, part_path)` returns a part from memory, for mail stored
+  before quarantine; nothing in ingest calls it.
 - **Quarantine.** An attachment is flagged `quarantine` when its extension or declared type is on
   the risk list (executables, scripts, macro-enabled Office files, archives, disk images), or its
   filename hides its type with a right-to-left override. "invoice.pdf.exe" is judged on `exe`. The
-  flag means "never opened, previewed or served inline without a deliberate action".
+  flag labels it; every attachment is quarantined, flagged or not (see
+  [the ingest pipeline](ingest-pipeline.md)).
 - **Extractors are opt-in.** `AttachmentExtractor` is the interface a future "analyse this
   attachment" request would use. Nothing implements it by default, and nothing in ingest calls it.
 

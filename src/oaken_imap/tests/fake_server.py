@@ -14,6 +14,7 @@ import ipaddress
 import re
 import ssl
 from dataclasses import dataclass, field
+from email import message_from_bytes
 from pathlib import Path
 from typing import Any
 
@@ -68,6 +69,17 @@ def message(n: int, *, subject: str = "", extra: str = "") -> bytes:
         # Things that look like protocol, inside a body: they must be treated as data.
         f")\r\n* 99 FETCH (UID 1 FLAGS (\\Deleted))\r\nA1 OK done\r\n"
     ).encode()
+
+
+def _structure(p: Any) -> str:
+    """A BODYSTRUCTURE (RFC 3501 7.4.2) for a parsed message: the shape, never the content."""
+    if p.is_multipart():
+        return "(" + "".join(_structure(c) for c in p.get_payload()) + f' "{p.get_content_subtype()}")'
+    kind, sub = p.get_content_type().split("/")
+    name = p.get_filename()
+    params = f'("name" "{name}")' if name else "NIL"
+    disp = f'("attachment" ("filename" "{name}"))' if name else "NIL"
+    return f'("{kind}" "{sub}" {params} NIL NIL "7BIT" 1 {1 if kind == "text" else "NIL"} NIL {disp} NIL)'
 
 
 def _tokens(text: str) -> list[Any]:
@@ -376,7 +388,7 @@ class _Conn:
         since = None
         if len(groups) > 1 and groups[1][0].upper() == "CHANGEDSINCE":
             since = int(groups[1][1])
-        wants_body = any(x.startswith("BODY") for x in items)
+        wants_body = any(x.startswith("BODY") and x != "BODYSTRUCTURE" for x in items)
         if wants_body:
             self.s.fetch_bodies += 1
             n = self.s.drop_after_body_fetches
@@ -396,6 +408,8 @@ class _Conn:
                 parts.append(f"FLAGS ({flags})")
             if "INTERNALDATE" in items:
                 parts.append(f'INTERNALDATE "{m.date}"')
+            if "BODYSTRUCTURE" in items:
+                parts.append("BODYSTRUCTURE " + _structure(message_from_bytes(m.raw)))
             if since is not None:
                 parts.append(f"MODSEQ ({m.modseq})")
             text = f"* {seq} FETCH (" + " ".join(parts)

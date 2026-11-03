@@ -60,7 +60,7 @@
       <a class="doc-link" href="read-state.html">Read state</a>
       <a class="doc-link" href="sync-schedule.html">Sync schedule</a>
       <a class="doc-link" href="operations.html">Operations</a>
-      <a class="doc-link" href="retrieval.html">Retrieval and ask</a>
+      <a class="doc-link" href="retrieval.html">Retrieval</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
       <a class="doc-link" href="../reference/operations.html">Operations</a>
@@ -212,12 +212,16 @@ to the index (prompt 07), not to this stateless function.</li>
 <code>Content-ID</code>, whether it is inline, and where it sits in the message (<code>part_path</code>). It does not
 decode or extract any bytes.</p>
 <ul>
-<li><strong>No copy.</strong> The bytes are already inside the raw message, in <code>raw.db</code> or in the LFS folder.
-<code>read_attachment(raw, part_path)</code> is the explicit door to them, and nothing in ingest calls it.</li>
+<li><strong>Not kept.</strong> The parser records an attachment and never extracts it. When the message is stored,
+core moves each attachment body into the locked quarantine (<code>oaken.mail.quarantine</code>, streamed, so a
+large attachment is never held in memory) and leaves a stub, which the parser reads for the real
+size and hash. <code>read_attachment(raw, part_path)</code> returns a part from memory, for mail stored
+before quarantine; nothing in ingest calls it.</li>
 <li><strong>Quarantine.</strong> An attachment is flagged <code>quarantine</code> when its extension or declared type is on
 the risk list (executables, scripts, macro-enabled Office files, archives, disk images), or its
 filename hides its type with a right-to-left override. &quot;invoice.pdf.exe&quot; is judged on <code>exe</code>. The
-flag means &quot;never opened, previewed or served inline without a deliberate action&quot;.</li>
+flag labels it; every attachment is quarantined, flagged or not (see
+<a href="ingest-pipeline.html">the ingest pipeline</a>).</li>
 <li><strong>Extractors are opt-in.</strong> <code>AttachmentExtractor</code> is the interface a future &quot;analyse this
 attachment&quot; request would use. Nothing implements it by default, and nothing in ingest calls it.</li>
 </ul>
@@ -312,7 +316,7 @@ machine down; the time is in the model.</p>
 message cannot make a pattern slow. A pattern that does not compile is a configuration error when
 settings load.</p>
 </section>
-  <footer>Oaken Mail 0.1.1 · Apache-2.0</footer>
+  <footer>Oaken Mail 0.2.0 · Apache-2.0</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

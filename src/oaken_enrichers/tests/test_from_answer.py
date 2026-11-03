@@ -4,8 +4,8 @@
 from typing import Any
 
 from oaken_enrichers import ActionsEnricher, SummaryEnricher
-from oaken_triagers import AITriager
 from oaken_enrichers.tests.conftest import Rig, message
+from oaken_triagers import AITriager
 
 TRIAGE = {
     "category": "automated",

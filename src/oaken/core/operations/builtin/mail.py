@@ -316,7 +316,7 @@ async def summarize_message(ctx: OpContext, inp: SummarizeInput) -> SummarizeOut
     return out
 
 
-Stage = Literal["parse", "filter", "embed", "enrich"]
+Stage = Literal["parse", "filter", "embed", "triage", "enrich", "action", "scan", "start"]
 
 
 class SyncNowInput(BaseModel):
@@ -404,11 +404,12 @@ class ReprocessInput(BaseModel):
     limit: int | None = Field(
         default=None, ge=1, description="embed and enrich only: just the newest N messages."
     )
+    route: str = Field(default="", description="action only: the route to queue.")
 
 
 @operation(
     "reprocess",
-    "Bring one pipeline stage up to date for old mail (parse, filter, embed or enrich).",
+    "Bring one pipeline stage up to date for old mail (parse, filter, embed, triage, enrich, action, scan or start).",
     permission="mutate",
     input=ReprocessInput,
     output=QueuedOutput,
@@ -421,6 +422,7 @@ async def reprocess(ctx: OpContext, inp: ReprocessInput) -> QueuedOutput:
         AccountId(inp.account_id) if inp.account_id else None,
         since=inp.since,
         limit=inp.limit,
+        route=inp.route,
         actor=ctx.caller.actor,
     )
     return QueuedOutput(job_id=queued.job_id, created=queued.created)

@@ -78,15 +78,25 @@
         {% if s.loaded and s.failed %}{% call m.post("retry-parked", back) %}<button class="btn btn-sm btn-icon" type="submit" title="Retry the parked jobs" aria-label="Retry the parked jobs">{{ m.icon("retry") }}</button>{% endcall %}{% endif %}
       </span>
     </div>
-    <div class="card-body row">
-      <span class="muted mono small"><span data-bind="pipeline.stages.{{ stage }}.pending" data-format="int">{{ s.pending if s.loaded else "…" }}</span> pending · <span data-bind="pipeline.stages.{{ stage }}.running" data-format="int">{{ s.running if s.loaded else "…" }}</span> running · <span data-bind="pipeline.stages.{{ stage }}.failed" data-format="int">{{ s.failed if s.loaded else "…" }}</span> failed · <span data-bind="pipeline.stages.{{ stage }}.per_second" data-format="fixed2">{{ ("%.2f" | format(s.per_second)) if s.loaded else "…" }}</span>/s</span>
+    <div class="card-body">
+      <div class="tiles tiles-flush">
+        <div class="tile"><span class="label">Pending</span><span class="value" data-bind="pipeline.stages.{{ stage }}.pending" data-format="int">{{ s.pending if s.loaded else "…" }}</span></div>
+        <div class="tile"><span class="label">Running</span><span class="value" data-bind="pipeline.stages.{{ stage }}.running" data-format="int">{{ s.running if s.loaded else "…" }}</span></div>
+        <div class="tile{% if s.loaded and s.failed %} bad{% endif %}"><span class="label">Failed</span><span class="value" data-bind="pipeline.stages.{{ stage }}.failed" data-format="int">{{ s.failed if s.loaded else "…" }}</span><span class="note">parked, out of attempts</span></div>
+        <div class="tile"><span class="label">Per second</span><span class="value" data-bind="pipeline.stages.{{ stage }}.per_second" data-format="fixed2">{{ ("%.2f" | format(s.per_second)) if s.loaded else "…" }}</span></div>
+      </div>
+    </div>
+    <div class="card-body setting-row flow">
       {% call m.post("limit", back) %}
         <input type="hidden" name="stage" value="{{ stage }}">
-        <label class="small muted" for="at-{{ kind }}">At once</label>
+        <label for="at-{{ kind }}"><strong>At once</strong></label>
         <input class="input input-sm" id="at-{{ kind }}" type="number" name="concurrency" min="1" max="64" value="{{ s.concurrency if s.concurrency else '' }}">
         <button class="btn btn-sm btn-icon" type="submit" title="Set" aria-label="Set jobs at once for {{ stage }}">{{ m.icon("check") }}</button>
+        {% set uses_model = models | selectattr("kind", "equalto", kind) | list %}
+        <p class="hint">The pressure valve: the most {{ stage }} jobs running together. It limits claims, it starts no threads of its own, and with nothing queued it does nothing.{% if not uses_model %} No plugin here uses a model, so this only paces the work.{% endif %}</p>
       {% endcall %}
     </div>
+    {% if stage_fields is defined %}{{ setting_rows(back, stage_fields) }}{% endif %}
   </div>
   {% endif %}
   <div class="card">
@@ -216,26 +226,26 @@
     </div>
 {% endmacro %}
 
-{# A setting of core's, changed in place: one field and a Save. Applies on the next reload. #}
-{% macro setting_card(title, back, fields) %}
-<div class="card">
-  <div class="card-head">{{ title }}</div>
-  <div class="card-body">
+{# Settings of the stage's kind (core's own), changed in place: one field and a Save each, in the
+   stage card. They apply on the next reload. #}
+{% macro setting_rows(back, fields) %}
   {% for f in fields %}
+  <div class="card-body setting-row">
     {% call m.post("stage-setting", back) %}
       <input type="hidden" name="section" value="{{ f.section }}"><input type="hidden" name="key" value="{{ f.key }}">
-      <label for="ss-{{ f.key }}">{{ f.label }}</label>
+      <label for="ss-{{ f.key }}"><strong>{{ f.label }}</strong></label>
       {% if f.choices %}
       <select class="select select-sm" id="ss-{{ f.key }}" name="value">{% for c in f.choices %}<option value="{{ c }}"{% if c == f.value %} selected{% endif %}>{{ c }}</option>{% endfor %}</select>
+      {% elif f.type == "text" %}
+      <input class="input" id="ss-{{ f.key }}" type="text" name="value" value="{{ f.value if f.value is not none else '' }}">
       {% else %}
       <input class="input input-sm" id="ss-{{ f.key }}" type="number" min="0" max="3" name="value" value="{{ f.value if f.value is not none else '' }}">
       {% endif %}
       <button class="btn btn-sm btn-icon" type="submit" title="Save" aria-label="Save {{ f.label }}">{{ m.icon("check") }}</button>
       <p class="hint">{{ f.hint }}</p>
     {% endcall %}
-  {% endfor %}
   </div>
-</div>
+  {% endfor %}
 {% endmacro %}
 
 {% macro dialogs(back) %}

@@ -60,7 +60,7 @@
       <a class="doc-link" href="../architecture/read-state.html">Read state</a>
       <a class="doc-link" href="../architecture/sync-schedule.html">Sync schedule</a>
       <a class="doc-link" href="../architecture/operations.html">Operations</a>
-      <a class="doc-link" href="../architecture/retrieval.html">Retrieval and ask</a>
+      <a class="doc-link" href="../architecture/retrieval.html">Retrieval</a>
       <div class="label">Reference</div>
       <a class="doc-link current" href="plugin-contracts.html" aria-current="page">Plugin contracts</a>
       <a class="doc-link" href="operations.html">Operations</a>
@@ -108,7 +108,7 @@
 <tr>
 <td><code>provider</code></td>
 <td><code>oaken.providers</code></td>
-<td><code>auth</code> (authenticate()), <code>sync.pull</code> (pull()), <code>flags.write</code> (set_flags()), <code>send</code> (send())</td>
+<td><code>auth</code> (authenticate()), <code>sync.pull</code> (pull()), <code>flags.write</code> (set_flags()), <code>attachments.detect</code> (has_attachments()), <code>send</code> (send())</td>
 <td>none</td>
 </tr>
 <tr>
@@ -134,6 +134,12 @@
 <td><code>oaken.enrichers</code></td>
 <td>none</td>
 <td><code>version</code>, <code>needs_llm</code>, <code>enrich</code></td>
+</tr>
+<tr>
+<td><code>action</code></td>
+<td><code>oaken.actions</code></td>
+<td>none</td>
+<td><code>version</code>, <code>needs_llm</code>, <code>routes</code>, <code>act</code></td>
 </tr>
 <tr>
 <td><code>vector_store</code></td>
@@ -187,6 +193,72 @@
 <td><code>api_version</code></td>
 <td><code>int</code></td>
 <td><code>required</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="plugintable"><code>PluginTable</code></h3>
+<p>A table a plugin owns. Core creates <code>&lt;kind&gt;_&lt;name&gt;_&lt;table&gt;</code> in its database and adds the columns below to the three every table has: <code>uid</code> (uuid7), <code>created_at</code>, <code>updated_at</code>. A column type is one of text, int, real, bool or json. A reference to a message, a rule or another record is a text column holding a UID: never a foreign key across an owner.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>columns</code></td>
+<td><code>Mapping[str, str]</code></td>
+<td><code>required</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="attachmentref"><code>AttachmentRef</code></h3>
+<p>One attachment of a message, as an action sees it: where it sits and what it is called. <code>quarantine</code> says core flagged it as risky by its name or type. <code>scan</code> is what a scanner has said of the quarantined file (<code>pending</code>, <code>clean</code>, <code>infected</code> or <code>error</code>), or empty for an attachment still inline in older mail.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>part_path</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>filename</code></td>
+<td><code>str | None</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>content_type</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>size</code></td>
+<td><code>int</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>quarantine</code></td>
+<td><code>bool</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>scan</code></td>
+<td><code>str</code></td>
+<td><code>''</code></td>
 </tr>
 </tbody>
 </table></div>
@@ -257,6 +329,26 @@
 <td><code>_not_tracing</code></td>
 </tr>
 <tr>
+<td><code>store</code></td>
+<td><code>PluginStore | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>folders</code></td>
+<td><code>Mapping[str, Path]</code></td>
+<td><code>empty</code></td>
+</tr>
+<tr>
+<td><code>draft</code></td>
+<td><code>PluginDraft | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>attachments</code></td>
+<td><code>PluginAttachments | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
 <td><code>_subscriptions</code></td>
 <td><code>list[Callable[[], None]]</code></td>
 <td><code>empty</code></td>
@@ -325,6 +417,21 @@
 <td><code>log</code></td>
 <td><code>Any</code></td>
 <td><code>required</code></td>
+</tr>
+<tr>
+<td><code>store</code></td>
+<td><code>PluginStore | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>folders</code></td>
+<td><code>Mapping[str, Path]</code></td>
+<td><code>empty</code></td>
+</tr>
+<tr>
+<td><code>draft</code></td>
+<td><code>PluginDraft | None</code></td>
+<td><code>None</code></td>
 </tr>
 </tbody>
 </table></div>
@@ -447,6 +554,180 @@
 </tr>
 </tbody>
 </table></div>
+<h3 id="uifield"><code>UiField</code></h3>
+<p>One input of a page. <code>kind</code> is text, number, bool, enum (<code>choices</code>) or list (one string a line). <code>name</code> is the key in the page's <code>load</code> values and in what <code>test</code> and <code>submit</code> receive.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td><code>str</code></td>
+<td><code>''</code></td>
+</tr>
+<tr>
+<td><code>kind</code></td>
+<td><code>Literal['text', 'number', 'bool', 'enum', 'list']</code></td>
+<td><code>'text'</code></td>
+</tr>
+<tr>
+<td><code>choices</code></td>
+<td><code>tuple[str, ...]</code></td>
+<td><code>()</code></td>
+</tr>
+<tr>
+<td><code>help</code></td>
+<td><code>str</code></td>
+<td><code>''</code></td>
+</tr>
+<tr>
+<td><code>required</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="uibutton"><code>UiButton</code></h3>
+<p>A button on a plugin's settings modal: runs one of the plugin's own operations, which takes no input.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>label</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>operation</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>confirm</code></td>
+<td><code>str</code></td>
+<td><code>''</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="uisection"><code>UiSection</code></h3>
+<p>A titled group of the plugin's config fields, in the settings modal.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>title</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>fields</code></td>
+<td><code>tuple[str, ...]</code></td>
+<td><code>required</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="uipage"><code>UiPage</code></h3>
+<p>A page core serves at <code>/plugins/&lt;plugin&gt;/&lt;name&gt;</code> and renders as a form. <code>load</code> is a read operation of the plugin with no input; it returns <code>{&quot;values&quot;: {field: value}, &quot;messages&quot;: [str], &quot;rows&quot;: [{&quot;id&quot;, &quot;label&quot;}]}</code> (each part optional). <code>test</code> (read) and <code>submit</code> (the plugin's own, a mutate is confirmed) take the typed fields as input. With <code>order</code> set, the page lists <code>rows</code> in order, each with a position box (1 to n), and Update calls the operation <code>order</code> with <code>{&quot;order&quot;: [row ids]}</code>: a row whose number changed goes there and the others shift to make room (ADR 0018, 4a).</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>title</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>load</code></td>
+<td><code>str</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>submit</code></td>
+<td><code>str</code></td>
+<td><code>''</code></td>
+</tr>
+<tr>
+<td><code>fields</code></td>
+<td><code>tuple[UiField, ...]</code></td>
+<td><code>()</code></td>
+</tr>
+<tr>
+<td><code>test</code></td>
+<td><code>str</code></td>
+<td><code>''</code></td>
+</tr>
+<tr>
+<td><code>confirm</code></td>
+<td><code>str</code></td>
+<td><code>''</code></td>
+</tr>
+<tr>
+<td><code>order</code></td>
+<td><code>str</code></td>
+<td><code>''</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="uispec"><code>UiSpec</code></h3>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sections</code></td>
+<td><code>tuple[UiSection, ...]</code></td>
+<td><code>()</code></td>
+</tr>
+<tr>
+<td><code>buttons</code></td>
+<td><code>tuple[UiButton, ...]</code></td>
+<td><code>()</code></td>
+</tr>
+<tr>
+<td><code>pages</code></td>
+<td><code>tuple[UiPage, ...]</code></td>
+<td><code>()</code></td>
+</tr>
+</tbody>
+</table></div>
 <h3 id="pluginjobcontext"><code>PluginJobContext</code></h3>
 <p>What a plugin's job handler receives besides its payload. Like <code>PluginOpContext</code>: the plugin's own <code>config</code>, the clock and a logger, and the registered <code>kind</code> it is running — no database handle, no queue, no job internals.</p>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
@@ -562,7 +843,7 @@
 </tbody>
 </table></div>
 <h3 id="pluginstageinput"><code>PluginStageInput</code></h3>
-<p>The message a stage runs on, after its enrichers. Everything derived from the mail is <code>UntrustedText</code>. <code>enrichments</code> is the message's stored enrichment results by enricher name (<code>summary</code>, <code>triage</code>, ...), so a stage can roll up or tag from them without re-reading the body.</p>
+<p>The message a stage runs on, after its enrichers. Everything derived from the mail is <code>UntrustedText</code>. <code>enrichments</code> is the message's stored enrichment results by enricher name (<code>summary</code>, <code>actions</code>, ...) and <code>triage</code> its stored triage verdict (None when unrated), so a stage can roll up or tag from them without re-reading the body.</p>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
 <thead>
 <tr>
@@ -596,6 +877,11 @@
 <td><code>enrichments</code></td>
 <td><code>dict[str, dict[str, Any]]</code></td>
 <td><code>empty</code></td>
+</tr>
+<tr>
+<td><code>triage</code></td>
+<td><code>dict[str, Any] | None</code></td>
+<td><code>None</code></td>
 </tr>
 </tbody>
 </table></div>
@@ -892,7 +1178,7 @@
 </tr>
 </tbody>
 </table></div>
-<h3 id="enrichinput"><code>EnrichInput</code></h3>
+<h3 id="cleanmessage"><code>CleanMessage</code></h3>
 <p>A cleaned message. Everything derived from the mail is <code>UntrustedText</code>. <code>headers</code> holds a few display values (<code>from</code>). <code>raw_headers</code> has every header, keys in lower case and every value kept, for a deterministic enricher such as the inspector. <code>parent_summary</code> is the stored summary of the message this one replies to, when core has one: a reply is summarized from its own new text plus that, never from the parent's body.</p>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
 <thead>
@@ -953,33 +1239,15 @@
 <td><code>UntrustedText | None</code></td>
 <td><code>None</code></td>
 </tr>
-</tbody>
-</table></div>
-<h3 id="askintent"><code>AskIntent</code></h3>
-<p>What an enricher lets <code>ask</code> understand: <code>name</code> is the intent a router may choose, <code>description</code> says in one plain sentence what a person asking for it wants, and <code>fields</code> are the keys of the stored result worth showing (empty: all of it). It is written in the enricher's code, never taken from mail, and is checked when the class is defined.</p>
-<div class="table-responsive"><table class="table table-sm table-striped align-middle">
-<thead>
 <tr>
-<th>Field</th>
-<th>Type</th>
-<th>Default</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>name</code></td>
-<td><code>str</code></td>
-<td><code>required</code></td>
+<td><code>labels</code></td>
+<td><code>dict[str, tuple[str, ...]]</code></td>
+<td><code>empty</code></td>
 </tr>
 <tr>
-<td><code>description</code></td>
-<td><code>str</code></td>
-<td><code>required</code></td>
-</tr>
-<tr>
-<td><code>fields</code></td>
-<td><code>tuple[str, ...]</code></td>
-<td><code>()</code></td>
+<td><code>filepath</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
 </tr>
 </tbody>
 </table></div>
@@ -998,6 +1266,42 @@
 <td><code>data</code></td>
 <td><code>dict[str, Any]</code></td>
 <td><code>required</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="triageverdict"><code>TriageVerdict</code></h3>
+<p>A triager's verdict: a JSON-serializable dict that must match the triager's <code>output_schema</code>. It is not an enricher's result, and is stored apart from one.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>data</code></td>
+<td><code>dict[str, Any]</code></td>
+<td><code>required</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="actionresult"><code>ActionResult</code></h3>
+<p>What an action did, as a JSON-serializable dict that must match its <code>output_schema</code>. It holds no mail text. Success is returning one; failure is raising.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>data</code></td>
+<td><code>dict[str, Any]</code></td>
+<td><code>empty</code></td>
 </tr>
 </tbody>
 </table></div>
@@ -1175,6 +1479,43 @@
 <p>The one way a plugin reaches a language model: a <code>PromptBuilder</code> task about mail, as <code>UntrustedText</code> parts. Core picks the workspace from the account, enforces what it allows, answers a repeated question from its cache and validates the answer against the task's schema. A plugin never sees a backend, a database or a workspace.</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">generate_cached</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">builder</span><span class="p">:</span> <span class="s1">'PromptBuilder[Any]'</span><span class="p">,</span> <span class="o">*</span><span class="n">parts</span><span class="p">:</span> <span class="n">UntrustedText</span><span class="p">,</span> <span class="n">content_hash</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">account_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">message_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span>
 </code></pre></div>
+<h3 id="pluginstore"><code>PluginStore</code></h3>
+<p>A plugin's own tables, by name. Declarative on purpose: no SQL, no other plugin's data.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">insert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">row</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
+</code></pre></div>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">uid</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span>
+</code></pre></div>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">find</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">where</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">order_by</span><span class="p">:</span> <span class="nb">str</span><span class="o">=</span><span class="s1">'created_at'</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
+</code></pre></div>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">uid</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">fields</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
+</code></pre></div>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">uid</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span>
+</code></pre></div>
+<h3 id="pluginattachments"><code>PluginAttachments</code></h3>
+<p>An action's door to attachments (ADR 0019). Only action plugins have it. Attachments live in core's quarantine, mode 0000, not in the database. Two things can be done with one: release it (<code>copy_to</code>, which needs a <code>clean</code> scan) and, on the <code>scan</code> route only, open it for a scan (<code>scanning</code>) and record the verdict (<code>record_scan</code>).</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">AttachmentRef</span><span class="p">]</span>
+</code></pre></div>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">copy_to</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">part_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">max_bytes</span><span class="p">:</span> <span class="nb">int</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span>
+</code></pre></div>
+<p>Release the decoded attachment into <code>out</code>; it is never held in memory. Returns the bytes written, or None when over <code>max_bytes</code> (0: no limit). Refused unless its scan is <code>clean</code>.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">def</span><span class="w"> </span><span class="nf">scanning</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">part_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AbstractAsyncContextManager</span><span class="p">[</span><span class="n">Path</span><span class="p">]</span>
+</code></pre></div>
+<p>The quarantined file's path, readable only inside the block (<code>async with</code>), then locked again. Only while the running job is the <code>scan</code> route.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">record_scan</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">part_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">status</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">detail</span><span class="p">:</span> <span class="nb">str</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">scanner</span><span class="p">:</span> <span class="nb">str</span><span class="o">=</span><span class="s1">''</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+<p>Record what a scan found: <code>clean</code>, <code>infected</code> or <code>error</code>. <code>scan</code> route only.</p>
+<h3 id="plugindraft"><code>PluginDraft</code></h3>
+<p>The staged copy of the plugin's own <code>config.toml</code> table. The plugin reads and replaces it; core validates it against <code>config_model</code>, writes the file once with one backup, and reloads the plugin.</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span>
+</code></pre></div>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">values</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">discard</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">apply</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">drift</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span>
+</code></pre></div>
 <h3 id="plugin"><code>Plugin</code></h3>
 <p>Lifecycle, shared by every kind. All three are optional for a plugin to define.</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">PluginContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
@@ -1187,7 +1528,7 @@
 </code></pre></div>
 <p>A cheap liveness check, polled periodically by the host.</p>
 <h3 id="provider"><code>Provider</code></h3>
-<p>A mail source or a way to send. Capabilities: <code>auth</code>, <code>sync.pull</code>, <code>flags.write</code>, <code>send</code>. A provider declares at least <code>sync.pull</code> or <code>send</code>: a send-only provider (an SMTP server) has no mail to pull.</p>
+<p>A mail source or a way to send. Capabilities: <code>auth</code>, <code>sync.pull</code>, <code>flags.write</code>, <code>attachments.detect</code>, <code>send</code>. A provider declares at least <code>sync.pull</code> or <code>send</code>: a send-only provider (an SMTP server) has no mail to pull.</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">authenticate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">PluginContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 <p>Make sure the plugin can talk to the service (capability <code>auth</code>).</p>
@@ -1197,6 +1538,9 @@
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">set_flags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">provider_ids</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">add</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">remove</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 <p>Write flags back to the server (capability <code>flags.write</code>).</p>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">has_attachments</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">provider_ids</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]</span>
+</code></pre></div>
+<p>Whether each message has an attachment, asked of the service's own view of the message structure and never by downloading the message (capability <code>attachments.detect</code>). An id the service cannot answer for (gone, wrong folder) is left out, not guessed at.</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">send</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw_bytes</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
 </code></pre></div>
 <p>Send a message and return its provider id. Declared for the future; unimplemented in v1, and the host never routes sending to a plugin (capability <code>send</code>).</p>
@@ -1232,7 +1576,7 @@
 <li><code>needs_llm: bool</code></li>
 <li><code>output_schema: dict[str, Any]</code></li>
 </ul>
-<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">enrich</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span> <span class="n">EnrichInput</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EnrichOutput</span>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">enrich</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span> <span class="n">CleanMessage</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EnrichOutput</span>
 </code></pre></div>
 <p>Derive this enricher's result for <code>msg</code>.</p>
 <h3 id="triager"><code>Triager</code></h3>
@@ -1244,9 +1588,21 @@
 <li><code>rank: int</code></li>
 <li><code>output_schema: dict[str, Any]</code></li>
 </ul>
-<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">triage</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span> <span class="n">EnrichInput</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EnrichOutput</span> <span class="o">|</span> <span class="kc">None</span>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">triage</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span> <span class="n">CleanMessage</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TriageVerdict</span> <span class="o">|</span> <span class="kc">None</span>
 </code></pre></div>
 <p>The verdict for <code>msg</code>, or None to leave it to the next triager.</p>
+<h3 id="action"><code>Action</code></h3>
+<p>Does something about a message triage routed to it (ADR 0019): save an attachment, open a ticket, fill in a report. <code>routes</code> are the route names it answers to. <code>version</code> is part of the result's identity: bump it when the output could change. An action should be idempotent, because a retry after a crash can run it again for the same message and route.</p>
+<p>Attributes:</p>
+<ul>
+<li><code>version: str</code></li>
+<li><code>needs_llm: bool</code></li>
+<li><code>routes: tuple[str, ...]</code></li>
+<li><code>output_schema: dict[str, Any]</code></li>
+</ul>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">act</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span> <span class="n">CleanMessage</span><span class="p">,</span> <span class="n">route</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ActionResult</span> <span class="o">|</span> <span class="kc">None</span>
+</code></pre></div>
+<p>Do the work for <code>msg</code>, routed here as <code>route</code>; None means there was nothing to do.</p>
 <h3 id="vectorstore"><code>VectorStore</code></h3>
 <p>Stores vectors and finds the nearest ones.</p>
 <div class="code"><pre class="highlight"><code class="language-python"><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">upsert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">items</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">VectorItem</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span>
@@ -1294,11 +1650,13 @@
 <li><code>config_model: ClassVar[type[BaseModel] | None] = None</code></li>
 <li><code>enabled_default: ClassVar[bool] = True</code></li>
 <li><code>requires_config: ClassVar[tuple[str, ...]] = ()</code></li>
+<li><code>tables: ClassVar[tuple[PluginTable, ...]] = ()</code></li>
+<li><code>folders: ClassVar[tuple[str, ...]] = ()</code></li>
 <li><code>ctx: PluginContext</code></li>
 <li><code>config: Any = None</code></li>
 </ul>
 <h3 id="baseprovider"><code>BaseProvider</code></h3>
-<p>Override <code>pull</code> (a mail source) or <code>send</code> (a sender) at least. Add <code>authenticate</code> and <code>set_flags</code> as the service allows. Capabilities come from what you override (<code>pull</code> is <code>sync.pull</code>, <code>set_flags</code> is <code>flags.write</code>). To state them yourself, set <code>capabilities = frozenset({...})</code>; the host rejects a capability whose method you did not write.</p>
+<p>Override <code>pull</code> (a mail source) or <code>send</code> (a sender) at least. Add <code>authenticate</code> and <code>set_flags</code> and <code>has_attachments</code> as the service allows. Capabilities come from what you override (<code>pull</code> is <code>sync.pull</code>, <code>set_flags</code> is <code>flags.write</code>). To state them yourself, set <code>capabilities = frozenset({...})</code>; the host rejects a capability whose method you did not write.</p>
 <p>Set:</p>
 <ul>
 <li><code>kind: ClassVar[PluginKind] = 'provider'</code></li>
@@ -1310,6 +1668,7 @@
 <li><code>async def authenticate(self, ctx: PluginContext) -&gt; None</code></li>
 <li><code>def pull(self, cursor: str | None, folder: str | None=None) -&gt; AsyncIterator[PullBatch]</code></li>
 <li><code>async def set_flags(self, provider_ids: Sequence[str], add: Collection[str], remove: Collection[str]) -&gt; None</code></li>
+<li><code>async def has_attachments(self, provider_ids: Sequence[str]) -&gt; dict[str, bool]</code></li>
 <li><code>async def send(self, raw_bytes: bytes) -&gt; str</code></li>
 </ul>
 <h3 id="baseembedder"><code>BaseEmbedder</code></h3>
@@ -1336,34 +1695,47 @@
 <ul>
 <li><code>async def generate(self, request: LLMRequest, *, model: str | None=None) -&gt; LLMResponse</code></li>
 </ul>
+<h3 id="baseanalyzer"><code>BaseAnalyzer</code></h3>
+<p>What the plugins that read a message and return a result share (ADR 0017): an enricher, a triager and an action. It is a helper for their base classes, not a kind of its own: it has no entry-point group and nothing outside the plugin classes names it. A plugin extends exactly one of <code>BaseEnricher</code>, <code>BaseTriager</code> or <code>BaseAction</code>. <code>version</code> is part of the identity of a stored result: bump it when the output could change. <code>needs_llm</code> says whether it asks a model. <code>output_model</code> is the pydantic model its result must match; the host checks it and publishes its JSON schema.</p>
+<p>Set:</p>
+<ul>
+<li><code>version: ClassVar[str] = '1'</code></li>
+<li><code>needs_llm: bool = False</code></li>
+<li><code>output_model: ClassVar[type[BaseModel] | None] = None</code></li>
+</ul>
 <h3 id="baseenricher"><code>BaseEnricher</code></h3>
 <p>Set <code>version</code> and, ideally, <code>output_model</code> (a pydantic model): the host then checks the result against it and publishes its JSON schema. Override <code>enrich</code>.</p>
 <p>Set:</p>
 <ul>
 <li><code>kind: ClassVar[PluginKind] = 'enricher'</code></li>
-<li><code>version: ClassVar[str] = '1'</code></li>
-<li><code>needs_llm: bool = False</code></li>
-<li><code>output_model: ClassVar[type[BaseModel] | None] = None</code></li>
-<li><code>ask_intent: ClassVar[AskIntent | None] = None</code></li>
 </ul>
 <p>Override:</p>
 <ul>
-<li><code>async def enrich(self, msg: EnrichInput) -&gt; EnrichOutput</code></li>
+<li><code>async def enrich(self, msg: CleanMessage) -&gt; EnrichOutput</code></li>
 </ul>
 <h3 id="basetriager"><code>BaseTriager</code></h3>
-<p>The first step of the pipeline: rate a message so core can decide what else it is owed. This is the deterministic kind: override <code>triage</code> to return the verdict (an <code>EnrichOutput</code>), or None to leave the message to the next triager. One that asks a model extends <code>LLMTriager</code>. Triagers run in <code>rank</code> order (lowest first) and the first verdict wins, so the model is asked only for what the cheaper ones leave. Set <code>output_model</code> as for an enricher.</p>
+<p>The first step of the pipeline: rate a message so core can decide what else it is owed. This is the deterministic kind: override <code>triage</code> to return the verdict (a <code>TriageVerdict</code>), or None to leave the message to the next triager. One that asks a model extends <code>LLMTriager</code>. Triagers run in <code>rank</code> order (lowest first) and the first verdict wins, so the model is asked only for what the cheaper ones leave. Set <code>output_model</code> as for an enricher.</p>
 <p>Set:</p>
 <ul>
 <li><code>kind: ClassVar[PluginKind] = 'triager'</code></li>
-<li><code>version: ClassVar[str] = '1'</code></li>
 <li><code>rank: ClassVar[int] = 50</code></li>
-<li><code>needs_llm: bool = False</code></li>
-<li><code>output_model: ClassVar[type[BaseModel] | None] = None</code></li>
-<li><code>ask_intent: ClassVar[AskIntent | None] = None</code></li>
+<li><code>kind_tables: ClassVar[tuple[PluginTable, ...]] = (PluginTable('levels', {'value': 'int', 'name': 'text'}),)</code></li>
 </ul>
 <p>Override:</p>
 <ul>
-<li><code>async def triage(self, msg: EnrichInput) -&gt; EnrichOutput | None</code></li>
+<li><code>async def triage(self, msg: CleanMessage) -&gt; TriageVerdict | None</code></li>
+</ul>
+<h3 id="baseaction"><code>BaseAction</code></h3>
+<p>Does something about a message triage routed to it (ADR 0019). Set <code>routes</code> to the route names it answers to and override <code>act</code>. Return an <code>ActionResult</code> (or None when there was nothing to do); raise to fail. It should be idempotent: a retry after a crash can run it again for the same message and route. Whether it runs on its own or waits for the person is the reader's setting, <code>approval = &quot;ask&quot; | &quot;auto&quot;</code> in its table, and the default is <code>ask</code>.</p>
+<p>Set:</p>
+<ul>
+<li><code>kind: ClassVar[PluginKind] = 'action'</code></li>
+<li><code>routes: ClassVar[tuple[str, ...]] = ()</code></li>
+<li><code>auto_routes: ClassVar[tuple[str, ...]] = ()</code></li>
+</ul>
+<p>Override:</p>
+<ul>
+<li><code>async def act(self, msg: CleanMessage, route: str) -&gt; ActionResult | None</code></li>
 </ul>
 <h3 id="basevectorstore"><code>BaseVectorStore</code></h3>
 <p>Set:</p>
@@ -1392,11 +1764,11 @@
 <li><code>async def clear(self, workspace: str | None=None, task: str | None=None) -&gt; int</code></li>
 </ul>
 <h3 id="the-enricher-decorator">The <code>@enricher</code> decorator</h3>
-<div class="code"><pre class="highlight"><code class="language-python"><span class="k">def</span><span class="w"> </span><span class="nf">enricher</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">version</span><span class="p">:</span> <span class="nb">str</span><span class="o">=</span><span class="s1">'1'</span><span class="p">,</span> <span class="n">needs_llm</span><span class="p">:</span> <span class="nb">bool</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Callable</span><span class="p">[[</span><span class="n">EnrichInput</span><span class="p">],</span> <span class="n">Awaitable</span><span class="p">[</span><span class="nb">object</span><span class="p">]]],</span> <span class="nb">type</span><span class="p">[</span><span class="n">BaseEnricher</span><span class="p">]]</span>
+<div class="code"><pre class="highlight"><code class="language-python"><span class="k">def</span><span class="w"> </span><span class="nf">enricher</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">version</span><span class="p">:</span> <span class="nb">str</span><span class="o">=</span><span class="s1">'1'</span><span class="p">,</span> <span class="n">needs_llm</span><span class="p">:</span> <span class="nb">bool</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Callable</span><span class="p">[[</span><span class="n">CleanMessage</span><span class="p">],</span> <span class="n">Awaitable</span><span class="p">[</span><span class="nb">object</span><span class="p">]]],</span> <span class="nb">type</span><span class="p">[</span><span class="n">BaseEnricher</span><span class="p">]]</span>
 </code></pre></div>
-<p>Turn one async function into an enricher class, ready to register as an entry point: class Result(BaseModel): words: int @enricher(&quot;word-count&quot;, output=Result) async def word_count(msg: EnrichInput) -&gt; Result: return Result(words=len(msg.body.unwrap().split())) The function may return the model, a dict or an <code>EnrichOutput</code>; the host coerces it.</p>
+<p>Turn one async function into an enricher class, ready to register as an entry point: class Result(BaseModel): words: int @enricher(&quot;word-count&quot;, output=Result) async def word_count(msg: CleanMessage) -&gt; Result: return Result(words=len(msg.body.unwrap().split())) The function may return the model, a dict or an <code>EnrichOutput</code>; the host coerces it.</p>
 </section>
-  <footer>Oaken Mail 0.1.1 · Apache-2.0</footer>
+  <footer>Oaken Mail 0.2.0 · Apache-2.0</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

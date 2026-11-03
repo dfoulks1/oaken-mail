@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
-"""``[plugins.<name>] min_priority``: triage runs first and its priority gates the other enrichers."""
+"""``[plugins.<name>] min_priority``: triage runs first and its priority gates the other
+enrichers."""
 
 import json
 from typing import Any, cast
 
 from oaken.core.settings import IngestSettings
-from oaken.ingest.pipeline import EMBED, ENRICH, TRIAGE, MessagePayload, enrich_kind
+from oaken.core.triage import TRIAGE
+from oaken.ingest.pipeline import EMBED, ENRICH, MessagePayload, enrich_kind
 from oaken.ingest.tests.conftest import Enricher, Options, mail
 from oaken.plugins.base import BaseTriager
 from oaken.plugins.contracts import CleanMessage, Triager, TriageVerdict
@@ -66,7 +68,8 @@ async def test_without_a_triage_result_nothing_is_gated(make_rig: Any) -> None:
 
 
 async def test_a_bar_written_as_a_string_still_gates(make_rig: Any) -> None:
-    # The console form writes ``min_priority = "2"``; a bar that is silently ignored is the worst bug.
+    # The console form writes ``min_priority = "2"``; a bar that is silently ignored is the worst
+    # bug.
     async with make_rig(Options(embedder=False)) as rig:
         rater, words = await run(rig, priority=1, bar="2")
         assert rater.calls == 1 and words == 0
@@ -247,6 +250,7 @@ async def test_the_model_is_asked_only_when_the_rules_are_off_or_leave_the_mail(
             "ai": cast(Triager, ai),
             "spamcheck": cast(Triager, _Passes()),  # a rules triager that settles nothing
         }
+        rig.pipeline.register_enrichers(rig.runner)  # a job kind per triager
         rig.provider.add_message(mail(1))
         await rig.run_sync()
         await rig.drain(rounds=3)
@@ -258,6 +262,7 @@ async def test_the_model_is_asked_only_when_the_rules_are_off_or_leave_the_mail(
             "ai": cast(Triager, ai2),
             "spamcheck": cast(Triager, rules),
         }
+        rig.pipeline.register_enrichers(rig.runner)
         rig.pipeline.settings.plugins["triager"] = {"spamcheck": {"enabled": False}}
         rig.provider.add_message(mail(2))
         await rig.run_sync()

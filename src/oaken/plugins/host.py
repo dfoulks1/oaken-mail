@@ -42,13 +42,13 @@ from oaken.plugins.contracts import (
     PluginJobHandler,
     PluginKind,
     PluginOpContext,
-    UiSpec,
     PluginOperation,
     PluginScheduledTask,
     PluginStage,
     PluginStageContext,
     Provider,
     Triager,
+    UiSpec,
     VectorStore,
 )
 from oaken.plugins.ui import check_ui
@@ -344,7 +344,8 @@ class PluginHost:
             log.error("plugin failed to start", kind=rec.kind, name=rec.name, error=str(exc))
             await self._announce(rec)
             return
-        config.pop("enabled", None)
+        for host_key in ("enabled", "when", "unless"):
+            config.pop(host_key, None)
         try:
             caps = await self.provision(rec.kind, rec.name, rec.instance) if self.provision else {}
         except Exception as exc:  # a bad table declaration is the plugin's, not core's
@@ -465,7 +466,8 @@ class PluginHost:
                 rec.kind, False, "a single object: it cannot be tried apart from the live one"
             )
         config = dict(candidate)
-        config.pop("enabled", None)
+        for host_key in ("enabled", "when", "unless"):
+            config.pop(host_key, None)
         try:
             allowed = self._allowlist(rec.kind, rec.info, config.pop("capabilities", None))
         except PluginError as exc:
@@ -514,7 +516,8 @@ class PluginHost:
         problems: list[str] = []
         for rec in recs:
             table = dict(config)
-            table.pop("enabled", None)
+            for host_key in ("enabled", "when", "unless"):
+                table.pop(host_key, None)
             try:
                 self._allowlist(rec.kind, rec.info, table.pop("capabilities", None))
                 if rec.instance is not None:
@@ -884,12 +887,13 @@ class PluginHost:
         for trying a setting out (the triage rule wizard). The running plugin is not touched and
         nothing is announced. Raises ``PluginError`` when ``config`` does not validate or the
         plugin does not start, ``NotFound`` when no such plugin is installed."""
-        rec = self._records.get((kind, name))
+        pkind = cast(PluginKind, kind)
+        rec = self._records.get((pkind, name))
         if rec is None or rec.factory is None:
             raise NotFound(f"no {kind} named {name!r}")
         instance = self._instantiate(rec.factory)
         ctx = PluginContext(
-            name=name, kind=kind, settings=self.settings, clock=self.clock,
+            name=name, kind=pkind, settings=self.settings, clock=self.clock,
             log=get_logger(f"oaken.plugin.{kind}.{name}"), config=dict(config), bus=None,
             account_id=None, llm=_HostLLM(self),
         )  # fmt: skip
@@ -902,7 +906,7 @@ class PluginHost:
 
     def validate_runtime(self, kind: str, name: str, config: dict[str, Any]) -> None:
         """Raise ``PluginError`` when ``config`` would not pass the plugin's ``config_model``."""
-        rec = self._records.get((kind, name))
+        rec = self._records.get((cast(PluginKind, kind), name))
         if rec is not None and rec.instance is not None:
             self._validate_config(rec.instance, config)
 

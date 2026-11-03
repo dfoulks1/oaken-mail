@@ -154,3 +154,16 @@ async def test_the_provider_refuses_to_work_before_it_is_started() -> None:
 
     with pytest.raises(PluginError, match="start"):
         await GmailProvider().set_flags(["x"], {"\\Seen"}, set())
+
+
+async def test_has_attachments_reads_the_part_list_and_skips_the_gone() -> None:
+    rig = await rig_with(2)
+    rig.google.messages["m00002"]["raw"] = base64.urlsafe_b64encode(
+        b"Content-Type: multipart/mixed; boundary=B\r\n\r\n--B\r\nContent-Type: "
+        b"text/plain\r\n\r\nhi\r\n"
+        b"--B\r\nContent-Type: application/pdf; name=a.pdf\r\nContent-Disposition: attachment;"
+        b' filename="a.pdf"\r\n\r\nxx\r\n--B--\r\n'
+    ).decode()
+    got = await rig.provider.has_attachments(["m00001", "m00002", "nope"])
+    assert got == {"m00001": False, "m00002": True}
+    await rig.provider.stop()

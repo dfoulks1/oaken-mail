@@ -16,9 +16,11 @@ the bookkeeping a provider needs to sync. Nothing derived lives here.
 
 import asyncio
 import hashlib
+import io
 import json
 import os
 import re
+import tempfile
 import time
 import uuid
 from collections.abc import AsyncIterator, Sequence
@@ -26,7 +28,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from sqlite3 import Row
-from typing import Any
+from typing import Any, BinaryIO, Protocol
 
 import zstandard
 
@@ -200,6 +202,13 @@ def _aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
+class Detacher(Protocol):
+    """Moves attachment bodies out of a message before it is stored (``oaken.mail.quarantine``).
+    Given the same bytes it returns the same bytes, so a re-sync stores nothing new."""
+
+    async def detach(self, raw: bytes) -> bytes: ...
+
+
 class RawStore:
     def __init__(
         self,
@@ -208,7 +217,10 @@ class RawStore:
         lfs_dir: Path,
         settings: StorageSettings | None = None,
         bus: EventBus | None = None,
+        *,
+        detacher: Detacher | None = None,
     ) -> None:
+        self.detacher = detacher
         self.db = db
         self.clock = clock
         self.lfs_dir = lfs_dir
@@ -338,6 +350,8 @@ class RawStore:
         """``put_message`` that also says whether anything changed: ``changed`` is True for a new
         message, new bytes, or a deleted message that came back, and False for a no-op."""
         meta = meta or MessageMeta()
+        if self.detacher is not None:  # attachments never enter raw.db
+            raw = await self.detacher.detach(raw)
         size = len(raw)
         to_lfs = size > self.settings.inline_max_bytes
         if size > OFF_THREAD_BYTES:
@@ -457,6 +471,32 @@ class RawStore:
         if verify and await _hash(raw) != row["sha256"]:
             raise StorageError(f"message {message_id} failed its sha256 check (corrupt)")
         return raw
+
+    async def spool_raw(self, message_id: MessageId) -> BinaryIO:
+        """The stored bytes in an anonymous temporary file (owner-only, gone when closed), decoded
+        a chunk at a time, for readers that must not hold a big message in memory. Seeked to 0."""
+        row = await self._blob_for(message_id)
+        return await asyncio.to_thread(self._spool, row)
+
+    def _spool(self, row: Row) -> BinaryIO:
+        out = tempfile.TemporaryFile()  # noqa: SIM115 - the caller closes it
+        try:
+            if row["codec"] == "zstd":
+                src: BinaryIO = io.BytesIO(row["data"])  # inline: small by definition
+            else:
+                src = (self.lfs_dir / row["lfs_path"]).open("rb")
+            with src:
+                zstandard.ZstdDecompressor().copy_stream(src, out)
+            if out.tell() != row["size_raw"]:
+                raise StorageError("stored message is truncated or its size is wrong (corrupt)")
+        except (OSError, zstandard.ZstdError) as exc:
+            out.close()
+            raise StorageError(f"stored message is unreadable: {exc}") from exc
+        except StorageError:
+            out.close()
+            raise
+        out.seek(0)
+        return out
 
     async def get_stub(self, message_id: MessageId) -> bytes:
         """The message's headers (up to the blank line, at most 1 MiB). For a large message this

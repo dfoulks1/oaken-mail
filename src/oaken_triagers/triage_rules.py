@@ -13,9 +13,9 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from oaken.core.triage import Category
 from oaken.core.untrusted import UntrustedText
 from oaken.plugins.contracts import CleanMessage
-from oaken.core.triage import Category
 from oaken.plugins.kit import header_values
 
 Verdict = tuple[Category, str]  # the category, and the rule's name

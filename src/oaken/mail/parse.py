@@ -16,10 +16,12 @@ from datetime import UTC, datetime
 from email import message_from_bytes, policy
 from email.message import Message
 from email.utils import getaddresses, parsedate_to_datetime
+from typing import Any
 
 from oaken.core.errors import NotFound
 from oaken.core.settings import MailSettings
 from oaken.mail.attachments import AttachmentInfo, is_quarantined
+from oaken.mail.stream import read_stub
 
 _MAX_DEPTH = 20  # MIME nesting
 _MAX_FORWARD_DEPTH = 5  # messages inside messages
@@ -254,15 +256,30 @@ def _attachment(
         if raw_cid:
             cid = str(raw_cid).strip().strip("<>") or None
     disposition = (part.get_content_disposition() or "").lower()
+    moved = _detached(part)
     return AttachmentInfo(
         filename=filename,
         content_type=ctype,
-        size=size,
+        size=moved["size"] if moved else size,
+        file_sha256=moved["sha256"] if moved else None,
         content_id=cid,
         inline=disposition == "inline" or (cid is not None and disposition != "attachment"),
         quarantine=is_quarantined(filename, ctype, cfg.attachments),
         part_path=path,
     )
+
+
+def _detached(part: Message) -> dict[str, Any] | None:
+    """The stub a quarantined body leaves in the message (see ``mail.stream``), if this is one."""
+    try:
+        payload = part.get_payload()
+        if not isinstance(payload, str) or len(payload) > 2048:
+            return None
+        if _is_base64(part):
+            payload = base64.b64decode("".join(payload.split()), validate=False).decode("ascii", "ignore")
+        return read_stub(payload.encode("utf-8", "surrogateescape"))
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _size_of(msg: Message | None) -> int:

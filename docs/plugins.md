@@ -97,6 +97,7 @@ is no second list to keep in step:
 | `pull(cursor, folder=None)` | `sync.pull` (a provider needs this or `send`). `folder` is passed only to a provider that sets `supports_folders = True` |
 | `authenticate(ctx)` | `auth` |
 | `set_flags(provider_ids, add, remove)` | `flags.write`, so a read in Oaken becomes a read on the server |
+| `has_attachments(provider_ids)` | `attachments.detect`: which messages have an attachment, answered from the service's own structure (IMAP `BODYSTRUCTURE`, Gmail part list) without downloading the message. Leave out an id you cannot answer for |
 | `send(raw_bytes)` | `send`, declared for the future. Nothing calls it in v1, and sending is never exposed over MCP |
 
 `ctx` (also on `self.ctx` once started) carries your settings, a logger, the clock, and `config`,
@@ -257,7 +258,7 @@ operations are available to any client (`plugin_enable`, `plugin_disable`, `plug
 
 ## What a person can say about your plugin
 
-Every plugin's `[plugins.<kind>.<name>]` table takes two keys that belong to the host, not to you, so your
+Every plugin's `[plugins.<kind>.<name>]` table takes keys that belong to the host, not to you, so your
 `ctx.config` never contains them:
 
 - `enabled = false` keeps the plugin off. A plugin that should be opt-in (it costs money, or reaches
@@ -268,6 +269,18 @@ Every plugin's `[plugins.<kind>.<name>]` table takes two keys that belong to the
   your plugin does not implement does nothing, a name that does not exist is an error at start, and
   a list that leaves only `auth` is refused. `auth` left off hides the plugin's sign-in command.
   This is how a person makes Gmail receive-only at the plugin level.
+- `when = ["sieve:vip", "triage:invoice"]` and `unless = ["user:muted"]` choose which messages an
+  enricher or an action sees, by label. A label is `scope:label` (the scope is `sieve`, `triage` or
+  `user`) or a bare label, which matches in any scope. `when` is any-of (absent: every message);
+  `unless` drops a message carrying any of its labels. An action that every selector passes over
+  for a route does not park the message.
+
+A message's labels are kept by scope: `sieve` (set by the reader's scripts and replaced when they
+change), `triage` (added by triagers, and only ever added) and `user`. A triager or enricher reads
+them in `CleanMessage.labels`, and the one folder the message is filed in in `CleanMessage.filepath`
+(the user's choice, else Sieve's). A triager adds labels by putting a `labels` list in its
+verdict; it cannot file, flag, discard or remove anything. What a provider does with `filepath`
+(a folder move, a Gmail label) is the provider's business.
 
 `list_plugins` reports `enabled`, `enabled_default` and `allowed_capabilities` for each plugin.
 To try settings before saving them, `oaken plugins check` (the operation `check_plugin_config`)

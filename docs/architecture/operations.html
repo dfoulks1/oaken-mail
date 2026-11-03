@@ -60,7 +60,7 @@
       <a class="doc-link" href="read-state.html">Read state</a>
       <a class="doc-link" href="sync-schedule.html">Sync schedule</a>
       <a class="doc-link current" href="operations.html" aria-current="page">Operations</a>
-      <a class="doc-link" href="retrieval.html">Retrieval and ask</a>
+      <a class="doc-link" href="retrieval.html">Retrieval</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="../reference/plugin-contracts.html">Plugin contracts</a>
       <a class="doc-link" href="../reference/operations.html">Operations</a>
@@ -169,7 +169,7 @@ name that is not a workspace matches nothing, so a typo hides mail and never exp
 mail outside it (a message id, or an <code>account_id</code>) is refused, <code>list_accounts</code> leaves those accounts
 out, and <code>status</code> and the MCP instructions report the listed names, never mail. A call that reads
 across every account and cannot be narrowed (<code>list_labels</code>, <code>list_mailbox</code>, and <code>search</code>,
-<code>list_messages</code>, <code>ask</code>, <code>get_thread</code> or <code>mailbox_counts</code> with no account) is refused rather than let
+<code>list_messages</code>, <code>get_thread</code> or <code>mailbox_counts</code> with no account) is refused rather than let
 through: name an account in scope. When the list covers every account, as on a default install, none
 of this changes anything. The CLI and the console are not scoped; the list only limits MCP clients.</p>
 <p>Set it with <code>oaken settings set mcp</code> or on the <strong>Reference</strong> tab of <code>/general</code>. <code>check</code> rejects an
@@ -259,7 +259,7 @@ the same ceiling rules, with these differences:</p>
 <ul>
 <li>A <strong>generic plugin settings store</strong> for the UI. <code>list_plugins</code> shows each plugin's settings
 schema, but nothing yet writes them.</li>
-<li><code>search</code> is on over MCP and <code>ask</code> is off until the user turns it on; both read through
+<li><code>search</code> is on over MCP and reads through
 <a href="retrieval.html">retrieval</a>, which the <a href="daemon.html">daemon</a> attaches to the registry along with the index, vectors and model
 service.</li>
 <li><strong>Summaries run inline</strong>, one after another, capped per call. They are not a job.</li>
@@ -270,7 +270,7 @@ schedules, exposure) are not affected.</li>
 <li>The HTTP surface and the MCP server are built (the <a href="daemon.html">daemon</a>, <a href="../mcp.html">Connect an AI client</a>).</li>
 </ul>
 </section>
-  <footer>Oaken Mail 0.1.1 · Apache-2.0</footer>
+  <footer>Oaken Mail 0.2.0 · Apache-2.0</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

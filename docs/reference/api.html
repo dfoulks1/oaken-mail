@@ -60,7 +60,7 @@
       <a class="doc-link" href="../architecture/read-state.html">Read state</a>
       <a class="doc-link" href="../architecture/sync-schedule.html">Sync schedule</a>
       <a class="doc-link" href="../architecture/operations.html">Operations</a>
-      <a class="doc-link" href="../architecture/retrieval.html">Retrieval and ask</a>
+      <a class="doc-link" href="../architecture/retrieval.html">Retrieval</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="plugin-contracts.html">Plugin contracts</a>
       <a class="doc-link" href="operations.html">Operations</a>
@@ -177,13 +177,13 @@ tokens. See <a href="../mcp.html">Connect an AI client</a>.</p>
 <td>POST</td>
 <td><code>/v1/operations/{name}</code></td>
 <td>API token</td>
-<td>Call one operation. 103 exist.</td>
+<td>Call one operation. 94 exist.</td>
 </tr>
 </tbody>
 </table></div>
 </section>
 <section id="calling-an-operation" class="doc-section"><div class="section-head"><span class="section-num">3</span><h2>Calling an operation</h2></div>
-<p><code>POST /v1/operations/{name}</code> takes <code>input</code> and answers ``request_id<code>, </code>status<code>, </code>output<code>?</code>.</p>
+<p><code>POST /v1/operations/{name}</code> takes <code>input`, `confirm`?, `confirmation_token`?` and answers </code>request_id<code>, </code>status<code>, </code>output<code>?, </code>proposal<code>?</code>.</p>
 <p><code>status</code> is <code>ok</code> when the operation ran, or <code>confirmation_required</code> for a mutation that was not
 confirmed: nothing has changed, and <code>proposal</code> says what would, with a <code>confirmation_token</code>.
 A person at the CLI or UI may send <code>confirm: true</code>. An agent calls again with the token.
@@ -200,10 +200,10 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 </thead>
 <tbody>
 <tr>
-<td><code>ask</code></td>
-<td>read</td>
-<td>off until turned on</td>
-<td><code>POST /v1/operations/ask</code></td>
+<td><code>approve_action</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/approve_action</code></td>
 </tr>
 <tr>
 <td><code>cache_stats</code></td>
@@ -308,6 +308,12 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/get_account</code></td>
 </tr>
 <tr>
+<td><code>get_action</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/get_action</code></td>
+</tr>
+<tr>
 <td><code>get_enrichment</code></td>
 <td>read</td>
 <td>on by default</td>
@@ -350,6 +356,12 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/get_thread</code></td>
 </tr>
 <tr>
+<td><code>get_triage</code></td>
+<td>read</td>
+<td>on by default</td>
+<td><code>POST /v1/operations/get_triage</code></td>
+</tr>
+<tr>
 <td><code>get_workspace</code></td>
 <td>read</td>
 <td>off until turned on</td>
@@ -360,6 +372,12 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td>read</td>
 <td>on by default</td>
 <td><code>POST /v1/operations/list_accounts</code></td>
+</tr>
+<tr>
+<td><code>list_actions</code></td>
+<td>read</td>
+<td>off until turned on</td>
+<td><code>POST /v1/operations/list_actions</code></td>
 </tr>
 <tr>
 <td><code>list_agents</code></td>
@@ -716,82 +734,10 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td><code>POST /v1/operations/trace_tail</code></td>
 </tr>
 <tr>
-<td><code>triage_ack</code></td>
+<td><code>triage_message</code></td>
 <td>mutate</td>
 <td>never</td>
-<td><code>POST /v1/operations/triage_ack</code></td>
-</tr>
-<tr>
-<td><code>triage_apply</code></td>
-<td>mutate</td>
-<td>never</td>
-<td><code>POST /v1/operations/triage_apply</code></td>
-</tr>
-<tr>
-<td><code>triage_discard</code></td>
-<td>mutate</td>
-<td>never</td>
-<td><code>POST /v1/operations/triage_discard</code></td>
-</tr>
-<tr>
-<td><code>triage_drift</code></td>
-<td>read</td>
-<td>never</td>
-<td><code>POST /v1/operations/triage_drift</code></td>
-</tr>
-<tr>
-<td><code>triage_level_delete</code></td>
-<td>mutate</td>
-<td>never</td>
-<td><code>POST /v1/operations/triage_level_delete</code></td>
-</tr>
-<tr>
-<td><code>triage_level_set</code></td>
-<td>mutate</td>
-<td>never</td>
-<td><code>POST /v1/operations/triage_level_set</code></td>
-</tr>
-<tr>
-<td><code>triage_levels</code></td>
-<td>read</td>
-<td>never</td>
-<td><code>POST /v1/operations/triage_levels</code></td>
-</tr>
-<tr>
-<td><code>triage_revert</code></td>
-<td>mutate</td>
-<td>never</td>
-<td><code>POST /v1/operations/triage_revert</code></td>
-</tr>
-<tr>
-<td><code>triage_rule_delete</code></td>
-<td>mutate</td>
-<td>never</td>
-<td><code>POST /v1/operations/triage_rule_delete</code></td>
-</tr>
-<tr>
-<td><code>triage_rule_move</code></td>
-<td>mutate</td>
-<td>never</td>
-<td><code>POST /v1/operations/triage_rule_move</code></td>
-</tr>
-<tr>
-<td><code>triage_rule_order</code></td>
-<td>mutate</td>
-<td>never</td>
-<td><code>POST /v1/operations/triage_rule_order</code></td>
-</tr>
-<tr>
-<td><code>triage_rule_set</code></td>
-<td>mutate</td>
-<td>never</td>
-<td><code>POST /v1/operations/triage_rule_set</code></td>
-</tr>
-<tr>
-<td><code>triage_rules</code></td>
-<td>read</td>
-<td>never</td>
-<td><code>POST /v1/operations/triage_rules</code></td>
+<td><code>POST /v1/operations/triage_message</code></td>
 </tr>
 <tr>
 <td><code>try_triage</code></td>
@@ -975,7 +921,7 @@ resume from the in-memory ring. If that id is older than the ring, or from befor
 <li>Response: <code>status</code></li>
 </ul>
 </section>
-  <footer>Oaken Mail 0.1.1 · Apache-2.0</footer>
+  <footer>Oaken Mail 0.2.0 · Apache-2.0</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

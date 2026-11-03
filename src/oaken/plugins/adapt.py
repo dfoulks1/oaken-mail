@@ -22,11 +22,11 @@ from oaken.core.errors import PluginError
 from oaken.plugins.contracts import (
     ActionResult,
     EnrichOutput,
-    TriageVerdict,
     Hit,
     LLMResponse,
     PullBatch,
     RawMessage,
+    TriageVerdict,
     VectorStats,
 )
 

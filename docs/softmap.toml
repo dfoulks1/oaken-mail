@@ -160,29 +160,26 @@ types = [
   ["Proposal", "model", "What a mutation would change, with a single-use token an agent redeems."],
   ["McpScope", "class", "Limits an MCP caller to the workspaces [mcp] workspaces lists: refuses a call that names, or cannot be narrowed away from, mail outside them, and trims list_accounts. One workspace_of function maps a message to its workspace."],
 ]
-notes = ["Anything that mutates mail is gated here, in code, not in a prompt.", "34 core operations, plus those plugins offer as <plugin>.<name>. Retrieval (search, ask) is built (prompt 15).", "The HTTP surface is the API component. Exposure to MCP is a ceiling in code and a user setting in operation_settings."]
+notes = ["Anything that mutates mail is gated here, in code, not in a prompt.", "34 core operations, plus those plugins offer as <plugin>.<name>. Retrieval (search) is built (prompt 15).", "The HTTP surface is the API component. Exposure to MCP is a ceiling in code and a user setting in operation_settings."]
 
 [[components]]
 id = "retrieval"
-name = "Retrieval and ask"
+name = "Retrieval"
 layer = "services"
 status = "built"
 prompt = "15"
 path = "src/oaken/core/search"
-summary = "Hybrid keyword and vector search merged by rank fusion, a token-budgeted context, and question answering whose every claim must quote the message it cites."
+summary = "Hybrid keyword and vector search merged by rank fusion. Returns references to messages; the vector side degrades, never raises."
 uses = ["index", "pluginhost", "llm", "safety"]
 untrusted = true
 types = [
   ["HybridSearch", "class", "BM25 and vector search in parallel, filtered, collapsed to messages and merged with RRF; the vector side degrades, never raises."],
-  ["ContextBuilder", "class", "Fills ai.ask_context_tokens in tiers (headers and summaries, matched chunks, neighbours and thread), dedupes, and reports tokens saved."],
-  ["Retrieval", "class", "search, evidence and ask over the pipeline's index, vectors and embedder."],
-  ["AskResult", "frozen dataclass", "Answer, verified citations, confidence, insufficient_evidence, degraded and token figures."],
+  ["Retrieval", "class", "search over the pipeline's index, vectors and embedder."],
 ]
 funcs = [
-  ["verify(quote, text)", "The quote as it stands in the cited chunk, or None when it is not there (whitespace-tolerant); a fabricated quote is dropped."],
-  ["python -m oaken.evals retrieval", "Seeded synthetic mailbox; Recall@k, MRR, nDCG@10, citation precision and cost; writes docs/evals/latest.json."],
+  ["python -m oaken.evals retrieval", "Seeded synthetic mailbox; Recall@k, MRR, nDCG@10 and cost; writes docs/evals/latest.json."],
 ]
-notes = ["Built means: tested with the fake embedder and model, including a vector outage, hostile queries, fabricated quotes and the budget as a property test. Offline numbers use stand-ins on a synthetic corpus built so each retriever has a weakness; a live run is manual.", "ask refuses mail from more than one account in a single prompt, and is off over MCP until the user turns it on.", "Nothing attaches Services.retrieval or a model service to a running process until the daemon (prompt 16)."]
+notes = ["Built means: tested with the fake embedder and model, including a vector outage and hostile queries. Offline numbers use stand-ins on a synthetic corpus built so each retriever has a weakness; a live run is manual.", "Nothing attaches Services.retrieval or a model service to a running process until the daemon (prompt 16)."]
 
 [[components]]
 id = "readstate"
@@ -226,7 +223,7 @@ types = [
   ["Backends", "dataclass", "Callables for the embedder, LLM, enrichers and vector store, so plugins can come and go while the pipeline runs."],
   ["Vectors", "class", "The one seam between core and a vector store. Optional store capabilities (stored_hashes, begin_model, activate_model, drop_model, prune_orphans) are detected, not required."],
   ["UsageStore", "class", "ai_usage in raw.db: calls, cached calls, tokens in and out, and tokens saved by caching."],
-  ["Quarantine", "class", "Writes flagged attachments to an owner-only folder. Never reads, parses or runs them."],
+  ["Vault", "class", "Moves attachment bodies out of a message into a mode-0000 folder, one file per sha256, leaving a stub; opens a file only for a scan or a release of a clean one."],
   ["PipelineStatus", "frozen dataclass", "Per-stage counts, embedding speed, backfill state and the parked (failed) jobs with reasons."],
   ["PipelineControl", "class", "The durable 'pause the model' switch (pipeline_control table, migration 0013): the runner stops claiming ingest.embed and ingest.enrich while llm_paused; parse and sync keep flowing. Audited."],
 ]
@@ -244,11 +241,11 @@ name = "Attachment quarantine"
 layer = "ingest"
 status = "built"
 prompt = "09"
-path = "src/oaken/ingest/quarantine.py"
-summary = "Flagged attachments are written, never read back, to a 0700 folder as 0600 .quarantined files named so they cannot escape or execute. Over-size attachments stay in the message."
-uses = ["parsing"]
+path = "src/oaken/mail/quarantine.py"
+summary = "Every attachment body is moved out of the message when it is stored: one file per content (named by its sha256, mode 0000) in a locked folder, and a stub stays in the message. A file opens only for a scan, and is released only after a clean one."
+uses = ["parsing", "rawstore"]
 untrusted = true
-notes = ["The one place attachment bytes leave raw.db without being asked for; the user chose this in 09. Switch off with mail.attachments.quarantine = false.", "problems() checks modes only."]
+notes = ["Core does this at put time, before Sieve or any plugin, so nothing can skip it. Switch off with mail.attachments.quarantine = false.", "Scanners are actions on the scan route; the attachment action's save route releases clean files. With no scanner nothing is released.", "A part the streaming reader cannot locate stays in the message and is logged."]
 
 [[components]]
 id = "parsing"
@@ -272,7 +269,7 @@ funcs = [
   ["clean(parsed, settings, tokenizer) -> CleanedText", "Pick plain or HTML, then tag quotes, signatures, footers, disclaimers and boilerplate by named rules."],
   ["thread_key(parsed, settings) -> ThreadInfo", "Stateless key from References, In-Reply-To or Message-ID, with a configurable subject fallback."],
   ["html_to_text(html) -> str", "selectolax: drops scripts, hidden preheaders and tracking pixels; keeps lists, tables, quotes and links."],
-  ["read_attachment(raw, part_path) -> bytes", "The explicit, on-demand door to an attachment's bytes; nothing in ingest calls it."],
+  ["read_attachment(raw, part_path) -> bytes", "An attachment's bytes in memory, found by part path; nothing in ingest calls it. The attachment action streams instead (oaken.mail.stream)."],
 ]
 notes = ["Every cleaning rule has a name and can be switched off or extended in [mail.cleaning].", "Attachments are flagged for quarantine by name and type and are never analysed unless asked."]
 
@@ -798,18 +795,16 @@ steps = [
 ]
 
 [[flows]]
-id = "ask"
-title = "Ask your mailbox a question"
+id = "search"
+title = "Search your mailbox"
 steps = [
-  ["cli", "api", "POST the question", "Token-authenticated, loopback only."],
-  ["api", "operations", "dispatch the ask operation", "Permission class: read-only."],
-  ["operations", "retrieval", "ask", ""],
+  ["cli", "api", "POST the query", "Token-authenticated, loopback only."],
+  ["api", "operations", "dispatch the search operation", "Permission class: read-only."],
+  ["operations", "retrieval", "search", ""],
   ["retrieval", "index", "keyword search", "FTS5 candidates."],
-  ["retrieval", "pluginhost", "embed the query and search vectors", "Only the top chunks go to the model."],
+  ["retrieval", "pluginhost", "embed the query and search vectors", "If the vector side is down, the keyword results come back marked degraded."],
   ["pluginhost", "embedder", "embed", ""],
   ["pluginhost", "vectorstore", "nearest chunks", ""],
-  ["pluginhost", "llm", "answer from the chunks", "Mail is wrapped as UntrustedText."],
-  ["llm", "safety", "wrap and cache", "Cached by (content hash, model, prompt version)."],
 ]
 
 [[flows]]

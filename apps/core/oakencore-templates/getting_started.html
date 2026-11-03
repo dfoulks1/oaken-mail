@@ -1,59 +1,120 @@
+
 <!doctype html>
-<!-- Oaken Core demo: a static snapshot of the /getting_started page the core daemon serves. The
-     live page lists the installed providers; here gmail and imap are baked in. Nav links are
-     relative; no external /welcome.js. -->
-<html lang="en" data-bs-theme="dark">
+<html lang="en" data-palette="auto" data-mode="auto">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Oaken Core — getting started (demo)</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <style>
-    :root { --oaken-oak: #527e61; --oaken-acorn: #8b5a2b; --oaken-acorn-2: #c6792e; --oaken-accent: var(--oaken-oak); }
-    [data-bs-theme="dark"] { --oaken-accent: var(--oaken-acorn-2); }
-    main { max-width: 52rem; }
-    main h2 { margin-top: 2rem; font-size: 1.15rem; font-weight: 700; }
-    main h2 .sec { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--oaken-acorn); font-size: .9rem; }
-    [data-bs-theme="dark"] main h2 .sec { color: var(--oaken-acorn-2); }
-    main pre { background: rgba(127,127,127,.12); border-radius: .4rem; padding: .8rem 1rem; overflow:auto; }
-    main code { font-size: .85em; }
-    .check { border-left: 3px solid var(--oaken-oak); padding-left: .8rem; color: var(--bs-secondary-color); }
-    .oaken-nav { display: flex; align-items: center; gap: 1rem; padding: 0.6rem 1rem; border-bottom: 1px solid rgba(127,127,127,0.25); font: 500 0.95rem/1.2 system-ui, sans-serif; }
-    .oaken-nav .oaken-nav-brand { font-weight: 700; text-decoration: none; color: inherit; display: inline-flex; align-items: center; gap: 0.4rem; }
-    .oaken-nav .oaken-nav-brand b { color: var(--oaken-accent); }
-    .oaken-nav .oaken-nav-links { margin-left: auto; display: flex; align-items: center; gap: 1rem; }
-    .oaken-nav a { color: inherit; text-decoration: none; opacity: 0.8; }
-    .oaken-nav a:hover { opacity: 1; }
-    .oaken-nav a.active { opacity: 1; border-bottom: 2px solid var(--oaken-accent); padding-bottom: 2px; }
-    .oaken-nav #theme-toggle { font: inherit; cursor: pointer; padding: 0.2rem 0.7rem; border-radius: 0.4rem; border: 1px solid rgba(127,127,127,0.4); background: transparent; color: inherit; }
-    .oaken-nav #theme-toggle:hover { border-color: var(--oaken-accent); }
-    .demo-ribbon { background: var(--oaken-acorn); color: #fff; text-align: center; padding: .35rem 1rem; font: 600 .8rem/1.3 system-ui, sans-serif; }
-    .demo-ribbon a { color: #fff; }
-  </style>
+  <meta name="color-scheme" content="light dark">
+  <title>Getting started · Oaken Mail</title>
+  <link rel="icon" type="image/png" href="assets/oaken-logo.png">
+  <link rel="stylesheet" href="assets/oaken.css">
 </head>
-<body>
-<div class="demo-ribbon">Demo snapshot of Oaken Core's <code>/getting_started</code> page. <a href="index.html">Back to the Core demo</a></div>
-<nav class="oaken-nav">
-  <a class="oaken-nav-brand" href="index.html">Oaken<b>Core</b></a>
-  <div class="oaken-nav-links">
-    <a href="index.html">Home</a>
-    <a href="stats.html">Stats</a>
-    <a href="jobs.html">Jobs</a>
-    <a href="config.html">Config</a>
-    <a href="../index.html">Docs</a>
-    <button type="button" id="theme-toggle" aria-label="Toggle light and dark theme"><span id="theme-label">Light</span></button>
-  </div>
-</nav>
+<body><div style="background:#8b5a2b;color:#fff;text-align:center;padding:.35rem 1rem;font:600 .8rem/1.3 system-ui,sans-serif">Demo snapshot of Oaken Core's console. Sample data; the controls do nothing. <a style="color:#fff" href="index.html">Back to the Core demo</a></div>
 
-<main class="container py-4">
-  <h1 class="h3 mb-1">Getting started</h1>
-  <p class="text-secondary">Welcome. This walks the <code>config.toml</code> settings, top to bottom.
+<a class="skip" href="#main">Skip to the page</a>
+
+<svg class="sprite" width="0" height="0" aria-hidden="true" focusable="false">
+  <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></symbol>
+  <symbol id="i-recycle" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.5-3.2M4.5 4v4h4"/><path d="M4 13a8 8 0 0 0 14.5 3.2M19.5 20v-4h-4"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6.5"/><path d="M12 2v3.5M12 18.5V22M2 12h3.5M18.5 12H22M4.9 4.9l2.5 2.5M16.6 16.6l2.5 2.5M4.9 19.1l2.5-2.5M16.6 7.4l2.5-2.5"/></symbol>
+  <symbol id="i-funnel" viewBox="0 0 24 24"><path d="M3 5h18l-7 8.5V20l-4-2v-4.5z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></symbol>
+  <symbol id="i-retry" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v4h4"/></symbol>
+</svg>
+
+<header class="hd">
+  <a class="brand" href="index.html" aria-label="Oaken Mail home">
+    <img class="logo" src="assets/oaken-logo.png" width="196" height="128" alt="">
+    <span class="wordmark">Oaken<span>Mail</span></span>
+  </a>
+  
+<nav class="nav" aria-label="Pages">
+  <a href="general.html">General</a>
+  <a href="index.html">Pipeline</a>
+<a href="triage.html">Triage</a>
+  <a href="embed.html">Embed</a>
+  <a href="enrich.html">Enrich</a>
+  <a href="action.html">Action</a>
+  <a href="config.html">Config</a>
+  <a href="capabilities.html">Capabilities</a>
+  <a href="https://dfoulks1.github.io/oaken-mail/" target="_blank" rel="noopener">Docs <svg class="icon" aria-hidden="true"><use href="#i-external"/></svg></a>
+</nav>
+  
+<div class="menu theme">
+  <button disabled type="button" class="menu-btn" aria-haspopup="true" aria-label="Theme: auto, auto"><span class="sw" data-palette="auto" data-mode="auto"></span> Theme</button>
+  <div class="theme-pop">
+    <form method="post" action="#">
+      <input disabled type="hidden" name="csrf" value="demo"><input disabled type="hidden" name="back" value="/getting-started"><input disabled type="hidden" name="mode" value="auto">
+      <p class="eyebrow">Palette</p>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="auto" aria-current="true">
+        <span class="sw" data-palette="auto" data-mode="auto"></span>auto (birch)
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="oak">
+        <span class="sw" data-palette="oak" data-mode="auto"></span>oak
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="maple">
+        <span class="sw" data-palette="maple" data-mode="auto"></span>maple
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="birch">
+        <span class="sw" data-palette="birch" data-mode="auto"></span>birch
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="acorn">
+        <span class="sw" data-palette="acorn" data-mode="auto"></span>acorn
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="moss">
+        <span class="sw" data-palette="moss" data-mode="auto"></span>moss
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="stone">
+        <span class="sw" data-palette="stone" data-mode="auto"></span>stone
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="sky">
+        <span class="sw" data-palette="sky" data-mode="auto"></span>sky
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="stream">
+        <span class="sw" data-palette="stream" data-mode="auto"></span>stream
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="contrast">
+        <span class="sw" data-palette="contrast" data-mode="auto"></span>contrast
+      </button>
+      
+    </form>
+    <form method="post" action="#">
+      <input disabled type="hidden" name="csrf" value="demo"><input disabled type="hidden" name="back" value="/getting-started"><input disabled type="hidden" name="palette" value="auto">
+      <p class="eyebrow">Mode</p>
+      <div class="row">
+      <button disabled class="btn btn-sm btn-primary" type="submit" name="mode" value="auto">auto</button><button disabled class="btn btn-sm" type="submit" name="mode" value="light">light</button><button disabled class="btn btn-sm" type="submit" name="mode" value="dark">dark</button>
+      </div>
+    </form>
+  </div>
+</div>
+</header>
+
+<div class="wrap">
+  <main id="main">
+    
+<article class="prose">
+  <h1>Getting started</h1>
+  <p class="muted">Welcome. This walks the <code>config.toml</code> settings, top to bottom.
   You only set what you change (every section has defaults), so skip what you don't need. Edit it
   all in the browser on the <a href="config.html">Config</a> page, then hit Reload. Secrets never go in
   this file (passwords and tokens live in your OS keyring).</p>
 
-  <p class="text-secondary">One rule worth saying once: nothing leaves your machine unless you turn
+  <p class="muted">One rule worth saying once: nothing leaves your machine unless you turn
   it on. The sections below are in the order most people set them.</p>
 
   <h2>Mail providers</h2>
@@ -61,42 +122,25 @@
   <code>config.toml</code> snippet to start from. Use the ones you need. The password or sign-in
   for each goes through the provider's own command (<code>oaken PROVIDER auth</code>) and lands in
   your OS keyring, never in this file.</p>
-
-  <h3 class="h6 mt-4"><span class="sec">[plugins.gmail]</span></h3>
-  <p>Create a Google Cloud OAuth client, authorize once with <code>oaken gmail auth</code>, then
-  name the account here. The token lands in your keyring.</p>
-  <pre>[plugins.gmail]
-client_secret_file = "~/.oaken/gmail-client.json"
-
-[[accounts]]
-id = "alex-gmail"
-provider = "gmail"</pre>
-
-  <h3 class="h6 mt-4"><span class="sec">[plugins.imap]</span></h3>
-  <p>Point at any IMAP server, run <code>oaken imap auth</code> for the password, and pick the
-  folders to sync.</p>
-  <pre>[plugins.imap]
-host = "imap.example.org"
-port = 993
-tls = true
-
-[[accounts]]
-id = "lists-imap"
-provider = "imap"</pre>
-
-  <p class="check">Check: the account shows up on the <a href="stats.html">Stats</a> page under
+  
+  <h3><span class="sec">[plugins.fake]</span></h3>
+  
+  
+  
+  <p class="check">Check: the account shows up on the <a href="general.html">Status</a> page under
   Connected accounts.</p>
 
   <h2>Local AI <span class="sec">[plugins.ollama]</span> <span class="sec">and [ai]</span></h2>
   <p>Oaken runs a local Ollama by default, so analysis stays on the machine. Pull the models first
   (<code>ollama pull nomic-embed-text</code> and your chat model), then name them in
   <code>[ai]</code>. The default chat model is small on purpose; set a bigger one for better
-  analysis if your machine can carry it.</p>
+  analysis if your machine can carry it. <code>[plugins.ollama]</code> only tunes the connection,
+  and <code>allow_remote</code> stays false unless you really mean to reach off-machine.</p>
   <pre>[ai]
 embed_model = "nomic-embed-text"
 llm_model = "qwen2.5:3b"   # bump this for better analysis
 allow_remote = false</pre>
-  <p class="check">Check: the <a href="jobs.html">Jobs</a> page shows the embed and enrich stages
+  <p class="check">Check: the <a href="index.html">Jobs</a> page shows the embed and enrich stages
   moving, not stuck.</p>
 
   <h2>Sync schedule <span class="sec">[sync]</span></h2>
@@ -116,6 +160,24 @@ max_concurrent = 2</pre>
 port = 0        # 0 = pick a free port
 mcp = false     # true mounts the MCP server at /mcp</pre>
 
+  <h2>External agents <span class="sec">[swarm]</span></h2>
+  <p>Off by default, and the one switch to think twice about. Handing a job to an external agent
+  sends that job's mail text to it (and to its provider, if it is hosted). So you opt in one job
+  kind at a time: it stays off until both <code>enabled = true</code> and
+  <code>allowed_kinds</code> is non-empty.</p>
+  <pre>[swarm]
+enabled = false
+allowed_kinds = []   # e.g. ["ingest.enrich"]</pre>
+
+  <h2>Read state <span class="sec">[read_state]</span> <span class="sec">and [ui]</span></h2>
+  <p>Whether opening or summarizing a message marks it read. Leave <code>auto_mark</code> on for
+  normal behavior; turn it off and only explicit mark read/unread counts.</p>
+  <pre>[read_state]
+auto_mark = true
+
+[ui]
+mark_read_delay_ms = 2000   # how long a message stays open before it counts as read</pre>
+
   <h2>Logging <span class="sec">[log]</span></h2>
   <p>Start at <code>INFO</code>. If you run the daemon detached it has no terminal, so set a
   <code>file</code> to keep its logs. Drop to <code>DEBUG</code> when something is wrong and you
@@ -125,27 +187,18 @@ level = "INFO"      # DEBUG when debugging
 format = "console"  # or "json"
 file = "oaken.log"</pre>
 
-  <hr class="my-4">
-  <p class="text-secondary">That is the whole file. Edit it on <a href="config.html">Config</a>, Test,
+  <hr>
+  <p class="muted">That is the whole file. Edit it on <a href="config.html">Config</a>, Test,
   Save, Reload. The full guide (install, keyring, the daemon) lives in the
-  <a href="../getting-started.html">docs</a>.</p>
-</main>
+  <a href="https://dfoulks1.github.io/oaken-mail/" target="_blank" rel="noopener">docs</a>.</p>
+</article>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-(function () {
-  var root = document.documentElement, btn = document.getElementById("theme-toggle"), lab = document.getElementById("theme-label");
-  var stored = null; try { stored = localStorage.getItem("oaken-theme"); } catch (e) {}
-  if (stored === "light" || stored === "dark") { root.setAttribute("data-bs-theme", stored); }
-  function sync() { if (lab) { lab.textContent = root.getAttribute("data-bs-theme") === "dark" ? "Light" : "Dark"; } }
-  sync();
-  if (btn) { btn.addEventListener("click", function () {
-    var next = root.getAttribute("data-bs-theme") === "dark" ? "light" : "dark";
-    root.setAttribute("data-bs-theme", next);
-    try { localStorage.setItem("oaken-theme", next); } catch (e) {}
-    sync();
-  }); }
-})();
-</script>
+  </main>
+</div>
+<footer class="foot">
+  <p>Oaken Mail test · this machine only · counts and health, never mail text</p>
+</footer>
+
+
 </body>
 </html>

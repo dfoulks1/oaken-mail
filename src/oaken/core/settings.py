@@ -233,16 +233,15 @@ class CleaningSettings(_Section):
 
 
 class AttachmentSettings(_Section):
-    """Attachments are never opened or analysed. A quarantined one is flagged so that nothing
-    previews, serves or extracts it without a deliberate action."""
+    """Attachments are never opened or analysed. Core moves every one out of the message into a
+    locked folder when the message is stored; a name or type on the risk lists only flags it."""
 
     extra_quarantine_extensions: list[str] = Field(default_factory=list)
     extra_quarantine_types: list[str] = Field(default_factory=list)
-    exempt_extensions: list[str] = Field(default_factory=list)  # never quarantined by extension
-    # Flagged attachments are written, never opened, to a folder only the owner can use.
+    exempt_extensions: list[str] = Field(default_factory=list)  # never flagged by extension
+    # Off leaves attachments inline in raw.db, unchecked: a choice, not a default.
     quarantine: bool = True
     quarantine_dir: str = "quarantine"  # relative to the data folder unless absolute
-    quarantine_max_bytes: int = Field(default=50 * 1024 * 1024, ge=0)  # per attachment
 
 
 class SieveSettings(_Section):
@@ -377,11 +376,13 @@ class McpSettings(_Section):
 
     allowed: dict[str, bool] = Field(default_factory=dict)
     # The master switch: false and the person's MCP door answers 503 and offers no tools, whatever
-    # ``[api] mcp`` and ``allowed`` say. It can only be turned on where ``[api] mcp`` mounted the door.
+    # ``[api] mcp`` and ``allowed`` say. It can only be turned on where ``[api] mcp`` mounted the
+    # door.
     enabled: bool = True
     # Which workspaces an MCP client may reach: only mail whose account is in one of these. An empty
     # list means every workspace. A name that is not a workspace matches nothing (a typo hides mail,
-    # it never exposes it). A fresh install lists only ``default``. See ``oaken.core.operations.scope``.
+    # it never exposes it). A fresh install lists only ``default``. See
+    # ``oaken.core.operations.scope``.
     workspaces: list[str] = Field(default_factory=lambda: ["default"])
 
 
@@ -431,7 +432,8 @@ class APISettings(_Section):
             )
         return self
 
-    # A fixed default, so clients find core even without the runtime file. 0 still picks a free port.
+    # A fixed default, so clients find core even without the runtime file. 0 still picks a free
+    # port.
     port: int = Field(default=DEFAULT_PORT, ge=0, le=65535)
     # The MCP server (ADR 0004) mounts at ``/mcp`` on this listener when true. It has its own
     # token and its own limits, so a heavy MCP call cannot starve the general API.

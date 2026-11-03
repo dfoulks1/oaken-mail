@@ -12,6 +12,7 @@ import base64
 import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from email import message_from_bytes
 from typing import Any
 from urllib.parse import parse_qs
 
@@ -35,6 +36,22 @@ def raw_mail(n: int) -> bytes:
         f"From: a{n}@example.com\r\nTo: me@example.com\r\nSubject: hello {n}\r\n"
         f"Message-ID: <m{n}@example.com>\r\n\r\nbody {n}\r\n"
     ).encode()
+
+
+def _payload(raw_b64: str) -> dict[str, Any]:
+    """What Gmail's ``format=full`` says of a message: parts, and an ``attachmentId`` (never the
+    bytes) for a named one."""
+    msg = message_from_bytes(base64.urlsafe_b64decode(raw_b64 + "=="))
+
+    def part(p: Any) -> dict[str, Any]:
+        out: dict[str, Any] = {"mimeType": p.get_content_type(), "filename": p.get_filename() or ""}
+        if p.is_multipart():
+            out["parts"] = [part(c) for c in p.get_payload()]
+        else:
+            out["body"] = {"attachmentId": "att-1"} if p.get_filename() else {"size": 1}
+        return out
+
+    return part(msg)
 
 
 def b64(data: bytes) -> str:
@@ -220,7 +237,7 @@ class FakeGoogle:
             self.sent.append(base64.urlsafe_b64decode(body["raw"] + "=="))
             return httpx2.Response(200, json={"id": f"sent{len(self.sent)}", "labelIds": ["SENT"]})
         if p.startswith("/messages/"):
-            return self._message(m, p.split("/")[2], p.split("/")[3:], body)
+            return self._message(m, p.split("/")[2], p.split("/")[3:], body, q)
         if p == "/history":
             return self._history(q)
         if p == "/labels" and m == "GET":
@@ -264,11 +281,15 @@ class FakeGoogle:
             out["nextPageToken"] = str(start + size)
         return httpx2.Response(200, json=out)
 
-    def _message(self, method: str, pid: str, rest: list[str], body: Any) -> httpx2.Response:
+    def _message(
+        self, method: str, pid: str, rest: list[str], body: Any, params: dict[str, str]
+    ) -> httpx2.Response:
         msg = self.messages.get(pid)
         if msg is None:
             return httpx2.Response(404, json={"error": {"code": 404}})
         if not rest:
+            if params.get("format") == "full":
+                return httpx2.Response(200, json={"id": pid, "payload": _payload(msg["raw"])})
             return httpx2.Response(200, json=msg)
         verb = rest[0]
         if verb == "trash":

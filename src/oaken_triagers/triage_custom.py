@@ -14,11 +14,13 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from oaken.core.errors import InvalidInput, NotFound
+from oaken.core.selector import has_label
+from oaken.core.triage import Category, TriageResult
 from oaken.plugins.base import BaseTriager
 from oaken.plugins.contracts import (
     CleanMessage,
-    PluginOperation,
     PluginOpContext,
+    PluginOperation,
     TriageVerdict,
     UiButton,
     UiField,
@@ -26,7 +28,6 @@ from oaken.plugins.contracts import (
     UiSpec,
 )
 from oaken.plugins.kit import header_values
-from oaken.core.triage import Category, TriageResult
 
 # What a ``when`` may say, for the help text of the wizard and the CLI.
 WHEN_KEYS: dict[str, str] = {
@@ -38,6 +39,7 @@ WHEN_KEYS: dict[str, str] = {
     "header_present": "this header exists (for example list-id)",
     "has_attachment": "true: has an attachment; false: has none",
     "is_reply": "true: a reply; false: not a reply",
+    "has_label": "carries this label: scope:label (scope sieve, triage or user) or a bare label",
 }
 
 
@@ -52,6 +54,7 @@ class When(BaseModel):
     header_present: str | None = None
     has_attachment: bool | None = None
     is_reply: bool | None = None
+    has_label: str | None = None
 
     @model_validator(mode="after")
     def _says_something(self) -> "When":
@@ -68,6 +71,7 @@ class Rule(BaseModel):
     category: Category
     when: When
     route: list[str] = Field(default_factory=list)
+    labels: list[str] = Field(default_factory=list)  # added to the message, in the triage scope
 
 
 class CustomRulesConfig(BaseModel):
@@ -111,6 +115,8 @@ def matches(msg: CleanMessage, when: When) -> bool:
         checks.append(bool(msg.attachments) is when.has_attachment)
     if when.is_reply is not None:
         checks.append(msg.is_reply is when.is_reply)
+    if when.has_label is not None:
+        checks.append(has_label(msg.labels, when.has_label))
     return all(checks)
 
 
@@ -131,6 +137,7 @@ class RuleRow(BaseModel):
     category: str
     when: dict[str, Any]
     route: list[str] = Field(default_factory=list)
+    labels: list[str] = Field(default_factory=list)
 
 
 class RulesOut(BaseModel):
@@ -152,6 +159,7 @@ class Conditions(BaseModel):
     header_present: str = ""
     has_attachment: str = ""  # "yes", "no" or blank for either
     is_reply: str = ""
+    has_label: str = ""
 
     def when(self) -> dict[str, Any]:
         out: dict[str, Any] = {}
@@ -167,6 +175,7 @@ class AddIn(Conditions):
     level: int = Field(default=2, ge=0, le=99)
     category: Category = "other"
     route: list[str] = Field(default_factory=list)
+    labels: list[str] = Field(default_factory=list)
     enabled: bool = True
 
 
@@ -176,6 +185,7 @@ class UpdateIn(Conditions):
     category: Category | None = None
     enabled: bool | None = None
     route: list[str] | None = None
+    labels: list[str] | None = None
 
 
 class NameIn(BaseModel):
@@ -226,13 +236,18 @@ class CustomRulesTriager(BaseTriager):
                 source="custom",
                 rule=rule.name,
                 route=rule.route,
+                labels=rule.labels,
             ).model_dump(mode="json")
         )
 
     # -- operations -----------------------------------------------------------------------
     def operations(self) -> list[PluginOperation]:
-        r = lambda name, summary, i, o, h: PluginOperation(name, summary, "read", i, o, h)  # noqa: E731
-        w = lambda name, summary, i, o, h: PluginOperation(name, summary, "mutate", i, o, h)  # noqa: E731
+        def r(name: str, summary: str, i: Any, o: Any, h: Any) -> PluginOperation:
+            return PluginOperation(name, summary, "read", i, o, h)
+
+        def w(name: str, summary: str, i: Any, o: Any, h: Any) -> PluginOperation:
+            return PluginOperation(name, summary, "mutate", i, o, h)
+
         return [
             *super().operations(),
             r("list", "List the rules in the order they run (the staged copy, if there is one).",
@@ -261,6 +276,7 @@ class CustomRulesTriager(BaseTriager):
             UiField("header_present", "Has header", help="for example list-id"),
             UiField("has_attachment", "Has an attachment", "enum", YESNO),
             UiField("is_reply", "Is a reply", "enum", YESNO),
+            UiField("has_label", "Has label", help="sieve:vip, triage:invoice, or a bare label"),
         )
         return UiSpec(
             buttons=(
@@ -288,8 +304,10 @@ class CustomRulesTriager(BaseTriager):
         if draft is not None:
             return list(draft.get("rules", [])), True
         cfg = self.config if isinstance(self.config, CustomRulesConfig) else CustomRulesConfig()
-        dump = {"mode": "json", "by_alias": True, "exclude_none": True, "exclude": {"uid"}}
-        return [r.model_dump(**dump) for r in cfg.rules], False
+        return [
+            r.model_dump(mode="json", by_alias=True, exclude_none=True, exclude={"uid"})
+            for r in cfg.rules
+        ], False
 
     async def _stage(self, ctx: PluginOpContext, rules: list[dict[str, Any]], note: str = "") -> RulesOut:
         if ctx.draft is None:
@@ -310,7 +328,7 @@ class CustomRulesTriager(BaseTriager):
         return RulesOut(
             rules=[RuleRow(place=i, name=r["name"], enabled=r.get("enabled", True),
                            level=r["level"], category=r["category"], when=r["when"],
-                           route=r.get("route", [])) for i, r in enumerate(rules, 1)],
+                           route=r.get("route", []), labels=r.get("labels", [])) for i, r in enumerate(rules, 1)],
             staged=staged, note=note,
         )  # fmt: skip
 
@@ -332,13 +350,14 @@ class CustomRulesTriager(BaseTriager):
         if any(r["name"] == inp.name for r in rules):
             raise InvalidInput(f"a rule named {inp.name!r} exists")
         rules.append({"name": inp.name, "enabled": inp.enabled, "level": inp.level,
-                      "category": inp.category, "when": when, "route": inp.route})  # fmt: skip
+                      "category": inp.category, "when": when, "route": inp.route,
+                      "labels": inp.labels})  # fmt: skip
         return await self._stage(ctx, rules, f"Staged rule {inp.name}. Apply writes it.")
 
     async def _update(self, ctx: PluginOpContext, inp: UpdateIn) -> RulesOut:
         rules, _ = await self._working(ctx)
         rule = rules[self._find(rules, inp.name)]
-        for key in ("level", "category", "enabled", "route"):
+        for key in ("level", "category", "enabled", "route", "labels"):
             if (value := getattr(inp, key)) is not None:
                 rule[key] = value
         if when := inp.when():
@@ -359,7 +378,8 @@ class CustomRulesTriager(BaseTriager):
         return await self._stage(ctx, [by[n] for n in inp.order], "Staged the new order. Apply writes it.")
 
     async def _test(self, ctx: PluginOpContext, inp: AddIn) -> TestOut:
-        """Core hands a plugin no mail, so this checks the rule as typed, not against stored messages."""
+        """Core hands a plugin no mail, so this checks the rule as typed, not against stored
+        messages."""
         when = inp.when()
         if not when:
             return TestOut(ok=False, summary="A rule needs at least one condition.")
@@ -389,7 +409,8 @@ class CustomRulesTriager(BaseTriager):
 
     async def _page_new(self, ctx: PluginOpContext, inp: Nothing) -> PageOut:
         return PageOut(values={"level": 2, "category": "other"},
-                       messages=["A rule goes last in order, and the first rule to match decides."])  # fmt: skip
+                       # fmt: skip
+                       messages=["A rule goes last in order, and the first rule to match decides."])
 
     async def _page_order(self, ctx: PluginOpContext, inp: Nothing) -> PageOut:
         out = await self._out_rules(ctx)

@@ -1,0 +1,218 @@
+
+<!doctype html>
+<html lang="en" data-palette="auto" data-mode="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Embed · Oaken Mail</title>
+  <link rel="icon" type="image/png" href="assets/oaken-logo.png">
+  <link rel="stylesheet" href="assets/oaken.css">
+</head>
+<body data-refresh="/general.json?stage=embed" data-refresh-seconds="15" data-lazy><div style="background:#8b5a2b;color:#fff;text-align:center;padding:.35rem 1rem;font:600 .8rem/1.3 system-ui,sans-serif">Demo snapshot of Oaken Core's console. Sample data; the controls do nothing. <a style="color:#fff" href="index.html">Back to the Core demo</a></div>
+
+<a class="skip" href="#main">Skip to the page</a>
+
+<svg class="sprite" width="0" height="0" aria-hidden="true" focusable="false">
+  <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></symbol>
+  <symbol id="i-recycle" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.5-3.2M4.5 4v4h4"/><path d="M4 13a8 8 0 0 0 14.5 3.2M19.5 20v-4h-4"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6.5"/><path d="M12 2v3.5M12 18.5V22M2 12h3.5M18.5 12H22M4.9 4.9l2.5 2.5M16.6 16.6l2.5 2.5M4.9 19.1l2.5-2.5M16.6 7.4l2.5-2.5"/></symbol>
+  <symbol id="i-funnel" viewBox="0 0 24 24"><path d="M3 5h18l-7 8.5V20l-4-2v-4.5z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></symbol>
+  <symbol id="i-retry" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v4h4"/></symbol>
+</svg>
+
+<header class="hd">
+  <a class="brand" href="index.html" aria-label="Oaken Mail home">
+    <img class="logo" src="assets/oaken-logo.png" width="196" height="128" alt="">
+    <span class="wordmark">Oaken<span>Mail</span></span>
+  </a>
+  
+<nav class="nav" aria-label="Pages">
+  <a href="general.html">General</a>
+  <a href="index.html">Pipeline</a>
+<a href="triage.html">Triage</a>
+  <a href="embed.html" aria-current="page">Embed</a>
+  <a href="enrich.html">Enrich</a>
+  <a href="action.html">Action</a>
+  <a href="config.html">Config</a>
+  <a href="capabilities.html">Capabilities</a>
+  <a href="https://dfoulks1.github.io/oaken-mail/" target="_blank" rel="noopener">Docs <svg class="icon" aria-hidden="true"><use href="#i-external"/></svg></a>
+</nav>
+  
+<div class="menu theme">
+  <button disabled type="button" class="menu-btn" aria-haspopup="true" aria-label="Theme: auto, auto"><span class="sw" data-palette="auto" data-mode="auto"></span> Theme</button>
+  <div class="theme-pop">
+    <form method="post" action="#">
+      <input disabled type="hidden" name="csrf" value="demo"><input disabled type="hidden" name="back" value="/embed"><input disabled type="hidden" name="mode" value="auto">
+      <p class="eyebrow">Palette</p>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="auto" aria-current="true">
+        <span class="sw" data-palette="auto" data-mode="auto"></span>auto (birch)
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="oak">
+        <span class="sw" data-palette="oak" data-mode="auto"></span>oak
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="maple">
+        <span class="sw" data-palette="maple" data-mode="auto"></span>maple
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="birch">
+        <span class="sw" data-palette="birch" data-mode="auto"></span>birch
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="acorn">
+        <span class="sw" data-palette="acorn" data-mode="auto"></span>acorn
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="moss">
+        <span class="sw" data-palette="moss" data-mode="auto"></span>moss
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="stone">
+        <span class="sw" data-palette="stone" data-mode="auto"></span>stone
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="sky">
+        <span class="sw" data-palette="sky" data-mode="auto"></span>sky
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="stream">
+        <span class="sw" data-palette="stream" data-mode="auto"></span>stream
+      </button>
+      
+      <button disabled class="theme-opt" type="submit" name="palette" value="contrast">
+        <span class="sw" data-palette="contrast" data-mode="auto"></span>contrast
+      </button>
+      
+    </form>
+    <form method="post" action="#">
+      <input disabled type="hidden" name="csrf" value="demo"><input disabled type="hidden" name="back" value="/embed"><input disabled type="hidden" name="palette" value="auto">
+      <p class="eyebrow">Mode</p>
+      <div class="row">
+      <button disabled class="btn btn-sm btn-primary" type="submit" name="mode" value="auto">auto</button><button disabled class="btn btn-sm" type="submit" name="mode" value="light">light</button><button disabled class="btn btn-sm" type="submit" name="mode" value="dark">dark</button>
+      </div>
+    </form>
+  </div>
+</div>
+</header>
+
+<div class="wrap">
+  <main id="main">
+    
+<h1>Embed</h1>
+
+  
+  
+  <div class="card">
+    <div class="card-head"><span>Embedders stage <span class="mono">embed</span></span>
+      <span class="row">
+        
+  <form class="inline" method="post" action="#"><input disabled type="hidden" name="csrf" value="demo"><input disabled type="hidden" name="back" value="/embed"><input disabled type="hidden" name="stage" value="embed"><input disabled type="hidden" name="run" value="off">
+    <button disabled class="switch" type="submit" role="switch" aria-checked="true"
+            aria-label="Run embed"><span class="knob"></span></button>
+    <span class="switch-text">on</span>
+  </form>
+
+        
+      </span>
+    </div>
+    <div class="card-body">
+      <div class="tiles tiles-flush">
+        <div class="tile"><span class="label">Pending</span><span class="value" data-bind="pipeline.stages.embed.pending" data-format="int">…</span></div>
+        <div class="tile"><span class="label">Running</span><span class="value" data-bind="pipeline.stages.embed.running" data-format="int">…</span></div>
+        <div class="tile"><span class="label">Failed</span><span class="value" data-bind="pipeline.stages.embed.failed" data-format="int">…</span><span class="note">parked, out of attempts</span></div>
+        <div class="tile"><span class="label">Per second</span><span class="value" data-bind="pipeline.stages.embed.per_second" data-format="fixed2">…</span></div>
+      </div>
+    </div>
+    <div class="card-body setting-row flow">
+      <form class="inline" method="post" action="#"><input disabled type="hidden" name="csrf" value="demo"><input disabled type="hidden" name="back" value="/embed">
+        <input disabled type="hidden" name="stage" value="embed">
+        <label for="at-embedder"><strong>At once</strong></label>
+        <input disabled class="input input-sm" id="at-embedder" type="number" name="concurrency" min="1" max="64" value="">
+        <button disabled class="btn btn-sm btn-icon" type="submit" title="Set" aria-label="Set jobs at once for embed"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></button>
+        
+        <p class="hint">The pressure valve: the most embed jobs running together. It limits claims, it starts no threads of its own, and with nothing queued it does nothing. No plugin here uses a model, so this only paces the work.</p>
+      </form>
+    </div>
+    
+  
+  <div class="card-body setting-row">
+    <form class="inline" method="post" action="#"><input disabled type="hidden" name="csrf" value="demo"><input disabled type="hidden" name="back" value="/embed">
+      <input disabled type="hidden" name="section" value="ingest"><input disabled type="hidden" name="key" value="embed_min_priority">
+      <label for="ss-embed_min_priority"><strong>Embed mail rated at least</strong></label>
+      
+      <input disabled class="input input-sm" id="ss-embed_min_priority" type="number" min="0" max="3" name="value" value="1">
+      
+      <button disabled class="btn btn-sm btn-icon" type="submit" title="Save" aria-label="Save Embed mail rated at least"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></button>
+      <p class="hint">0 embeds everything; 1 skips mail triage rated 0 (junk). Blank restores the default.</p>
+    </form>
+  </div>
+  
+
+  </div>
+  
+  <div class="card">
+    <div class="card-head">Embedders</div>
+    <div class="table-wrap"><table class="table nowrap">
+      <thead><tr><th>Plugin</th><th>Version</th><th>Health</th><th>Model</th><th>Enabled</th><th class="right">Actions</th></tr></thead>
+      <tbody>
+      
+      
+      
+        <tr><td colspan="8" class="muted">No embedders installed.</td></tr>
+      
+      </tbody>
+    </table></div>
+    <div class="card-foot">Turn a plugin off to take it out of the pipeline for now; turn it on to put it back.</div>
+  </div>
+
+
+
+    <div class="card">
+      <div class="card-head"><span>Model &amp; token usage</span>
+        
+      </div>
+      <div class="table-wrap"><table class="table nowrap">
+        <thead><tr><th>Workspace</th><th>Stage</th><th>Model</th><th>Calls</th><th>Cached</th><th>In</th><th>Out</th><th>Saved</th><th><span class="sr-only">Actions</span></th></tr></thead>
+        <tbody>
+        
+          <tr><td colspan="9" class="muted">No model usage recorded yet.</td></tr>
+        
+        </tbody>
+      </table></div>
+    </div>
+
+
+    <div class="card">
+      <div class="card-head">Agents working embed</div>
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>Agent</th><th>Kinds</th><th>Last seen</th><th>State</th><th class="right">Revoke</th></tr></thead>
+        <tbody>
+        
+          <tr><td colspan="5" class="muted">No agents registered.</td></tr>
+        
+        </tbody>
+      </table></div>
+    </div>
+
+
+
+
+
+  </main>
+</div>
+<footer class="foot">
+  <p>Oaken Mail test · this machine only · counts and health, never mail text</p>
+</footer>
+
+
+</body>
+</html>

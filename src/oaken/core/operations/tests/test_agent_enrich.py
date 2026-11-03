@@ -13,9 +13,10 @@ from oaken.core.operations import CallerContext, CoreClient
 from oaken.core.operations.builtin import agent_registry
 from oaken.core.operations.tests.conftest import Ops
 from oaken.core.settings import McpSettings, SwarmSettings, WorkspaceSettings
+from oaken.core.triage import TriageResult
 from oaken.ingest.pipeline import ENRICH, MessagePayload, StageJobResult, enrich_kind
-from oaken.plugins.base import BaseEnricher
-from oaken.plugins.contracts import CleanMessage, EnrichOutput
+from oaken.plugins.base import BaseEnricher, BaseTriager
+from oaken.plugins.contracts import CleanMessage, EnrichOutput, TriageVerdict
 
 
 class Gist(SafeOutput):
@@ -274,23 +275,25 @@ async def test_fail_with_retry_hands_the_job_back_unharmed(ops: Ops, swarm: Swar
     assert job is not None and job.attempts == 0
 
 
-class RatedResult(ToneResult):
-    priority: int = 0
-
-
-class Rater(BaseEnricher):
-    """Stands in for triage: its ``priority`` can rule the other enrichers out."""
+class Rater(BaseTriager):
+    """Stands in for the model triager: its ``priority`` can rule the enrichers out."""
 
     version = "1"
     needs_llm = True
-    prompt = PromptBuilder("enrich.rate", "1", "Rate it.", Gist)
-    output_model = RatedResult
+    rank = 90
+    prompt = PromptBuilder("triage", "1", "Rate it.", Gist)
+    output_model = TriageResult
 
-    async def enrich(self, msg: CleanMessage) -> EnrichOutput:
+    async def triage(self, msg: CleanMessage) -> TriageVerdict | None:
         raise AssertionError("an agent should have been asked")
 
-    def from_answer(self, msg: CleanMessage, answer: Gist) -> EnrichOutput:
-        return EnrichOutput({"tone": answer.gist, "priority": int(answer.gist)})
+    def from_answer(self, msg: CleanMessage, answer: Gist) -> TriageVerdict:
+        return TriageVerdict(
+            TriageResult(
+                category="other", priority=int(answer.gist), needs_reply=False,
+                waiting_on_others=False, source="llm",
+            ).model_dump(mode="json")
+        )  # fmt: skip
 
 
 async def test_a_triage_below_an_enrichers_bar_rules_it_out_for_the_agent_too(
@@ -298,17 +301,21 @@ async def test_a_triage_below_an_enrichers_bar_rules_it_out_for_the_agent_too(
 ) -> None:
     mid, _ = await swarm.message()
 
-    swarm.use({"triage": Rater(), "gist": swarm.gister})
+    swarm.use({"gist": swarm.gister})
+    ops.svc.need_pipeline().backends.triagers = lambda: {"model": Rater()}  # type: ignore[dict-item]
     ops.svc.need_pipeline().settings.plugins["gist"] = {"min_priority": 2}
     job_id = await swarm.job(mid)
     job = (await swarm.call("claim_job")).job
-    owed = {o["enricher"]: o for o in job.payload["owed"]}
-    assert owed["gist"]["min_priority"] == 2 and "triage first" in job.payload["order"].lower()
+    owed = {o.get("enricher") or o["triager"]: o for o in job.payload["owed"]}
+    # strict gate: gist has a bar, so it waits until triage has rated the message
+    assert set(owed) == {"model"} and "triage first" in job.payload["order"].lower()
     done = await swarm.call(
         "complete_job", job_id=job_id, result={"enrichments": {"triage": {"gist": "1"}}}
     )
     assert (done.stored, done.still_owed) == (1, 0)  # priority 1 is under the bar: gist is not owed
     assert (await ops.svc.queue.get(job_id)).status == "succeeded"  # type: ignore[union-attr,arg-type]
+    row = await ops.svc.need_pipeline().verdict_row(mid)  # type: ignore[arg-type]
+    assert row is not None and row["triager"] == "model"  # stored under the triager's own name
 
 
 async def test_an_agent_for_one_enricher_gets_only_that_enrichers_job_and_answers_it(

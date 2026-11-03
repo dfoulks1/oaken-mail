@@ -49,7 +49,7 @@ The saving for a call is `full - returned`, never less than zero. A column of pe
 
 ### Which operations are measured
 
-`list_messages`, `search`, `search_keyword`, `ask`, `get_message`, `get_thread`, `get_enrichment`
+`list_messages`, `search`, `search_keyword`, `get_message`, `get_thread`, `get_enrichment`
 and `summarize_message`.
 
 Operations that change state, such as `mark_read`, are not measured. They name messages but return

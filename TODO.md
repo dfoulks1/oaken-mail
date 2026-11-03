@@ -28,3 +28,22 @@ Working items. ROADMAP.md holds the why; this file holds the next concrete steps
 - [ ] Run the checks on what was built 2026-11-03 (ADR 0017 and 0019, `ask` removed): ruff, mypy, pytest, the docs check and build, and `uv.lock`. Back up `~/.oaken` first: migrations 0019 to 0021 run on the next start.
 - [ ] Next: the plugin capabilities (ADR 0016: `store`, `folders`, `draft`), the rules plugin owning its rules and the wizard page (ADR 0018), then the `attachment` action. Open: the grant mechanism, the result-store helper, the lazy triage chain.
 
+
+## Two-sided mail: file and local server
+
+Oaken should sit on either side of the MUA: read a Thunderbird/Outlook/mbox-file store, and serve
+its own store back to one over IMAP.
+
+- [ ] **Mailbox-file provider.** A provider plugin that reads updates from a mailbox file (`mbox`,
+  and ideally Maildir). It pulls like any source: parse the file, yield the new or changed messages
+  since the last cursor (file offset or message count for mbox, new/cur scan for Maildir). Read-only
+  first, no `send`, no `flags.write`. This is the ROADMAP "Later" `.mbox` import, made concrete.
+  Open: how a source that is not a live account picks its datastore and workspace (the same open
+  question the roadmap already flags), and whether a file that is rewritten under us (mbox compaction)
+  invalidates the cursor.
+- [ ] **Local IMAP-server action.** An action plugin that serves core's own store to an MUA over a
+  loopback IMAP server, so Thunderbird or Outlook reads Oaken's mail as if it were any IMAP account.
+  The inverse of `oaken-imap` (that one is a client pulling from a remote server; this one is the
+  server). Binds `127.0.0.1` only, read-first (folders and FETCH before any write-back). Open: how
+  it maps core's labels and folders onto IMAP folders, and how flag write-back (`\Seen`) rejoins
+  core's durable read-state path.

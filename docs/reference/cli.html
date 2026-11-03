@@ -60,7 +60,7 @@
       <a class="doc-link" href="../architecture/read-state.html">Read state</a>
       <a class="doc-link" href="../architecture/sync-schedule.html">Sync schedule</a>
       <a class="doc-link" href="../architecture/operations.html">Operations</a>
-      <a class="doc-link" href="../architecture/retrieval.html">Retrieval and ask</a>
+      <a class="doc-link" href="../architecture/retrieval.html">Retrieval</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="plugin-contracts.html">Plugin contracts</a>
       <a class="doc-link" href="operations.html">Operations</a>
@@ -188,10 +188,6 @@
 <td>Look at a mailbox: the folder tree, counts, a listing, or why a message is filed.</td>
 </tr>
 <tr>
-<td><a href="#ask"><code>ask</code></a></td>
-<td>Ask about your mail: a summary, what needs you, actions, or a cited answer.</td>
-</tr>
-<tr>
 <td><a href="#pipeline"><code>pipeline</code></a></td>
 <td>Pipeline status, and pausing the model-bound stages.</td>
 </tr>
@@ -252,14 +248,6 @@
 <td>The enrichment cache: how it is doing, or clear it.</td>
 </tr>
 <tr>
-<td><a href="#level"><code>level</code></a></td>
-<td>Triage levels: list them, add one (4 and up), rename or renumber, remove.</td>
-</tr>
-<tr>
-<td><a href="#rule"><code>rule</code></a></td>
-<td>Your own triage rules: list, add, turn on or off, move, remove.</td>
-</tr>
-<tr>
 <td><a href="#events"><code>events</code></a></td>
 <td>Recent events from core's event log (--follow keeps watching).</td>
 </tr>
@@ -281,7 +269,15 @@
 </tr>
 <tr>
 <td><a href="#enrich"><code>enrich</code></a></td>
-<td>Run or show the enrichers (summary, triage, actions, inspector) on a message.</td>
+<td>Run or show the enrichers (summary, actions, inspector) on a message.</td>
+</tr>
+<tr>
+<td><a href="#triage"><code>triage</code></a></td>
+<td>Run, show or dry-run triage (the verdict that rates a message) on a message.</td>
+</tr>
+<tr>
+<td><a href="#action"><code>action</code></a></td>
+<td>Show what the actions did about a message, or approve one that is waiting.</td>
 </tr>
 <tr>
 <td><a href="#sieve"><code>sieve</code></a></td>
@@ -320,7 +316,7 @@
 <tr>
 <td><code>mill</code></td>
 <td>The Oaken core daemon: run it, configure it, look after its storage.</td>
-<td><code>start</code> · <code>stop</code> · <code>restart</code> · <code>reload</code> · <code>status</code> · <code>plugins</code> · <code>config</code> · <code>settings</code> · <code>storage</code> · <code>vacuum</code> · <code>cache</code> · <code>level</code> · <code>rule</code> · <code>events</code> · <code>mcp</code> · <code>help</code></td>
+<td><code>start</code> · <code>stop</code> · <code>restart</code> · <code>reload</code> · <code>status</code> · <code>plugins</code> · <code>config</code> · <code>settings</code> · <code>storage</code> · <code>vacuum</code> · <code>cache</code> · <code>events</code> · <code>mcp</code> · <code>help</code></td>
 </tr>
 <tr>
 <td><code>sawyer</code></td>
@@ -330,7 +326,7 @@
 <tr>
 <td><code>cubby</code></td>
 <td>The Oaken mailbox: search, read and file your mail.</td>
-<td><code>search</code> · <code>show</code> · <code>thread</code> · <code>summarize</code> · <code>read</code> · <code>unread</code> · <code>undo</code> · <code>label</code> · <code>folder</code> · <code>star</code> · <code>unstar</code> · <code>mailbox</code> · <code>ask</code> · <code>sieve</code> · <code>help</code></td>
+<td><code>search</code> · <code>show</code> · <code>thread</code> · <code>summarize</code> · <code>read</code> · <code>unread</code> · <code>undo</code> · <code>label</code> · <code>folder</code> · <code>star</code> · <code>unstar</code> · <code>mailbox</code> · <code>sieve</code> · <code>help</code></td>
 </tr>
 </tbody>
 </table></div>
@@ -600,17 +596,6 @@
 <li><code>--limit</code> — With messages: most to show.</li>
 <li><code>--offset</code> — Skip this many.</li>
 </ul>
-<h3 id="ask"><code>ask</code></h3>
-<p>Ask about your mail: a summary, what needs you, actions, or a cited answer.</p>
-<p>Arguments:</p>
-<ul>
-<li><code>question</code> — What you want to know or see, in plain words.</li>
-</ul>
-<p>Options:</p>
-<ul>
-<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
-<li><code>--timeout</code> — Give up waiting for the answer after S seconds (a local model can be slow).</li>
-</ul>
 <h3 id="pipeline"><code>pipeline</code></h3>
 <p>Default shows status. 'pause'/'resume' stop and restart the model-bound ingest stages (embed, triage, enrich), or just one (oaken pipeline pause enrich, or one enricher: enrich.summary) — mail keeps landing and being filtered while paused. 'limits enrich 2' changes how many jobs a stage runs at once, live. 'parked' re-queues failed ingest jobs.</p>
 <p>Arguments:</p>
@@ -762,35 +747,6 @@
 <li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--task</code> — With clear: only this task's answers.</li>
 <li><code>--yes</code> — With clear: do not ask.</li>
-</ul>
-<h3 id="level"><code>level</code></h3>
-<p>0 ignore, 1 low, 2 normal and 3 soon are built in. <code>oaken level add 5 vip</code> adds a level your own rules can give. Renumbering keeps the rules that use it.</p>
-<p>Arguments:</p>
-<ul>
-<li><code>action</code> —</li>
-<li><code>value</code> — The level's number.</li>
-<li><code>name</code> — The level's name (add, rename).</li>
-</ul>
-<p>Options:</p>
-<ul>
-<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
-<li><code>--number</code> — With rename: the new number.</li>
-</ul>
-<h3 id="rule"><code>rule</code></h3>
-<p>A rule gives mail a level and a category when every condition holds; the first rule in order that matches wins, and no model is asked. <code>oaken rule add NAME</code> with no conditions asks for them. Conditions: from, to, subject, subject_contains, body_contains, header_present, has_attachment, is_reply. Rules are kept in config.toml (trusted) and in core's database (a working copy, and the last known good copy, which is what runs). Edits are staged: <code>apply</code> (or any <code>oaken reload</code>) writes the batch to the file once and reloads the rules; <code>discard</code> drops them. After a hand edit of the file, <code>diff</code> shows what changed, <code>ack</code> accepts it, <code>revert</code> undoes it.</p>
-<p>Arguments:</p>
-<ul>
-<li><code>action</code> —</li>
-<li><code>name</code> — The rule's name.</li>
-</ul>
-<p>Options:</p>
-<ul>
-<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
-<li><code>--level</code> — With add: the level it gives.</li>
-<li><code>--category</code> — With add: the category it gives.</li>
-<li><code>--when</code> — With add: a condition (repeat).</li>
-<li><code>--to</code> — With move: the place, 1 is first.</li>
-<li><code>--before</code> — With move: just before this rule.</li>
 </ul>
 <h3 id="events"><code>events</code></h3>
 <p>What core published recently, including before it was last restarted: ids, states and numbers, never mail text. --follow prints the history and then the live stream.</p>
@@ -962,7 +918,7 @@
 <li><code>--plugin</code> — With expose: NAME is a plugin (all of its operations).</li>
 </ul>
 <h3 id="enrich"><code>enrich</code></h3>
-<p>Run or show the enrichers (summary, triage, actions, inspector) on a message.</p>
+<p>Run or show the enrichers (summary, actions, inspector) on a message.</p>
 <p>Options:</p>
 <ul>
 <li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
@@ -990,7 +946,34 @@
 <ul>
 <li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 </ul>
-<h4 id="enrich-try"><code>enrich try</code></h4>
+<h3 id="triage"><code>triage</code></h3>
+<p>Run, show or dry-run triage (the verdict that rates a message) on a message.</p>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
+<h4 id="triage-run"><code>triage run</code></h4>
+<p>Run the triagers on one message now.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>message_id</code> —</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+<li><code>--force</code> — Rate again even if a current verdict is stored.</li>
+</ul>
+<h4 id="triage-show"><code>triage show</code></h4>
+<p>Show the stored verdict.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>message_id</code> —</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
+<h4 id="triage-try"><code>triage try</code></h4>
 <p>Dry-run triage on a message or on text: the verdict, nothing stored.</p>
 <p>Arguments:</p>
 <ul>
@@ -1002,6 +985,34 @@
 <li><code>--text</code> — Triage this text instead (- reads stdin).</li>
 <li><code>--subject</code> — With --text: the subject.</li>
 <li><code>--sender</code> — With --text: the From line.</li>
+</ul>
+<h3 id="action"><code>action</code></h3>
+<p>Show what the actions did about a message, or approve one that is waiting.</p>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
+<h4 id="action-show"><code>action show</code></h4>
+<p>What each action did.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>message_id</code> —</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+</ul>
+<h4 id="action-approve"><code>action approve</code></h4>
+<p>Say yes to an action that is waiting.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>message_id</code> —</li>
+<li><code>name</code> — The action plugin's name.</li>
+<li><code>route</code> — The route triage sent the message by.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 </ul>
 <h3 id="sieve"><code>sieve</code></h3>
 <p>Scripts are files you edit; these commands never change them.</p>
@@ -1215,7 +1226,7 @@
 <li><code>COMMAND</code> — A command to show help for.</li>
 </ul>
 </section>
-  <footer>Oaken Mail 0.1.1 · Apache-2.0</footer>
+  <footer>Oaken Mail 0.2.0 · Apache-2.0</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

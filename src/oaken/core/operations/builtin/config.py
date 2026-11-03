@@ -27,7 +27,6 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from oaken.core import config_edit, paths
-from oaken.core.logging import get_logger
 from oaken.core.errors import ConfigError, NotFound, OakenError, StorageError
 from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import AnyOperation, operation

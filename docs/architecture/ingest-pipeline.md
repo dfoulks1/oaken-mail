@@ -12,17 +12,20 @@ description = "The stages mail passes through (store, filter and index, embed, e
 
 ```mermaid
 flowchart LR
-    S[Provider sync] -->|raw.put| R[(raw.db)]
+    S[Provider sync] -->|"raw.put: attachments move out"| R[(raw.db)]
+    S -.->|"attachments, mode 0000"| Q[(quarantine folder)]
     R --> F
     subgraph PARSE[ingest.parse]
-        F[Sieve filter] --> I[Index: fields and FTS5] --> Q[Quarantine flagged attachments]
+        F[Sieve filter] --> I[Index: fields and FTS5]
     end
-    Q -->|priority - 2| T[ingest.triage]
-    Q -->|priority - 2, no bar| N[ingest.enrich.name]
-    T -->|priority - 1| E[ingest.embed]
-    T -->|priority - 2 - (3 - rating), bar met| N
+    I -->|"priority - 2"| T[ingest.triage]
+    I -->|"priority - 2, no bar"| N[ingest.enrich.name]
+    I -->|"quarantined attachments"| A[ingest.action.scan]
+    T -->|"priority - 1"| E[ingest.embed]
+    T -->|"priority - 2 - (3 - rating), bar met"| N
     E --> V[(vector store)]
     N --> X[(enrichments in raw.db)]
+    A -->|"verdict"| Q
 ```
 
 1. **Store.** The sync runner writes the exact bytes to `raw.db` and queues a parse job. The cursor
@@ -30,8 +33,8 @@ flowchart LR
    write changes nothing.
 2. **Parse** (`ingest.parse`). The user's Sieve scripts run **first**, so a message that is
    discarded or marked `skip_enrich` never reaches the expensive stages. Then the message is
-   indexed (fields and FTS5), flagged attachments are written to the quarantine folder, and the
-   triage job is queued, with the job of each enricher that has no `min_priority`. From here on the
+   indexed (fields and FTS5), a message with quarantined attachments is queued to the `scan` route of any
+   scanner action, and the triage job is queued, with the job of each enricher that has no `min_priority`. From here on the
    message is **searchable by keyword**. With triage off, parse queues the embed job and every
    enricher's job itself.
 3. **Triage** (`ingest.triage`). The first step, and independent of enrichment: the **triagers**
@@ -137,21 +140,37 @@ To check a model against the enrichers' fixtures by hand (not in CI):
 `uv run python -m oaken.evals enrich [--enricher NAME]`. It scores properties of the result, not
 exact words.
 
-## The quarantine folder
+## The quarantine
 
-Attachments flagged by name or type (executables, scripts, archives that hide them) are written to
-`quarantine/` inside the data folder by the parse stage:
+Attachments do not live in `raw.db`. On the way in, **core** moves every attachment body out of the
+message into the quarantine folder, and a short stub takes its place in the stored message. This
+happens when the message is stored, before Sieve or any plugin sees it, so nothing can skip it.
 
-- The folder is mode 0700 and the files 0600, with no execute bit, named
-  `<part>_<safe-name>.quarantined` so the name cannot escape the folder or mean anything to a shell.
-- Core **only writes** there. It never opens, parses, analyses or runs what it wrote.
-- Writing is atomic (a temporary `.part` file, then a rename) and idempotent.
-- An attachment over `mail.attachments.quarantine_max_bytes` (50 MiB) is left in the message, which
-  `raw.db` keeps whole.
-- Turn it off with `mail.attachments.quarantine = false`. Unflagged attachments are never
-  extracted.
+- **One file per distinct content**, named by its sha256 (`ab/ab12….quarantined`), so the name cannot
+  mean anything to a shell and the same attachment is stored once. The folder is mode 0700 and each
+  file is **mode 0000**: nothing can read or run it.
+- The stored message keeps its headers, each part's own headers and its filename. The body is a stub
+  (`X-Oaken-Detached: {"sha256": ..., "size": ..., "path": ...}`), so the message still parses and
+  the attachment's real size and hash are known.
+- The move is **streamed**: the body is decoded a line at a time into a scratch file, flushed to disk
+  and hashed, then renamed into place. Nothing holds an attachment in memory, and a crash leaves at
+  worst an unused file, since the provider still has the original.
+- Re-syncing the same mail stores the same bytes, so nothing changes.
+- A forwarded message (`message/rfc822`) stays readable, since its text is part of the message. Its own
+  attachments are quarantined.
+- A part core cannot locate in the MIME structure is left in the message and logged. The provider still
+  holds the original, and failing the ingest would lose the mail.
+- An attachment is flagged by its name and type (executables, scripts, archives that hide them), which
+  only labels it. All attachments are quarantined.
+- Turn it off with `mail.attachments.quarantine = false` (the attachments then stay inline, unchecked).
+  The folder is `mail.attachments.quarantine_dir`.
 
-`Quarantine.problems()` reports loose permissions from file modes alone.
+**Scanning and release.** An attachment stays in quarantine until a scanner says `clean`. A scanner is
+an **action** on the `scan` route, which core queues for any message with quarantined files. While the
+job runs, the file is readable (0400) for one block and then locked again, and the verdict is recorded
+(`clean`, `infected` or `error`). The `attachment` action's `save` route copies **clean** attachments
+into a folder. With no scanner installed nothing is ever released. Mail stored before the quarantine
+keeps its attachments inline; an unflagged one can still be saved, a flagged one never.
 
 ## Plugins and events
 
@@ -178,6 +197,6 @@ store can sit behind it later.
 | `plugins.summary.skip_bulk` / `plugins.actions.skip_bulk` | true | Do not ask a model about bulk mail |
 | `plugins.summary.min_priority` / `plugins.actions.min_priority` | unset | Skip mail triage rated below this (0 to 3) |
 | `ingest.throughput_window_seconds` | 600 | Window for the embedding speed shown in status |
-| `mail.attachments.quarantine` | true | Write flagged attachments to the quarantine folder |
-| `mail.attachments.quarantine_dir` | `quarantine` | Folder, relative to the data folder |
-| `mail.attachments.quarantine_max_bytes` | 50 MiB | Largest attachment to write |
+| `mail.attachments.quarantine` | true | Move attachments out of `raw.db` into quarantine (core does it) |
+| `mail.attachments.quarantine_dir` | `quarantine` | Folder, relative to the data folder unless absolute |
+| `plugins.action.attachment.max_bytes` | 0 (no limit) | Largest attachment the attachment action copies |

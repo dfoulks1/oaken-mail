@@ -9,15 +9,15 @@ can reply through a list, so list mail goes to the model for its priority.
 
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 
 from oaken.ai.prompts import PromptBuilder, SafeOutput
+from oaken.core.triage import Category, TriageResult
 from oaken.core.untrusted import UntrustedText
 from oaken.plugins.base import BaseTriager
 from oaken.plugins.contracts import CleanMessage, TriageVerdict
 from oaken.plugins.kit import digest, fit, labeled
 from oaken_triagers._common import LLMTriager
-from oaken.core.triage import Category, TriageResult
 from oaken_triagers.triage_rules import RulesConfig, describe, settled
 
 MAX_REASON_WORDS = 20

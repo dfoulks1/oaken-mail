@@ -60,7 +60,7 @@
       <a class="doc-link" href="architecture/read-state.html">Read state</a>
       <a class="doc-link" href="architecture/sync-schedule.html">Sync schedule</a>
       <a class="doc-link" href="architecture/operations.html">Operations</a>
-      <a class="doc-link" href="architecture/retrieval.html">Retrieval and ask</a>
+      <a class="doc-link" href="architecture/retrieval.html">Retrieval</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="reference/plugin-contracts.html">Plugin contracts</a>
       <a class="doc-link" href="reference/operations.html">Operations</a>
@@ -440,8 +440,8 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <tr>
 <td>40</td>
 <td>CORE_40-mcp-allowed-config</td>
-<td><strong>Written</strong></td>
-<td>The plan only. <code>[mcp.allowed]</code> in config.toml is the source of truth for MCP exposure (seeded to the store on load, file wins on conflict); generated commented menu, op write-back via config_edit, toggle on /stats Reference. DB table stays the live-read cache</td>
+<td><strong>Built</strong></td>
+<td><code>[mcp.allowed]</code> in config.toml is the source of truth for MCP exposure (seeded to the store on load, file wins on conflict); generated commented menu, op write-back via config_edit, toggle on /stats Reference. DB table stays the live-read cache</td>
 </tr>
 <tr>
 <td>41</td>
@@ -482,7 +482,7 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <tr>
 <td>51</td>
 <td>CORE_51-triage-labels-and-automations</td>
-<td><strong>Written</strong></td>
+<td><strong>Partly built</strong></td>
 <td>Custom triage labels and rules that launch automations from a label, on top of the triager kind built in CORE_47; triagers and rules operable from the CLI and over MCP. Draft: needs an ADR first</td>
 </tr>
 <tr>
@@ -494,8 +494,26 @@ tests. <strong>Partly</strong> says what is done and what is left. A <strong>Wri
 <tr>
 <td>53</td>
 <td>CORE_53-agent-trace-and-step</td>
-<td><strong>Written</strong></td>
-<td>An opt-in, token-protected trace of what a model or agent is told, thinks and returns (prompt, thinking, tool calls, timings, the answer committed), the agent door traffic with optional agent reports, single-step on a paused stage, and a view of the rules that run. Draft</td>
+<td><strong>Built</strong> (trace)</td>
+<td>An opt-in, token-protected trace of what a model or agent is told, thinks and returns (prompt, thinking, tool calls, timings, the answer committed), the agent door traffic with optional agent reports, single-step on a paused stage, and a view of the rules that run. Draft; the trace is built, single-step and the rules view are not</td>
+</tr>
+<tr>
+<td>54</td>
+<td>CORE_54-triage-rule-wizard</td>
+<td><strong>Built</strong></td>
+<td>A dry run for a rule, a CLI wizard and the same process on the console's Triage page, no script</td>
+</tr>
+<tr>
+<td>55</td>
+<td>CORE_55-separate-triagers-and-enrichers</td>
+<td><strong>Draft</strong></td>
+<td>Triagers stop being enrichers: <code>BasePlugin</code>, <code>CleanMessage</code>, <code>TriageVerdict</code>, an <code>oaken_triagers</code> package, a <code>triage_verdicts</code> table (ADR 0017, proposed)</td>
+</tr>
+<tr>
+<td>56</td>
+<td>CORE_56-plugin-web-ui-contract</td>
+<td><strong>Draft</strong></td>
+<td>A plugin shapes its console modal and form page by declaring data (<code>ui()</code>, <code>UiSpec</code>); core renders it (ADR 0018, proposed)</td>
 </tr>
 </tbody>
 </table></div>
@@ -683,7 +701,7 @@ records what it generated in <code>docs/.site-manifest</code> and only ever repl
 <code>docs/softmap.toml</code> in the same change that builds or alters a component (the build fails if it
 disagrees with the repository).</p>
 </section>
-  <footer>Oaken Mail 0.1.1 · Apache-2.0</footer>
+  <footer>Oaken Mail 0.2.0 · Apache-2.0</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

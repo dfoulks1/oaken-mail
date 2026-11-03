@@ -60,7 +60,7 @@
       <a class="doc-link" href="../architecture/read-state.html">Read state</a>
       <a class="doc-link" href="../architecture/sync-schedule.html">Sync schedule</a>
       <a class="doc-link" href="../architecture/operations.html">Operations</a>
-      <a class="doc-link" href="../architecture/retrieval.html">Retrieval and ask</a>
+      <a class="doc-link" href="../architecture/retrieval.html">Retrieval</a>
       <div class="label">Reference</div>
       <a class="doc-link" href="plugin-contracts.html">Plugin contracts</a>
       <a class="doc-link current" href="operations.html" aria-current="page">Operations</a>
@@ -101,11 +101,11 @@
 </thead>
 <tbody>
 <tr>
-<td><code>ask</code></td>
-<td>read</td>
-<td>off until you turn it on</td>
+<td><code>approve_action</code></td>
+<td>mutate</td>
+<td>never</td>
 <td>no</td>
-<td>Answer a question from the mail, citing the messages and quoting the lines it came from.</td>
+<td>Say yes to an action that is waiting for approval: it runs now, for this message and route.</td>
 </tr>
 <tr>
 <td><code>cache_stats</code></td>
@@ -227,11 +227,18 @@
 <td>One account: provider, its non-secret settings, what the provider's settings are, and why it cannot sync if it cannot.</td>
 </tr>
 <tr>
+<td><code>get_action</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>Show what the actions did about a message: for each action and route, whether it succeeded, failed or was skipped. An action that is waiting for approval is a parked job.</td>
+</tr>
+<tr>
 <td><code>get_enrichment</code></td>
 <td>read</td>
 <td>on by default</td>
 <td>no</td>
-<td>Show the stored enrichment results (summary, triage, actions, inspector) for a message.</td>
+<td>Show the stored enrichment results (summary, actions, inspector) for a message. The triage verdict is <code>get_triage</code>.</td>
 </tr>
 <tr>
 <td><code>get_message</code></td>
@@ -276,6 +283,13 @@
 <td>A conversation as a tree: every message that shares a thread, in reading order, each with its parent and depth.</td>
 </tr>
 <tr>
+<td><code>get_triage</code></td>
+<td>read</td>
+<td>on by default</td>
+<td>no</td>
+<td>Show the stored triage verdict for a message: which triager rated it, the category, level (priority) and whether a reply is owed.</td>
+</tr>
+<tr>
 <td><code>get_workspace</code></td>
 <td>read</td>
 <td>off until you turn it on</td>
@@ -288,6 +302,13 @@
 <td>on by default</td>
 <td>no</td>
 <td>The configured accounts: id, provider and display name (never credentials).</td>
+</tr>
+<tr>
+<td><code>list_actions</code></td>
+<td>read</td>
+<td>off until you turn it on</td>
+<td>no</td>
+<td>The actions waiting for approval or for a route to be answered, and what the actions did lately. No message text.</td>
 </tr>
 <tr>
 <td><code>list_agents</code></td>
@@ -483,7 +504,7 @@
 <td>mutate</td>
 <td>never</td>
 <td>no</td>
-<td>Bring one pipeline stage up to date for old mail (parse, filter, embed or enrich).</td>
+<td>Bring one pipeline stage up to date for old mail (parse, filter, embed, triage, enrich, action, scan or start).</td>
 </tr>
 <tr>
 <td><code>reset_usage</code></td>
@@ -703,95 +724,11 @@
 <td>The most recent trace events (oldest first), optionally for one plugin (plugin.KIND.NAME), one job or one message: prompts, responses, thinking, tool calls, timings and what was committed. Holds mail text.</td>
 </tr>
 <tr>
-<td><code>triage_ack</code></td>
+<td><code>triage_message</code></td>
 <td>mutate</td>
 <td>never</td>
 <td>no</td>
-<td>Accept config.toml's triage rules as they are now: they become the running copy and the rules plugin reloads on them. Refused while edits are staged (apply or discard them first). They are checked first; a set the plugin refuses is not taken.</td>
-</tr>
-<tr>
-<td><code>triage_apply</code></td>
-<td>mutate</td>
-<td>never</td>
-<td>no</td>
-<td>Write the staged triage edits to config.toml once (one backup), make them the running copy and reload the rules plugin. Any config reload does the same first.</td>
-</tr>
-<tr>
-<td><code>triage_discard</code></td>
-<td>mutate</td>
-<td>never</td>
-<td>no</td>
-<td>Throw away the staged triage edits: the working copy goes back to the running copy.</td>
-</tr>
-<tr>
-<td><code>triage_drift</code></td>
-<td>read</td>
-<td>never</td>
-<td>no</td>
-<td>The state of the triage rules: whether config.toml differs from the last known good copy (which is what runs), and whether edits are staged and not yet written to the file.</td>
-</tr>
-<tr>
-<td><code>triage_level_delete</code></td>
-<td>mutate</td>
-<td>never</td>
-<td>no</td>
-<td>Delete a level the reader added. A built-in level, or one a rule still uses, stays.</td>
-</tr>
-<tr>
-<td><code>triage_level_set</code></td>
-<td>mutate</td>
-<td>never</td>
-<td>no</td>
-<td>Add a triage level (4 and up), or rename one. With renumber_from, change a level's number: its rules keep it.</td>
-</tr>
-<tr>
-<td><code>triage_levels</code></td>
-<td>read</td>
-<td>never</td>
-<td>no</td>
-<td>The triage levels: 0 to 3 are built in; others are the reader's own.</td>
-</tr>
-<tr>
-<td><code>triage_revert</code></td>
-<td>mutate</td>
-<td>never</td>
-<td>no</td>
-<td>Throw away config.toml's unacknowledged triage rules: the running copy is written back over them (the file is backed up first).</td>
-</tr>
-<tr>
-<td><code>triage_rule_delete</code></td>
-<td>mutate</td>
-<td>never</td>
-<td>no</td>
-<td>Delete a triage rule by name.</td>
-</tr>
-<tr>
-<td><code>triage_rule_move</code></td>
-<td>mutate</td>
-<td>never</td>
-<td>no</td>
-<td>Change when a rule runs: to a place in the order (1 is first), or just before another rule.</td>
-</tr>
-<tr>
-<td><code>triage_rule_order</code></td>
-<td>mutate</td>
-<td>never</td>
-<td>no</td>
-<td>Set the whole order of the rules at once (what dragging them in the console does).</td>
-</tr>
-<tr>
-<td><code>triage_rule_set</code></td>
-<td>mutate</td>
-<td>never</td>
-<td>no</td>
-<td>Add a triage rule (it goes last), or change the one with this name. The rule is checked before it is saved.</td>
-</tr>
-<tr>
-<td><code>triage_rules</code></td>
-<td>read</td>
-<td>never</td>
-<td>no</td>
-<td>The reader's triage rules, in the order they run. The first that matches decides.</td>
+<td>Run the triagers on one message now and store the verdict.</td>
 </tr>
 <tr>
 <td><code>try_triage</code></td>
@@ -826,11 +763,11 @@
 
 <section id="inputs-and-outputs" class="doc-section"><div class="section-head"><span class="section-num">1</span><h2>Inputs and outputs</h2></div>
 <p>A trailing <code>?</code> marks an optional field.</p>
-<h3 id="ask"><code>ask</code></h3>
-<p>Every quote is checked against the message it cites; claims that fail are dropped, and with none left the answer is <code>insufficient_evidence</code>. Never marks anything read. With <code>raw</code> the model is not called: the matching messages come back with their stored enrichments verbatim, so a person sees the data without AI rewriting it.</p>
+<h3 id="approve-action"><code>approve_action</code></h3>
+<p>Say yes to an action that is waiting for approval: it runs now, for this message and route.</p>
 <ul>
-<li>Input: <code>account_id</code>?, <code>label</code>?, <code>location</code>?, <code>from</code>?, <code>after</code>?, <code>before</code>?, <code>disposition</code>?, <code>unread_only</code>?, <code>starred</code>?, <code>has_attachment</code>?, <code>thread_key</code>?, <code>question</code>, <code>limit</code>?, <code>raw</code>?</li>
-<li>Output: <code>intent</code>?, <code>interpreted</code>?, <code>results</code>?, <code>answer</code>, <code>message_ids</code>?, <code>citations</code>?, <code>confidence</code>?, <code>insufficient_evidence</code>?, <code>dropped_claims</code>?, <code>degraded</code>?, <code>degraded_reason</code>?, <code>evidence_tokens</code>?, <code>full_body_tokens</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?, <code>evidence</code>?</li>
+<li>Input: <code>message_id</code>, <code>action</code>, <code>route</code></li>
+<li>Output: <code>approved</code></li>
 </ul>
 <h3 id="cache-stats"><code>cache_stats</code></h3>
 <p>The enrichment cache: how many answers it holds, how big, from which prompt versions, and how often it saved a model call.</p>
@@ -934,8 +871,14 @@
 <li>Input: <code>account_id</code></li>
 <li>Output: <code>account_id</code>, <code>provider</code>, <code>display_name</code>, <code>config</code>, <code>receive_only</code>?, <code>capabilities</code>?, <code>problem</code>?, <code>config_schema</code>?</li>
 </ul>
+<h3 id="get-action"><code>get_action</code></h3>
+<p>Show what the actions did about a message: for each action and route, whether it succeeded, failed or was skipped. An action that is waiting for approval is a parked job.</p>
+<ul>
+<li>Input: <code>message_id</code></li>
+<li>Output: <code>message_id</code>, <code>actions</code></li>
+</ul>
 <h3 id="get-enrichment"><code>get_enrichment</code></h3>
-<p>Show the stored enrichment results (summary, triage, actions, inspector) for a message.</p>
+<p>Show the stored enrichment results (summary, actions, inspector) for a message. The triage verdict is <code>get_triage</code>.</p>
 <ul>
 <li>Input: <code>message_id</code>, <code>enricher</code>?</li>
 <li>Output: <code>message_id</code>, <code>results</code>, <code>content_is_untrusted</code>?</li>
@@ -976,6 +919,12 @@
 <li>Input: <code>message_id</code>?, <code>thread_key</code>?, <code>limit</code>?</li>
 <li>Output: <code>thread_key</code>, <code>items</code>?, <code>total</code>?, <code>truncated</code>?, <code>content_is_untrusted</code>?, <code>warnings</code>?</li>
 </ul>
+<h3 id="get-triage"><code>get_triage</code></h3>
+<p>Show the stored triage verdict for a message: which triager rated it, the category, level (priority) and whether a reply is owed.</p>
+<ul>
+<li>Input: <code>message_id</code></li>
+<li>Output: <code>message_id</code>, <code>rated</code>, <code>triager</code>?, <code>version</code>?, <code>model</code>?, <code>result</code>?, <code>content_is_untrusted</code>?</li>
+</ul>
 <h3 id="get-workspace"><code>get_workspace</code></h3>
 <p>One workspace: its settings as editable TOML, the effective LLM backend, and usage numbers.</p>
 <ul>
@@ -987,6 +936,12 @@
 <ul>
 <li>Input: none</li>
 <li>Output: <code>accounts</code></li>
+</ul>
+<h3 id="list-actions"><code>list_actions</code></h3>
+<p>The actions waiting for approval or for a route to be answered, and what the actions did lately. No message text.</p>
+<ul>
+<li>Input: <code>limit</code>?</li>
+<li>Output: <code>waiting</code>, <code>recent</code></li>
 </ul>
 <h3 id="list-agents"><code>list_agents</code></h3>
 <p>List the registered agents (never their tokens).</p>
@@ -1151,9 +1106,9 @@
 <li>Output: <code>removed</code>, <code>name</code>, <code>path</code>?, <code>backup</code>?, <code>cache_kept</code>?, <code>error</code>?</li>
 </ul>
 <h3 id="reprocess"><code>reprocess</code></h3>
-<p>Bring one pipeline stage up to date for old mail (parse, filter, embed or enrich).</p>
+<p>Bring one pipeline stage up to date for old mail (parse, filter, embed, triage, enrich, action, scan or start).</p>
 <ul>
-<li>Input: <code>stage</code>, <code>account_id</code>?, <code>since</code>?, <code>limit</code>?</li>
+<li>Input: <code>stage</code>, <code>account_id</code>?, <code>since</code>?, <code>limit</code>?, <code>route</code>?</li>
 <li>Output: <code>job_id</code>, <code>created</code></li>
 </ul>
 <h3 id="reset-usage"><code>reset_usage</code></h3>
@@ -1342,83 +1297,11 @@
 <li>Input: <code>limit</code>?, <code>since</code>?, <code>kinds</code>?, <code>plugin</code>?, <code>job_id</code>?, <code>message_id</code>?</li>
 <li>Output: <code>events</code>, <code>enabled</code>, <code>content_is_untrusted</code>?</li>
 </ul>
-<h3 id="triage-ack"><code>triage_ack</code></h3>
-<p>Accept config.toml's triage rules as they are now: they become the running copy and the rules plugin reloads on them. Refused while edits are staged (apply or discard them first). They are checked first; a set the plugin refuses is not taken.</p>
+<h3 id="triage-message"><code>triage_message</code></h3>
+<p>Run the triagers on one message now and store the verdict.</p>
 <ul>
-<li>Input: none</li>
-<li>Output: <code>acknowledged</code>, <code>changed</code>, <code>changes</code>, <code>error</code>?, <code>staged</code>, <code>file</code>, <code>snapshot</code>, <code>working</code></li>
-</ul>
-<h3 id="triage-apply"><code>triage_apply</code></h3>
-<p>Write the staged triage edits to config.toml once (one backup), make them the running copy and reload the rules plugin. Any config reload does the same first.</p>
-<ul>
-<li>Input: none</li>
-<li>Output: <code>acknowledged</code>, <code>changed</code>, <code>changes</code>, <code>error</code>?, <code>staged</code>, <code>file</code>, <code>snapshot</code>, <code>working</code></li>
-</ul>
-<h3 id="triage-discard"><code>triage_discard</code></h3>
-<p>Throw away the staged triage edits: the working copy goes back to the running copy.</p>
-<ul>
-<li>Input: none</li>
-<li>Output: <code>acknowledged</code>, <code>changed</code>, <code>changes</code>, <code>error</code>?, <code>staged</code>, <code>file</code>, <code>snapshot</code>, <code>working</code></li>
-</ul>
-<h3 id="triage-drift"><code>triage_drift</code></h3>
-<p>The state of the triage rules: whether config.toml differs from the last known good copy (which is what runs), and whether edits are staged and not yet written to the file.</p>
-<ul>
-<li>Input: none</li>
-<li>Output: <code>acknowledged</code>, <code>changed</code>, <code>changes</code>, <code>error</code>?, <code>staged</code>, <code>file</code>, <code>snapshot</code>, <code>working</code></li>
-</ul>
-<h3 id="triage-level-delete"><code>triage_level_delete</code></h3>
-<p>Delete a level the reader added. A built-in level, or one a rule still uses, stays.</p>
-<ul>
-<li>Input: <code>value</code></li>
-<li>Output: <code>levels</code></li>
-</ul>
-<h3 id="triage-level-set"><code>triage_level_set</code></h3>
-<p>Add a triage level (4 and up), or rename one. With renumber_from, change a level's number: its rules keep it.</p>
-<ul>
-<li>Input: <code>value</code>, <code>name</code>, <code>renumber_from</code>?</li>
-<li>Output: <code>levels</code></li>
-</ul>
-<h3 id="triage-levels"><code>triage_levels</code></h3>
-<p>The triage levels: 0 to 3 are built in; others are the reader's own.</p>
-<ul>
-<li>Input: none</li>
-<li>Output: <code>levels</code></li>
-</ul>
-<h3 id="triage-revert"><code>triage_revert</code></h3>
-<p>Throw away config.toml's unacknowledged triage rules: the running copy is written back over them (the file is backed up first).</p>
-<ul>
-<li>Input: none</li>
-<li>Output: <code>acknowledged</code>, <code>changed</code>, <code>changes</code>, <code>error</code>?, <code>staged</code>, <code>file</code>, <code>snapshot</code>, <code>working</code></li>
-</ul>
-<h3 id="triage-rule-delete"><code>triage_rule_delete</code></h3>
-<p>Delete a triage rule by name.</p>
-<ul>
-<li>Input: <code>name</code></li>
-<li>Output: <code>rules</code></li>
-</ul>
-<h3 id="triage-rule-move"><code>triage_rule_move</code></h3>
-<p>Change when a rule runs: to a place in the order (1 is first), or just before another rule.</p>
-<ul>
-<li>Input: <code>name</code>, <code>to</code>?, <code>before</code>?</li>
-<li>Output: <code>rules</code></li>
-</ul>
-<h3 id="triage-rule-order"><code>triage_rule_order</code></h3>
-<p>Set the whole order of the rules at once (what dragging them in the console does).</p>
-<ul>
-<li>Input: <code>order</code></li>
-<li>Output: <code>rules</code></li>
-</ul>
-<h3 id="triage-rule-set"><code>triage_rule_set</code></h3>
-<p>Add a triage rule (it goes last), or change the one with this name. The rule is checked before it is saved.</p>
-<ul>
-<li>Input: <code>name</code>, <code>level</code>?, <code>category</code>?, <code>when</code>?, <code>enabled</code>?</li>
-<li>Output: <code>rules</code></li>
-</ul>
-<h3 id="triage-rules"><code>triage_rules</code></h3>
-<p>The reader's triage rules, in the order they run. The first that matches decides.</p>
-<ul>
-<li>Input: none</li>
-<li>Output: <code>rules</code></li>
+<li>Input: <code>message_id</code>, <code>force</code>?</li>
+<li>Output: <code>message_id</code>, <code>ran</code>, <code>cached</code>, <code>rated</code></li>
 </ul>
 <h3 id="try-triage"><code>try_triage</code></h3>
 <p>Run triage on one stored message, or on pasted text, and show the verdict without storing it: which triager decided (a header rule or a model), the category, priority and whether a reply is owed. For tuning: change a rule or the triage model, then try again.</p>
@@ -1459,9 +1342,15 @@
 </thead>
 <tbody>
 <tr>
+<td><code>attachment</code></td>
+<td>action</td>
+<td>1</td>
+<td>none yet</td>
+</tr>
+<tr>
 <td><code>ollama</code></td>
 <td>embedder</td>
-<td>0.1.1</td>
+<td>0.2.0</td>
 <td>none yet</td>
 </tr>
 <tr>
@@ -1485,13 +1374,13 @@
 <tr>
 <td><code>ollama</code></td>
 <td>llm_backend</td>
-<td>0.1.1</td>
+<td>0.2.0</td>
 <td>none yet</td>
 </tr>
 <tr>
 <td><code>ollama-remote</code></td>
 <td>llm_backend</td>
-<td>0.1.1</td>
+<td>0.2.0</td>
 <td>none yet</td>
 </tr>
 <tr>
@@ -1516,19 +1405,19 @@
 <td><code>ai</code></td>
 <td>triager</td>
 <td>1</td>
-<td>none yet</td>
+<td><code>ai.levels</code>, <code>ai.level_set</code>, <code>ai.level_remove</code></td>
 </tr>
 <tr>
 <td><code>rules</code></td>
 <td>triager</td>
 <td>1</td>
-<td>none yet</td>
+<td><code>rules.levels</code>, <code>rules.level_set</code>, <code>rules.level_remove</code>, <code>rules.list</code>, <code>rules.add</code>, <code>rules.update</code>, <code>rules.remove</code>, <code>rules.order</code>, <code>rules.test</code>, <code>rules.apply</code>, <code>rules.discard</code>, <code>rules.page_new</code>, <code>rules.page_order</code></td>
 </tr>
 <tr>
 <td><code>spamcheck</code></td>
 <td>triager</td>
 <td>1</td>
-<td>none yet</td>
+<td><code>spamcheck.levels</code>, <code>spamcheck.level_set</code>, <code>spamcheck.level_remove</code></td>
 </tr>
 <tr>
 <td><code>sqlite-vec</code></td>
@@ -1574,8 +1463,122 @@
 <li>Input: <code>account_id</code>?, <code>check</code>?, <code>password</code>?</li>
 <li>Output: <code>account_id</code>, <code>state</code>, <code>detail</code>?, <code>open_url</code>?, <code>poll</code>?, <code>poll_input</code>?</li>
 </ul>
+<h3 id="ailevels"><code>ai.levels</code></h3>
+<p>List the triage levels: built in and the reader's own. Offered by the <code>ai</code> triager plugin; permission <code>read</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>levels</code></li>
+</ul>
+<h3 id="ailevel-set"><code>ai.level_set</code></h3>
+<p>Add a triage level (4 to 99), or rename one of yours. Offered by the <code>ai</code> triager plugin; permission <code>mutate</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: <code>value</code>, <code>name</code></li>
+<li>Output: <code>levels</code></li>
+</ul>
+<h3 id="ailevel-remove"><code>ai.level_remove</code></h3>
+<p>Remove one of your triage levels. Offered by the <code>ai</code> triager plugin; permission <code>mutate</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: <code>value</code></li>
+<li>Output: <code>levels</code></li>
+</ul>
+<h3 id="ruleslevels"><code>rules.levels</code></h3>
+<p>List the triage levels: built in and the reader's own. Offered by the <code>rules</code> triager plugin; permission <code>read</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>levels</code></li>
+</ul>
+<h3 id="ruleslevel-set"><code>rules.level_set</code></h3>
+<p>Add a triage level (4 to 99), or rename one of yours. Offered by the <code>rules</code> triager plugin; permission <code>mutate</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: <code>value</code>, <code>name</code></li>
+<li>Output: <code>levels</code></li>
+</ul>
+<h3 id="ruleslevel-remove"><code>rules.level_remove</code></h3>
+<p>Remove one of your triage levels. Offered by the <code>rules</code> triager plugin; permission <code>mutate</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: <code>value</code></li>
+<li>Output: <code>levels</code></li>
+</ul>
+<h3 id="ruleslist"><code>rules.list</code></h3>
+<p>List the rules in the order they run (the staged copy, if there is one). Offered by the <code>rules</code> triager plugin; permission <code>read</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>rules</code>, <code>staged</code>, <code>note</code>?</li>
+</ul>
+<h3 id="rulesadd"><code>rules.add</code></h3>
+<p>Stage a new rule, last in order. Apply writes it to config.toml. Offered by the <code>rules</code> triager plugin; permission <code>mutate</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: <code>from</code>?, <code>to</code>?, <code>subject</code>?, <code>subject_contains</code>?, <code>body_contains</code>?, <code>header_present</code>?, <code>has_attachment</code>?, <code>is_reply</code>?, <code>has_label</code>?, <code>name</code>, <code>level</code>?, <code>category</code>?, <code>route</code>?, <code>labels</code>?, <code>enabled</code>?</li>
+<li>Output: <code>rules</code>, <code>staged</code>, <code>note</code>?</li>
+</ul>
+<h3 id="rulesupdate"><code>rules.update</code></h3>
+<p>Stage a change to one rule, found by name. Offered by the <code>rules</code> triager plugin; permission <code>mutate</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: <code>from</code>?, <code>to</code>?, <code>subject</code>?, <code>subject_contains</code>?, <code>body_contains</code>?, <code>header_present</code>?, <code>has_attachment</code>?, <code>is_reply</code>?, <code>has_label</code>?, <code>name</code>, <code>level</code>?, <code>category</code>?, <code>enabled</code>?, <code>route</code>?, <code>labels</code>?</li>
+<li>Output: <code>rules</code>, <code>staged</code>, <code>note</code>?</li>
+</ul>
+<h3 id="rulesremove"><code>rules.remove</code></h3>
+<p>Stage the removal of one rule. Offered by the <code>rules</code> triager plugin; permission <code>mutate</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: <code>name</code></li>
+<li>Output: <code>rules</code>, <code>staged</code>, <code>note</code>?</li>
+</ul>
+<h3 id="rulesorder"><code>rules.order</code></h3>
+<p>Stage a new order: the rule names, first to last. Offered by the <code>rules</code> triager plugin; permission <code>mutate</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: <code>order</code></li>
+<li>Output: <code>rules</code>, <code>staged</code>, <code>note</code>?</li>
+</ul>
+<h3 id="rulestest"><code>rules.test</code></h3>
+<p>Check a rule as typed, without staging it. Offered by the <code>rules</code> triager plugin; permission <code>read</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: <code>from</code>?, <code>to</code>?, <code>subject</code>?, <code>subject_contains</code>?, <code>body_contains</code>?, <code>header_present</code>?, <code>has_attachment</code>?, <code>is_reply</code>?, <code>has_label</code>?, <code>name</code>, <code>level</code>?, <code>category</code>?, <code>route</code>?, <code>labels</code>?, <code>enabled</code>?</li>
+<li>Output: <code>ok</code>, <code>summary</code>, <code>notes</code>?</li>
+</ul>
+<h3 id="rulesapply"><code>rules.apply</code></h3>
+<p>Write the staged rules to config.toml (one backup) and reload this plugin. Offered by the <code>rules</code> triager plugin; permission <code>mutate</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>rules</code>, <code>staged</code>, <code>note</code>?</li>
+</ul>
+<h3 id="rulesdiscard"><code>rules.discard</code></h3>
+<p>Throw the staged rules away. Offered by the <code>rules</code> triager plugin; permission <code>mutate</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>rules</code>, <code>staged</code>, <code>note</code>?</li>
+</ul>
+<h3 id="rulespage-new"><code>rules.page_new</code></h3>
+<p>The values for the new-rule page. Offered by the <code>rules</code> triager plugin; permission <code>read</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>values</code>?, <code>messages</code>?, <code>rows</code>?</li>
+</ul>
+<h3 id="rulespage-order"><code>rules.page_order</code></h3>
+<p>The rules, for the order page. Offered by the <code>rules</code> triager plugin; permission <code>read</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>values</code>?, <code>messages</code>?, <code>rows</code>?</li>
+</ul>
+<h3 id="spamchecklevels"><code>spamcheck.levels</code></h3>
+<p>List the triage levels: built in and the reader's own. Offered by the <code>spamcheck</code> triager plugin; permission <code>read</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>levels</code></li>
+</ul>
+<h3 id="spamchecklevel-set"><code>spamcheck.level_set</code></h3>
+<p>Add a triage level (4 to 99), or rename one of yours. Offered by the <code>spamcheck</code> triager plugin; permission <code>mutate</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: <code>value</code>, <code>name</code></li>
+<li>Output: <code>levels</code></li>
+</ul>
+<h3 id="spamchecklevel-remove"><code>spamcheck.level_remove</code></h3>
+<p>Remove one of your triage levels. Offered by the <code>spamcheck</code> triager plugin; permission <code>mutate</code>, MCP <code>off</code>.</p>
+<ul>
+<li>Input: <code>value</code></li>
+<li>Output: <code>levels</code></li>
+</ul>
 </section>
-  <footer>Oaken Mail 0.1.1 · Apache-2.0</footer>
+  <footer>Oaken Mail 0.2.0 · Apache-2.0</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

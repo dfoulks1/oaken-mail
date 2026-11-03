@@ -325,6 +325,7 @@ class IndexStore:
                 "size": x.size,
                 "inline": x.inline,
                 "quarantine": x.quarantine,
+                "sha256": x.file_sha256,
             }
             for x in p.attachments
         ]

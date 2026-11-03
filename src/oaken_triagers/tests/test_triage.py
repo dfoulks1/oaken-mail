@@ -5,8 +5,8 @@ import pytest
 
 from oaken.core.errors import AIBackendError
 from oaken.testing.contracts import TriagerContract
-from oaken_triagers import AITriager, SpamCheckTriager
 from oaken_enrichers.tests.conftest import Rig, message, with_llm
+from oaken_triagers import AITriager, SpamCheckTriager
 
 WORK = {
     "category": "work", "priority": 3, "needs_reply": True, "waiting_on_others": False,
@@ -126,7 +126,7 @@ async def test_an_unchanged_message_is_answered_from_the_cache(rig: Rig) -> None
     second = (await enricher.triage(message())).data
     assert first == second and len(rig.llm.requests) == 1
     rows = {r.stage: r for r in await rig.usage.usage_summary(None)}
-    assert rows["llm.enrich.triage"].cached_calls == 1
+    assert rows["llm.triage"].cached_calls == 1
 
 
 async def test_a_spam_flagged_message_is_settled_by_rule_with_no_model_call(rig: Rig) -> None:

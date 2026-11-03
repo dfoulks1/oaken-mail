@@ -47,8 +47,8 @@ class TestImapProvider(ProviderContract):
 
 def test_it_declares_auth_pull_and_flags_and_cannot_send() -> None:
     p = ImapProvider()
-    assert declared_capabilities(p, "provider") == {"auth", "sync.pull", "flags.write"}
+    assert declared_capabilities(p, "provider") == {"auth", "sync.pull", "flags.write", "attachments.detect"}
     info, problems = check_plugin("provider", "imap", p)
     assert not problems and info is not None
-    assert info.capabilities == {"auth", "sync.pull", "flags.write"}
+    assert info.capabilities == {"auth", "sync.pull", "flags.write", "attachments.detect"}
     assert not is_implemented(p, "send")

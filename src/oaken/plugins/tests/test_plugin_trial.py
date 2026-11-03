@@ -44,9 +44,9 @@ async def test_a_trial_runs_on_its_own_config_and_stops(install_plugin: Installe
     await host.start()
     try:
         async with host.trial("triager", "words", {"word": "candidate"}) as plugin:
-            assert (await plugin.triage(None)).data == {"word": "candidate"}  # type: ignore[arg-type]
+            assert (await plugin.triage(None)).data == {"word": "candidate"}
         live = host.get("triager", "words")
-        assert (await live.triage(None)).data == {"word": "live"}  # type: ignore[arg-type]
+        assert (await live.triage(None)).data == {"word": "live"}
     finally:
         await host.stop()
 

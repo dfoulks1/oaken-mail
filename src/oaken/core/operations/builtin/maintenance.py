@@ -14,7 +14,6 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from oaken.core.errors import Conflict, StorageError
-from oaken.core.plugin_store import folder_stats
 from oaken.core.maintenance import check_room, enqueue_vacuum, file_bytes
 from oaken.core.operations.builtin.mail import QueuedOutput
 from oaken.core.operations.context import OpContext
@@ -38,6 +37,11 @@ class StorageInfo(BaseModel):
     quarantine_bytes: int = 0
 
 
+def _quarantine_dir(configured: str, data: Path) -> Path:
+    path = Path(configured).expanduser()
+    return path if path.is_absolute() else data / path
+
+
 @operation(
     "storage_info",
     "Where Oaken keeps its data and how big it is: the two databases, their write-ahead logs and "
@@ -49,7 +53,11 @@ class StorageInfo(BaseModel):
 )
 async def storage_info(ctx: OpContext, inp: Empty) -> StorageInfo:
     raw, index = ctx.svc.raw.db.path, ctx.svc.index.db.path
-    qdir, qfiles, qbytes = folder_stats("action", "attachment", "quarantine")
+    row = await ctx.svc.raw.db.fetchone(
+        "SELECT COUNT(*) AS n, COALESCE(SUM(size), 0) AS b FROM quarantined_files"
+    )
+    qfiles, qbytes = (int(row["n"]), int(row["b"])) if row else (0, 0)
+    qdir = _quarantine_dir(ctx.svc.settings.mail.attachments.quarantine_dir, raw.parent)
     wal = sum(file_bytes(Path(f"{p}-wal")) for p in (raw, index))
     return StorageInfo(
         data_dir=str(raw.parent),

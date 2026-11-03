@@ -76,6 +76,18 @@
 # [plugins.actions]
 # min_priority = 1
 
+# --- Attachments ----------------------------------------------------------------------
+# Core moves every attachment out of a message into a locked quarantine folder (mode 0000) when the
+# message is stored; raw.db never holds one. Nothing is released until a scanner action says clean.
+# [mail.attachments]
+# quarantine = true
+# quarantine_dir = "quarantine"   # relative to the data folder unless absolute
+#
+# The attachment action saves CLEAN attachments into a folder. max_bytes is the largest it saves; 0
+# (the default) saves all of them.
+# [plugins.action.attachment]
+# max_bytes = 0
+
 
 # --- Local AI (Ollama) ----------------------------------------------------------------
 # Oaken runs a LOCAL Ollama by default; nothing leaves the machine. The model names live in [ai];
