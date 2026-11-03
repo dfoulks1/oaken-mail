@@ -5,6 +5,25 @@ All notable changes to Oaken are recorded here. The format follows
 [Semantic Versioning](https://semver.org/). All three distributions (`oaken`, `oaken-cli`,
 `oaken-core`) release in lockstep at one version (ADR 0014).
 
+## [0.2.1] — unreleased
+
+### Added
+
+- **Attachment scanning (CORE_57, ADR 0020).** `AttachmentHandler` (the shared list/scan/save
+  loops over an action's attachment door), `BaseScanner(BaseAction)` on the `scan` route (write one
+  method, `scan(path) -> Verdict`), and the first-party `clamav` scanner (`oaken_scanners`), which
+  streams each quarantined attachment to `clamd` over `INSTREAM` and records `clean`/`infected`/
+  `error`. Only a `clean` verdict releases a file; with no scanner installed nothing is released.
+  `clamav` is opt-in and needs a running `clamd`. Scanning is core, not an add-on.
+
+### Changed
+
+- **One model default.** The chat and embed model are named in one place, `[ai] llm_model` /
+  `[ai] embed_model`. The `ollama` backend/embedder plugin table no longer takes a `model` key (it
+  tunes the connection); a `model` there is now a config error. A per-task analyzer (`enricher`,
+  `triager`) may still set `model` as an override. A `config.toml` that set
+  `[plugins.llm_backend.ollama] model` must move it to `[ai] llm_model`.
+
 ## [0.2.0] — 2026-11-03
 
 > 0.1.1 was never released. The work done under that label, and everything since, ships as 0.2.0.
