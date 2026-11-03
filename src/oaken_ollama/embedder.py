@@ -8,13 +8,14 @@ import httpx2
 from oaken.core.errors import PluginError
 from oaken.plugins.base import BaseEmbedder
 from oaken.plugins.contracts import Health, PluginContext
+from oaken.plugins.kit import default_model
 from oaken_ollama.client import OllamaClient, OllamaConfig, check_url
 
 
 class OllamaEmbedder(BaseEmbedder):
-    """Registered as ``oaken.embedders: ollama``. The model is ``ai.embed_model`` unless
-    ``[plugins.ollama] model`` overrides it. ``start`` confirms the model is installed, reads its
-    context length and embeds one probe text to learn the vector size."""
+    """Registered as ``oaken.embedders: ollama``. The model is ``ai.embed_model`` (the one place a
+    model is named). ``start`` confirms the model is installed, reads its context length and embeds
+    one probe text to learn the vector size."""
 
     config_model = OllamaConfig
 
@@ -26,7 +27,7 @@ class OllamaEmbedder(BaseEmbedder):
         await super().start(ctx)
         cfg = self.config  # parsed by _Base from config_model
         check_url(cfg.base_url, ctx.settings.ai.allow_remote, ctx.name)
-        self.model_id = cfg.model or ctx.settings.ai.embed_model
+        self.model_id = default_model(ctx, "embed_model")
         self._client = OllamaClient(cfg, ctx.name, transport=self._transport)
         try:
             await self._client.require_model(self.model_id)

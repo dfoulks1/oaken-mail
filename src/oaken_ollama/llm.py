@@ -10,6 +10,7 @@ from oaken.ai.prompts import render_user
 from oaken.core.errors import PluginError
 from oaken.plugins.base import BaseLLMBackend
 from oaken.plugins.contracts import Health, LLMRequest, LLMResponse, PluginContext
+from oaken.plugins.kit import default_model
 from oaken_ollama.client import OllamaClient, OllamaConfig, check_url
 
 
@@ -30,7 +31,7 @@ class OllamaLLM(BaseLLMBackend):
         cfg = self.config  # parsed by _Base from config_model (set below)
         local = check_url(cfg.base_url, ctx.settings.ai.allow_remote, ctx.name)
         self.locality = "local" if local else "remote"
-        self.model_id = cfg.model or ctx.settings.ai.llm_model
+        self.model_id = default_model(ctx, "llm_model")
         self._client = OllamaClient(cfg, ctx.name, transport=self._transport)
         try:
             await self._client.require_model(self.model_id)

@@ -28,6 +28,12 @@ class _Access:
     async def list(self, message_id: str) -> list[AttachmentRef]:
         return self.refs
 
+    async def copy_to(
+        self, message_id: str, part_path: str, out: Any, *, max_bytes: int = 0
+    ) -> int | None:
+        # the scan tests here never release; save is covered in oaken_actions/tests
+        raise NotImplementedError
+
     @contextlib.asynccontextmanager
     async def scanning(self, message_id: str, part_path: str):  # type: ignore[no-untyped-def]
         if self.on_route != "scan":

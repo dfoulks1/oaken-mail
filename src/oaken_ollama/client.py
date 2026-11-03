@@ -29,7 +29,6 @@ class OllamaConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     base_url: str = DEFAULT_URL
-    model: str = ""  # empty: use ai.embed_model / ai.llm_model
     keep_alive: str = "5m"  # how long Ollama keeps the model loaded after a call
     timeout: float = Field(default=120.0, gt=0)  # seconds, per request
     max_retries: int = Field(default=2, ge=0, le=10)  # extra tries after a connection error / 5xx

@@ -92,11 +92,15 @@ def context(
     name: str = "ollama",
     config: dict[str, Any] | None = None,
     allow_remote: bool = False,
+    llm_model: str = "qwen2.5:3b",
+    embed_model: str = "nomic-embed-text",
 ) -> PluginContext:
     return PluginContext(
         name=name,
         kind=kind,
-        settings=Settings(ai=AISettings(allow_remote=allow_remote)),
+        settings=Settings(
+            ai=AISettings(allow_remote=allow_remote, llm_model=llm_model, embed_model=embed_model)
+        ),
         clock=FakeClock(),
         log=get_logger("test"),
         config={"backoff": 0, **(config or {})},

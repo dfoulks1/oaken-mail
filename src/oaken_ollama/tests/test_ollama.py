@@ -134,10 +134,17 @@ async def test_the_llm_discovers_its_context_window(ollama: FakeOllama) -> None:
     assert llm.model_id == "qwen2.5:3b" and llm.context_window == 32768
 
 
-async def test_the_model_can_be_overridden_per_plugin(ollama: FakeOllama) -> None:
+async def test_the_model_is_inherited_from_ai_not_the_plugin_table(ollama: FakeOllama) -> None:
+    # one default, in [ai]: the backend reads ai.llm_model and keeps none of its own.
     ollama.tags = {"models": [{"name": "other:7b"}]}
-    llm = await started_llm(ollama, config={"model": "other:7b"})
+    llm = await started_llm(ollama, llm_model="other:7b")
     assert llm.model_id == "other:7b"
+
+
+async def test_a_model_key_in_the_plugin_table_is_rejected(ollama: FakeOllama) -> None:
+    # the plugin table only tunes the connection; naming a model there is a config error now.
+    with pytest.raises(PluginError, match="model"):
+        await started_llm(ollama, config={"model": "other:7b"})
 
 
 # -- embedding ---------------------------------------------------------------------------------

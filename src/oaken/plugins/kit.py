@@ -17,6 +17,14 @@ from oaken.plugins.contracts import CleanMessage, LLMAccess, PluginContext
 CUT_MARKER = "\n[... the middle of this message was cut to fit the size limit ...]\n"
 
 
+def default_model(ctx: PluginContext, setting: str) -> str:
+    """The model a model-running plugin starts with, from the one place it is set: ``[ai]``.
+    ``setting`` names the field (``llm_model`` for a chat backend, ``embed_model`` for an embedder),
+    so the backend and the embedder read the single default the same way and keep none of their own.
+    A per-call ``model`` (an analyzer's ``model_for``, an agent) still overrides it downstream."""
+    return str(getattr(ctx.settings.ai, setting))
+
+
 def header_values(msg: CleanMessage) -> dict[str, tuple[str, ...]]:
     """Every header as plain strings, for rules only (never passed to a model)."""
     return {k: tuple(v.unwrap() for v in vals) for k, vals in msg.raw_headers.items()}
