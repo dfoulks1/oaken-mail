@@ -6,7 +6,12 @@
   plugins), built first, in that order
 - Amends: ADR 0012 (the plugin context gains two scoped capabilities; the no-database-handle
   boundary stays) and ADR 0015 (where the rule and level operations live, and the CLI wizard)
-- Built: not started. Queued in `TODO.md` ("Move the triage rule operations into the `rules` plugin").
+- Built: 2026-11-03, not yet verified by the owner's checks: the `store` (declarative, no SQL),
+  `folders` and `draft` capabilities (`core/plugin_store.py`), the rules plugin's own operations
+  (`rules.*`, over its staged draft) and the levels as `BaseTriager` operations over one table of the
+  kind, and the removal of core's rule and level operations, `TriageStore`, `oaken rule` and
+  `oaken level`. Not built: grants (mechanism unidentified), a CLI wizard that walks a page, and
+  `rules.test` against stored mail (a plugin gets none, so it checks the rule as typed).
 
 ## Context
 

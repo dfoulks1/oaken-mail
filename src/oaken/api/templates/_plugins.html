@@ -2,7 +2,6 @@
 {#- Shared pieces for the pages that list plugins: a stage's controls, a kind's plugin table and the
     settings dialogs. Import with context: they read pipeline, plugins and models. -#}
 {% import "_macros.html" as m with context %}
-{% import "_triage_rules.html" as tr with context %}
 
 {% macro setting(plugin, field, spec, val, row) %}
   {% set kinds = (spec.anyOf | map(attribute="type") | list) if spec.anyOf else [spec.type] %}
@@ -255,7 +254,14 @@
         </tbody></table>
       </div>
       {% endif %}
-      {% if c.kind == "triager" and c.name == "rules" and triage is defined %}<div class="dialog-body">{{ tr.manage(back) }}</div>{% endif %}
+      {% if c.ui and (c.ui.pages or c.ui.buttons) %}
+      <div class="dialog-body row">
+        {% for pg in c.ui.pages %}<a class="btn btn-sm" href="/plugins/{{ c.kind }}/{{ c.name }}/{{ pg.name }}">{{ pg.title }}</a>{% endfor %}
+        {% for b in c.ui.buttons %}
+          {% call m.post("plugin-button", back) %}<input type="hidden" name="kind" value="{{ c.kind }}"><input type="hidden" name="plugin" value="{{ c.name }}"><input type="hidden" name="operation" value="{{ b.operation }}"><button class="btn btn-sm" type="submit" title="{{ b.confirm }}">{{ b.label }}</button>{% endcall %}
+        {% endfor %}
+      </div>
+      {% endif %}
       <form method="post" action="/ui/plugin-settings">
         {{ m.guard(back) }}<input type="hidden" name="plugin" value="{{ c.name }}"><input type="hidden" name="kind" value="{{ c.kind }}">
         <div class="dialog-body">

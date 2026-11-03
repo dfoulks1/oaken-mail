@@ -56,6 +56,9 @@ spamcheck = "oaken_triagers:SpamCheckTriager"
 rules = "oaken_triagers:CustomRulesTriager"
 ai = "oaken_triagers:AITriager"
 
+[project.entry-points."oaken.actions"]
+attachment = "oaken_actions:AttachmentAction"
+
 [project.entry-points."oaken.enrichers"]
 summary = "oaken_enrichers:SummaryEnricher"
 actions = "oaken_enrichers:ActionsEnricher"
@@ -89,7 +92,7 @@ build-backend = "hatchling.build"
 path = "src/oaken/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/oaken", "src/oaken_vec_sqlite", "src/oaken_ollama", "src/oaken_gmail", "src/oaken_smtp", "src/oaken_imap", "src/oaken_enrichers", "src/oaken_triagers"]
+packages = ["src/oaken", "src/oaken_vec_sqlite", "src/oaken_ollama", "src/oaken_gmail", "src/oaken_smtp", "src/oaken_imap", "src/oaken_enrichers", "src/oaken_triagers", "src/oaken_actions"]
 exclude = ["**/tests/**"]
 
 [dependency-groups]
@@ -185,6 +188,7 @@ root_packages = [
     "oaken_vec_sqlite",
     "oaken_enrichers",
     "oaken_triagers",
+    "oaken_actions",
 ]
 
 # 1. Core never imports a feature plugin or a client (ADR 0002: "core never imports provider code").
@@ -201,6 +205,7 @@ forbidden_modules = [
     "oaken_vec_sqlite",
     "oaken_enrichers",
     "oaken_triagers",
+    "oaken_actions",
 ]
 # Only core test modules may reference a plugin package (the shared ProviderContract rig does).
 ignore_imports = ["oaken.**.tests.** -> **"]
@@ -258,6 +263,7 @@ source_modules = [
     "oaken_vec_sqlite",
     "oaken_enrichers",
     "oaken_triagers",
+    "oaken_actions",
 ]
 forbidden_modules = [
     "oaken.api",
@@ -278,6 +284,7 @@ ignore_imports = [
     "oaken_vec_sqlite.tests.** -> **",
     "oaken_enrichers.tests.** -> **",
     "oaken_triagers.tests.** -> **",
+    "oaken_actions.tests.** -> **",
 ]
 
 [[tool.mypy.overrides]]

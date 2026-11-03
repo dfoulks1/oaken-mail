@@ -270,7 +270,7 @@ class Api:
             Route("/getting_started", _moved("/getting-started"), methods=["GET"]),
             Route("/pipeline", safe(self.pipeline_page), methods=["GET"]),
             Route("/triage", safe(self.triage_page), methods=["GET"]),
-            Route("/triage/rules/new", safe(self.new_rule_page), methods=["GET"]),
+            Route("/plugins/{kind}/{name}/{page}", safe(self.plugin_page), methods=["GET"]),
             Route("/embed", safe(self.embed_page), methods=["GET"]),
             Route("/enrich", safe(self.enrich_page), methods=["GET"]),
             Route("/action", safe(self.action_page), methods=["GET"]),
@@ -373,15 +373,6 @@ class Api:
                 out.add("enrich")
         return out
 
-    async def _triage_view(self) -> dict[str, Any]:
-        """The reader's rules, levels and state for the Triage page (counts and rules only)."""
-        op = self.console.op
-        return {
-            "rules": (await op("triage_rules", {})).rules,
-            "levels": (await op("triage_levels", {})).levels,
-            "state": await op("triage_drift", {}),
-        }
-
     async def _stage_page(
         self, request: Request, kind: str, stage: str, label: str, plural: str
     ) -> Response:
@@ -422,8 +413,6 @@ class Api:
                     "restores the default.",
                 }
             )
-        if stage == "triage":
-            data["triage"] = await self._triage_view()
         if stage == "action":
             listed = await self.console.op("list_actions", {})
             data["action_waiting"], data["action_recent"] = listed.waiting, listed.recent
@@ -439,10 +428,8 @@ class Api:
     async def triage_page(self, request: Request) -> Response:
         return await self._stage_page(request, "triager", "triage", "Triage", "Triagers")
 
-    async def new_rule_page(self, request: Request) -> Response:
-        """The form for one new triage rule: it stages the rule, and Apply is in the rules dialog."""
-        data = {"triage": await self._triage_view()}
-        return self.console.render(request, "triage_rule_new.html", "triage", data)
+    async def plugin_page(self, request: Request) -> Response:
+        return await self.console.plugin_page(request)
 
     async def embed_page(self, request: Request) -> Response:
         return await self._stage_page(request, "embedder", "embed", "Embed", "Embedders")
@@ -499,6 +486,7 @@ class Api:
     # The Pipeline page: the plugins behind the stages, one kind per tab.
     PIPELINE_PARTS: ClassVar[dict[str, frozenset[str]]] = {
         "provider": frozenset({"plugins", "schedules", "accounts", "settings"}),
+        "sieve": frozenset(),
         "llm_backend": frozenset({"plugins", "models", "usage", "settings"}),
         "vector_store": frozenset({"plugins", "settings"}),
         "cache_store": frozenset({"plugins", "settings"}),
@@ -511,7 +499,19 @@ class Api:
         data["usage_rows"] = [
             r for r in data.get("usage_rows", []) if self._usage_stage(r["stage"]) == "pipeline"
         ]
+        if tab == "sieve":
+            data["sieve"] = await self._sieve_view(request.query_params.get("script", ""))
         return self.console.render(request, "pipeline.html", "pipeline", data)
+
+    async def _sieve_view(self, chosen: str) -> dict[str, Any]:
+        """The Sieve scripts on disk (names and problems, never mail) and, for ``?script=NAME``,
+        that script's text for the editor."""
+        op = self.console.op
+        listed = await op("sieve_list", {})
+        view: dict[str, Any] = {"list": listed, "open": None}
+        if chosen and any(s.name == chosen for s in listed.scripts):
+            view["open"] = await op("sieve_get", {"name": chosen})
+        return view
 
     async def general(self, request: Request) -> Response:
         """General (ADR 0013). Loopback-only (the Host guard) and unauthenticated like

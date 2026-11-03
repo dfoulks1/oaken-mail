@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The quarantine folder: where attachments flagged as risky are put, and never opened.
 
-Core only ever *writes* here. It never reads a quarantined file back, never parses it and never
+The ``attachment`` action only ever *writes* here (ADR 0019). It never reads a quarantined file back, never parses it and never
 hands it to a model; the user decides what to do with it (usually: delete it). The folder and
 the folders inside it are owner-only (0700, so the owner can list them) and every file is 0600:
 no execute bit, and the name ends in ``.quarantined`` so a file manager does not open it by
@@ -18,10 +18,8 @@ from pathlib import Path
 from oaken.core.errors import StorageError
 from oaken.core.ids import MessageId
 from oaken.core.logging import get_logger
-from oaken.core.paths import data_dir
-from oaken.core.settings import AttachmentSettings
 
-log = get_logger("oaken.quarantine")
+log = get_logger("oaken.action.attachment")
 
 SUFFIX = ".quarantined"
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
@@ -113,9 +111,3 @@ def _chmod(path: Path, mode: int) -> None:
 def _private_dir(path: Path) -> None:
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     _chmod(path, 0o700)
-
-
-def quarantine_dir(settings: AttachmentSettings) -> Path:
-    """The configured folder: absolute as given, else under the data folder."""
-    p = Path(settings.quarantine_dir).expanduser()
-    return p if p.is_absolute() else data_dir() / p

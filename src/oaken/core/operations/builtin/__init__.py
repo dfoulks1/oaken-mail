@@ -18,7 +18,6 @@ from oaken.core.operations.builtin import (
     settings_ops,
     system,
     trace,
-    triage_rules,
     workspaces,
 )
 from oaken.core.operations.registry import AnyOperation, OperationRegistry
@@ -41,7 +40,6 @@ def core_operations() -> tuple[AnyOperation, ...]:
         *config.OPERATIONS,
         *settings_ops.OPERATIONS,
         *maintenance.OPERATIONS,
-        *triage_rules.OPERATIONS,
         *trace.OPERATIONS,
         *workspaces.OPERATIONS,
     )

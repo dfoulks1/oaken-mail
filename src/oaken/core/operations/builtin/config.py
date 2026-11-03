@@ -358,15 +358,6 @@ async def config_reload(ctx: OpContext, inp: Empty) -> ReloadResult:
         check = _validate(on_disk.read_text(encoding="utf-8"))
         if not check.ok:
             return ReloadResult(ok=False, requested=False, error=check.error)
-    if ctx.svc.triage is not None:  # staged triage edits are written to the file with the reload
-        from oaken.core.operations.builtin.triage_rules import apply_staged
-
-        try:
-            await apply_staged(ctx, ctx.svc.triage)
-        except OakenError as exc:
-            # A hand edit is in the way (the batch would overwrite it): the reload still goes
-            # ahead, on the last known good rules, and the edits stay staged (`oaken rule`).
-            get_logger("oaken.triage").info("staged triage edits not written", reason=str(exc))
     sighup = getattr(signal, "SIGHUP", None)
     if sighup is None:  # Windows: no in-place reload signal
         return ReloadResult(

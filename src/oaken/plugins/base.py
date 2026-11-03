@@ -22,9 +22,10 @@ import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Sequence
 from typing import Any, ClassVar, Literal, TypeVar
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from oaken.core.errors import InvalidInput, OakenError, PluginError
+from oaken.core.triage import BUILTIN_LEVELS
 from oaken.core.trace import brief, trace_context
 from oaken.plugins.adapt import to_enrich_output
 from oaken.plugins.authorize import Authorizations
@@ -44,6 +45,8 @@ from oaken.plugins.contracts import (
     PluginKind,
     PluginOpContext,
     PluginOperation,
+    PluginTable,
+    UiSpec,
     PullBatch,
     TriageVerdict,
     VectorItem,
@@ -203,6 +206,16 @@ class BasePlugin:
     # Settings the plugin cannot run without (``("base_url",)``). While its table lacks any of them
     # the host leaves it switched off, with the reason shown, and starts it when they are set.
     requires_config: ClassVar[tuple[str, ...]] = ()
+    # What the plugin owns (ADR 0016): tables core creates for it as ``<kind>_<name>_<table>``
+    # (``ctx.store``), and folders core provisions under ``OAKEN_HOME/plugins/<kind>/<name>/``
+    # (``ctx.folders``). Declare nothing and the plugin has neither.
+    tables: ClassVar[tuple[PluginTable, ...]] = ()
+    folders: ClassVar[tuple[str, ...]] = ()
+    def ui(self) -> UiSpec | None:
+        """The plugin's web UI as data (ADR 0018): settings sections, buttons and pages. None: the
+        settings modal is built from the config schema alone. Optional, additive."""
+        return None
+
     ctx: PluginContext  # set by start()
     config: Any = None  # the parsed config_model instance, set by start() when config_model is set
 
@@ -466,6 +479,29 @@ class BaseEnricher(BaseAnalyzer):
         raise NotImplementedError
 
 
+class LevelsIn(BaseModel):
+    pass
+
+
+class Level(BaseModel):
+    value: int
+    name: str
+    builtin: bool
+
+
+class LevelsOut(BaseModel):
+    levels: list[Level]
+
+
+class LevelSetIn(BaseModel):
+    value: int = Field(ge=4, le=99)
+    name: str = Field(min_length=1, max_length=40)
+
+
+class LevelRemoveIn(BaseModel):
+    value: int = Field(ge=4, le=99)
+
+
 class BaseTriager(BaseAnalyzer):
     """The first step of the pipeline: rate a message so core can decide what else it is owed.
     This is the deterministic kind: override ``triage`` to return the verdict (a
@@ -476,6 +512,59 @@ class BaseTriager(BaseAnalyzer):
 
     kind: ClassVar[PluginKind] = "triager"
     rank: ClassVar[int] = 50
+    # The levels (a number and a name; 0 to 3 are built in, the reader's own start at 4) are one set
+    # for every triager, coordinated here (ADR 0016): a table of the kind, not of one plugin.
+    kind_tables: ClassVar[tuple[PluginTable, ...]] = (
+        PluginTable("levels", {"value": "int", "name": "text"}),
+    )
+
+    async def level_table(self) -> dict[int, str]:
+        """Every level now defined, by number: the built-in ones and the reader's own."""
+        store = self.ctx.store
+        custom = await store.find("levels", order_by="value") if store else []
+        return {**BUILTIN_LEVELS, **{int(r["value"]): str(r["name"]) for r in custom}}
+
+    def operations(self) -> list[PluginOperation]:
+        """The level operations, offered by every triager over the one shared set."""
+        return [
+            PluginOperation("levels", "List the triage levels: built in and the reader's own.",
+                            "read", LevelsIn, LevelsOut, self._levels),
+            PluginOperation("level_set", "Add a triage level (4 to 99), or rename one of yours.",
+                            "mutate", LevelSetIn, LevelsOut, self._level_set),
+            PluginOperation("level_remove", "Remove one of your triage levels.",
+                            "mutate", LevelRemoveIn, LevelsOut, self._level_remove),
+        ]  # fmt: skip
+
+    async def _levels(self, ctx: PluginOpContext, inp: "LevelsIn") -> "LevelsOut":
+        return self._out(await self.level_table())
+
+    @staticmethod
+    def _out(table: dict[int, str]) -> "LevelsOut":
+        return LevelsOut(levels=[Level(value=v, name=n, builtin=v in BUILTIN_LEVELS)
+                                 for v, n in sorted(table.items())])  # fmt: skip
+
+    async def _level_set(self, ctx: PluginOpContext, inp: "LevelSetIn") -> "LevelsOut":
+        store = ctx.store
+        if store is None:
+            raise PluginError("levels need the plugin store")
+        if inp.value in BUILTIN_LEVELS:
+            raise PluginError(f"level {inp.value} is built in")
+        have = await store.find("levels", {"value": inp.value})
+        if have:
+            await store.update("levels", have[0]["uid"], {"name": inp.name.strip()})
+        else:
+            await store.insert("levels", {"value": inp.value, "name": inp.name.strip()})
+        return self._out(await self.level_table())
+
+    async def _level_remove(self, ctx: PluginOpContext, inp: "LevelRemoveIn") -> "LevelsOut":
+        store = ctx.store
+        if store is None:
+            raise PluginError("levels need the plugin store")
+        if inp.value in BUILTIN_LEVELS:
+            raise PluginError(f"level {inp.value} is built in")
+        for row in await store.find("levels", {"value": inp.value}):
+            await store.delete("levels", row["uid"])
+        return self._out(await self.level_table())
 
     @_default
     async def triage(self, msg: CleanMessage) -> TriageVerdict | None:
@@ -497,6 +586,9 @@ class BaseAction(BaseAnalyzer):
 
     kind: ClassVar[PluginKind] = "action"
     routes: ClassVar[tuple[str, ...]] = ()
+    # Routes that run without waiting for the person unless the reader sets ``approval = "ask"``
+    # in the plugin's table. Only for work that is safe to do unasked (a private copy).
+    auto_routes: ClassVar[tuple[str, ...]] = ()
 
     @_default
     async def act(self, msg: CleanMessage, route: str) -> ActionResult | None:

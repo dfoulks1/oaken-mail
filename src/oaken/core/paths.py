@@ -79,6 +79,12 @@ def data_dir() -> Path:
     return _ensure(home / "data" if home else Path(platformdirs.user_data_dir(APP)))
 
 
+def plugins_dir() -> Path:
+    """Folders plugins own, ``<kind>/<name>/<folder>`` beneath it (ADR 0016)."""
+    home = _home()
+    return _ensure(home / "plugins" if home else Path(platformdirs.user_data_dir(APP)) / "plugins")
+
+
 def config_dir() -> Path:
     """``config.toml`` lives here."""
     home = _home()

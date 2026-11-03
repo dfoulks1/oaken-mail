@@ -25,7 +25,6 @@ from oaken.core.settings import Settings
 from oaken.core.trace import Tracer
 from oaken.index import Indexer, IndexStore
 from oaken.ingest import Pipeline, UsageStore
-from oaken.core.triage_store import TriageStore
 from oaken.ingest.pipeline_control import PipelineControl
 from oaken.ingest.schedule import SyncService
 from oaken.plugins.contracts import CacheOps
@@ -59,7 +58,6 @@ class Services:
     plugins: PluginHost | None = None
     llm: LLMService | None = None
     pipeline_control: PipelineControl | None = None
-    triage: TriageStore | None = None  # the reader's triage levels and rules
     retrieval: Retrieval | None = None  # built from the pipeline when not given
     agents: AgentRegistry | None = None
     mailbox: MailboxStore | None = None  # built on first use from raw, attrs and the indexer
@@ -81,9 +79,6 @@ class Services:
 
     def need_sync(self) -> SyncService:
         return need(self.sync, "the sync scheduler")
-
-    def need_triage(self) -> TriageStore:
-        return need(self.triage, "the triage rules")
 
     def need_pipeline_control(self) -> PipelineControl:
         return need(self.pipeline_control, "the pipeline control")

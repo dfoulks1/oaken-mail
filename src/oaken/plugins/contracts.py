@@ -11,9 +11,10 @@ tuples are accepted and coerced into these types) and strict about what it hands
 """
 
 import re
-from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel
@@ -123,6 +124,76 @@ def _not_tracing() -> bool:
     return False
 
 
+# -- capabilities (ADR 0016): each scoped to the one plugin holding it ---------------------------
+_COLUMN_TYPES = ("text", "int", "real", "bool", "json")
+
+
+@dataclass(frozen=True)
+class PluginTable:
+    """A table a plugin owns. Core creates ``<kind>_<name>_<table>`` in its database and adds the
+    columns below to the three every table has: ``uid`` (uuid7), ``created_at``, ``updated_at``.
+    A column type is one of text, int, real, bool or json. A reference to a message, a rule or
+    another record is a text column holding a UID: never a foreign key across an owner."""
+
+    name: str
+    columns: Mapping[str, str]
+
+
+class PluginStore(Protocol):
+    """A plugin's own tables, by name. Declarative on purpose: no SQL, no other plugin's data."""
+
+    async def insert(self, table: str, row: Mapping[str, Any]) -> dict[str, Any]: ...
+
+    async def get(self, table: str, uid: str) -> dict[str, Any] | None: ...
+
+    async def find(
+        self, table: str, where: Mapping[str, Any] | None = None, *, order_by: str = "created_at",
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]: ...
+
+    async def update(self, table: str, uid: str, fields: Mapping[str, Any]) -> dict[str, Any]: ...
+
+    async def delete(self, table: str, uid: str) -> bool: ...
+
+
+@dataclass(frozen=True)
+class AttachmentRef:
+    """One attachment of a message, as an action sees it: where it sits and what it is called. The
+    bytes come from ``PluginAttachments.read``. ``quarantine`` says core flagged it as risky."""
+
+    part_path: str
+    filename: str | None
+    content_type: str
+    size: int
+    quarantine: bool
+
+
+class PluginAttachments(Protocol):
+    """An action's door to attachment bytes (ADR 0019). Only action plugins have it. A flagged
+    attachment is readable only while the running job is the ``quarantine`` route, so a flagged
+    file is never extracted by anything but that deliberate, approved step."""
+
+    async def list(self, message_id: str) -> list[AttachmentRef]: ...
+
+    async def read(self, message_id: str, part_path: str) -> bytes: ...
+
+
+class PluginDraft(Protocol):
+    """The staged copy of the plugin's own ``config.toml`` table. The plugin reads and replaces it;
+    core validates it against ``config_model``, writes the file once with one backup, and reloads
+    the plugin."""
+
+    async def get(self) -> dict[str, Any] | None: ...
+
+    async def set(self, values: Mapping[str, Any]) -> None: ...
+
+    async def discard(self) -> None: ...
+
+    async def apply(self) -> None: ...
+
+    async def drift(self) -> bool: ...
+
+
 @dataclass(frozen=True)
 class PluginContext:
     """Handed to ``start()``. ``config`` is the plugin's own ``[plugins.<kind>.<name>]`` table."""
@@ -147,6 +218,11 @@ class PluginContext:
     # Both do nothing in a context built without a tracer.
     trace: Callable[..., None] = _no_trace
     tracing: Callable[[], bool] = _not_tracing
+    # The capabilities (ADR 0016); None or empty in a context built without core's services.
+    store: PluginStore | None = None
+    folders: Mapping[str, Path] = field(default_factory=dict)
+    draft: PluginDraft | None = None
+    attachments: PluginAttachments | None = None  # action plugins only
     _subscriptions: list[Callable[[], None]] = field(
         default_factory=list, repr=False, compare=False
     )
@@ -203,6 +279,9 @@ class PluginOpContext:
     config: dict[str, Any]
     clock: Clock
     log: Any
+    store: PluginStore | None = None
+    folders: Mapping[str, Path] = field(default_factory=dict)
+    draft: PluginDraft | None = None
 
 
 @dataclass(frozen=True)
@@ -251,6 +330,72 @@ class PluginOperation:
     # means the only account this plugin has. Offered even while the plugin is unhealthy or not
     # set up, because that is when you need it (signing in).
     per_account: bool = False
+
+
+# -- A plugin's web UI, as data (ADR 0018) -----------------------------------------------------
+# A plugin declares its UI in ``ui()`` as these plain dataclasses and never sends markup. Core owns
+# the chrome, the escaping, the length caps, the CSRF token and the CSP. A button or page names the
+# plugin's own operations, and core refuses any other.
+
+
+@dataclass(frozen=True)
+class UiField:
+    """One input of a page. ``kind`` is text, number, bool, enum (``choices``) or list (one string a
+    line). ``name`` is the key in the page's ``load`` values and in what ``test`` and ``submit``
+    receive."""
+
+    name: str
+    label: str = ""
+    kind: Literal["text", "number", "bool", "enum", "list"] = "text"
+    choices: tuple[str, ...] = ()
+    help: str = ""
+    required: bool = False
+
+
+@dataclass(frozen=True)
+class UiButton:
+    """A button on a plugin's settings modal: runs one of the plugin's own operations, which takes
+    no input."""
+
+    label: str
+    operation: str
+    confirm: str = ""
+
+
+@dataclass(frozen=True)
+class UiSection:
+    """A titled group of the plugin's config fields, in the settings modal."""
+
+    title: str
+    fields: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class UiPage:
+    """A page core serves at ``/plugins/<plugin>/<name>`` and renders as a form.
+
+    ``load`` is a read operation of the plugin with no input; it returns
+    ``{"values": {field: value}, "messages": [str], "rows": [{"id", "label"}]}`` (each part
+    optional). ``test`` (read) and ``submit`` (the plugin's own, a mutate is confirmed) take the
+    typed fields as input. With ``order`` set, the page lists ``rows`` in order, each with a position
+    box (1 to n), and Update calls the operation ``order`` with ``{"order": [row ids]}``: a row
+    whose number changed goes there and the others shift to make room (ADR 0018, 4a)."""
+
+    name: str
+    title: str
+    load: str
+    submit: str = ""
+    fields: tuple[UiField, ...] = ()
+    test: str = ""
+    confirm: str = ""
+    order: str = ""
+
+
+@dataclass(frozen=True)
+class UiSpec:
+    sections: tuple[UiSection, ...] = ()
+    buttons: tuple[UiButton, ...] = ()
+    pages: tuple[UiPage, ...] = ()
 
 
 # -- Job kinds a plugin offers -----------------------------------------------------------------

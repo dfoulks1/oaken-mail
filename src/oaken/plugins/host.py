@@ -11,7 +11,7 @@ Plugins run in-process with full access and are not sandboxed in v1.
 import asyncio
 import contextlib
 import inspect
-from collections.abc import AsyncIterator, Callable, Iterable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from importlib.metadata import EntryPoint, entry_points
 from typing import Any, cast
@@ -42,6 +42,7 @@ from oaken.plugins.contracts import (
     PluginJobHandler,
     PluginKind,
     PluginOpContext,
+    UiSpec,
     PluginOperation,
     PluginScheduledTask,
     PluginStage,
@@ -50,6 +51,7 @@ from oaken.plugins.contracts import (
     Triager,
     VectorStore,
 )
+from oaken.plugins.ui import check_ui
 from oaken.plugins.validate import (
     check_plugin,
     check_started,
@@ -190,6 +192,9 @@ class PluginHost:
         # Settings core keeps in its own tables (the reader's triage rules): merged over the
         # [plugins] table when a plugin starts. ``(kind, name) -> table``.
         self.runtime_config: Callable[[str, str], dict[str, Any]] = lambda _kind, _name: {}
+        # Set by core: ``(kind, name, instance) -> {store, folders, draft}``, the capabilities
+        # (ADR 0016) added to a plugin's context when it starts. None: a plugin gets none.
+        self.provision: Callable[[str, str, Any], Awaitable[dict[str, Any]]] | None = None
 
     # -- lifecycle ---------------------------------------------------------------------------
     async def load(self) -> None:
@@ -340,6 +345,13 @@ class PluginHost:
             await self._announce(rec)
             return
         config.pop("enabled", None)
+        try:
+            caps = await self.provision(rec.kind, rec.name, rec.instance) if self.provision else {}
+        except Exception as exc:  # a bad table declaration is the plugin's, not core's
+            rec.started, rec.healthy, rec.detail = False, False, f"tables or folders failed: {exc}"
+            log.error("plugin capabilities failed", kind=rec.kind, name=rec.name, error=str(exc))
+            await self._announce(rec)
+            return
         ctx = PluginContext(
             name=rec.name,
             kind=rec.kind,
@@ -350,6 +362,7 @@ class PluginHost:
             bus=self.bus,
             account_id=rec.account_id,
             llm=_HostLLM(self),
+            **caps,
             **self._trace_hooks(),
         )
         rec.ctx = ctx
@@ -731,6 +744,9 @@ class PluginHost:
                     config=dict(rec.ctx.config),
                     clock=self.clock,
                     log=rec.ctx.log,
+                    store=rec.ctx.store,
+                    folders=rec.ctx.folders,
+                    draft=rec.ctx.draft,
                 )
         raise NotFound(f"no account {account_id!r} of plugin {plugin!r}")
 
@@ -745,6 +761,9 @@ class PluginHost:
                     config=dict(rec.ctx.config),
                     clock=self.clock,
                     log=rec.ctx.log,
+                    store=rec.ctx.store,
+                    folders=rec.ctx.folders,
+                    draft=rec.ctx.draft,
                 )
         raise NotFound(f"plugin {plugin!r} is not running")
 
@@ -821,6 +840,24 @@ class PluginHost:
                 if isinstance(d, PluginScheduledTask)
             )
         return out
+
+    def plugin_ui(self, kind: PluginKind, name: str) -> UiSpec | None:
+        """The plugin's declared web UI, or None. A ``ui()`` that raises or is malformed is logged
+        and ignored, so the settings modal falls back to the schema and the plugin stays healthy."""
+        rec = self._records.get((kind, name))
+        fn = getattr(rec.instance, "ui", None) if rec and rec.instance is not None else None
+        if not callable(fn):
+            return None
+        try:
+            spec = fn()
+            problems = check_ui(spec)
+        except Exception as exc:  # noqa: BLE001 - plugin code
+            log.error("plugin ui failed", kind=kind, name=name, error=type(exc).__name__)
+            return None
+        if problems:
+            log.error("plugin ui refused", kind=kind, name=name, problems=problems)
+            return None
+        return cast("UiSpec | None", spec)
 
     def config_schema(self, kind: PluginKind, name: str) -> dict[str, Any] | None:
         """JSON Schema of a plugin's settings, if it declares ``config_model`` (pydantic)."""

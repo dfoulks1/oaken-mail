@@ -27,7 +27,20 @@ Makes a fresh install usable without reading the docs.
   `ai.ask_model`, `ai.ask_context_tokens` and `search.ask_*` (a `config.toml` that sets them must
   drop them). A model with MCP reads the mail through `search`, `get_message`, `get_enrichment`,
   `get_triage` and `get_action`.
-- The swarm agent wire is unchanged in this release, though the verdict is stored apart.
+- The swarm agent wire keeps its answer shape; a triage entry in an offer is keyed `triager`.
+  Triage runs as a lazy chain of jobs, `ingest.triage` then `ingest.triage.<name>` (ADR 0017).
+- `oaken rule` and `oaken level` are gone, and so are the `triage_rule_*` and `triage_level_*`
+  operations and the `[triage]` section. Rules live in `[plugins.triager.rules]` and are edited with
+  `oaken rules ...` (the `rules` plugin's own operations: `list`, `add`, `update`, `remove`, `order`,
+  `test`, `apply`, `discard`); levels with `oaken rules levels` (every triager offers them over one
+  shared set). A `[triage]` section still works, with a warning. Migration 0023 drops the unreleased
+  core rule tables (ADR 0016).
+- Plugins gain `ui()` (pages, buttons) and the `store`, `folders` and `draft` capabilities; an
+  action gains `attachments` (ADR 0016, 0018, 0019).
+- Quarantine is the `attachment` action's (`oaken_actions`, `[plugins.action.attachment]`). Core no
+  longer writes it: it queues the `quarantine` route for a flagged attachment when the action is
+  installed, and the files are under `OAKEN_HOME/plugins/action/attachment/quarantine`.
+  `[mail.attachments] quarantine_dir` is no longer read.
 
 ### Added
 

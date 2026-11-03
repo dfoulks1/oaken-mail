@@ -27,7 +27,6 @@ from oaken.core.operations.builtin import core_registry
 from oaken.core.operations.plugin_ops import plugin_operations
 from oaken.core.operations.registry import AnyOperation
 from oaken.core.settings import OperationsSettings, Settings, SwarmSettings, SyncSettings
-from oaken.core.triage_store import TriageStore
 from oaken.ingest.pipeline_control import PipelineControl
 from oaken.ingest.schedule import SyncService
 from oaken.plugins.accounts import AccountProviders
@@ -197,7 +196,6 @@ async def build_ops(
             pipeline=rig.pipeline, indexer=rig.indexer, usage=rig.usage, sync=sync,
             plugins=host, llm=llm, version="test",
             pipeline_control=PipelineControl(rig.raw_db, rig.clock, rs.audit),
-            triage=TriageStore(rig.raw_db, rig.clock),
             agents=AgentRegistry(rig.raw_db, rig.clock, settings.swarm, rig.bus),
         )  # fmt: skip
         registry = core_registry()

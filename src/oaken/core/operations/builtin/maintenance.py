@@ -14,6 +14,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from oaken.core.errors import Conflict, StorageError
+from oaken.core.plugin_store import folder_stats
 from oaken.core.maintenance import check_room, enqueue_vacuum, file_bytes
 from oaken.core.operations.builtin.mail import QueuedOutput
 from oaken.core.operations.context import OpContext
@@ -48,8 +49,7 @@ class StorageInfo(BaseModel):
 )
 async def storage_info(ctx: OpContext, inp: Empty) -> StorageInfo:
     raw, index = ctx.svc.raw.db.path, ctx.svc.index.db.path
-    quarantine = ctx.svc.pipeline.quarantine if ctx.svc.pipeline is not None else None
-    stats = quarantine.stats() if quarantine is not None else None
+    qdir, qfiles, qbytes = folder_stats("action", "attachment", "quarantine")
     wal = sum(file_bytes(Path(f"{p}-wal")) for p in (raw, index))
     return StorageInfo(
         data_dir=str(raw.parent),
@@ -58,9 +58,9 @@ async def storage_info(ctx: OpContext, inp: Empty) -> StorageInfo:
         index_db=str(index),
         index_db_bytes=file_bytes(index),
         wal_bytes=wal,
-        quarantine_dir=str(quarantine.root) if quarantine is not None else None,
-        quarantined_files=stats.files if stats else 0,
-        quarantine_bytes=stats.bytes if stats else 0,
+        quarantine_dir=str(qdir) if qfiles or qdir.is_dir() else None,
+        quarantined_files=qfiles,
+        quarantine_bytes=qbytes,
     )
 
 

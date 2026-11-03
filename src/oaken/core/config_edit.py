@@ -185,6 +185,21 @@ def _parent(doc: Any, path: Sequence[str]) -> Any:
     return parent
 
 
+def _aot(rows: Sequence[Mapping[str, Any]]) -> Any:
+    """A list of tables as ``[[...]]`` entries, a nested table on one line (``when = { ... }``)."""
+    aot = tomlkit.aot()
+    for row in rows:
+        table = tomlkit.table()
+        for name, value in row.items():
+            if isinstance(value, Mapping):
+                inline = tomlkit.inline_table()
+                inline.update(dict(value))
+                value = inline
+            table.add(name, value)
+        aot.append(table)
+    return aot
+
+
 def set_table(text: str, path: Sequence[str], values: Mapping[str, Any]) -> str:
     """``text`` with the table at ``path`` holding exactly ``values``. Keys already there keep
     their comments and place, keys not in ``values`` are removed, new ones are appended, and the
@@ -201,7 +216,10 @@ def set_table(text: str, path: Sequence[str], values: Mapping[str, Any]) -> str:
     for key in [k for k in table if k not in values]:
         del table[key]
     for key, value in values.items():
-        table[key] = value
+        is_rows = isinstance(value, list) and value and all(isinstance(v, Mapping) for v in value)
+        if is_rows and key in table:  # an array of tables is replaced, never merged
+            del table[key]
+        table[key] = _aot(value) if is_rows else value
     return tomlkit.dumps(doc)
 
 
@@ -211,30 +229,4 @@ def remove_table(text: str, path: Sequence[str]) -> str:
     parent: Any = _table(doc, path[:-1]) if len(path) > 1 else doc
     if parent is not None and path[-1] in parent:
         del parent[path[-1]]
-    return tomlkit.dumps(doc)
-
-
-def set_triage(text: str, levels: Sequence[Mapping[str, Any]], rules: Sequence[Mapping[str, Any]]) -> str:
-    """``text`` with the ``[[triage.levels]]`` and ``[[triage.rules]]`` arrays set to exactly these
-    (in this order), or removed when empty. Comments and every other table are untouched."""
-    doc = _parse(text)
-    triage = _parent(doc, ("triage", "x"))  # [triage], made if the file has none
-    for key, rows in (("levels", levels), ("rules", rules)):
-        if key in triage:
-            del triage[key]
-        if not rows:
-            continue
-        aot = tomlkit.aot()
-        for row in rows:
-            table = tomlkit.table()
-            for name, value in row.items():
-                if isinstance(value, Mapping):
-                    inline = tomlkit.inline_table()
-                    inline.update(dict(value))
-                    value = inline
-                table.add(name, value)
-            aot.append(table)
-        triage[key] = aot
-    if not len(triage) and "triage" in doc:  # nothing left: no empty [triage] behind
-        del doc["triage"]
     return tomlkit.dumps(doc)

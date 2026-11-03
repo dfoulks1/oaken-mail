@@ -15,6 +15,25 @@ Category = Literal[
     "personal", "work", "transactional", "notification", "newsletter", "automated", "other"
 ]
 MAX_LEVEL = 99  # 0 to 3 are built in; a reader's own levels start at 4
+BUILTIN_LEVELS: dict[int, str] = {0: "ignore", 1: "low", 2: "normal", 3: "soon"}
+
+TRIAGE = "ingest.triage"  # the head of the chain: it runs the first triager
+TRIAGE_PREFIX = TRIAGE + "."  # ``ingest.triage.<triager>``: one atomic job per triager
+STAGE = "llm.triage"  # the usage stage a model's triage is billed under
+
+
+def triage_kind(name: str) -> str:
+    return TRIAGE_PREFIX + name
+
+
+def is_triage(kind: str) -> bool:
+    return kind == TRIAGE or kind.startswith(TRIAGE_PREFIX)
+
+
+def triager_for(kind: str) -> str | None:
+    """The triager one job kind runs, or None for the chain head (the first triager runs) and for
+    any kind that is not triage."""
+    return kind.removeprefix(TRIAGE_PREFIX) if kind.startswith(TRIAGE_PREFIX) else None
 
 
 def urgency(level: object) -> int:

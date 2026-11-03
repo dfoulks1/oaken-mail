@@ -37,7 +37,6 @@ from oaken.core.attrs import AttrStore
 from oaken.core.clock import Clock, fmt_ts, parse_ts
 from oaken.core.errors import Conflict, InvalidInput, InvalidResult, NotFound, PluginError
 from oaken.core.events import (
-    AttachmentQuarantined,
     EventBus,
     MessageEmbedded,
     MessageEnriched,
@@ -57,14 +56,15 @@ from oaken.core.logging import get_logger
 from oaken.core.rawstore import RawStore
 from oaken.core.settings import Settings
 from oaken.core.trace import Tracer
-from oaken.core.triage import urgency
+from oaken.core.triage import STAGE, TRIAGE, is_triage, triage_kind, triager_for, urgency
 from oaken.core.untrusted import UntrustedText
 from oaken.index import Indexer, IndexStore, RebuildPayload, enqueue_rebuild
 from oaken.ingest.backends import Backends, Vectors
-from oaken.ingest.quarantine import Quarantine
+from oaken.core.attachment_access import ACTION_ROUTE, QUARANTINE_ROUTE
+from oaken.core.plugin_store import folder_stats
 from oaken.ingest.usage import UsageStore
 from oaken.mail.filtering import FilterEngine
-from oaken.mail.parse import parse, read_attachment
+from oaken.mail.parse import parse
 from oaken.mail.threading import normalize_subject
 from oaken.mail.tokens import Tokenizer, load_tokenizer
 from oaken.plugins.adapt import to_action_result, to_enrich_output, to_triage_verdict, to_vectors
@@ -85,7 +85,6 @@ ENRICH = "ingest.enrich"  # legacy: a job of this kind queues the per-enricher j
 ENRICH_PREFIX = ENRICH + "."  # ``ingest.enrich.<enricher>``: one kind per enricher but the gate
 ACTION = "ingest.action"  # a route no installed action answers: the job parks (ADR 0019)
 ACTION_PREFIX = ACTION + "."  # ``ingest.action.<action>``: one kind per action plugin
-TRIAGE = "ingest.triage"  # the gate enricher alone; its result decides what is owed after it
 REPROCESS = "ingest.reprocess"
 STAGE_KINDS = (PARSE, TRIAGE, EMBED, ENRICH, ACTION, REPROCESS)
 
@@ -101,7 +100,7 @@ def action_kind(name: str) -> str:
 def split_enricher(kind: str) -> str | None:
     """The one enricher a job kind runs (the gate for ``ingest.triage``), or None for any other
     kind, including the legacy ``ingest.enrich``."""
-    if kind == TRIAGE:
+    if is_triage(kind):
         return GATE
     return kind.removeprefix(ENRICH_PREFIX) if kind.startswith(ENRICH_PREFIX) else None
 
@@ -218,14 +217,13 @@ class Pipeline:
         clock: Clock,
         *,
         filters: FilterEngine | None = None,
-        quarantine: Quarantine | None = None,
         bus: EventBus | None = None,
         tokenizer: Tokenizer | None = None,
     ) -> None:
         self.raw, self.index, self.attrs, self.indexer = raw, index, attrs, indexer
         self.queue, self.usage, self.backends = queue, usage, backends
         self.settings, self.clock, self.bus = settings, clock, bus
-        self.filters, self.quarantine = filters, quarantine
+        self.filters = filters
         self.tokenizer = tokenizer or indexer.tokenizer or load_tokenizer(settings.mail)
         self.vectors = Vectors(backends.vector_store)
         self.cfg = settings.ingest
@@ -284,6 +282,15 @@ class Pipeline:
             except ValueError:  # already registered
                 continue
             added.append(enrich_kind(name))
+        for tname in self.backends.triagers():
+            with contextlib.suppress(ValueError):  # already registered
+                runner.register(
+                    triage_kind(tname),
+                    MessagePayload,
+                    self._triage_job_for(tname),
+                    concurrency=self.cfg.triage_concurrency,
+                    result_model=StageJobResult,
+                )
         self.register_actions(runner)
         return added
 
@@ -357,7 +364,7 @@ class Pipeline:
             return StageJobResult(note="deleted")
         await self._filter(mid, p.changed)
         res = await self.indexer.index_one(mid)
-        await self._quarantine(mid, msg.account_id)
+        await self._queue_quarantine(mid, msg.account_id, p.backfill)
         if self._triage_on():  # embedding and the barred enrichers wait for its result
             await self._enqueue_stage(TRIAGE, ENRICH_STEP, mid, msg.account_id, p.backfill)
             await self._queue_enrichers(mid, msg.account_id, p.backfill, barred=False)
@@ -377,35 +384,16 @@ class Pipeline:
             return
         await engine.filter_message(mid)
 
-    async def _quarantine(self, mid: MessageId, account_id: AccountId) -> int:
-        """Write flagged attachments to the quarantine folder. The bytes are copied there and
-        never read back, parsed or sent to a model."""
-        qt = self.quarantine
-        if qt is None or not self.settings.mail.attachments.quarantine:
-            return 0
+    async def _queue_quarantine(self, mid: MessageId, account: AccountId, backfill: bool) -> None:
+        """A message with a flagged attachment goes to the ``quarantine`` route, whatever triage
+        says, when an action answers it and ``[mail.attachments] quarantine`` is on. Core writes
+        nothing itself: the action does (ADR 0019, decision 5)."""
+        if not self.settings.mail.attachments.quarantine or not self._answering(QUARANTINE_ROUTE):
+            return
         doc = await self.index.get_doc(mid)
         if doc is None or not any(a.get("quarantine") for a in json.loads(doc["attachments_json"])):
-            return 0
-        raw = await self.raw.get_raw(mid)
-        parsed = await asyncio.to_thread(parse, raw, self.settings.mail)
-        count = 0
-        for att in parsed.attachments:
-            if not att.quarantine:
-                continue
-            try:
-                data = await asyncio.to_thread(read_attachment, raw, att.part_path)
-            except Exception as exc:  # noqa: BLE001 - an unreadable part must not fail the message
-                log.warning("attachment unreadable", message_id=mid, error=type(exc).__name__)
-                continue
-            if await asyncio.to_thread(qt.put, mid, att.filename, att.part_path, data):
-                count += 1
-        if count and self.bus:
-            await self.bus.publish(
-                AttachmentQuarantined(
-                    ts=self.clock.now(), account_id=account_id, message_id=mid, count=count
-                )
-            )
-        return count
+            return
+        await self._queue_actions(mid, account, backfill, {"route": [QUARANTINE_ROUTE]})
 
     # -- ingest.embed -----------------------------------------------------------------------
     async def _embed_job(self, p: MessagePayload, _job: Job) -> StageJobResult:
@@ -508,23 +496,47 @@ class Pipeline:
         return out
 
     # -- ingest.triage ----------------------------------------------------------------------
-    async def _triage_job(self, p: MessagePayload, job: Job) -> StageJobResult:
-        """Triage alone. Its result decides what else is owed, so embedding and the barred
-        enrichers are queued once it has one. On the last attempt a failure still queues them,
-        with the gate open, so one model outage cannot strand mail."""
+    async def _triage_job(
+        self, p: MessagePayload, job: Job, name: str | None = None
+    ) -> StageJobResult:
+        """One link of the lazy triage chain (ADR 0017 2d): run one triager (``name``, or the first
+        for the head kind). A verdict ends the chain; none queues the next triager's job, and the
+        last one leaves the mail unrated. Either way what waits on triage is queued then. On the
+        last attempt a failure still queues it, with the gate open, so one model outage cannot
+        strand mail."""
         mid = MessageId(p.message_id)
         doc = await self.index.get_doc(mid)
         if doc is None:
             return StageJobResult(note="gone")
         account = AccountId(doc["account_id"])
+        order = [n for n in self._triagers() if self._enabled(n)]
+        if name is not None and name not in order:
+            order = []  # switched off or uninstalled since it was queued: the chain ends here
+        elif name is None and order:
+            name = order[0]
+        if not order or await self._skip_ai(mid):
+            await self._after_triage(mid, account, p.backfill)
+            return StageJobResult(skipped=1)
         try:
-            r = await self.triage_message(mid)
+            r = await self._triager_step(mid, doc, name or order[0], force=False)
         except Exception:
             if job.attempts >= job.max_attempts:
                 await self._after_triage(mid, account, p.backfill, failed=True)
             raise
-        await self._after_triage(mid, account, p.backfill)
+        later = order[order.index(name or order[0]) + 1 :]
+        if r.ran or r.cached or not later:
+            await self._after_triage(mid, account, p.backfill)
+        else:
+            await self._enqueue_stage(
+                triage_kind(later[0]), ENRICH_STEP, mid, account, p.backfill
+            )
         return StageJobResult(done=r.ran, skipped=r.cached)
+
+    def _triage_job_for(self, name: str) -> Any:
+        async def run(p: MessagePayload, job: Job) -> StageJobResult:
+            return await self._triage_job(p, job, name)
+
+        return run
 
     async def _after_triage(
         self, mid: MessageId, account: AccountId, backfill: bool, *, failed: bool = False
@@ -594,12 +606,16 @@ class Pipeline:
         name = split_enricher(kind)
         if name is None:
             return None
-        if kind == TRIAGE:
-            for tname, t in self._triagers().items():
-                if t is self._ai_triager():
-                    return "triager", tname
-            return "triager", GATE
+        if is_triage(kind):
+            if (named := triager_for(kind)) is not None:
+                return "triager", named
+            first = next((n for n in self._triagers() if self._enabled(n)), GATE)
+            return "triager", first
         return "enricher", name
+
+    def _ai_triager_name(self) -> str | None:
+        ai = self._ai_triager()
+        return next((n for n, t in self._triagers().items() if t is ai), None)
 
     def _ai_triager(self) -> Triager | None:
         """The first enabled triager that asks a model and can take an agent's answer."""
@@ -667,66 +683,68 @@ class Pipeline:
         return TriagePreview(None, None, None, "no triager rated this message")
 
     async def triage_message(self, message_id: MessageId, *, force: bool = False) -> EnrichResult:
-        """The first step: run the triagers in rank order until one gives a verdict, and store it
-        under ``triage``. A verdict already stored for this content stands (``force`` asks again).
-        Mail none of them rates stays unrated."""
+        """Run the triagers in rank order until one gives a verdict, and store it. A verdict already
+        stored for this content stands (``force`` asks again). Mail none of them rates stays
+        unrated. The job chain does the same one triager at a time; this is for a caller that
+        wants the answer now (the ``triage_message`` operation, the CLI)."""
         out = EnrichResult()
         if await self._skip_ai(message_id):
             return out
         doc = await self.index.get_doc(message_id)
         if doc is None:
             return out
-        llm = self.backends.llm()
-        account = AccountId(doc["account_id"])
-        msg_input: CleanMessage | None = None
-        for name, triager in self._triagers().items():
+        for name in self._triagers():
             if not self._enabled(name):
                 continue
-            if triager.needs_llm and llm is None:
-                raise PluginError(f"triager {name} needs a language model, none is available")
-            model = ""
-            if triager.needs_llm and llm:
-                configured = getattr(triager, "model_for", lambda: None)()
-                available = await llm.available_models() if configured else []
-                model = (
-                    configured
-                    if (configured and (not available or configured in available))
-                    else llm.model_id
-                )
-            key = (doc["content_hash"], name, triager.version, model)
-            tokens = self.tokenizer.count(doc["cleaned_text"])
-            if not force and await self._cached_verdict(message_id, key):
-                out.cached += 1
-                await self.usage.record(
-                    "enrich", model or name, tokens_in=tokens, cached=True,
-                    account_id=account, message_id=message_id,
-                )  # fmt: skip
+            r = await self._triager_step(message_id, doc, name, force=force)
+            out.ran += r.ran
+            out.cached += r.cached
+            if r.ran or r.cached:
                 break
-            if msg_input is None:
-                msg_input = await self._enrich_input(message_id, doc)
-            verdict = await triager.triage(msg_input)
-            if verdict is None:
-                continue  # not this triager's: the next one
-            result = to_triage_verdict(
-                verdict, f"triager {name}", getattr(triager, "output_model", None)
+        return out
+
+    async def _triager_step(
+        self, message_id: MessageId, doc: sqlite3.Row, name: str, *, force: bool
+    ) -> EnrichResult:
+        """Run one triager on one message. ``ran``: it gave a verdict, stored. ``cached``: one was
+        already stored. Neither: it declined, and the next triager is asked."""
+        out = EnrichResult()
+        triager = self._triagers()[name]
+        llm = self.backends.llm()
+        account = AccountId(doc["account_id"])
+        if triager.needs_llm and llm is None:
+            raise PluginError(f"triager {name} needs a language model, none is available")
+        model = ""
+        if triager.needs_llm and llm:
+            configured = getattr(triager, "model_for", lambda: None)()
+            available = await llm.available_models() if configured else []
+            model = (
+                configured
+                if (configured and (not available or configured in available))
+                else llm.model_id
             )
-            data = json.dumps(result.data, sort_keys=True)
-            await self._store_verdict(message_id, key, data)
-            out.ran += 1
+        key = (doc["content_hash"], name, triager.version, model)
+        tokens = self.tokenizer.count(doc["cleaned_text"])
+        if not force and await self._cached_verdict(message_id, key):
+            out.cached += 1
             await self.usage.record(
-                "enrich", model or name, tokens_in=tokens, tokens_out=self.tokenizer.count(data),
+                STAGE, model or name, tokens_in=tokens, cached=True,
                 account_id=account, message_id=message_id,
             )  # fmt: skip
-            if self.bus:
-                await self.bus.publish(
-                    MessageEnriched(
-                        ts=self.clock.now(),
-                        account_id=account,
-                        message_id=message_id,
-                        enricher=GATE,
-                    )
-                )
-            break
+            return out
+        verdict = await triager.triage(await self._enrich_input(message_id, doc))
+        if verdict is None:
+            return out
+        result = to_triage_verdict(
+            verdict, f"triager {name}", getattr(triager, "output_model", None)
+        )
+        data = json.dumps(result.data, sort_keys=True)
+        await self._store_verdict(message_id, key, data)
+        out.ran += 1
+        await self.usage.record(
+            STAGE, model or name, tokens_in=tokens, tokens_out=self.tokenizer.count(data),
+            account_id=account, message_id=message_id,
+        )  # fmt: skip
         return out
 
     # -- ingest.enrich.<name> and the legacy ingest.enrich ---------------------------------
@@ -789,7 +807,8 @@ class Pipeline:
         if action is None or not self._enabled(name, "action"):
             raise PermanentJobError(f"action {name!r} is not available")
         table = self.settings.plugin_table("action", name)
-        if table.get("approval", "ask") != "auto":
+        approval = table.get("approval") or ("auto" if route in action.auto_routes else "ask")
+        if approval != "auto":
             row = await self.action_row(mid, name, route)
             if row is None or row["status"] != "approved":
                 raise PermanentJobError("awaiting approval")
@@ -799,7 +818,11 @@ class Pipeline:
         msg = await self._enrich_input(mid, doc)
         status, data, error = "done", {}, ""
         try:
-            out = await action.act(msg, route)
+            token = ACTION_ROUTE.set(route)
+            try:
+                out = await action.act(msg, route)
+            finally:
+                ACTION_ROUTE.reset(token)
             if out is None:
                 status = "skipped"
             else:
@@ -1124,15 +1147,18 @@ class Pipeline:
             "you give triage is not owed: leave it out.",
             "owed": [
                 {
-                    "enricher": n,
+                    ("triager" if n == GATE else "enricher"): (
+                        self._ai_triager_name() if n == GATE else n
+                    ),
                     "version": e.version,
-                    "min_priority": self._bar(n, e),
+                    "min_priority": None if n == GATE else self._bar(n, e),
                     "instructions": e.prompt.system,  # type: ignore[attr-defined]
                     "schema": e.prompt.schema,  # type: ignore[attr-defined]
                 }
                 for n, e in owed.items()
             ],
             "answer": {"enrichments": {"<enricher>": "an object matching that enricher's schema"}},
+            "triage": "the triager entry in owed is answered under the name triage",
             "content_is_untrusted": True,
         }
 
@@ -1143,10 +1169,14 @@ class Pipeline:
         follows it (embedding, the enrichers its result owes) is still queued."""
         name = split_enricher(kind)
         payload = MessagePayload.model_validate_json(job.payload_json)
-        offer = await self.agent_offer(MessageId(payload.message_id), max_chars, only=name)
+        named = triager_for(kind)
+        if named is not None and named != self._ai_triager_name():
+            offer = None  # a rule or other non-model triager: core runs this link itself
+        else:
+            offer = await self.agent_offer(MessageId(payload.message_id), max_chars, only=name)
         if offer is None:
-            if kind == TRIAGE:
-                await self._triage_job(payload, job)
+            if is_triage(kind):
+                await self._triage_job(payload, job, triager_for(kind))
             elif name is not None:
                 await self._enricher_job(name)(payload, job)
         return offer
@@ -1166,7 +1196,7 @@ class Pipeline:
         doc = await self.index.get_doc(mid)
         if doc is not None:
             account = AccountId(doc["account_id"])
-            if kind == TRIAGE:
+            if is_triage(kind):
                 await self._after_triage(mid, account, payload.backfill)
             elif not await self._enrichers_pending(mid, job.id):
                 await self._run_plugin_stages(mid, doc, account, False)
@@ -1346,94 +1376,78 @@ class Pipeline:
             else None,
         )
 
-    async def _cached_enrichment(
-        self, message_id: MessageId, key: tuple[str, str, str, str]
+    # One result store, two tables (ADR 0017 2b): (table, name column, conflict target, trace field).
+    _ENRICHMENTS = ("enrichments", "enricher", "message_id, enricher", "enricher")
+    _VERDICTS = ("triage_verdicts", "triager", "message_id", "triager")
+
+    async def _cached_result(
+        self, store: tuple[str, str, str, str], message_id: MessageId, key: tuple[str, str, str, str]
     ) -> bool:
-        """True if the result is stored for this message; if only another message has it, copy
-        it here (and say True)."""
+        """True if the result is stored for this message; if only another message with the same
+        content has it, copy it here (and say True). A row an external agent produced (model_id
+        ``agent:<label>``) counts as current whatever the native model is: the person chose to
+        have a larger model do that work."""
+        table, col = store[0], store[1]
         content_hash, name, version, model = key
-        # A row an external agent produced (model_id ``agent:<label>``) counts as current whatever
-        # the native model is: the person chose to have a larger model do that work.
         mine = await self.raw.db.fetchone(
-            "SELECT 1 FROM enrichments WHERE message_id = ? AND enricher = ? AND version = ?"
+            f"SELECT 1 FROM {table} WHERE message_id = ? AND {col} = ? AND version = ?"  # noqa: S608
             " AND (model_id = ? OR model_id LIKE 'agent:%') AND content_hash = ?",
             (message_id, name, version, model, content_hash),
         )
         if mine:
             return True
         other = await self.raw.db.fetchone(
-            "SELECT data_json, model_id FROM enrichments WHERE content_hash = ? AND enricher = ?"
+            f"SELECT data_json, model_id FROM {table} WHERE content_hash = ? AND {col} = ?"  # noqa: S608
             " AND version = ? AND (model_id = ? OR model_id LIKE 'agent:%') LIMIT 1",
             (content_hash, name, version, model),
         )
         if other:  # copied under the model that made it, so who produced it is never lost
-            await self._store_enrichment(
-                message_id, (content_hash, name, version, other["model_id"]), other["data_json"]
-            )
+            await self._store_result(
+                store, message_id, (content_hash, name, version, other["model_id"]),
+                other["data_json"],
+            )  # fmt: skip
             return True
         return False
+
+    async def _store_result(
+        self,
+        store: tuple[str, str, str, str],
+        message_id: MessageId,
+        key: tuple[str, str, str, str],
+        data: str,
+    ) -> None:
+        table, col, conflict, field = store
+        content_hash, name, version, model = key
+        if self.tracer is not None:
+            self.tracer.emit(
+                "ingest.stored", message_id=message_id, version=version, model=model,
+                result=json.loads(data), **{field: name},
+            )  # fmt: skip
+        await self.raw.db.execute(
+            f"INSERT INTO {table} (message_id, {col}, version, model_id, content_hash,"  # noqa: S608
+            " data_json, created_at) VALUES (?,?,?,?,?,?,?)"
+            f" ON CONFLICT ({conflict}) DO UPDATE SET {col} = excluded.{col},"
+            " version = excluded.version, model_id = excluded.model_id,"
+            " content_hash = excluded.content_hash, data_json = excluded.data_json,"
+            " created_at = excluded.created_at",
+            (message_id, name, version, model, content_hash, data, fmt_ts(self.clock.now())),
+        )
+
+    async def _cached_enrichment(self, message_id: MessageId, key: tuple[str, str, str, str]) -> bool:
+        return await self._cached_result(self._ENRICHMENTS, message_id, key)
 
     async def _store_enrichment(
         self, message_id: MessageId, key: tuple[str, str, str, str], data: str
     ) -> None:
-        content_hash, name, version, model = key
-        if self.tracer is not None:
-            self.tracer.emit(
-                "ingest.stored", message_id=message_id, enricher=name, version=version,
-                model=model, result=json.loads(data),
-            )  # fmt: skip
-        await self.raw.db.execute(
-            "INSERT INTO enrichments (message_id, enricher, version, model_id, content_hash,"
-            " data_json, created_at) VALUES (?,?,?,?,?,?,?)"
-            " ON CONFLICT (message_id, enricher) DO UPDATE SET version = excluded.version,"
-            " model_id = excluded.model_id, content_hash = excluded.content_hash,"
-            " data_json = excluded.data_json, created_at = excluded.created_at",
-            (message_id, name, version, model, content_hash, data, fmt_ts(self.clock.now())),
-        )
+        await self._store_result(self._ENRICHMENTS, message_id, key, data)
 
-    async def _cached_verdict(
-        self, message_id: MessageId, key: tuple[str, str, str, str]
-    ) -> bool:
-        """True if a verdict is stored for this message by this triager; if only another message
-        with the same content has it, copy it here (and say True). An external agent's row counts."""
-        content_hash, triager, version, model = key
-        mine = await self.raw.db.fetchone(
-            "SELECT 1 FROM triage_verdicts WHERE message_id = ? AND triager = ? AND version = ?"
-            " AND (model_id = ? OR model_id LIKE 'agent:%') AND content_hash = ?",
-            (message_id, triager, version, model, content_hash),
-        )
-        if mine:
-            return True
-        other = await self.raw.db.fetchone(
-            "SELECT data_json, model_id FROM triage_verdicts WHERE content_hash = ? AND triager = ?"
-            " AND version = ? AND (model_id = ? OR model_id LIKE 'agent:%') LIMIT 1",
-            (content_hash, triager, version, model),
-        )
-        if other:  # copied under the model that made it, so who produced it is never lost
-            await self._store_verdict(
-                message_id, (content_hash, triager, version, other["model_id"]), other["data_json"]
-            )
-            return True
-        return False
+    async def _cached_verdict(self, message_id: MessageId, key: tuple[str, str, str, str]) -> bool:
+        return await self._cached_result(self._VERDICTS, message_id, key)
 
     async def _store_verdict(
         self, message_id: MessageId, key: tuple[str, str, str, str], data: str
     ) -> None:
-        content_hash, triager, version, model = key
-        if self.tracer is not None:
-            self.tracer.emit(
-                "ingest.stored", message_id=message_id, enricher=GATE, version=version,
-                model=model, result=json.loads(data),
-            )  # fmt: skip
-        await self.raw.db.execute(
-            "INSERT INTO triage_verdicts (message_id, triager, version, model_id, content_hash,"
-            " data_json, created_at) VALUES (?,?,?,?,?,?,?)"
-            " ON CONFLICT (message_id) DO UPDATE SET triager = excluded.triager,"
-            " version = excluded.version, model_id = excluded.model_id,"
-            " content_hash = excluded.content_hash, data_json = excluded.data_json,"
-            " created_at = excluded.created_at",
-            (message_id, triager, version, model, content_hash, data, fmt_ts(self.clock.now())),
-        )
+        await self._store_result(self._VERDICTS, message_id, key, data)
 
     async def verdict(self, message_id: MessageId) -> dict[str, object] | None:
         """The stored triage verdict for a message, or None when it is unrated."""
@@ -1707,7 +1721,7 @@ class Pipeline:
             embedder_model=embedder.model_id if embedder else None,
             embeddings_stale=bool(embedder and held and held != embedder.model_id),
             backfill_paused=await self.backfill_paused(),
-            quarantined_files=self.quarantine.stats().files if self.quarantine else 0,
+            quarantined_files=folder_stats("action", "attachment", "quarantine")[1],
             parked=parked,
         )
 

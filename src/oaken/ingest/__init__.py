@@ -16,7 +16,6 @@ from oaken.ingest.pipeline import (
     Stage,
     StageStatus,
 )
-from oaken.ingest.quarantine import Quarantine, quarantine_dir
 from oaken.ingest.sync import SyncResult, SyncRunner
 from oaken.ingest.usage import UsageRow, UsageStore
 
@@ -32,7 +31,6 @@ __all__ = [
     "ParkedJob",
     "Pipeline",
     "PipelineStatus",
-    "Quarantine",
     "Stage",
     "StageStatus",
     "SyncResult",
@@ -40,5 +38,4 @@ __all__ = [
     "UsageRow",
     "UsageStore",
     "Vectors",
-    "quarantine_dir",
 ]

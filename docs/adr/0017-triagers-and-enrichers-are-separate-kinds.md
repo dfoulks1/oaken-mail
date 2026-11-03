@@ -7,10 +7,10 @@
   rename of `EnrichInput` rides on that bump)
 - Built: 2026-11-03, not yet verified by the owner's checks: decisions 1, 2, 2c, 3, 4 and 5, the
   `oaken_triagers` package, `triage_verdicts` (migration 0019), `BaseAnalyzer` and `core/triage.py`.
-  Not built: 2b in full (the validators share `to_result`; the result-store helper is still two
-  copies), 2d (the triage chain is still one `ingest.triage` job), the job-kind routing, the double
-  `MessageEnriched` event, the `llm.triage` usage stage in the pipeline's own records, and the swarm
-  wire. Prompt: `docs/prompts/CORE_55-separate-triagers-and-enrichers.md`.
+  Built later the same day: 2b (one result-store helper, `_cached_result`/`_store_result`), 2d (the lazy
+  chain: `ingest.triage` runs the first triager, `ingest.triage.<name>` the next), the job-kind names
+  in `core/triage.py`, one `MessageTriaged` event, the `llm.triage` stage and the `triager` trace field,
+  and the swarm wire's `triager` entry. Not built: the validators still share `to_result`. Prompt: `docs/prompts/CORE_55-separate-triagers-and-enrichers.md`.
 
 ## Context
 

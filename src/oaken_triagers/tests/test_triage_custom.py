@@ -86,3 +86,89 @@ async def test_the_old_rules_table_is_reported_not_ignored(rig: Rig) -> None:
 
     with pytest.raises(PluginError, match="skip_rules"):  # moved to [plugins.triager.spamcheck]
         await rig.start(CustomRulesTriager(), config={"skip_rules": ["cron"]})
+
+
+# -- the plugin's own operations (ADR 0016) -----------------------------------------------------
+class _Draft:
+    def __init__(self) -> None:
+        self.value: dict[str, Any] | None = None
+        self.applied = 0
+
+    async def get(self) -> dict[str, Any] | None:
+        return self.value
+
+    async def set(self, values: Any) -> None:
+        self.value = dict(values)
+
+    async def discard(self) -> None:
+        self.value = None
+
+    async def apply(self) -> None:
+        self.applied += 1
+
+    async def drift(self) -> bool:
+        return False
+
+
+class _Store:
+    def __init__(self) -> None:
+        self.rows: list[dict[str, Any]] = []
+
+    async def find(self, table: str, where: Any = None, **_: Any) -> list[dict[str, Any]]:
+        return [r for r in self.rows if all(r.get(k) == v for k, v in (where or {}).items())]
+
+    async def insert(self, table: str, row: Any) -> dict[str, Any]:
+        self.rows.append({**row, "uid": str(len(self.rows))})
+        return self.rows[-1]
+
+
+def _ctx(plugin: Any) -> tuple[Any, _Draft]:
+    from oaken.plugins.contracts import PluginOpContext
+
+    draft = _Draft()
+    ctx = PluginOpContext(plugin="rules", client="cli", actor="t", config={}, clock=None,  # type: ignore[arg-type]
+                          log=None, store=_Store(), draft=draft)  # type: ignore[arg-type]  # fmt: skip
+    plugin.ctx = ctx  # the level table reads the plugin's own store
+    return ctx, draft
+
+
+async def test_edits_stage_in_the_draft_and_apply_writes_through_core(rig: Rig) -> None:
+    from oaken_triagers.triage_custom import AddIn, NameIn, OrderIn
+
+    plugin = await rig.start(CustomRulesTriager(), config={"rules": [rule("a", 2, {"from": "a"})]})
+    ctx, draft = _ctx(plugin)
+    out = await plugin._add(ctx, AddIn(name="b", level=1, category="newsletter", header_present="list-id"))
+    assert out.staged and [r.name for r in out.rules] == ["a", "b"]
+    assert draft.value is not None and [r["name"] for r in draft.value["rules"]] == ["a", "b"]
+    out = await plugin._order(ctx, OrderIn(order=["b", "a"]))
+    assert [r.name for r in out.rules] == ["b", "a"]
+    out = await plugin._remove(ctx, NameIn(name="a"))
+    assert [r.name for r in out.rules] == ["b"]
+    await plugin._apply(ctx, plugin_nothing())
+    assert draft.applied == 1
+
+
+def plugin_nothing() -> Any:
+    from oaken_triagers.triage_custom import Nothing
+
+    return Nothing()
+
+
+async def test_a_rule_needs_a_condition_a_defined_level_and_a_new_name(rig: Rig) -> None:
+    from oaken.core.errors import InvalidInput
+    from oaken_triagers.triage_custom import AddIn
+
+    plugin = await rig.start(CustomRulesTriager(), config={"rules": [rule("a", 2, {"from": "a"})]})
+    ctx, _ = _ctx(plugin)
+    with pytest.raises(InvalidInput):
+        await plugin._add(ctx, AddIn(name="x"))  # no condition
+    with pytest.raises(InvalidInput):
+        await plugin._add(ctx, AddIn(name="x", level=7, **{"from": "z"}))  # level 7 not defined
+    with pytest.raises(InvalidInput):
+        await plugin._add(ctx, AddIn(name="a", **{"from": "z"}))  # the name is taken
+
+
+async def test_the_page_declaration_is_sound() -> None:
+    from oaken.plugins.ui import check_ui
+
+    assert check_ui(CustomRulesTriager().ui()) == []

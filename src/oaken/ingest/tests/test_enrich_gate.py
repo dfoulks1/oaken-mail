@@ -194,7 +194,7 @@ async def test_an_ingest_is_traced_job_by_job_under_its_message(
         triage = next(
             e["data"]
             for e in events
-            if e["kind"] == "ingest.stored" and e["data"]["enricher"] == "triage"
+            if e["kind"] == "ingest.stored" and "triager" in e["data"]
         )
         assert triage["job_kind"] == "ingest.triage" and triage["message_id"]
         assert triage["result"]["priority"] == 2 and rater.calls == 1

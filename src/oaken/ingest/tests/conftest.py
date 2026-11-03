@@ -22,7 +22,7 @@ from oaken.core.settings import (
     Settings,
 )
 from oaken.index import Indexer, IndexStore
-from oaken.ingest import Backends, Pipeline, Quarantine, SyncRunner, UsageStore
+from oaken.ingest import Backends, Pipeline, SyncRunner, UsageStore
 from oaken.mail.filtering import FilterEngine
 from oaken.plugins.contracts import Embedder, Enricher
 from oaken.testing.fakes import (
@@ -66,7 +66,6 @@ class Rig:
     enricher: FakeEnricher
     llm: FakeLLM
     store: InMemoryVectorStore
-    quarantine: Quarantine
     engine: FilterEngine
     sieve_dir: Path
     events: list[Any] = field(default_factory=list)
@@ -127,7 +126,6 @@ async def build(tmp: Path, opts: Options, *, with_filters: bool = True) -> Async
         sieve_dir = tmp / "sieve"
         sieve_dir.mkdir()
         engine = FilterEngine(raw, attrs, settings.mail, clock, directory=sieve_dir, bus=bus)
-        quarantine = Quarantine(tmp / "quarantine")
         backends = Backends(
             embedder=lambda: embedder if opts.embedder else None,
             llm=lambda: llm,
@@ -145,7 +143,6 @@ async def build(tmp: Path, opts: Options, *, with_filters: bool = True) -> Async
             settings,
             clock,
             filters=engine if with_filters else None,
-            quarantine=quarantine,
             bus=bus,
         )
         pipeline.register(runner)
@@ -153,7 +150,7 @@ async def build(tmp: Path, opts: Options, *, with_filters: bool = True) -> Async
         rig = Rig(
             tmp, clock, bus, raw_db, raw, attrs, index, indexer, queue, runner, usage, pipeline,
             sync, FakeProvider(batch_size=opts.provider_batch), embedder, enricher, llm, store,
-            quarantine, engine, sieve_dir,
+            engine, sieve_dir,
         )  # fmt: skip
 
         async def record(event: Any) -> None:

@@ -32,10 +32,10 @@ from oaken.core.scheduler import Scheduler
 from oaken.core.settings import Settings
 from oaken.core.trace import Tracer
 from oaken.index import Indexer, IndexStore
-from oaken.ingest import Backends, Pipeline, Quarantine, SyncRunner, UsageStore
-from oaken.core.triage_store import PLUGIN as TRIAGE_PLUGIN, TriageStore
+from oaken.ingest import Backends, Pipeline, SyncRunner, UsageStore
+from oaken.core.attachment_access import AttachmentAccess
+from oaken.core.plugin_store import PluginServices
 from oaken.ingest.pipeline_control import PipelineControl
-from oaken.ingest.quarantine import quarantine_dir
 from oaken.ingest.schedule import SyncService
 from oaken.mail.filtering import FilterEngine, scripts_dir
 from oaken.plugins.accounts import AccountProviders
@@ -130,10 +130,11 @@ class Core:
         self.scheduler = Scheduler(self.raw_db, self.queue, clock)
         kwargs = {} if self._discover is None else {"discover": self._discover}
         self.host = PluginHost(s, clock, bus, **kwargs)  # type: ignore[arg-type]
-        self.triage = TriageStore(self.raw_db, clock)
-        self.host.runtime_config = lambda kind, name: (
-            self.triage.config if (kind, name) == TRIAGE_PLUGIN else {}
+        self.plugin_services = PluginServices(
+            self.raw_db, clock, self.host, AttachmentAccess(self.raw, s)
         )
+        self.host.provision = self.plugin_services.provision
+        self.host.runtime_config = self._runtime_config
         self.llm = LLMService(
             LLMCache(self.raw_db, clock), self.usage, Workspaces(s),
             lambda name: self.host.llm_backend(name), s,
@@ -143,12 +144,9 @@ class Core:
         engine = FilterEngine(
             self.raw, self.attrs, s.mail, clock, directory=scripts_dir(s.mail), bus=bus
         )
-        quarantine = Quarantine(
-            quarantine_dir(s.mail.attachments), max_bytes=s.mail.attachments.quarantine_max_bytes
-        )
         self.pipeline = Pipeline(
             self.raw, self.index, self.attrs, self.indexer, self.queue, self.usage,
-            Backends.from_host(self.host), s, clock, filters=engine, quarantine=quarantine,
+            Backends.from_host(self.host), s, clock, filters=engine,
             bus=bus,
         )  # fmt: skip
         self.tracer.bus = bus
@@ -319,11 +317,18 @@ class Core:
             if door is not None:
                 await door.stop()
 
+    def _runtime_config(self, kind: str, name: str) -> dict[str, Any]:
+        """A reader who still has rules under the old ``[triage]`` section keeps them: they are
+        the ``rules`` plugin's rules until its own table says any. Move them to
+        ``[plugins.triager.rules]``."""
+        if (kind, name) != ("triager", "rules") or not self.settings.triage.rules:
+            return {}
+        if self.settings.plugin_table(kind, name).get("rules"):
+            return {}
+        log.warning("[triage] in config.toml is old: move its rules to [plugins.triager.rules]")
+        return {"rules": [r.model_dump(mode="json") for r in self.settings.triage.rules]}
+
     async def _start_host(self) -> None:
-        # The reader's rules, before the triager plugin starts: the last acknowledged copy runs,
-        # and an edit of config.toml waits for the reader to acknowledge it (ADR 0015).
-        await self.triage.check(self.settings.triage)
-        await self.triage.refresh()
         await self.host.start()
 
     async def _stop_host(self) -> None:

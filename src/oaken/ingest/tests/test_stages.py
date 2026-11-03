@@ -1,18 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """Skipping, quarantine, the enrichment cache, sync errors, flags and usage."""
 
-import os
-import stat
 from email.message import EmailMessage
 from typing import Any
 
 import pytest
 
-from oaken.core.events import AttachmentQuarantined, SyncFinished
-from oaken.core.ids import MessageId
+from oaken.core.events import SyncFinished
 from oaken.index import SearchFilters
-from oaken.ingest import Quarantine
-from oaken.ingest.quarantine import safe_name
 from oaken.ingest.tests.conftest import ACCT, Options, Rig, mail
 
 SKIP = (
@@ -50,48 +45,42 @@ async def test_skip_enrich_keeps_a_message_out_of_embedding_and_enrichment(rig: 
     assert len(hits.hits) == 2
 
 
-# -- quarantine --------------------------------------------------------------------------------
-def test_quarantine_writes_private_files_and_never_follows_names(tmp_path: Any) -> None:
-    q = Quarantine(tmp_path / "q", max_bytes=100)
-    mid = MessageId("msg-1")
-    p = q.put(mid, "../../etc/passwd", "1.2", b"abc")
-    assert p is not None and p.parent.parent == q.root and p.name.endswith(".quarantined")
-    assert ".." not in p.name and "/" not in p.name
-    assert p.read_bytes() == b"abc"
-    if os.name != "nt":
-        assert stat.S_IMODE(p.stat().st_mode) == 0o600
-        assert stat.S_IMODE(p.parent.stat().st_mode) == 0o700
-        assert q.problems() == []
-        p.chmod(0o755)
-        assert any("loose" in x for x in q.problems())
-    assert q.put(mid, "../../etc/passwd", "1.2", b"abc") == p  # idempotent
-    assert q.put(mid, "big.exe", "1.3", b"x" * 101) is None
-    assert q.stats().files == 1 and not list(q.root.rglob("*.part"))
+# -- quarantine ----------------------------------------------------------------------------------
+# The writer is the `attachment` action's (oaken_actions); core only queues the route (ADR 0019).
+async def test_a_flagged_attachment_is_routed_to_quarantine_when_an_action_answers(rig: Rig) -> None:
+    from oaken.plugins.base import BaseAction
+    from oaken.plugins.contracts import ActionResult
 
+    class Keeper(BaseAction):
+        routes = ("quarantine",)
+        auto_routes = ("quarantine",)
 
-def test_quarantine_names_are_safe() -> None:
-    assert safe_name(None, "1").startswith("1_attachment")
-    assert "/" not in safe_name("a/b\\c.exe", "1.1") and " " not in safe_name("a b.exe", "1")
-    assert len(safe_name("x" * 500, "1")) < 120
+        def __init__(self) -> None:
+            self.seen: list[str] = []
 
+        async def act(self, msg: Any, route: str) -> ActionResult | None:
+            self.seen.append(msg.message_id)
+            return ActionResult({"quarantined": 1})
 
-async def test_flagged_attachments_are_written_and_the_rest_are_not(rig: Rig) -> None:
+    keeper = Keeper()
+    rig.pipeline.backends.actions = lambda: {"keeper": keeper}
+    rig.pipeline.register_actions(rig.runner)
     bad = rig.provider.add_message(
         with_attachment(1, "invoice.exe", b"MZ-not-run", ("application", "octet-stream"))
     )
-    ok = rig.provider.add_message(with_attachment(2, "notes.txt", b"just text", ("text", "plain")))
+    rig.provider.add_message(with_attachment(2, "notes.txt", b"just text", ("text", "plain")))
     await rig.run_sync()
-    await rig.drain()
-    files = sorted(p.name for p in rig.quarantine.root.rglob("*.quarantined"))
-    assert len(files) == 1 and "invoice.exe" in files[0]
-    mid = await rig.mid(bad)
-    assert (rig.quarantine.root / mid).is_dir()
-    assert [e.message_id for e in rig.names(AttachmentQuarantined)] == [mid]
-    assert not (rig.quarantine.root / await rig.mid(ok)).exists()
-    # running the stage again changes nothing
-    await rig.pipeline.reprocess("parse")
-    await rig.drain(2)
-    assert len(list(rig.quarantine.root.rglob("*.quarantined"))) == 1
+    await rig.drain(rounds=4)
+    assert keeper.seen == [await rig.mid(bad)]  # unflagged mail is not routed; no yes was needed
+
+
+async def test_nothing_is_routed_when_no_action_answers_quarantine(rig: Rig) -> None:
+    rig.provider.add_message(
+        with_attachment(1, "invoice.exe", b"MZ-not-run", ("application", "octet-stream"))
+    )
+    await rig.run_sync()
+    await rig.drain(rounds=3)
+    assert await rig.pipeline.waiting_actions() == []  # no parked job either
 
 
 # -- enrichment cache --------------------------------------------------------------------------

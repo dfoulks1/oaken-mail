@@ -744,57 +744,6 @@ def _register_admin(
     cache.add_argument("--yes", action="store_true", help="With clear: do not ask.")
     cache.set_defaults(func=_lazy("admin_cmd", "cmd_cache"))
 
-    level = sub.add_parser(
-        "level",
-        help="Triage levels: list them, add one (4 and up), rename or renumber, remove.",
-        parents=[g],
-        description=(
-            "0 ignore, 1 low, 2 normal and 3 soon are built in. `oaken level add 5 vip` adds a "
-            "level your own rules can give. Renumbering keeps the rules that use it."
-        ),
-    )
-    level.add_argument("action", nargs="?", default="list", choices=["list", "add", "rename", "rm"])
-    level.add_argument("value", nargs="?", type=int, help="The level's number.")
-    level.add_argument("name", nargs="?", help="The level's name (add, rename).")
-    level.add_argument("--number", type=int, help="With rename: the new number.")
-    level.set_defaults(func=_lazy("triage_cmd", "cmd_level"))
-
-    rule = sub.add_parser(
-        "rule",
-        help="Your own triage rules: list, add, turn on or off, move, remove.",
-        parents=[g],
-        description=(
-            "A rule gives mail a level and a category when every condition holds; the first rule "
-            "in order that matches wins, and no model is asked. `oaken rule add NAME` with no "
-            "conditions is a wizard: conditions from a menu, the level, the category, a test on "
-            "your recent mail, and a confirm. `oaken rule test --when KEY=VALUE` runs the test "
-            "alone. Conditions: from, to, subject, subject_contains, body_contains, header_present, "
-            "has_attachment, is_reply. Rules are kept in config.toml (trusted) and in core's "
-            "database (a working copy, and the last known good copy, which is what runs). Edits "
-            "are staged: `apply` (or any `oaken reload`) writes the batch to the file once and "
-            "reloads the rules; `discard` drops them. After a hand edit of the file, `diff` shows "
-            "what changed, `ack` accepts it, `revert` undoes it."
-        ),
-    )
-    rule.add_argument(
-        "action",
-        nargs="?",
-        default="list",
-        choices=[
-            "list", "add", "test", "on", "off", "move", "rm", "diff", "apply", "discard", "ack",
-            "revert",
-        ],
-    )
-    rule.add_argument("name", nargs="?", help="The rule's name.")
-    rule.add_argument("--level", type=int, help="With add: the level it gives.")
-    rule.add_argument("--category", help="With add: the category it gives.")
-    rule.add_argument(
-        "--when", action="append", metavar="KEY=VALUE", help="With add: a condition (repeat)."
-    )
-    rule.add_argument("--to", type=int, metavar="PLACE", help="With move: the place, 1 is first.")
-    rule.add_argument("--before", metavar="RULE", help="With move: just before this rule.")
-    rule.set_defaults(func=_lazy("triage_cmd", "cmd_rule"))
-
     events = sub.add_parser(
         "events",
         help="Recent events from core's event log (--follow keeps watching).",

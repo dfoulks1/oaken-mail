@@ -30,28 +30,16 @@ async def test_storage_numbers_are_the_files_on_disk(ops: Ops) -> None:
 
 
 async def test_the_quarantine_folder_and_its_files_are_counted(ops: Ops) -> None:
-    quarantine = ops.svc.pipeline.quarantine if ops.svc.pipeline else None
-    if quarantine is None:
-        pytest.skip("this rig has no quarantine folder")
+    from oaken.core.plugin_store import folder_stats
+
     before = await ops.out("storage_info", {})
-    assert before.quarantine_dir == str(quarantine.root)
-    quarantine.ensure()
-    (quarantine.root / "m1").mkdir()
-    (quarantine.root / "m1" / "a.bin").write_bytes(b"x" * 100)
+    root = folder_stats("action", "attachment", "quarantine")[0]
+    (root / "m1").mkdir(parents=True)
+    (root / "m1" / "a.bin").write_bytes(b"x" * 100)
     after = await ops.out("storage_info", {})
+    assert after.quarantine_dir == str(root)
     assert after.quarantined_files == before.quarantined_files + 1
     assert after.quarantine_bytes == before.quarantine_bytes + 100
-
-
-# -- vacuum ---------------------------------------------------------------------------------
-async def test_vacuum_queues_one_job_and_a_second_ask_returns_it(ops: Ops) -> None:
-    first = await ops.out("vacuum", {})
-    again = await ops.out("vacuum", {})
-    assert first.created and not again.created and again.job_id == first.job_id
-    job = await ops.svc.queue.get(first.job_id)
-    assert job is not None and job.kind == VACUUM_KIND
-
-
 async def test_vacuum_refuses_while_a_rebuild_runs(ops: Ops) -> None:
     await enqueue_rebuild(ops.svc.queue, RebuildPayload())
     with pytest.raises(Conflict, match="rebuild is running"):

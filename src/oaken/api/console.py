@@ -18,6 +18,7 @@ optional script (``/refresh.js``). Nothing comes from another origin.
 
 import hashlib
 import hmac
+import re
 import secrets
 import time
 from collections import OrderedDict
@@ -35,6 +36,7 @@ from oaken.core.errors import OakenError
 from oaken.core.logging import get_logger
 from oaken.core.operations.caller import CallerContext
 from oaken.core.operations.client import CoreClient
+from oaken.plugins.ui import reposition
 
 log = get_logger("oaken.console")
 
@@ -62,7 +64,6 @@ PAGES = frozenset(
         "/general",
         "/pipeline",
         "/triage",
-        "/triage/rules/new",
         "/embed",
         "/enrich",
         "/action",
@@ -74,8 +75,9 @@ PAGES = frozenset(
 # The tabs of /general (General): the pipeline and its queue, the kinds with no stage of their own,
 # usage, the audit log.
 TABS = frozenset(
-    {"ingest", "queue", "provider", "llm_backend", "vector_store", "cache_store", "audit"}
+    {"ingest", "queue", "provider", "sieve", "llm_backend", "vector_store", "cache_store", "audit"}
 )
+PLUGIN_PAGE = re.compile(r"^/plugins/[a-z_]+/[a-z0-9_-]+/[a-z0-9_-]+$")
 FLASH_SECONDS = 60.0
 FLASH_MAX = 200
 MAX_FORM_BYTES = 512 * 1024  # a config.toml is a few kilobytes; this is generous
@@ -294,7 +296,8 @@ class Console:
     def _back(form: Form, flash_id: str) -> str:
         """The page to return to: one of the console's own, never a URL the form made up."""
         target = urlsplit(form.one("back", "/"))
-        path = target.path if target.path in PAGES and not target.netloc else "/general"
+        ok_path = target.path in PAGES or PLUGIN_PAGE.match(target.path)
+        path = target.path if ok_path and not target.netloc else "/general"
         tab = parse_qs(target.query).get("tab", [""])[0]
         query = f"tab={tab}&" if tab in TABS else ""
         return f"{path}?{query}flash={quote(flash_id)}"
@@ -415,93 +418,36 @@ class Console:
         state = "off" if f.one("run") == "off" else "on"
         return ok(f"{rule} is {state}. Reload {plugin} for it to take effect.")
 
-    # -- the reader's triage rules (CORE_54, ADR 0015) -----------------------------------------
-    CONDITIONS: ClassVar[tuple[str, ...]] = (
-        "from", "to", "subject", "subject_contains", "body_contains", "header_present",
-        "has_attachment", "is_reply",
-    )  # fmt: skip
-    BOOLEAN_CONDITIONS: ClassVar[frozenset[str]] = frozenset({"has_attachment", "is_reply"})
-
-    def _when(self, f: Form) -> dict[str, Any]:
-        """The conditions typed in the form: a blank is unused, a yes/no select is a boolean."""
-        when: dict[str, Any] = {}
-        for key in self.CONDITIONS:
-            raw = f.one(f"when_{key}").strip()
-            if not raw:
-                continue
-            when[key] = raw == "yes" if key in self.BOOLEAN_CONDITIONS else raw
-        return when
-
-    def _typed(self, f: Form) -> dict[str, str]:
-        fields = ("name", "level", "category", *(f"when_{k}" for k in self.CONDITIONS))
-        return {k: f.one(k) for k in fields if f.one(k)}
-
-    async def do_triage_rule_add(self, f: Form) -> Flash:
-        """Stage a rule from the form. Nothing is written to config.toml until Apply."""
-        name, when = f.one("name").strip(), self._when(f)
-        if not name:
-            return Flash("danger", "Give the rule a name.", draft=self._typed(f))
-        if not when:
-            return Flash("danger", "A rule needs at least one condition.", draft=self._typed(f))
+    # -- Sieve scripts (the Pipeline page's Sieve tab) ----------------------------------------
+    async def do_sieve_save(self, f: Form) -> Flash:
+        """Compile and save one script; a script that does not compile is not saved, and what was
+        typed stays in the editor with the reason and the line."""
+        typed = {"name": f.one("name").strip(), "text": f.one("text")}
+        if not typed["name"]:
+            return Flash("danger", "Give the script a name, such as 10-lists.sieve.", draft=typed)
         try:
-            await self.op(
-                "triage_rule_set",
-                {"name": name, "level": int(f.one("level", "2")), "category": f.one("category"),
-                 "when": when},
-            )  # fmt: skip
-        except OakenError as exc:  # keep what was typed: only the reason is new
-            return Flash("danger", str(exc), draft=self._typed(f))
-        return ok(f"Staged rule {name}.", "It is not in config.toml yet: press Apply.")
-
-    async def do_triage_rule_test(self, f: Form) -> Flash:
-        """Try the typed conditions on the newest stored mail: counts and ids, never mail text."""
-        when = self._when(f)
-        if not when:
-            return Flash("danger", "Type at least one condition to try.", draft=self._typed(f))
-        try:
-            out = await self.op("triage_rule_test", {"when": when})
+            out = await self.op("sieve_save", typed)
         except OakenError as exc:
-            return Flash("danger", str(exc), draft=self._typed(f))
-        text = f"This rule matches {out.matched} of the {out.tested} most recent messages."
-        details = ("Message ids: " + ", ".join(out.sample_ids),) if out.sample_ids else ()
-        if out.tested == 0:
-            kind, text = "warn", "There is no stored mail to try it on yet."
-        elif out.matched == 0:
-            kind, details = "warn", ("It matches none: check the conditions.", *details)
-        elif out.tested >= 10 and out.matched * 2 > out.tested:
-            kind, details = "warn", ("That is more than half of your mail: a very broad rule.", *details)
-        else:
-            kind = "ok"
-        return Flash(kind, text, details, draft=self._typed(f))
+            return Flash("danger", str(exc), draft=typed)
+        if not out.saved:
+            where = f" (line {out.check.line})" if out.check.line else ""
+            return Flash("danger", f"Not saved: {out.check.error}{where}", draft=typed)
+        return ok(f"Saved {typed['name']}.", "It runs on the next filter pass.")
 
-    async def do_triage_rule_move(self, f: Form) -> Flash:
-        """One step up or down in the order the rules run."""
-        name, step = f.one("rule"), -1 if f.one("direction") == "up" else 1
-        names = [r.name for r in (await self.op("triage_rules", {})).rules]
-        if name not in names:
-            return danger(f"There is no rule {name}.")
-        place = names.index(name) + step
-        if not 0 <= place < len(names):
-            return warn(f"{name} is already {'first' if step < 0 else 'last'}.")
-        await self.op("triage_rule_move", {"name": name, "to": place + 1})
-        return ok(f"Moved {name} {'up' if step < 0 else 'down'}.", "Press Apply to write the order.")
+    async def do_sieve_check(self, f: Form) -> Flash:
+        typed = {"name": f.one("name").strip() or "script.sieve", "text": f.one("text")}
+        out = await self.op("sieve_check", {"name": typed["name"], "script": typed["text"]})
+        if not out.ok:
+            where = f" (line {out.line})" if out.line else ""
+            return Flash("danger", f"Does not compile: {out.error}{where}", draft=typed)
+        needs = (f"Uses: {', '.join(out.requires)}",) if out.requires else ()
+        return Flash("ok", "Compiles. Safe to save.", needs, draft=typed)
 
-    async def do_triage_rule_toggle(self, f: Form) -> Flash:
-        name, on = f.one("rule"), f.one("run") == "on"
-        await self.op("triage_rule_set", {"name": name, "enabled": on})
-        return ok(f"{name} is {'on' if on else 'off'} (staged).", "Press Apply to write it.")
-
-    async def do_triage_rule_delete(self, f: Form) -> Flash:
-        await self.op("triage_rule_delete", {"name": f.one("rule")})
-        return ok(f"Removed {f.one('rule')} (staged).", "Press Apply to write it.")
-
-    async def do_triage_level_add(self, f: Form) -> Flash:
-        try:
-            value = int(f.one("value"))
-        except ValueError:
-            return danger("A level is a number, 4 or more.")
-        await self.op("triage_level_set", {"value": value, "name": f.one("name").strip()})
-        return ok(f"Staged level {value} {f.one('name').strip()}.", "Press Apply to write it.")
+    async def do_sieve_delete(self, f: Form) -> Flash:
+        out = await self.op("sieve_delete", {"name": f.one("script")})
+        if not out.deleted:
+            return warn(f"There is no script {f.one('script')}.")
+        return ok(f"Removed {f.one('script')}.", "It stops running on the next filter pass.")
 
     async def do_action_approve(self, f: Form) -> Flash:
         """Say yes to an action that is waiting: it runs now."""
@@ -511,21 +457,108 @@ class Console:
         )
         return ok(f"Approved: {f.one('action')} runs now.")
 
-    async def do_triage_apply(self, f: Form) -> Flash:
-        await self.op("triage_apply", {})
-        return ok("Applied: config.toml written once and the rules reloaded.")
+    # -- a plugin's own pages and buttons (ADR 0018) ------------------------------------------
+    def _plugin_spec(self, f: Form) -> tuple[str, str, Any]:
+        """The ``(kind, name, UiSpec)`` a form names. Only what the plugin declared can run."""
+        kind, name = f.one("kind"), f.one("plugin")
+        host = self.client.svc.plugins
+        spec = host.plugin_ui(kind, name) if host is not None else None  # type: ignore[arg-type]
+        if spec is None:
+            raise OakenError(f"plugin {name} declares no page")
+        return kind, name, spec
 
-    async def do_triage_discard(self, f: Form) -> Flash:
-        await self.op("triage_discard", {})
-        return ok("Discarded the staged edits.")
+    @staticmethod
+    def _page_input(page: Any, f: Form) -> tuple[dict[str, Any], dict[str, str]]:
+        """What the page's fields hold, as the operation's input, and as text to fill the form in
+        again. A blank field is left out, so the operation's own default applies."""
+        data: dict[str, Any] = {}
+        typed: dict[str, str] = {}
+        for fld in page.fields:
+            raw = f.one(fld.name)
+            if fld.kind == "bool":
+                data[fld.name] = f.has(fld.name)
+                typed[fld.name] = "on" if f.has(fld.name) else ""
+                continue
+            typed[fld.name] = raw
+            if not raw.strip():
+                continue
+            if fld.kind == "number":
+                try:
+                    data[fld.name] = int(raw)
+                except ValueError:
+                    raise OakenError(f"{fld.label or fld.name} must be a whole number") from None
+            elif fld.kind == "list":
+                data[fld.name] = [x.strip() for x in raw.splitlines() if x.strip()]
+            else:
+                data[fld.name] = raw.strip()
+        return data, typed
 
-    async def do_triage_ack(self, f: Form) -> Flash:
-        await self.op("triage_ack", {})
-        return ok("Accepted: config.toml's rules are now the ones running.")
+    async def _page_call(self, f: Form, role: str) -> tuple[Any, Any, dict[str, str]]:
+        kind, name, spec = self._plugin_spec(f)
+        page = next((p for p in spec.pages if p.name == f.one("page")), None)
+        op = getattr(page, role, "") if page is not None else ""
+        if not op:
+            raise OakenError(f"{name} has no {role} for that page")
+        data, typed = self._page_input(page, f)
+        return await self.op(f"{name}.{op}", data), page, typed
 
-    async def do_triage_revert(self, f: Form) -> Flash:
-        await self.op("triage_revert", {})
-        return ok("Reverted: config.toml holds the running rules again (a backup was kept).")
+    async def do_plugin_page_test(self, f: Form) -> Flash:
+        try:
+            out, _, typed = await self._page_call(f, "test")
+        except OakenError as exc:
+            return Flash("danger", str(exc), draft={k: f.one(k) for k in f.fields if k not in ("csrf", "back")})
+        text = getattr(out, "summary", "") or "Tested."
+        notes = tuple(getattr(out, "notes", ()) or ())
+        kind = "ok" if getattr(out, "ok", True) else "warn"
+        return Flash(kind, text, notes, draft=typed)
+
+    async def do_plugin_page_submit(self, f: Form) -> Flash:
+        try:
+            out, _, typed = await self._page_call(f, "submit")
+        except OakenError as exc:
+            return Flash("danger", str(exc), draft={k: f.one(k) for k in f.fields if k not in ("csrf", "back")})
+        return ok(getattr(out, "note", "") or "Done.")
+
+    async def do_plugin_page_order(self, f: Form) -> Flash:
+        """Each row's position box: a row whose number changed goes there, the rest shift (ADR 0018)."""
+        _, name, spec = self._plugin_spec(f)
+        page = next((p for p in spec.pages if p.name == f.one("page")), None)
+        if page is None or not page.order:
+            raise OakenError(f"{name} has no order for that page")
+        ids = f.many("row")
+        asked = {rid: f.one(f"pos_{i}") for i, rid in enumerate(ids)}
+        order = reposition(ids, asked)
+        if order == ids:
+            return warn("Nothing moved.")
+        out = await self.op(f"{name}.{page.order}", {"order": order})
+        return ok(getattr(out, "note", "") or "Order updated.")
+
+    async def do_plugin_button(self, f: Form) -> Flash:
+        _, name, spec = self._plugin_spec(f)
+        op = f.one("operation")
+        if op not in {b.operation for b in spec.buttons}:
+            raise OakenError(f"{name} has no such button")
+        out = await self.op(f"{name}.{op}", {})
+        return ok(getattr(out, "note", "") or "Done.")
+
+    async def plugin_page(self, request: Request) -> Response:
+        """Serve one page a plugin declared (``/plugins/<kind>/<name>/<page>``): core renders the
+        fields from the declaration, the plugin's ``load`` operation supplies the values."""
+        kind, name = str(request.path_params["kind"]), str(request.path_params["name"])
+        host = self.client.svc.plugins
+        spec = host.plugin_ui(kind, name) if host is not None else None  # type: ignore[arg-type]
+        page = next((p for p in spec.pages if p.name == request.path_params["page"]), None) if spec else None
+        if page is None:
+            return Response("no such page", status_code=404)
+        loaded = await self.op(f"{name}.{page.load}", {})
+        values = dict(getattr(loaded, "values", {}))  # what was typed (``draft``) wins in the template
+        active = {"triager": "triage", "enricher": "enrich", "action": "action", "embedder": "embed"}
+        return self.render(
+            request, "plugin_page.html", active.get(kind, "pipeline"),
+            {"kind": kind, "plugin": name, "page": page, "values": values,
+             "messages": getattr(loaded, "messages", []), "rows": getattr(loaded, "rows", []),
+             "back": f"/plugins/{kind}/{name}/{page.name}"},
+        )  # fmt: skip
 
     async def do_schedule(self, f: Form) -> Flash:
         """Change one account's sync schedule: how often (or a cron line), its timezone, quiet
@@ -696,17 +729,14 @@ ACTIONS: dict[str, Action] = {
     "stage": Console.do_stage,
     "stage-setting": Console.do_stage_setting,
     "rule": Console.do_rule,
-    "triage-rule-add": Console.do_triage_rule_add,
-    "triage-rule-test": Console.do_triage_rule_test,
-    "triage-rule-move": Console.do_triage_rule_move,
-    "triage-rule-toggle": Console.do_triage_rule_toggle,
-    "triage-rule-delete": Console.do_triage_rule_delete,
-    "triage-level-add": Console.do_triage_level_add,
+    "sieve-save": Console.do_sieve_save,
+    "sieve-check": Console.do_sieve_check,
+    "sieve-delete": Console.do_sieve_delete,
     "action-approve": Console.do_action_approve,
-    "triage-apply": Console.do_triage_apply,
-    "triage-discard": Console.do_triage_discard,
-    "triage-ack": Console.do_triage_ack,
-    "triage-revert": Console.do_triage_revert,
+    "plugin-page-test": Console.do_plugin_page_test,
+    "plugin-page-submit": Console.do_plugin_page_submit,
+    "plugin-page-order": Console.do_plugin_page_order,
+    "plugin-button": Console.do_plugin_button,
     "schedule": Console.do_schedule,
     "schedule-state": Console.do_schedule_state,
     "sync-now": Console.do_sync_now,

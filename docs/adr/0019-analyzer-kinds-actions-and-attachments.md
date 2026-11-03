@@ -6,8 +6,9 @@
 - Amends: ADR 0012 (a third pipeline kind, with effects outside the mail store)
 - Built: 2026-11-03, not yet verified by the owner's checks: decisions 1 to 4a, 4b2 to 4b4, 4c and
   4e (the kind, `route`, `approval`, parked jobs, `action_results`, `get_action`, `list_actions`,
-  `approve_action`, `oaken action`, the Action tab). Not built: decisions 4b (grants and folders) and
-  5 (the `attachment` plugin), and 4d needs no code. Proof: `src/oaken/ingest/tests/test_actions.py`.
+  `approve_action`, `oaken action`, the Action tab). Built later the same day: decision 5 (the `attachment` plugin in `oaken_actions`, the byte reader
+  `PluginContext.attachments`, the quarantine writer moved out of core, the `quarantine` route
+  queued by core). Not built: grants (4b), a destination the reader chooses, and 4d needs no code. Proof: `src/oaken/ingest/tests/test_actions.py`.
 
 ## Context
 

@@ -243,6 +243,7 @@ class StatsCollector:
                     "config_schema": e["config_schema"],
                     "enabled": e["enabled"],
                     "steps": e.get("steps", []),
+                    "ui": e.get("ui", {"pages": [], "buttons": []}),
                 }  # fmt: skip
             )
         return rows
@@ -350,6 +351,7 @@ class StatsCollector:
                     "config": cfg.config if cfg else {},
                     "config_schema": schema,
                     "steps": steps,
+                    "ui": self._ui(s.kind, s.name),
                 }
             )
         return rows
@@ -534,9 +536,22 @@ class StatsCollector:
                     "config": cfg.config if cfg else {},
                     "config_schema": cfg.config_schema if cfg else None,
                     "steps": steps,
+                    "ui": self._ui(s.kind, s.name),
                 }
             )
         return out
+
+    def _ui(self, kind: str, name: str) -> dict[str, Any]:
+        """What the plugin's declared UI offers its settings dialog: page links and buttons."""
+        host = self._svc.plugins
+        spec = host.plugin_ui(kind, name) if host is not None else None  # type: ignore[arg-type]
+        if spec is None:
+            return {"pages": [], "buttons": []}
+        return {
+            "pages": [{"name": p.name, "title": p.title} for p in spec.pages],
+            "buttons": [{"label": b.label, "operation": b.operation, "confirm": b.confirm}
+                        for b in spec.buttons],
+        }  # fmt: skip
 
     async def _run_op(self, name: str, payload: dict[str, Any]) -> Any:
         """Invoke a read operation through the CoreClient as the internal caller, returning its

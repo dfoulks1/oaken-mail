@@ -253,7 +253,7 @@ class CompleteJobOutput(Done):
 async def complete_job(ctx: OpContext, inp: CompleteJobInput) -> CompleteJobOutput:
     """The result is checked before anything is stored: a result that does not match the kind's
     schema is rejected as invalid_result and the job stays yours, so you can fix it or fail it.
-    For ingest.triage and ingest.enrich.<name> the result is that enricher's answer, matching the
+    For ingest.triage, ingest.triage.<name> and ingest.enrich.<name> the result is that enricher's answer, matching the
     schema in the claim. For the legacy ingest.enrich it is
     ``{"enrichments": {"<enricher>": {...}}}``; answer some and the rest stay owed (the job goes
     back to the queue), answer all and the job is done."""

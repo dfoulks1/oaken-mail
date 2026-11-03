@@ -5,7 +5,10 @@
 - Rests on: ADR 0017 (built first); ADR 0016 is built on this one
 - Amends: ADR 0012 (a plugin gains one optional method, `ui()`, and one context-free declaration) and
   ADR 0013 (a plugin's pages are shown by core; the no-script rule stands)
-- Built: not started. Prompt: `docs/prompts/CORE_56-plugin-web-ui-contract.md` (draft).
+- Built: 2026-11-03, not yet verified by the owner's checks: `UiSpec` and its parts, `ui()`, the
+  check and fallback (`plugins/ui.py`, `PluginHost.plugin_ui`), position-field ordering with
+  downshift (`reposition`), the console's `/plugins/<kind>/<name>/<page>`, and the page and button
+  actions. Not built: settings sections and `show_if` in the modal, and the CLI walking a page.
 
 ## Context
 
