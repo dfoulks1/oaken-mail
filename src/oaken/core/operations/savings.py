@@ -29,7 +29,6 @@ MEASURED = frozenset(
         "list_messages",
         "search",
         "search_keyword",
-        "ask",
         "get_message",
         "get_thread",
         "get_enrichment",

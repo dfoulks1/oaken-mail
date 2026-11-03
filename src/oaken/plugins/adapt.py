@@ -20,7 +20,9 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from oaken.core.errors import PluginError
 from oaken.plugins.contracts import (
+    ActionResult,
     EnrichOutput,
+    TriageVerdict,
     Hit,
     LLMResponse,
     PullBatch,
@@ -110,25 +112,43 @@ def to_llm_response(obj: object, who: str) -> LLMResponse:
         raise _problem(who, "generate()", exc) from exc
 
 
-def to_enrich_output(obj: object, who: str, model: type[BaseModel] | None = None) -> EnrichOutput:
-    """An ``EnrichOutput``, from one, a dict, or a pydantic model. If the enricher declares an
-    output model the data is validated against it."""
-    if isinstance(obj, EnrichOutput):
-        obj = obj.data
-    if isinstance(obj, BaseModel):
-        obj = obj.model_dump(mode="json")
-    if not isinstance(obj, dict):
-        raise PluginError(f"{who}: enrich() must return a dict or model, got {type(obj).__name__}")
+def to_result(
+    obj: object, who: str, verb: str, model: type[BaseModel] | None = None
+) -> dict[str, Any]:
+    """The one check every analyzer's answer goes through (ADR 0017): a dict, or a pydantic model
+    (or a result wrapper with ``data``), validated against the plugin's output model when it has
+    one, and JSON-serializable. ``verb`` names the method for the error (``enrich``, ``triage``,
+    ``act``)."""
+    data = obj.data if isinstance(obj, (EnrichOutput, TriageVerdict, ActionResult)) else obj
+    if isinstance(data, BaseModel):
+        data = data.model_dump(mode="json")
+    if not isinstance(data, dict):
+        raise PluginError(f"{who}: {verb}() must return a dict or model, got {type(data).__name__}")
     if model is not None:
         try:
-            obj = model.model_validate(obj).model_dump(mode="json")
+            data = model.model_validate(data).model_dump(mode="json")
         except ValidationError as exc:
-            raise _problem(who, "enrich()", exc) from exc
+            raise _problem(who, f"{verb}()", exc) from exc
     try:
-        json.dumps(obj)
+        json.dumps(data)
     except (TypeError, ValueError) as exc:
-        raise PluginError(f"{who}: enrich() result is not JSON-serializable ({exc})") from exc
-    return EnrichOutput(data=obj)
+        raise PluginError(f"{who}: {verb}() result is not JSON-serializable ({exc})") from exc
+    return data
+
+
+def to_enrich_output(obj: object, who: str, model: type[BaseModel] | None = None) -> EnrichOutput:
+    """An ``EnrichOutput`` from one, a dict, or a pydantic model, checked against ``model``."""
+    return EnrichOutput(data=to_result(obj, who, "enrich", model))
+
+
+def to_triage_verdict(obj: object, who: str, model: type[BaseModel] | None = None) -> TriageVerdict:
+    """A ``TriageVerdict`` from one, a dict, or a pydantic model, checked against ``model``."""
+    return TriageVerdict(data=to_result(obj, who, "triage", model))
+
+
+def to_action_result(obj: object, who: str, model: type[BaseModel] | None = None) -> ActionResult:
+    """An ``ActionResult`` from one, a dict, or a pydantic model, checked against ``model``."""
+    return ActionResult(data=to_result(obj, who, "act", model))
 
 
 def to_hits(obj: object, k: int, who: str) -> list[Hit]:

@@ -14,13 +14,8 @@ from oaken.core.logging import get_logger
 from oaken.core.settings import Settings
 from oaken.ingest.tests.conftest import Options, Rig, build, mail
 from oaken.plugins.contracts import Enricher, LLMRequest, PluginContext, Triager
-from oaken_enrichers import (
-    ActionsEnricher,
-    AITriager,
-    InspectorEnricher,
-    RulesTriager,
-    SummaryEnricher,
-)
+from oaken_enrichers import ActionsEnricher, InspectorEnricher, SummaryEnricher
+from oaken_triagers import AITriager, SpamCheckTriager
 
 NAMES = ("summary", "actions", "inspector")
 
@@ -53,7 +48,7 @@ async def start_all(rig: Rig, settings: Settings) -> tuple[dict[str, Enricher], 
         await plugin.start(context(name, "enricher"))
         found[name] = cast(Enricher, plugin)
     triagers: dict[str, Triager] = {}
-    for name, tcls in (("rules", RulesTriager), ("ai", AITriager)):
+    for name, tcls in (("spamcheck", SpamCheckTriager), ("ai", AITriager)):
         triager = tcls()
         await triager.start(context(name, "triager"))
         triagers[name] = cast(Triager, triager)
@@ -80,8 +75,10 @@ async def rig(tmp_path: Path) -> AsyncIterator[Rig]:
 
 async def rows(rig: Rig, mid: str) -> dict[str, dict[str, Any]]:
     got = await rig.raw_db.fetchall(
-        "SELECT enricher, version, created_at FROM enrichments WHERE message_id = ?", (mid,)
-    )
+        "SELECT enricher, version, created_at FROM enrichments WHERE message_id = ?"
+        " UNION ALL SELECT 'triage', version, created_at FROM triage_verdicts WHERE message_id = ?",
+        (mid, mid),
+    )  # the verdict is stored apart from the enrichers (ADR 0017); the tests count both
     return {r["enricher"]: dict(r) for r in got}
 
 

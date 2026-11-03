@@ -28,7 +28,7 @@ _MESSAGE_FIELDS = ("message_id", "message_ids", "ids")
 # Operations that read across every account with no way to narrow them to a set of accounts. With
 # a restricted scope they must name one account in scope (``account_id``) or are refused.
 _NEEDS_ACCOUNT = frozenset(
-    {"search", "search_keyword", "list_messages", "ask", "get_thread", "mailbox_counts"}
+    {"search", "search_keyword", "list_messages", "get_thread", "mailbox_counts"}
 )
 # Operations with no input that summarize all mail. With a restricted scope they are refused.
 _REFUSED_WHEN_RESTRICTED = frozenset({"list_labels", "list_mailbox"})

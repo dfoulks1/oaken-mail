@@ -57,11 +57,11 @@ def scrub(_logger: WrappedLogger, _method: str, event_dict: EventDict) -> EventD
 
 
 class _LogFile:
-    """An append-only, owner-only (``0600``) log file that rotates by size, and still writes to
-    ``also`` (stderr). A failing file never costs the process its log: the error is dropped."""
+    """An append-only, owner-only (``0600``) log file that rotates by size. A failing file never
+    costs the process its log: the error is dropped."""
 
-    def __init__(self, path: Path, max_bytes: int, backups: int, also: TextIO) -> None:
-        self.path, self.max_bytes, self.backups, self.also = path, max_bytes, backups, also
+    def __init__(self, path: Path, max_bytes: int, backups: int) -> None:
+        self.path, self.max_bytes, self.backups = path, max_bytes, backups
         self._lock = threading.Lock()
         path.parent.mkdir(parents=True, exist_ok=True)
         self._fh = self._open()
@@ -81,10 +81,6 @@ class _LogFile:
         self._fh = self._open()
 
     def write(self, text: str) -> int:
-        try:
-            self.also.write(text)
-        except (OSError, ValueError):
-            pass
         with self._lock:
             try:
                 if self._fh.tell() + len(text) > self.max_bytes:
@@ -95,9 +91,26 @@ class _LogFile:
                 pass
         return len(text)
 
+    def flush(self) -> None:  # every write is flushed already
+        pass
+
+
+class _Tolerant:
+    """``stream`` that never raises: a detached core's stderr may be closed, and logging must not
+    take the process down with it."""
+
+    def __init__(self, stream: TextIO) -> None:
+        self.stream = stream
+
+    def write(self, text: str) -> int:
+        try:
+            return self.stream.write(text)
+        except (OSError, ValueError):
+            return len(text)
+
     def flush(self) -> None:
         try:
-            self.also.flush()
+            self.stream.flush()
         except (OSError, ValueError):
             pass
 
@@ -108,13 +121,20 @@ def _log_path(name: str) -> Path:
 
 
 def configure_logging(settings: LogSettings, stream: TextIO | None = None) -> None:
-    """Configure structlog. With ``settings.file`` set, lines go to that file as well as ``stream``
+    """Configure structlog. With ``settings.file`` set, every line also goes to that file as one
+    JSON object whatever ``format`` is, so the whole file parses; ``format`` shapes ``stream``
     (stderr by default). Calling it again replaces the setup, so a reload can change any of it."""
     out: TextIO = stream or sys.stderr
+    sink: list[Processor] = []
     if settings.file:
-        out = _LogFile(  # type: ignore[assignment]
-            _log_path(settings.file), settings.file_max_bytes, settings.file_backups, out
-        )
+        file = _LogFile(_log_path(settings.file), settings.file_max_bytes, settings.file_backups)
+        as_json = structlog.processors.JSONRenderer()
+
+        def to_file(_: WrappedLogger, __: str, event_dict: EventDict) -> EventDict:
+            file.write(f"{as_json(_, __, event_dict)}\n")
+            return event_dict
+
+        sink = [to_file]
     renderer: Processor = (
         structlog.processors.JSONRenderer()
         if settings.format == "json"
@@ -127,10 +147,11 @@ def configure_logging(settings: LogSettings, stream: TextIO | None = None) -> No
             structlog.processors.TimeStamper(fmt="iso", utc=True),
             exc_frames,
             scrub,
+            *sink,
             renderer,
         ],
         wrapper_class=structlog.make_filtering_bound_logger(_LEVELS[settings.level]),
-        logger_factory=structlog.PrintLoggerFactory(file=out),
+        logger_factory=structlog.PrintLoggerFactory(file=_Tolerant(out)),  # type: ignore[arg-type]
         cache_logger_on_first_use=False,
     )
 

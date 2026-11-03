@@ -14,7 +14,9 @@ async def state(rig: Rig) -> dict[str, Any]:
     docs = await rig.raw_db.fetchone("SELECT 1")  # raw.db is alive
     assert docs
     rows = await rig.index.db.fetchall("SELECT subject FROM docs ORDER BY subject")
-    enr = await rig.raw_db.fetchall("SELECT enricher, content_hash FROM enrichments")
+    enr = await rig.raw_db.fetchall("SELECT enricher, content_hash FROM enrichments"
+        " UNION ALL SELECT 'triage', content_hash FROM triage_verdicts"
+    )
     return {
         "docs": [r["subject"] for r in rows],
         "chunks": (await rig.index.stats()).chunks,

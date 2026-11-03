@@ -74,9 +74,6 @@ class AISettings(_Section):
     embed_model: str = "nomic-embed-text"
     llm_backend: str = "ollama"
     llm_model: str = "qwen2.5:3b"  # small on purpose; set a larger model for better analysis
-    # The model ``ask`` uses (working out what was asked, and a cited answer). Empty means the
-    # backend's own model. A question a person is waiting on may deserve a better one than enrich.
-    ask_model: str = ""
     # While a question a person is waiting on uses the model, background work (enrich) holds its
     # next model call for at most this many seconds, then goes ahead. 0 means it never holds back.
     background_yield_seconds: float = Field(default=120.0, ge=0)
@@ -93,9 +90,6 @@ class AISettings(_Section):
     # Most tokens of one message's cleaned text an LLM enricher sends. A longer message keeps its
     # head and tail with a marker between, and the result says ``truncated``.
     enrich_max_input_tokens: int = Field(default=3000, ge=200)
-    # Most tokens of evidence (mail text, summaries and headers) one ``ask`` puts in front of the
-    # model. The context builder never goes over it.
-    ask_context_tokens: int = Field(default=3000, ge=200)
     # Chunking (prompt 07): the target size of a chunk and how much of the previous one a chunk
     # repeats, both in tokens as the configured tokenizer counts them.
     chunk_tokens: int = Field(default=256, ge=16, le=8192)
@@ -135,7 +129,7 @@ class IngestSettings(_Section):
     triage_concurrency: int = Field(default=1, ge=1)
     # Mail triage rated below this is not embedded (it stays keyword-searchable). Unrated mail is
     # embedded. None embeds everything.
-    embed_min_priority: int | None = Field(default=1, ge=0, le=3)
+    embed_min_priority: int | None = Field(default=1, ge=0, le=99)
     # Rolling window for the throughput the status ETA uses.
     throughput_window_seconds: float = Field(default=600.0, gt=0)
 
@@ -308,13 +302,6 @@ class SearchSettings(_Section):
     # enough; a search that comes up short widens up to ``max_candidates``.
     overfetch: int = Field(default=5, ge=1, le=50)
     max_candidates: int = Field(default=500, ge=10, le=10_000)
-    # Messages ``ask`` retrieves before the context builder decides how much of each to send.
-    ask_hits: int = Field(default=10, ge=1, le=50)
-    # Of those, how many get their matched chunks into the context (the rest are only a header and
-    # a summary line), and how many also get the chunks beside the match and their thread's
-    # summaries. The context never goes over ``ai.ask_context_tokens`` whatever these are.
-    ask_chunk_hits: int = Field(default=5, ge=1, le=50)
-    ask_neighbor_hits: int = Field(default=2, ge=0, le=50)
     # The vector side gives up (and the result says ``degraded``) after this long.
     vector_timeout_seconds: float = Field(default=10.0, gt=0)
     # Ask the language model to rephrase the free text before it is embedded. Off by default: it
@@ -503,6 +490,36 @@ class LogSettings(_Section):
     trace_event_cap: int = Field(default=200_000, ge=1000)  # longest text kept in one event
 
 
+class TriageLevelCfg(BaseModel):
+    """``[[triage.levels]]``: a level of the reader's own (4 and up; 0 to 3 are built in)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    value: int = Field(ge=4, le=99)
+    name: str = Field(min_length=1, max_length=40)
+
+
+class TriageRuleCfg(BaseModel):
+    """``[[triage.rules]]``: one of the reader's rules. The list's order is the order they run.
+    ``when`` is checked by the ``rules`` triager's own config model, not here."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    name: str = Field(min_length=1, max_length=80)
+    enabled: bool = True
+    level: int = Field(ge=0, le=99)
+    category: str
+    when: dict[str, Any]
+    route: list[str] = Field(default_factory=list)  # the actions it sends a message to (ADR 0019)
+
+
+class TriageSettings(BaseModel):
+    """The reader's triage levels and rules. ``config.toml`` is the source of truth for them; core
+    keeps the last copy the reader acknowledged in its database (ADR 0015)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    levels: list[TriageLevelCfg] = Field(default_factory=list)
+    rules: list[TriageRuleCfg] = Field(default_factory=list)
+
+
 class Settings(BaseSettings):
     """``Settings(...)`` is pure: it reads neither the file nor the environment.
     ``Settings.load()`` applies the full precedence."""
@@ -526,6 +543,7 @@ class Settings(BaseSettings):
     ui: UISettings = UISettings()
     api: APISettings = APISettings()
     log: LogSettings = LogSettings()
+    triage: TriageSettings = TriageSettings()
     # Free-form, per plugin: [plugins.<kind>.<name>] (or the older flat [plugins.<name>]) reaches
     # that plugin as ``ctx.config``. Read it with ``plugin_table``.
     plugins: dict[str, dict[str, Any]] = Field(default_factory=dict)

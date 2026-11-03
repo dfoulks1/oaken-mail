@@ -5,7 +5,7 @@
 ``enrich`` scores the enrichers' eval fixtures against the language model configured in
 ``config.toml``. Manual: it needs a running model (Ollama, say) and is never part of CI.
 
-``retrieval`` builds a synthetic mailbox, runs keyword, vector and hybrid search and ``ask`` over
+``retrieval`` builds a synthetic mailbox, runs keyword, vector and hybrid search over
 planted questions, and writes ``latest.json`` and ``latest.md``. Offline (the default) it uses
 deterministic stand-ins for the models and is what CI runs; ``--live`` uses the configured
 embedder and language model instead. Nothing is stored outside a throwaway database and no real
@@ -121,7 +121,6 @@ async def run_retrieval(args: argparse.Namespace) -> int:
     from oaken.evals.retrieval import report
     from oaken.evals.retrieval.corpus import generate
     from oaken.evals.retrieval.embedder import ConceptEmbedder
-    from oaken.evals.retrieval.reader import read
     from oaken.evals.retrieval.run import run as run_eval
     from oaken.testing.fakes import FakeLLM
 
@@ -135,12 +134,11 @@ async def run_retrieval(args: argparse.Namespace) -> int:
         except Exception as exc:  # noqa: BLE001
             raise SystemExit(f"no embedder or language model is available ({exc})") from exc
         results = await run_eval(
-            corpus, embedder, llm, mode="live", reader=llm.model_id, settings=settings,
-            date=args.date,
-        )  # fmt: skip
+            corpus, embedder, llm, mode="live", settings=settings, date=args.date
+        )
         await host.stop()
     else:
-        results = await run_eval(corpus, ConceptEmbedder(), FakeLLM(responder=read), date=args.date)
+        results = await run_eval(corpus, ConceptEmbedder(), FakeLLM(), date=args.date)
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "latest.json").write_text(report.dumps(results))
     (args.out / "latest.md").write_text(report.markdown(results))
@@ -151,7 +149,7 @@ async def run_retrieval(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m oaken.evals")
     sub = ap.add_subparsers(dest="command", required=True)
-    rt = sub.add_parser("retrieval", help="measure hybrid search and ask on a synthetic mailbox")
+    rt = sub.add_parser("retrieval", help="measure hybrid search on a synthetic mailbox")
     rt.add_argument("--messages", type=int, default=1000)
     rt.add_argument("--seed", type=int, default=0)
     rt.add_argument("--per-kind", type=int, default=12, help="questions of each kind")

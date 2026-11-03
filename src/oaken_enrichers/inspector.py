@@ -19,13 +19,12 @@ from pydantic import BaseModel, Field
 
 from oaken.plugins.base import BaseEnricher
 from oaken.plugins.contracts import (
-    AskIntent,
     EnrichAttachment,
-    EnrichInput,
+    CleanMessage,
     EnrichOutput,
     PluginContext,
 )
-from oaken_enrichers._common import bulk_reasons, header_values
+from oaken.plugins.kit import bulk_reasons, header_values
 
 LONG_PATH_HOPS = 8
 SKEW = timedelta(days=2)
@@ -139,7 +138,7 @@ def attachment_report(att: EnrichAttachment) -> AttachmentReport:
     )  # fmt: skip
 
 
-def inspect(msg: EnrichInput, now: datetime) -> InspectorResult:
+def inspect(msg: CleanMessage, now: datetime) -> InspectorResult:
     h = header_values(msg)
     auth = authentication(h)
     warnings: list[str] = []
@@ -187,16 +186,11 @@ class InspectorEnricher(BaseEnricher):
     version = "1"
     needs_llm = False
     output_model = InspectorResult
-    ask_intent = AskIntent(
-        "inspector",
-        "The reader asks whether mail is authentic, spam or suspicious.",
-        ("warnings", "authentication", "spam_headers"),
-    )
 
     async def start(self, ctx: PluginContext) -> None:
         await super().start(ctx)
 
-    async def enrich(self, msg: EnrichInput) -> EnrichOutput:
+    async def enrich(self, msg: CleanMessage) -> EnrichOutput:
         return EnrichOutput(inspect(msg, self.ctx.clock.now()).model_dump(mode="json"))
 
 

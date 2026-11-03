@@ -270,8 +270,10 @@ class Api:
             Route("/getting_started", _moved("/getting-started"), methods=["GET"]),
             Route("/pipeline", safe(self.pipeline_page), methods=["GET"]),
             Route("/triage", safe(self.triage_page), methods=["GET"]),
+            Route("/triage/rules/new", safe(self.new_rule_page), methods=["GET"]),
             Route("/embed", safe(self.embed_page), methods=["GET"]),
             Route("/enrich", safe(self.enrich_page), methods=["GET"]),
+            Route("/action", safe(self.action_page), methods=["GET"]),
             Route("/capabilities", safe(self.capabilities_page), methods=["GET"]),
             Route("/pipeline.json", safe(self.pipeline_json), methods=["GET"]),
             Route("/oaken.css", safe(self.asset_css), methods=["GET"]),
@@ -349,8 +351,10 @@ class Api:
     # Which stage a model call or an agent belongs to, so each stage's page shows its own.
     @staticmethod
     def _usage_stage(stage: str) -> str:
-        if stage == "llm.enrich.triage":
+        if stage in ("llm.triage", "llm.enrich.triage"):  # the old name is in stored usage
             return "triage"
+        if stage == "llm.action" or stage.startswith("llm.action."):
+            return "action"
         if stage == "embed" or stage.startswith(("embed.", "llm.embed")):
             return "embed"
         if stage == "enrich" or stage.startswith("llm.enrich."):
@@ -368,6 +372,15 @@ class Api:
             elif k == "ingest.enrich" or k.startswith("ingest.enrich."):
                 out.add("enrich")
         return out
+
+    async def _triage_view(self) -> dict[str, Any]:
+        """The reader's rules, levels and state for the Triage page (counts and rules only)."""
+        op = self.console.op
+        return {
+            "rules": (await op("triage_rules", {})).rules,
+            "levels": (await op("triage_levels", {})).levels,
+            "state": await op("triage_drift", {}),
+        }
 
     async def _stage_page(
         self, request: Request, kind: str, stage: str, label: str, plural: str
@@ -409,6 +422,11 @@ class Api:
                     "restores the default.",
                 }
             )
+        if stage == "triage":
+            data["triage"] = await self._triage_view()
+        if stage == "action":
+            listed = await self.console.op("list_actions", {})
+            data["action_waiting"], data["action_recent"] = listed.waiting, listed.recent
         data.update(
             stage_kind=kind,
             stage_name=stage,
@@ -421,11 +439,19 @@ class Api:
     async def triage_page(self, request: Request) -> Response:
         return await self._stage_page(request, "triager", "triage", "Triage", "Triagers")
 
+    async def new_rule_page(self, request: Request) -> Response:
+        """The form for one new triage rule: it stages the rule, and Apply is in the rules dialog."""
+        data = {"triage": await self._triage_view()}
+        return self.console.render(request, "triage_rule_new.html", "triage", data)
+
     async def embed_page(self, request: Request) -> Response:
         return await self._stage_page(request, "embedder", "embed", "Embed", "Embedders")
 
     async def enrich_page(self, request: Request) -> Response:
         return await self._stage_page(request, "enricher", "enrich", "Enrich", "Enrichers")
+
+    async def action_page(self, request: Request) -> Response:
+        return await self._stage_page(request, "action", "action", "Action", "Actions")
 
     async def capabilities_page(self, request: Request) -> Response:
         """What this core can do, by plugin kind, and what MCP clients may call."""

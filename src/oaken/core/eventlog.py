@@ -57,7 +57,9 @@ class EventLog:
         self.append_line(event.ts.isoformat(), type(event).__name__, event_data(event))
 
     def append_line(self, ts: str, kind: str, data: dict[str, Any]) -> None:
-        line = json.dumps({"ts": ts, "kind": kind, "data": data}, default=str) + "\n"
+        line = json.dumps(
+            {"ts": ts, "kind": kind, "data": data}, default=str, separators=(",", ":"), ensure_ascii=False
+        ) + "\n"
         try:
             if self._fh is None:
                 self._fh = self._open()

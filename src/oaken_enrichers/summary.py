@@ -12,8 +12,9 @@ from pydantic import BaseModel, Field, field_validator
 
 from oaken.ai.prompts import PromptBuilder, SafeOutput
 from oaken.core.untrusted import UntrustedText
-from oaken.plugins.contracts import AskIntent, EnrichInput, EnrichOutput
-from oaken_enrichers._common import GatedConfig, LLMEnricher, bulk_reasons, digest, fit, labeled
+from oaken.plugins.contracts import CleanMessage, EnrichOutput
+from oaken.plugins.kit import bulk_reasons, digest, fit, labeled
+from oaken_enrichers._common import GatedConfig, LLMEnricher
 
 MAX_POINTS = 5
 
@@ -64,15 +65,12 @@ class SummaryEnricher(LLMEnricher):
     skip_bulk = True
     config_model = GatedConfig
     prompt = SUMMARY
-    ask_intent = AskIntent(
-        "summary", "The reader wants a summary or the gist of messages.", ("summary", "key_points")
-    )
     output_model = SummaryResult
 
-    def needs_model(self, msg: EnrichInput) -> bool:
+    def needs_model(self, msg: CleanMessage) -> bool:
         return not (self.skips_bulk() and bulk_reasons(msg))
 
-    async def enrich(self, msg: EnrichInput) -> EnrichOutput:
+    async def enrich(self, msg: CleanMessage) -> EnrichOutput:
         if self.skips_bulk() and bulk_reasons(msg):
             return EnrichOutput(SummaryResult(skipped="bulk").model_dump(mode="json"))
         body, truncated = fit(msg.body.unwrap(), self.budget(), self.tokenizer)
@@ -90,7 +88,7 @@ class SummaryEnricher(LLMEnricher):
         )
         return self.finish(answer, truncated)
 
-    def from_answer(self, msg: EnrichInput, answer: SummaryAnswer) -> EnrichOutput:
+    def from_answer(self, msg: CleanMessage, answer: SummaryAnswer) -> EnrichOutput:
         """The stored result for an answer a model (or an external agent) gave: what ``enrich``
         does after the model call, so every answer is held to the same rules."""
         _, truncated = fit(msg.body.unwrap(), self.budget(), self.tokenizer)

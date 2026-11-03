@@ -62,8 +62,10 @@ PAGES = frozenset(
         "/general",
         "/pipeline",
         "/triage",
+        "/triage/rules/new",
         "/embed",
         "/enrich",
+        "/action",
         "/capabilities",
         "/config",
         "/getting-started",
@@ -88,6 +90,7 @@ class Flash:
     kind: str
     text: str
     details: tuple[str, ...] = ()
+    draft: Mapping[str, str] | None = None  # what was typed, to fill the form in again
 
 
 class FlashStore:
@@ -117,6 +120,29 @@ class FlashStore:
 
 
 FLASHES = FlashStore()
+
+
+class DraftStore:
+    """What a person typed into a form whose button only tried something (Test), kept on the server
+    for one page load so the form comes back filled in: a script-free page cannot hold it."""
+
+    def __init__(self, now: Callable[[], float] = time.monotonic) -> None:
+        self._now = now
+        self._items: OrderedDict[str, tuple[float, Mapping[str, str]]] = OrderedDict()
+
+    def add(self, draft: Mapping[str, str]) -> str:
+        key = secrets.token_urlsafe(9)
+        self._items[key] = (self._now() + FLASH_SECONDS, draft)
+        while len(self._items) > FLASH_MAX:
+            self._items.popitem(last=False)
+        return key
+
+    def take(self, key: str) -> Mapping[str, str]:
+        entry = self._items.pop(key, None)
+        return entry[1] if entry and entry[0] > self._now() else {}
+
+
+DRAFTS = DraftStore()
 _SECRET = secrets.token_bytes(32)
 
 
@@ -210,6 +236,7 @@ class Console:
             "palettes": PALETTES,
             "modes": MODES,
             "flash": flash,
+            "draft": DRAFTS.take(request.query_params.get("draft", "")),
             "csrf": csrf_token(),
             "here": here,
             "tab": tab if tab in TABS else "ingest",
@@ -258,7 +285,10 @@ class Console:
         except Exception as exc:  # noqa: BLE001 - a console button must never 500 the page
             log.error("console action failed", action=name, error=type(exc).__name__)
             flash = danger("that did not work; core's log has the details")
-        return RedirectResponse(self._back(form, FLASHES.add(flash)), status_code=303)
+        back = self._back(form, FLASHES.add(flash))
+        if flash.draft:
+            back += f"&draft={quote(DRAFTS.add(flash.draft))}"
+        return RedirectResponse(back, status_code=303)
 
     @staticmethod
     def _back(form: Form, flash_id: str) -> str:
@@ -328,17 +358,14 @@ class Console:
     async def do_model(self, f: Form) -> Flash:
         kind, plugin, model = f.one("kind"), f.one("plugin"), f.one("model")
         shown = model or "the backend's own model"
-        if kind == "ask":
-            saved = await self.op("set_settings", {"section": "ai", "values": {"ask_model": model}})
-        else:
-            saved = await self.op(
-                "set_plugin_config", {"plugin": plugin, "kind": kind, "config": {"model": model}}
-            )
+        saved = await self.op(
+            "set_plugin_config", {"plugin": plugin, "kind": kind, "config": {"model": model}}
+        )
         if (why := _problem(saved)) is not None:
             return danger(f"Could not set the model: {why}")
-        if kind in ("ask", "llm_backend"):  # a backend pins its model when it starts
+        if kind == "llm_backend":  # a backend pins its model when it starts
             await self.op("config_reload", {})
-            return ok(f"{plugin or 'ask'} will use {shown}; core reloaded.")
+            return ok(f"{plugin} will use {shown}; core reloaded.")
         if kind == "embedder":
             return warn(
                 f"{plugin} will use {shown} from its next job.",
@@ -387,6 +414,118 @@ class Console:
             return danger(f"Could not change the rule: {why}")
         state = "off" if f.one("run") == "off" else "on"
         return ok(f"{rule} is {state}. Reload {plugin} for it to take effect.")
+
+    # -- the reader's triage rules (CORE_54, ADR 0015) -----------------------------------------
+    CONDITIONS: ClassVar[tuple[str, ...]] = (
+        "from", "to", "subject", "subject_contains", "body_contains", "header_present",
+        "has_attachment", "is_reply",
+    )  # fmt: skip
+    BOOLEAN_CONDITIONS: ClassVar[frozenset[str]] = frozenset({"has_attachment", "is_reply"})
+
+    def _when(self, f: Form) -> dict[str, Any]:
+        """The conditions typed in the form: a blank is unused, a yes/no select is a boolean."""
+        when: dict[str, Any] = {}
+        for key in self.CONDITIONS:
+            raw = f.one(f"when_{key}").strip()
+            if not raw:
+                continue
+            when[key] = raw == "yes" if key in self.BOOLEAN_CONDITIONS else raw
+        return when
+
+    def _typed(self, f: Form) -> dict[str, str]:
+        fields = ("name", "level", "category", *(f"when_{k}" for k in self.CONDITIONS))
+        return {k: f.one(k) for k in fields if f.one(k)}
+
+    async def do_triage_rule_add(self, f: Form) -> Flash:
+        """Stage a rule from the form. Nothing is written to config.toml until Apply."""
+        name, when = f.one("name").strip(), self._when(f)
+        if not name:
+            return Flash("danger", "Give the rule a name.", draft=self._typed(f))
+        if not when:
+            return Flash("danger", "A rule needs at least one condition.", draft=self._typed(f))
+        try:
+            await self.op(
+                "triage_rule_set",
+                {"name": name, "level": int(f.one("level", "2")), "category": f.one("category"),
+                 "when": when},
+            )  # fmt: skip
+        except OakenError as exc:  # keep what was typed: only the reason is new
+            return Flash("danger", str(exc), draft=self._typed(f))
+        return ok(f"Staged rule {name}.", "It is not in config.toml yet: press Apply.")
+
+    async def do_triage_rule_test(self, f: Form) -> Flash:
+        """Try the typed conditions on the newest stored mail: counts and ids, never mail text."""
+        when = self._when(f)
+        if not when:
+            return Flash("danger", "Type at least one condition to try.", draft=self._typed(f))
+        try:
+            out = await self.op("triage_rule_test", {"when": when})
+        except OakenError as exc:
+            return Flash("danger", str(exc), draft=self._typed(f))
+        text = f"This rule matches {out.matched} of the {out.tested} most recent messages."
+        details = ("Message ids: " + ", ".join(out.sample_ids),) if out.sample_ids else ()
+        if out.tested == 0:
+            kind, text = "warn", "There is no stored mail to try it on yet."
+        elif out.matched == 0:
+            kind, details = "warn", ("It matches none: check the conditions.", *details)
+        elif out.tested >= 10 and out.matched * 2 > out.tested:
+            kind, details = "warn", ("That is more than half of your mail: a very broad rule.", *details)
+        else:
+            kind = "ok"
+        return Flash(kind, text, details, draft=self._typed(f))
+
+    async def do_triage_rule_move(self, f: Form) -> Flash:
+        """One step up or down in the order the rules run."""
+        name, step = f.one("rule"), -1 if f.one("direction") == "up" else 1
+        names = [r.name for r in (await self.op("triage_rules", {})).rules]
+        if name not in names:
+            return danger(f"There is no rule {name}.")
+        place = names.index(name) + step
+        if not 0 <= place < len(names):
+            return warn(f"{name} is already {'first' if step < 0 else 'last'}.")
+        await self.op("triage_rule_move", {"name": name, "to": place + 1})
+        return ok(f"Moved {name} {'up' if step < 0 else 'down'}.", "Press Apply to write the order.")
+
+    async def do_triage_rule_toggle(self, f: Form) -> Flash:
+        name, on = f.one("rule"), f.one("run") == "on"
+        await self.op("triage_rule_set", {"name": name, "enabled": on})
+        return ok(f"{name} is {'on' if on else 'off'} (staged).", "Press Apply to write it.")
+
+    async def do_triage_rule_delete(self, f: Form) -> Flash:
+        await self.op("triage_rule_delete", {"name": f.one("rule")})
+        return ok(f"Removed {f.one('rule')} (staged).", "Press Apply to write it.")
+
+    async def do_triage_level_add(self, f: Form) -> Flash:
+        try:
+            value = int(f.one("value"))
+        except ValueError:
+            return danger("A level is a number, 4 or more.")
+        await self.op("triage_level_set", {"value": value, "name": f.one("name").strip()})
+        return ok(f"Staged level {value} {f.one('name').strip()}.", "Press Apply to write it.")
+
+    async def do_action_approve(self, f: Form) -> Flash:
+        """Say yes to an action that is waiting: it runs now."""
+        await self.op(
+            "approve_action",
+            {"message_id": f.one("message_id"), "action": f.one("action"), "route": f.one("route")},
+        )
+        return ok(f"Approved: {f.one('action')} runs now.")
+
+    async def do_triage_apply(self, f: Form) -> Flash:
+        await self.op("triage_apply", {})
+        return ok("Applied: config.toml written once and the rules reloaded.")
+
+    async def do_triage_discard(self, f: Form) -> Flash:
+        await self.op("triage_discard", {})
+        return ok("Discarded the staged edits.")
+
+    async def do_triage_ack(self, f: Form) -> Flash:
+        await self.op("triage_ack", {})
+        return ok("Accepted: config.toml's rules are now the ones running.")
+
+    async def do_triage_revert(self, f: Form) -> Flash:
+        await self.op("triage_revert", {})
+        return ok("Reverted: config.toml holds the running rules again (a backup was kept).")
 
     async def do_schedule(self, f: Form) -> Flash:
         """Change one account's sync schedule: how often (or a cron line), its timezone, quiet
@@ -557,6 +696,17 @@ ACTIONS: dict[str, Action] = {
     "stage": Console.do_stage,
     "stage-setting": Console.do_stage_setting,
     "rule": Console.do_rule,
+    "triage-rule-add": Console.do_triage_rule_add,
+    "triage-rule-test": Console.do_triage_rule_test,
+    "triage-rule-move": Console.do_triage_rule_move,
+    "triage-rule-toggle": Console.do_triage_rule_toggle,
+    "triage-rule-delete": Console.do_triage_rule_delete,
+    "triage-level-add": Console.do_triage_level_add,
+    "action-approve": Console.do_action_approve,
+    "triage-apply": Console.do_triage_apply,
+    "triage-discard": Console.do_triage_discard,
+    "triage-ack": Console.do_triage_ack,
+    "triage-revert": Console.do_triage_revert,
     "schedule": Console.do_schedule,
     "schedule-state": Console.do_schedule_state,
     "sync-now": Console.do_sync_now,

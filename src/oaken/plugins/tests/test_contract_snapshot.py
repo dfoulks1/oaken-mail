@@ -43,7 +43,7 @@ _DATACLASSES = [
     "LLMRequest",
     "LLMResponse",
     "EnrichAttachment",
-    "EnrichInput",
+    "CleanMessage",
     "EnrichOutput",
     "VectorItem",
     "Hit",

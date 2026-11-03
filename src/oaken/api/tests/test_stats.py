@@ -103,26 +103,6 @@ def test_the_dropdown_and_menu_sit_on_the_first_row_of_each_component_and_none_i
     assert rows[1]["calls"] == 2  # the triage row aggregates both models
 
 
-def test_ask_has_its_own_model_row_and_its_usage_lands_on_it() -> None:
-    from oaken.api.stats import StatsCollector
-
-    ask: dict[str, Any] = {"kind": "ask", "label": "ask", "name": "ask", "model": "big",
-                           "choices": ["big"], "default": "", "config": {}, "config_schema": None,
-                           "enabled": True}  # fmt: skip
-    backend = {**ask, "kind": "llm_backend", "label": "Language model", "name": "ollama"}
-
-    def use(stage: str) -> dict[str, Any]:
-        return {"workspace": "default", "stage": stage, "model_id": "m", "calls": 1,
-                "cached_calls": 0, "tokens_in": 1, "tokens_out": 1, "tokens_saved": 0}  # fmt: skip
-
-    rows = StatsCollector._usage_view(
-        [use("llm.ask"), use("llm.ask.route"), use("llm.other")], [backend, ask]
-    )
-    owners = [(r["stage"], (r["component"] or {}).get("label")) for r in rows]
-    # the routing call runs on the ask model too, so it lands on the ask row
-    assert owners == [("llm.ask", "ask"), ("llm.ask.route", "ask"), ("llm.other", "Language model")]
-
-
 async def test_stats_shows_counts_and_health(rig: Rig) -> None:
     body = (await rig.http.get("/general")).text
     for marker in (
@@ -225,12 +205,6 @@ async def test_the_leftover_usage_is_one_table_on_the_llm_backend_tab(rig: Rig) 
     table = body.split("Other model usage")[1]
     assert "<th>Model</th>" in table and "<th>Stage</th>" in table
     assert 'action="/ui/reset-usage"' in body
-
-
-async def test_ask_model_form_refuses_nothing_it_cannot_store(rig: Rig) -> None:
-    page = await rig.seen("model", "/general?tab=ai", kind="ask", plugin="ask", model="big-model")
-    assert "ask will use big-model" in page
-    assert 'ask_model = "big-model"' in (paths.config_dir() / "config.toml").read_text("utf-8")
 
 
 async def test_clearing_usage_says_what_it_left_alone(rig: Rig) -> None:

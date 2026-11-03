@@ -62,9 +62,74 @@ async def _try_triage(client: ApiClient, args: argparse.Namespace) -> int:
     return emit(args, data=result.output, text=shown)
 
 
-async def _enrich(client: ApiClient, args: argparse.Namespace) -> int:
+def cmd_triage(args: argparse.Namespace) -> int:
+    return run(lambda client: _triage(client, args), args)
+
+
+async def _triage(client: ApiClient, args: argparse.Namespace) -> int:
     if args.action == "try":
         return await _try_triage(client, args)
+    if args.action == "show":
+        result = await client.call("get_triage", {"message_id": args.message_id})
+        out = result.output if isinstance(result.output, dict) else {}
+
+        def shown() -> None:
+            from oaken_cli.output import print_text
+
+            if not out.get("rated"):
+                print_text("not rated yet")
+                return
+            print_text(f"{out.get('triager')} (version {out.get('version')}):")
+            print_text(json.dumps(out.get("result"), indent=2, ensure_ascii=False))
+
+        return emit(args, data=result.output, text=shown)
+    payload = {"message_id": args.message_id, "force": bool(args.force)}
+    result = await client.call("triage_message", payload, confirm=True)
+    out = result.output if isinstance(result.output, dict) else {}
+
+    def ran() -> None:
+        from oaken_cli.output import print_text
+
+        print_text(
+            f"ran {out.get('ran', 0)}, already current {out.get('cached', 0)}; "
+            f"{'rated' if out.get('rated') else 'not rated'}"
+        )
+
+    return emit(args, data=result.output, text=ran)
+
+
+def cmd_action(args: argparse.Namespace) -> int:
+    return run(lambda client: _action(client, args), args)
+
+
+async def _action(client: ApiClient, args: argparse.Namespace) -> int:
+    if args.action_verb == "approve":
+        payload = {"message_id": args.message_id, "action": args.name, "route": args.route}
+        result = await client.call("approve_action", payload, confirm=True)
+        return emit(
+            args, data=result.output, text=lambda: _say("approved: the action runs now")
+        )
+    result = await client.call("get_action", {"message_id": args.message_id})
+    out = result.output if isinstance(result.output, dict) else {}
+
+    def shown() -> None:
+        rows = out.get("actions", [])
+        if not rows:
+            _say("no action has run for this message")
+        for r in rows:
+            err = f" ({r['error']})" if r.get("error") else ""
+            _say(f"{r['action']} / {r['route']}: {r['status']}{err}")
+
+    return emit(args, data=result.output, text=shown)
+
+
+def _say(text: str) -> None:
+    from oaken_cli.output import print_text
+
+    print_text(text)
+
+
+async def _enrich(client: ApiClient, args: argparse.Namespace) -> int:
     names = list(args.enricher) or None
     if args.action == "show":
         payload: dict[str, object] = {"message_id": args.message_id}

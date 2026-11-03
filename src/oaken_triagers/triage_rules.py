@@ -1,25 +1,23 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The default deterministic triage rules: what headers and the message itself can settle with no
-model. One place for every such check, in order; the first to match wins and triage rates the
+"""The built-in spam and bulk checks (the ``spamcheck`` triager): what headers and the message itself
+can settle with no model. One place for every such check, in order; the first to match wins and triage rates the
 message priority 0 with that rule's category. Mail none of them settles goes to the model.
 
-Add a rule by writing one function from a message to ``(category, rule name)`` or None, and listing
-it in ``RULES``. (CORE_51 turns this set into a standalone triager plugin.)
+Add a check by writing one function from a message to ``(category, rule name)`` or None, and listing
+it in ``RULES``. The reader's own rules are the ``rules`` triager (``triage_custom.py``).
 """
 
 import re
 from collections.abc import Callable
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
 from oaken.core.untrusted import UntrustedText
-from oaken.plugins.contracts import EnrichInput
-from oaken_enrichers._common import header_values
+from oaken.plugins.contracts import CleanMessage
+from oaken.core.triage import Category
+from oaken.plugins.kit import header_values
 
-Category = Literal[
-    "personal", "work", "transactional", "notification", "newsletter", "automated", "other"
-]
 Verdict = tuple[Category, str]  # the category, and the rule's name
 
 _NOREPLY = re.compile(r"(?<![a-z0-9])(?:no[._-]?reply|do[._-]?not[._-]?reply)@", re.I)
@@ -28,7 +26,7 @@ _CRON_SENDER = re.compile(r"\bcron daemon\b", re.I)
 
 
 class RulesConfig(BaseModel):
-    """``[plugins.triager.rules]``: which rules run, and the values they match on."""
+    """``[plugins.triager.spamcheck]``: which checks run, and the values they match on."""
 
     skip_rules: list[str] = Field(
         default_factory=list,
@@ -70,22 +68,22 @@ class RulesConfig(BaseModel):
         return [v.strip().lower() for v in values if v.strip()]
 
 
-def _first(msg: EnrichInput, name: str) -> str:
+def _first(msg: CleanMessage, name: str) -> str:
     values = header_values(msg).get(name)
     return values[0].strip() if values else ""
 
 
-def _sender(msg: EnrichInput) -> str:
+def _sender(msg: CleanMessage) -> str:
     return msg.headers.get("from", UntrustedText("")).unwrap()
 
 
-def auto_submitted(msg: EnrichInput, cfg: RulesConfig) -> Verdict | None:
+def auto_submitted(msg: CleanMessage, cfg: RulesConfig) -> Verdict | None:
     if (_first(msg, "auto-submitted") or "no").lower() != "no":
         return "automated", "auto-submitted"
     return None
 
 
-def cron(msg: EnrichInput, cfg: RulesConfig) -> Verdict | None:
+def cron(msg: CleanMessage, cfg: RulesConfig) -> Verdict | None:
     """Cron output: its body is a template and the job's own log has the content."""
     if (
         "x-cron-env" in header_values(msg)
@@ -96,12 +94,12 @@ def cron(msg: EnrichInput, cfg: RulesConfig) -> Verdict | None:
     return None
 
 
-def auto_reply(msg: EnrichInput, cfg: RulesConfig) -> Verdict | None:
+def auto_reply(msg: CleanMessage, cfg: RulesConfig) -> Verdict | None:
     headers = header_values(msg)
     return ("automated", "auto-reply") if any(h in headers for h in cfg.autoreply_headers) else None
 
 
-def spam(msg: EnrichInput, cfg: RulesConfig) -> Verdict | None:
+def spam(msg: CleanMessage, cfg: RulesConfig) -> Verdict | None:
     """The spam filter's own verdict."""
     flag = _first(msg, "x-spam-flag").lower()
     if flag in {"yes", "true"} or any(
@@ -111,17 +109,17 @@ def spam(msg: EnrichInput, cfg: RulesConfig) -> Verdict | None:
     return None
 
 
-def bulk(msg: EnrichInput, cfg: RulesConfig) -> Verdict | None:
+def bulk(msg: CleanMessage, cfg: RulesConfig) -> Verdict | None:
     if _first(msg, "precedence").lower() in cfg.bulk_precedence:
         return "newsletter", "precedence"
     return None
 
 
-def no_reply(msg: EnrichInput, cfg: RulesConfig) -> Verdict | None:
+def no_reply(msg: CleanMessage, cfg: RulesConfig) -> Verdict | None:
     return ("notification", "no-reply-sender") if _NOREPLY.search(_sender(msg)) else None
 
 
-def empty(msg: EnrichInput, cfg: RulesConfig) -> Verdict | None:
+def empty(msg: CleanMessage, cfg: RulesConfig) -> Verdict | None:
     """No body, no attachment and a short subject."""
     if (
         not msg.body.unwrap().strip()
@@ -132,7 +130,7 @@ def empty(msg: EnrichInput, cfg: RulesConfig) -> Verdict | None:
     return None
 
 
-Rule = Callable[[EnrichInput, RulesConfig], Verdict | None]
+Rule = Callable[[CleanMessage, RulesConfig], Verdict | None]
 RULES: tuple[Rule, ...] = (auto_submitted, bulk, no_reply, cron, auto_reply, spam, empty)
 RULE_NAMES = tuple(r.__name__ for r in RULES)
 
@@ -160,7 +158,7 @@ def describe(cfg: RulesConfig) -> list[dict[str, Any]]:
     ]
 
 
-def settled(msg: EnrichInput, cfg: RulesConfig | None = None) -> Verdict | None:
+def settled(msg: CleanMessage, cfg: RulesConfig | None = None) -> Verdict | None:
     """The category and rule when the first matching rule settles triage with no model."""
     cfg = cfg or RulesConfig()
     for rule in RULES:

@@ -64,19 +64,37 @@ async def state_flags(raw: RawStore, ids: Sequence[str]) -> dict[str, tuple[bool
 async def stored_enrichments(
     raw: RawStore, ids: Sequence[str], names: Sequence[str]
 ) -> dict[str, dict[str, dict[str, Any]]]:
-    """``{message_id: {enricher: result}}`` for the stored results of the named enrichers."""
+    """``{message_id: {name: result}}`` for the stored results of the named enrichers. The name
+    ``triage`` reads the triage verdict (its own table, ADR 0017) and is returned under that key,
+    so ``ask`` can route to it like any intent."""
     out: dict[str, dict[str, dict[str, Any]]] = {}
+    enrichers = [n for n in names if n != "triage"]
     for i in range(0, len(ids), IN_LIMIT):
         part = ids[i : i + IN_LIMIT]
         marks = ",".join("?" * len(part))
-        want = ",".join("?" * len(names))
-        for r in await raw.db.fetchall(
-            "SELECT message_id, enricher, data_json FROM enrichments"  # noqa: S608
-            f" WHERE message_id IN ({marks}) AND enricher IN ({want})",
-            [*part, *names],
-        ):
+        rows: list[tuple[str, str, str]] = []
+        if enrichers:
+            want = ",".join("?" * len(enrichers))
+            rows += [
+                (r["message_id"], r["enricher"], r["data_json"])
+                for r in await raw.db.fetchall(
+                    "SELECT message_id, enricher, data_json FROM enrichments"  # noqa: S608
+                    f" WHERE message_id IN ({marks}) AND enricher IN ({want})",
+                    [*part, *enrichers],
+                )
+            ]
+        if "triage" in names:
+            rows += [
+                (r["message_id"], "triage", r["data_json"])
+                for r in await raw.db.fetchall(
+                    "SELECT message_id, data_json FROM triage_verdicts"  # noqa: S608
+                    f" WHERE message_id IN ({marks})",
+                    list(part),
+                )
+            ]
+        for message_id, name, data_json in rows:
             try:
-                out.setdefault(r["message_id"], {})[r["enricher"]] = json.loads(r["data_json"])
+                out.setdefault(message_id, {})[name] = json.loads(data_json)
             except ValueError:
                 continue
     return out

@@ -33,6 +33,7 @@ from oaken.core.settings import Settings
 from oaken.core.trace import Tracer
 from oaken.index import Indexer, IndexStore
 from oaken.ingest import Backends, Pipeline, Quarantine, SyncRunner, UsageStore
+from oaken.core.triage_store import PLUGIN as TRIAGE_PLUGIN, TriageStore
 from oaken.ingest.pipeline_control import PipelineControl
 from oaken.ingest.quarantine import quarantine_dir
 from oaken.ingest.schedule import SyncService
@@ -129,6 +130,10 @@ class Core:
         self.scheduler = Scheduler(self.raw_db, self.queue, clock)
         kwargs = {} if self._discover is None else {"discover": self._discover}
         self.host = PluginHost(s, clock, bus, **kwargs)  # type: ignore[arg-type]
+        self.triage = TriageStore(self.raw_db, clock)
+        self.host.runtime_config = lambda kind, name: (
+            self.triage.config if (kind, name) == TRIAGE_PLUGIN else {}
+        )
         self.llm = LLMService(
             LLMCache(self.raw_db, clock), self.usage, Workspaces(s),
             lambda name: self.host.llm_backend(name), s,
@@ -177,7 +182,7 @@ class Core:
             raw=self.raw, index=self.index, attrs=self.attrs, queue=self.queue, audit=self.audit,
             settings=s, clock=clock, bus=bus, readstate=self.readstate, pipeline=self.pipeline,
             indexer=self.indexer, usage=self.usage, sync=self.sync, plugins=self.host,
-            llm=self.llm, agents=self.agents, pipeline_control=self.pipeline_control,
+            llm=self.llm, agents=self.agents, pipeline_control=self.pipeline_control, triage=self.triage,
             eventlog=self.eventlog, tracer=self.tracer, version=oaken.__version__,
         )  # fmt: skip
         registry = core_registry()
@@ -229,7 +234,7 @@ class Core:
         if self.eventlog is not None:  # first, so the plugins' start-up is in the record
             units.append(unit("events", self._start_eventlog, self._stop_eventlog))
         units += [
-            unit("host", self.host.start, self._stop_host),
+            unit("host", self._start_host, self._stop_host),
             unit("sync", self.sync.start, self.sync.stop),
             unit("jobs", self._start_jobs, lambda: self._stop_jobs(grace)),
         ]
@@ -313,6 +318,13 @@ class Core:
         for door in (self.mcp_agent, self.mcp):
             if door is not None:
                 await door.stop()
+
+    async def _start_host(self) -> None:
+        # The reader's rules, before the triager plugin starts: the last acknowledged copy runs,
+        # and an edit of config.toml waits for the reader to acknowledge it (ADR 0015).
+        await self.triage.check(self.settings.triage)
+        await self.triage.refresh()
+        await self.host.start()
 
     async def _stop_host(self) -> None:
         await self.host.stop()

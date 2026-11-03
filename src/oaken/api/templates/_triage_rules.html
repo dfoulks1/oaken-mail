@@ -1,0 +1,140 @@
+{#- SPDX-License-Identifier: Apache-2.0 -#}
+{#- The reader's own triage rules (CORE_54, ADR 0015): staged edits, the rules in order, a form to
+    add one with a test, and the levels. No script: every button is a form. Counts and rules only;
+    no mail text. Import with context so the macros see the form token and the `triage` data. -#}
+{% import "_macros.html" as m with context %}
+
+{% set words = {
+  "rule_added": "rules added", "rule_removed": "rules removed", "rule_changed": "rules changed",
+  "rule_reordered": "rules moved", "level_added": "levels added", "level_removed": "levels removed",
+  "level_changed": "levels changed", "level_reordered": "levels moved"} %}
+{% set conditions = [
+  ("from", "From", "text", "boss@example.com or *@example.com"),
+  ("to", "To", "text", "a recipient"),
+  ("subject", "Subject matches", "text", "a glob, such as invoice*"),
+  ("subject_contains", "Subject contains", "text", "urgent"),
+  ("body_contains", "Body contains", "text", "wire transfer"),
+  ("header_present", "Has header", "text", "list-id"),
+  ("has_attachment", "Has an attachment", "yesno", ""),
+  ("is_reply", "Is a reply", "yesno", "")] %}
+
+{% macro manage(back) %}
+{% set st = triage.state %}
+{% if st.staged %}
+<div class="card">
+  <div class="card-head"><span>Staged edits, not yet in config.toml</span>
+    <span class="row">
+      {% call m.post("triage-apply", back) %}<button class="btn btn-primary btn-sm" type="submit">Apply</button>{% endcall %}
+      {% call m.post("triage-discard", back) %}<button class="btn btn-sm" type="submit">Discard</button>{% endcall %}
+    </span></div>
+  <div class="card-body"><ul class="plain">
+    {% for key, names in st.staged.items() %}<li>{{ words.get(key, key) }}: <span class="mono">{{ names | join(", ") }}</span></li>{% endfor %}
+  </ul></div>
+  <div class="card-foot">Apply writes all of these to <code>config.toml</code> at once (one backup) and reloads the rules. A reload does the same.</div>
+</div>
+{% endif %}
+{% if st.changed %}
+<div class="card">
+  <div class="card-head"><span>config.toml was edited by hand</span>
+    <span class="row">
+      {% call m.post("triage-ack", back) %}<button class="btn btn-primary btn-sm" type="submit"{% if st.staged %} disabled title="Apply or discard the staged edits first"{% endif %}>Accept the file</button>{% endcall %}
+      {% call m.post("triage-revert", back) %}<button class="btn btn-sm" type="submit">Revert the file</button>{% endcall %}
+    </span></div>
+  <div class="card-body">
+    {% if st.error %}<p>Its triage section is not valid: <span class="mono">{{ st.error }}</span></p>
+    {% else %}<ul class="plain">{% for key, names in st.changes.items() %}<li>{{ words.get(key, key) }}: <span class="mono">{{ names | join(", ") }}</span></li>{% endfor %}</ul>{% endif %}
+  </div>
+  <div class="card-foot">The last known good rules are still running. Accept makes the file's rules the running ones; Revert writes the running rules back over the file.</div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-head"><span>Your rules</span><span class="muted">first to match decides, no model asked</span></div>
+  {% if triage.rules %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>#</th><th>Rule</th><th>Level</th><th>Category</th><th>When all of these hold</th><th>On</th><th>Order</th><th class="right">Remove</th></tr></thead>
+    <tbody>
+    {% for r in triage.rules %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td class="mono">{{ r.name }}</td>
+        <td>{{ r.level }} <span class="muted">{{ r.level_name }}</span></td>
+        <td>{{ r.category }}</td>
+        <td class="mono">{% for k, v in r.when.items() %}{{ k }}={{ v }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+        <td>{{ m.switch("triage-rule-toggle", back, r.enabled, "Rule " ~ r.name, {"rule": r.name}, "run", "on", "off", false, "", false) }}</td>
+        <td>
+          {% call m.post("triage-rule-move", back) %}<input type="hidden" name="rule" value="{{ r.name }}"><input type="hidden" name="direction" value="up"><button class="btn btn-sm btn-icon" type="submit" title="Move up" aria-label="Move {{ r.name }} up"{% if loop.first %} disabled{% endif %}>↑</button>{% endcall %}
+          {% call m.post("triage-rule-move", back) %}<input type="hidden" name="rule" value="{{ r.name }}"><input type="hidden" name="direction" value="down"><button class="btn btn-sm btn-icon" type="submit" title="Move down" aria-label="Move {{ r.name }} down"{% if loop.last %} disabled{% endif %}>↓</button>{% endcall %}
+        </td>
+        <td class="right">{{ m.confirm("triage-rule-delete", back, "Remove " ~ r.name, "Remove rule " ~ r.name ~ "?", "Remove", {"rule": r.name}, "trash") }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}<div class="card-body"><p class="muted">No rules yet. Add one below.</p></div>{% endif %}
+</div>
+
+<p class="row"><a class="btn btn-primary" href="/triage/rules/new">Add a rule</a>
+  <span class="muted">a page with a test; the rule is staged, then Apply writes it.</span></p>
+
+<div class="card">
+  <div class="card-head"><span>Levels</span><span class="muted">0 to 3 are built in; yours start at 4</span></div>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Level</th><th>Name</th></tr></thead>
+    <tbody>{% for lv in triage.levels %}<tr><td class="mono">{{ lv.value }}</td><td>{{ lv.name }}{% if lv.builtin %} <span class="muted">built in</span>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <form method="post" action="/ui/triage-level-add" class="card-foot row">
+    {{ m.guard(back) }}
+    <label for="lv-value">Add a level</label>
+    <input class="input input-sm" id="lv-value" name="value" type="number" min="4" max="99" required placeholder="5" style="width:5rem">
+    <input class="input input-sm" name="name" maxlength="40" required placeholder="vip" aria-label="Level name">
+    <button class="btn btn-sm" type="submit">Add level</button>
+  </form>
+</div>
+{% endmacro %}
+
+{% macro wizard(back) %}
+<div class="card">
+  <div class="card-head"><span>Add a rule</span><span class="muted">it goes last; move it with the arrows</span></div>
+  <form method="post" action="/ui/triage-rule-add">
+    {{ m.guard(back) }}
+    <div class="card-body">
+      <div class="form-grid">
+        <label for="tr-name">Name</label>
+        <input class="input" id="tr-name" name="name" maxlength="80" required value="{{ draft.get('name', '') }}" placeholder="boss-urgent">
+        <label for="tr-level">Level</label>
+        <select class="select" id="tr-level" name="level">
+          {% set chosen = draft.get('level', '2') %}
+          {% for lv in triage.levels %}<option value="{{ lv.value }}"{% if lv.value | string == chosen %} selected{% endif %}>{{ lv.value }} {{ lv.name }}</option>{% endfor %}
+        </select>
+        <label for="tr-category">Category</label>
+        <select class="select" id="tr-category" name="category">
+          {% set chosen_c = draft.get('category', 'other') %}
+          {% for c in ["personal", "work", "transactional", "notification", "newsletter", "automated", "other"] %}<option value="{{ c }}"{% if c == chosen_c %} selected{% endif %}>{{ c }}</option>{% endfor %}
+        </select>
+      </div>
+      <h3 class="eyebrow">When all of these hold (leave blank what you do not need)</h3>
+      <div class="form-grid">
+        {% for key, label, kind, hint in conditions %}
+          <label for="tr-{{ key }}">{{ label }}</label>
+          {% if kind == "yesno" %}
+          {% set have = draft.get("when_" ~ key, "") %}
+          <select class="select" id="tr-{{ key }}" name="when_{{ key }}">
+            <option value=""{% if not have %} selected{% endif %}>any</option>
+            <option value="yes"{% if have == "yes" %} selected{% endif %}>yes</option>
+            <option value="no"{% if have == "no" %} selected{% endif %}>no</option>
+          </select>
+          {% else %}
+          <input class="input" id="tr-{{ key }}" name="when_{{ key }}" value="{{ draft.get('when_' ~ key, '') }}" placeholder="{{ hint }}">
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    <div class="card-foot row">
+      <button class="btn" type="submit" formaction="/ui/triage-rule-test">Test on my recent mail</button>
+      <button class="btn btn-primary" type="submit">Add rule</button>
+      <span class="muted">Test shows how many of the newest messages it would match; it shows no mail.</span>
+    </div>
+  </form>
+</div>
+{% endmacro %}

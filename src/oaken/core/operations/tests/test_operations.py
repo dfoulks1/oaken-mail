@@ -65,14 +65,6 @@ async def test_hybrid_search_finds_mail_says_why_and_never_marks_it_read(ops: Op
     assert flags[b] is False and flags[a] is False
 
 
-async def test_ask_without_a_model_is_unavailable_not_a_crash(ops: Ops) -> None:
-    await ops.add(1)
-    ops.svc.llm = None
-    ops.svc.retrieval = None
-    with pytest.raises(Unavailable):
-        await ops.call("ask", {"question": "what is topic0?"})
-
-
 async def test_status_and_pipeline_status_and_accounts(ops: Ops) -> None:
     await ops.add(4)
     s = await ops.out("status")

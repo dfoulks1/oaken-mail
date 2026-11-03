@@ -21,7 +21,7 @@ async def test_an_agent_sees_what_is_on_by_default_and_not_the_rest(ops: Ops) ->
     assert (
         on <= seen and {"mark_read", "get_message", "search_keyword", "summarize_message"} <= seen
     )
-    assert "search" in seen and "ask" not in seen  # ask is the user's to turn on
+    assert "search" in seen and "list_workspaces" not in seen  # the user turns it on
     assert not seen & {"get_raw", "reprocess", "rebuild_index", "set_schedule", "list_audit"}
     assert not {n for n in seen if n.startswith("greeter.")}  # a plugin's operations start off
     assert (await names_for(ops, CLI)) == set(ops.registry.names())  # a person sees everything
@@ -29,12 +29,12 @@ async def test_an_agent_sees_what_is_on_by_default_and_not_the_rest(ops: Ops) ->
 
 async def test_the_user_turns_an_operation_on_and_off_and_back_to_its_default(ops: Ops) -> None:
     with pytest.raises(NotExposed):
-        await ops.call("ask", {"question": "x"}, agent())
+        await ops.call("list_workspaces", {}, agent())
     out = await ops.out(
-        "set_operation_exposure", {"scope": "operation", "name": "ask", "mcp": True}
+        "set_operation_exposure", {"scope": "operation", "name": "list_workspaces", "mcp": True}
     )
     assert out.before is None and out.after is True and out.operations[0].mcp_enabled is True
-    assert "ask" in await names_for(ops)
+    assert "list_workspaces" in await names_for(ops)
     out = await ops.out(
         "set_operation_exposure", {"scope": "operation", "name": "status", "mcp": False}
     )
@@ -44,7 +44,7 @@ async def test_the_user_turns_an_operation_on_and_off_and_back_to_its_default(op
     await ops.out("set_operation_exposure", {"scope": "operation", "name": "status", "mcp": None})
     assert "status" in await names_for(ops)
     listed = {o.name: o for o in (await ops.out("list_operations")).operations}
-    assert listed["ask"].mcp_enabled and not listed["ask"].mcp_default
+    assert listed["list_workspaces"].mcp_enabled and not listed["list_workspaces"].mcp_default
 
 
 async def test_nothing_the_user_sets_can_widen_what_code_forbids(ops: Ops) -> None:
@@ -67,16 +67,16 @@ async def test_seed_from_config_sets_exposure_without_audit_and_the_file_wins(op
     store = ops.client.exposure
     audit_before = len(await ops.svc.audit.recent(50))
     # a known op, a plugin group, an unknown key and a never op all in one file
-    await store.seed({"ask": True, "greeter": True, "nope": True, "get_raw": True}, ops.registry)
+    await store.seed({"list_workspaces": True, "greeter": True, "nope": True, "get_raw": True}, ops.registry)
     seen = await names_for(ops)
-    assert "ask" in seen  # the op key took
+    assert "list_workspaces" in seen  # the op key took
     assert {"greeter.hello", "greeter.rename"} <= seen  # the plugin group took
     assert "greeter.secret" not in seen  # never: the plugin's own ceiling holds
     assert "get_raw" not in seen  # a never op key is ignored, nothing can expose it
     assert len(await ops.svc.audit.recent(50)) == audit_before  # seeding is not an action: no audit
-    # the file wins: a re-seed without 'ask' drops it (config rows are replaced, not merged)
+    # the file wins: a re-seed without 'list_workspaces' drops it (config rows are replaced, not merged)
     await store.seed({"greeter": True}, ops.registry)
-    assert "ask" not in await names_for(ops)
+    assert "list_workspaces" not in await names_for(ops)
     assert {"greeter.hello"} <= await names_for(ops)
 
 
@@ -85,7 +85,7 @@ async def test_an_agent_cannot_change_what_it_may_call(ops: Ops) -> None:
         with pytest.raises(NotExposed):
             await ops.call(
                 "set_operation_exposure",
-                {"scope": "operation", "name": "ask", "mcp": True},
+                {"scope": "operation", "name": "list_workspaces", "mcp": True},
                 caller,
                 confirm=True,
             )
@@ -93,12 +93,12 @@ async def test_an_agent_cannot_change_what_it_may_call(ops: Ops) -> None:
 
 
 async def test_every_change_is_audited_with_who_and_before_and_after(ops: Ops) -> None:
-    await ops.out("set_operation_exposure", {"scope": "operation", "name": "ask", "mcp": True}, UI)
-    await ops.out("set_operation_exposure", {"scope": "operation", "name": "ask", "mcp": False}, UI)
+    await ops.out("set_operation_exposure", {"scope": "operation", "name": "list_workspaces", "mcp": True}, UI)
+    await ops.out("set_operation_exposure", {"scope": "operation", "name": "list_workspaces", "mcp": False}, UI)
     rows = await ops.svc.audit.recent(5, op="set_exposure")
     assert [(r.before, r.after) for r in rows] == [
-        ({"op:ask": True}, {"op:ask": False}),
-        ({"op:ask": None}, {"op:ask": True}),
+        ({"op:list_workspaces": True}, {"op:list_workspaces": False}),
+        ({"op:list_workspaces": None}, {"op:list_workspaces": True}),
     ]
     assert {r.reason for r in rows} == {"ui_set_exposure"} and rows[0].actor.kind == "user"
 

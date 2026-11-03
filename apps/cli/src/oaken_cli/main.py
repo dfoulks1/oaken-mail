@@ -53,12 +53,12 @@ getting started:
   oaken gmail auth            sign an account in (also imap, smtp: any plugin's functions are
                               'oaken PLUGIN VERB'; 'oaken operation --describe NAME' lists flags)
   oaken sync --wait           pull mail now and wait for it to finish
-  oaken search "quokkas"      search; oaken ask "when is the board meeting?" to ask
+  oaken search "quokkas"      search your mail
   oaken show MESSAGE_ID       read one message (adds --mark-read via 'oaken read')
 
 command groups:
   daemon        start · stop · restart · reload · status
-  mail          search · ask · show · thread · summarize · read · unread · undo · sync
+  mail          search · show · thread · summarize · read · unread · undo · sync
   organize      mailbox · label · folder · star · sieve · schedule · reprocess · rebuild-index
   queue         jobs · pipeline · watch
   accounts      admin · auth · accounts
@@ -72,7 +72,7 @@ shortcuts (each takes only its slice of the commands above; oaken takes them all
                 plugins · mcp · storage · vacuum · cache · events
   sawyer        the flow: sync · pipeline · watch · reprocess · rebuild-index · enrich · jobs ·
                 schedule
-  cubby         the mailbox: search · ask · show · thread · summarize · read · unread · undo ·
+  cubby         the mailbox: search · show · thread · summarize · read · unread · undo ·
                 mailbox · label · folder · star · unstar · sieve
 
 anything else:
@@ -93,7 +93,7 @@ ALIASES: dict[str, tuple[str, frozenset[str]]] = {
         "The Oaken core daemon: run it, configure it, look after its storage.",
         frozenset(
             "start stop restart reload status config settings plugins mcp storage vacuum cache "
-            "events help".split()
+            "events rule level help".split()
         ),
     ),
     "sawyer": (
@@ -103,7 +103,7 @@ ALIASES: dict[str, tuple[str, frozenset[str]]] = {
     "cubby": (
         "The Oaken mailbox: search, read and file your mail.",
         frozenset(
-            "search ask show thread summarize read unread undo mailbox label folder star unstar "
+            "search show thread summarize read unread undo mailbox label folder star unstar "
             "sieve help".split()
         ),
     ),
@@ -490,22 +490,7 @@ def _register_system(
     sub: argparse._SubParsersAction[argparse.ArgumentParser], g: argparse.ArgumentParser
 ) -> None:
     """System, inspection and job verbs: pipeline, usage, plugins, accounts, audit, operations,
-    reprocess, rebuild-index, ask, watch."""
-    ask = sub.add_parser(
-        "ask",
-        help="Ask about your mail: a summary, what needs you, actions, or a cited answer.",
-        parents=[g],
-    )
-    ask.add_argument("question", help="What you want to know or see, in plain words.")
-    ask.add_argument(
-        "--timeout",
-        type=float,
-        default=300.0,
-        metavar="S",
-        help="Give up waiting for the answer after S seconds (a local model can be slow).",
-    )
-    ask.set_defaults(func=_lazy("system_cmd", "cmd_ask"))
-
+    reprocess, rebuild-index, watch."""
     pipeline = sub.add_parser(
         "pipeline",
         help="Pipeline status, and pausing the model-bound stages.",
@@ -759,6 +744,57 @@ def _register_admin(
     cache.add_argument("--yes", action="store_true", help="With clear: do not ask.")
     cache.set_defaults(func=_lazy("admin_cmd", "cmd_cache"))
 
+    level = sub.add_parser(
+        "level",
+        help="Triage levels: list them, add one (4 and up), rename or renumber, remove.",
+        parents=[g],
+        description=(
+            "0 ignore, 1 low, 2 normal and 3 soon are built in. `oaken level add 5 vip` adds a "
+            "level your own rules can give. Renumbering keeps the rules that use it."
+        ),
+    )
+    level.add_argument("action", nargs="?", default="list", choices=["list", "add", "rename", "rm"])
+    level.add_argument("value", nargs="?", type=int, help="The level's number.")
+    level.add_argument("name", nargs="?", help="The level's name (add, rename).")
+    level.add_argument("--number", type=int, help="With rename: the new number.")
+    level.set_defaults(func=_lazy("triage_cmd", "cmd_level"))
+
+    rule = sub.add_parser(
+        "rule",
+        help="Your own triage rules: list, add, turn on or off, move, remove.",
+        parents=[g],
+        description=(
+            "A rule gives mail a level and a category when every condition holds; the first rule "
+            "in order that matches wins, and no model is asked. `oaken rule add NAME` with no "
+            "conditions is a wizard: conditions from a menu, the level, the category, a test on "
+            "your recent mail, and a confirm. `oaken rule test --when KEY=VALUE` runs the test "
+            "alone. Conditions: from, to, subject, subject_contains, body_contains, header_present, "
+            "has_attachment, is_reply. Rules are kept in config.toml (trusted) and in core's "
+            "database (a working copy, and the last known good copy, which is what runs). Edits "
+            "are staged: `apply` (or any `oaken reload`) writes the batch to the file once and "
+            "reloads the rules; `discard` drops them. After a hand edit of the file, `diff` shows "
+            "what changed, `ack` accepts it, `revert` undoes it."
+        ),
+    )
+    rule.add_argument(
+        "action",
+        nargs="?",
+        default="list",
+        choices=[
+            "list", "add", "test", "on", "off", "move", "rm", "diff", "apply", "discard", "ack",
+            "revert",
+        ],
+    )
+    rule.add_argument("name", nargs="?", help="The rule's name.")
+    rule.add_argument("--level", type=int, help="With add: the level it gives.")
+    rule.add_argument("--category", help="With add: the category it gives.")
+    rule.add_argument(
+        "--when", action="append", metavar="KEY=VALUE", help="With add: a condition (repeat)."
+    )
+    rule.add_argument("--to", type=int, metavar="PLACE", help="With move: the place, 1 is first.")
+    rule.add_argument("--before", metavar="RULE", help="With move: just before this rule.")
+    rule.set_defaults(func=_lazy("triage_cmd", "cmd_rule"))
+
     events = sub.add_parser(
         "events",
         help="Recent events from core's event log (--follow keeps watching).",
@@ -948,7 +984,7 @@ def _register_content(sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
     """Enrichment results and Sieve scripts."""
     enrich = sub.add_parser(
         "enrich",
-        help="Run or show the enrichers (summary, triage, actions, inspector) on a message.",
+        help="Run or show the enrichers (summary, actions, inspector) on a message.",
         parents=[_globals(True)],
     )
     verbs = enrich.add_subparsers(dest="action", metavar="ACTION")
@@ -964,7 +1000,25 @@ def _register_content(sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
     show = verbs.add_parser("show", parents=[_globals(True)], help="Show the stored results.")
     show.add_argument("message_id")
     show.add_argument("enricher", nargs="*", help="One enricher (default: all stored).")
-    tri = verbs.add_parser(
+    enrich.set_defaults(func=_lazy("content_cmd", "cmd_enrich"))
+
+    triage = sub.add_parser(
+        "triage",
+        help="Run, show or dry-run triage (the verdict that rates a message) on a message.",
+        parents=[_globals(True)],
+    )
+    tverbs = triage.add_subparsers(dest="action", metavar="ACTION")
+    tverbs.required = True
+    trun = tverbs.add_parser(
+        "run", parents=[_globals(True)], help="Run the triagers on one message now."
+    )
+    trun.add_argument("message_id")
+    trun.add_argument(
+        "--force", action="store_true", help="Rate again even if a current verdict is stored."
+    )
+    tshow = tverbs.add_parser("show", parents=[_globals(True)], help="Show the stored verdict.")
+    tshow.add_argument("message_id")
+    tri = tverbs.add_parser(
         "try",
         parents=[_globals(True)],
         help="Dry-run triage on a message or on text: the verdict, nothing stored.",
@@ -973,7 +1027,24 @@ def _register_content(sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
     tri.add_argument("--text", metavar="FILE", help="Triage this text instead (- reads stdin).")
     tri.add_argument("--subject", default="", help="With --text: the subject.")
     tri.add_argument("--sender", default="", help="With --text: the From line.")
-    enrich.set_defaults(func=_lazy("content_cmd", "cmd_enrich"))
+    triage.set_defaults(func=_lazy("content_cmd", "cmd_triage"))
+
+    action = sub.add_parser(
+        "action",
+        help="Show what the actions did about a message, or approve one that is waiting.",
+        parents=[_globals(True)],
+    )
+    averbs = action.add_subparsers(dest="action_verb", metavar="ACTION")
+    averbs.required = True
+    ashow = averbs.add_parser("show", parents=[_globals(True)], help="What each action did.")
+    ashow.add_argument("message_id")
+    aok = averbs.add_parser(
+        "approve", parents=[_globals(True)], help="Say yes to an action that is waiting."
+    )
+    aok.add_argument("message_id")
+    aok.add_argument("name", help="The action plugin's name.")
+    aok.add_argument("route", help="The route triage sent the message by.")
+    action.set_defaults(func=_lazy("content_cmd", "cmd_action"))
 
     sieve = sub.add_parser(
         "sieve",

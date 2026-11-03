@@ -1,409 +1,45 @@
 {
-  "ask": {
+  "approve_action": {
     "input_schema": {
       "properties": {
-        "account_id": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Account Id"
-        },
-        "after": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "After"
-        },
-        "before": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Before"
-        },
-        "disposition": {
-          "default": "inbox",
-          "enum": [
-            "inbox",
-            "filed",
-            "discarded",
-            "any"
-          ],
-          "title": "Disposition",
+        "action": {
+          "description": "The action plugin's name.",
+          "title": "Action",
           "type": "string"
         },
-        "from": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "From"
-        },
-        "has_attachment": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Has Attachment"
-        },
-        "label": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Label"
-        },
-        "limit": {
-          "default": 10,
-          "description": "Most messages a listing returns.",
-          "maximum": 50,
-          "minimum": 1,
-          "title": "Limit",
-          "type": "integer"
-        },
-        "location": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Location"
-        },
-        "question": {
-          "maxLength": 2000,
-          "title": "Question",
+        "message_id": {
+          "title": "Message Id",
           "type": "string"
         },
-        "raw": {
-          "default": false,
-          "description": "Skip the model: return the matching messages and their stored enrichments (summary, triage, actions, inspector) verbatim, so you see the data without AI rewriting.",
-          "title": "Raw",
-          "type": "boolean"
-        },
-        "starred": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Starred"
-        },
-        "thread_key": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Thread Key"
-        },
-        "unread_only": {
-          "default": false,
-          "title": "Unread Only",
-          "type": "boolean"
+        "route": {
+          "title": "Route",
+          "type": "string"
         }
       },
       "required": [
-        "question"
+        "message_id",
+        "action",
+        "route"
       ],
-      "title": "AskInput",
+      "title": "ApproveActionInput",
       "type": "object"
     },
     "marks_read": false,
-    "mcp": "off",
+    "mcp": "never",
     "output_schema": {
-      "$defs": {
-        "CitationInfo": {
-          "properties": {
-            "chunk_ordinal": {
-              "title": "Chunk Ordinal",
-              "type": "integer"
-            },
-            "claim": {
-              "title": "Claim",
-              "type": "integer"
-            },
-            "date": {
-              "anyOf": [
-                {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "title": "Date"
-            },
-            "message_id": {
-              "title": "Message Id",
-              "type": "string"
-            },
-            "quote": {
-              "title": "Quote",
-              "type": "string"
-            },
-            "sender": {
-              "default": "",
-              "title": "Sender",
-              "type": "string"
-            },
-            "subject": {
-              "default": "",
-              "title": "Subject",
-              "type": "string"
-            }
-          },
-          "required": [
-            "claim",
-            "message_id",
-            "chunk_ordinal",
-            "quote"
-          ],
-          "title": "CitationInfo",
-          "type": "object"
-        },
-        "EnrichedMessage": {
-          "properties": {
-            "date": {
-              "anyOf": [
-                {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "title": "Date"
-            },
-            "enrichments": {
-              "additionalProperties": {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              "title": "Enrichments",
-              "type": "object"
-            },
-            "message_id": {
-              "title": "Message Id",
-              "type": "string"
-            },
-            "sender": {
-              "default": "",
-              "title": "Sender",
-              "type": "string"
-            },
-            "subject": {
-              "default": "",
-              "title": "Subject",
-              "type": "string"
-            }
-          },
-          "required": [
-            "message_id"
-          ],
-          "title": "EnrichedMessage",
-          "type": "object"
-        },
-        "RoutedMessage": {
-          "description": "A message an ``ask`` listing found, with the stored enrichment it was asked about.",
-          "properties": {
-            "date": {
-              "anyOf": [
-                {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "title": "Date"
-            },
-            "message_id": {
-              "title": "Message Id",
-              "type": "string"
-            },
-            "not_enriched": {
-              "default": false,
-              "title": "Not Enriched",
-              "type": "boolean"
-            },
-            "sender": {
-              "default": "",
-              "title": "Sender",
-              "type": "string"
-            },
-            "subject": {
-              "default": "",
-              "title": "Subject",
-              "type": "string"
-            },
-            "view": {
-              "additionalProperties": true,
-              "title": "View",
-              "type": "object"
-            }
-          },
-          "required": [
-            "message_id"
-          ],
-          "title": "RoutedMessage",
-          "type": "object"
-        }
-      },
       "properties": {
-        "answer": {
-          "title": "Answer",
-          "type": "string"
-        },
-        "citations": {
-          "items": {
-            "$ref": "#/$defs/CitationInfo"
-          },
-          "title": "Citations",
-          "type": "array"
-        },
-        "confidence": {
-          "default": "low",
-          "enum": [
-            "high",
-            "medium",
-            "low"
-          ],
-          "title": "Confidence",
-          "type": "string"
-        },
-        "content_is_untrusted": {
-          "default": true,
-          "title": "Content Is Untrusted",
+        "approved": {
+          "title": "Approved",
           "type": "boolean"
-        },
-        "degraded": {
-          "default": false,
-          "title": "Degraded",
-          "type": "boolean"
-        },
-        "degraded_reason": {
-          "default": "",
-          "title": "Degraded Reason",
-          "type": "string"
-        },
-        "dropped_claims": {
-          "default": 0,
-          "title": "Dropped Claims",
-          "type": "integer"
-        },
-        "evidence": {
-          "items": {
-            "$ref": "#/$defs/EnrichedMessage"
-          },
-          "title": "Evidence",
-          "type": "array"
-        },
-        "evidence_tokens": {
-          "default": 0,
-          "title": "Evidence Tokens",
-          "type": "integer"
-        },
-        "full_body_tokens": {
-          "default": 0,
-          "title": "Full Body Tokens",
-          "type": "integer"
-        },
-        "insufficient_evidence": {
-          "default": false,
-          "title": "Insufficient Evidence",
-          "type": "boolean"
-        },
-        "intent": {
-          "default": "qa",
-          "title": "Intent",
-          "type": "string"
-        },
-        "interpreted": {
-          "default": "",
-          "title": "Interpreted",
-          "type": "string"
-        },
-        "message_ids": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Message Ids",
-          "type": "array"
-        },
-        "results": {
-          "items": {
-            "$ref": "#/$defs/RoutedMessage"
-          },
-          "title": "Results",
-          "type": "array"
-        },
-        "warnings": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Warnings",
-          "type": "array"
         }
       },
       "required": [
-        "answer"
+        "approved"
       ],
-      "title": "AskOutput",
+      "title": "ApproveActionOutput",
       "type": "object"
     },
-    "permission": "read",
+    "permission": "mutate",
     "streaming": false
   },
   "cache_stats": {
@@ -1644,6 +1280,93 @@
     "permission": "read",
     "streaming": false
   },
+  "get_action": {
+    "input_schema": {
+      "properties": {
+        "message_id": {
+          "title": "Message Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message_id"
+      ],
+      "title": "GetActionInput",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "on",
+    "output_schema": {
+      "$defs": {
+        "ActionRow": {
+          "properties": {
+            "action": {
+              "title": "Action",
+              "type": "string"
+            },
+            "attempts": {
+              "default": 0,
+              "title": "Attempts",
+              "type": "integer"
+            },
+            "error": {
+              "default": "",
+              "description": "The name of the error type, never its message.",
+              "title": "Error",
+              "type": "string"
+            },
+            "route": {
+              "title": "Route",
+              "type": "string"
+            },
+            "status": {
+              "description": "approved, done, failed or skipped.",
+              "title": "Status",
+              "type": "string"
+            },
+            "updated_at": {
+              "default": "",
+              "title": "Updated At",
+              "type": "string"
+            },
+            "version": {
+              "default": "",
+              "title": "Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "route",
+            "status"
+          ],
+          "title": "ActionRow",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/ActionRow"
+          },
+          "title": "Actions",
+          "type": "array"
+        },
+        "message_id": {
+          "title": "Message Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message_id",
+        "actions"
+      ],
+      "title": "GetActionOutput",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
   "get_enrichment": {
     "input_schema": {
       "properties": {
@@ -2699,6 +2422,98 @@
     "permission": "read",
     "streaming": false
   },
+  "get_triage": {
+    "input_schema": {
+      "properties": {
+        "message_id": {
+          "title": "Message Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message_id"
+      ],
+      "title": "GetTriageInput",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "on",
+    "output_schema": {
+      "properties": {
+        "content_is_untrusted": {
+          "default": true,
+          "title": "Content Is Untrusted",
+          "type": "boolean"
+        },
+        "message_id": {
+          "title": "Message Id",
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "rated": {
+          "description": "False when no triager has rated this message yet.",
+          "title": "Rated",
+          "type": "boolean"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result"
+        },
+        "triager": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Triager"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "message_id",
+        "rated"
+      ],
+      "title": "GetTriageOutput",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
   "get_workspace": {
     "input_schema": {
       "properties": {
@@ -2856,6 +2671,130 @@
         "accounts"
       ],
       "title": "AccountsOutput",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
+  "list_actions": {
+    "input_schema": {
+      "properties": {
+        "limit": {
+          "default": 25,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      "title": "ListActionsInput",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "off",
+    "output_schema": {
+      "$defs": {
+        "RecentAction": {
+          "properties": {
+            "action": {
+              "title": "Action",
+              "type": "string"
+            },
+            "attempts": {
+              "default": 0,
+              "title": "Attempts",
+              "type": "integer"
+            },
+            "error": {
+              "default": "",
+              "description": "The name of the error type, never its message.",
+              "title": "Error",
+              "type": "string"
+            },
+            "message_id": {
+              "title": "Message Id",
+              "type": "string"
+            },
+            "route": {
+              "title": "Route",
+              "type": "string"
+            },
+            "status": {
+              "description": "approved, done, failed or skipped.",
+              "title": "Status",
+              "type": "string"
+            },
+            "updated_at": {
+              "default": "",
+              "title": "Updated At",
+              "type": "string"
+            },
+            "version": {
+              "default": "",
+              "title": "Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "route",
+            "status",
+            "message_id"
+          ],
+          "title": "RecentAction",
+          "type": "object"
+        },
+        "WaitingAction": {
+          "properties": {
+            "kind": {
+              "description": "The action's name, or `unrouted` when no action answers.",
+              "title": "Kind",
+              "type": "string"
+            },
+            "message_id": {
+              "title": "Message Id",
+              "type": "string"
+            },
+            "route": {
+              "title": "Route",
+              "type": "string"
+            },
+            "why": {
+              "default": "",
+              "title": "Why",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "message_id",
+            "route"
+          ],
+          "title": "WaitingAction",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "recent": {
+          "items": {
+            "$ref": "#/$defs/RecentAction"
+          },
+          "title": "Recent",
+          "type": "array"
+        },
+        "waiting": {
+          "items": {
+            "$ref": "#/$defs/WaitingAction"
+          },
+          "title": "Waiting",
+          "type": "array"
+        }
+      },
+      "required": [
+        "waiting",
+        "recent"
+      ],
+      "title": "ListActionsOutput",
       "type": "object"
     },
     "permission": "read",
@@ -6904,7 +6843,7 @@
         "min_priority": {
           "anyOf": [
             {
-              "maximum": 3,
+              "maximum": 99,
               "minimum": 0,
               "type": "integer"
             },
@@ -9824,6 +9763,1233 @@
         "enabled"
       ],
       "title": "TraceTailOutput",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
+  "triage_ack": {
+    "input_schema": {
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "acknowledged": {
+          "title": "Acknowledged",
+          "type": "boolean"
+        },
+        "changed": {
+          "title": "Changed",
+          "type": "boolean"
+        },
+        "changes": {
+          "additionalProperties": {
+            "items": {},
+            "type": "array"
+          },
+          "title": "Changes",
+          "type": "object"
+        },
+        "error": {
+          "default": "",
+          "title": "Error",
+          "type": "string"
+        },
+        "file": {
+          "additionalProperties": true,
+          "title": "File",
+          "type": "object"
+        },
+        "snapshot": {
+          "additionalProperties": true,
+          "title": "Snapshot",
+          "type": "object"
+        },
+        "staged": {
+          "additionalProperties": {
+            "items": {},
+            "type": "array"
+          },
+          "title": "Staged",
+          "type": "object"
+        },
+        "working": {
+          "additionalProperties": true,
+          "title": "Working",
+          "type": "object"
+        }
+      },
+      "required": [
+        "acknowledged",
+        "changed",
+        "changes",
+        "staged",
+        "file",
+        "snapshot",
+        "working"
+      ],
+      "title": "Drift",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "triage_apply": {
+    "input_schema": {
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "acknowledged": {
+          "title": "Acknowledged",
+          "type": "boolean"
+        },
+        "changed": {
+          "title": "Changed",
+          "type": "boolean"
+        },
+        "changes": {
+          "additionalProperties": {
+            "items": {},
+            "type": "array"
+          },
+          "title": "Changes",
+          "type": "object"
+        },
+        "error": {
+          "default": "",
+          "title": "Error",
+          "type": "string"
+        },
+        "file": {
+          "additionalProperties": true,
+          "title": "File",
+          "type": "object"
+        },
+        "snapshot": {
+          "additionalProperties": true,
+          "title": "Snapshot",
+          "type": "object"
+        },
+        "staged": {
+          "additionalProperties": {
+            "items": {},
+            "type": "array"
+          },
+          "title": "Staged",
+          "type": "object"
+        },
+        "working": {
+          "additionalProperties": true,
+          "title": "Working",
+          "type": "object"
+        }
+      },
+      "required": [
+        "acknowledged",
+        "changed",
+        "changes",
+        "staged",
+        "file",
+        "snapshot",
+        "working"
+      ],
+      "title": "Drift",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "triage_discard": {
+    "input_schema": {
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "acknowledged": {
+          "title": "Acknowledged",
+          "type": "boolean"
+        },
+        "changed": {
+          "title": "Changed",
+          "type": "boolean"
+        },
+        "changes": {
+          "additionalProperties": {
+            "items": {},
+            "type": "array"
+          },
+          "title": "Changes",
+          "type": "object"
+        },
+        "error": {
+          "default": "",
+          "title": "Error",
+          "type": "string"
+        },
+        "file": {
+          "additionalProperties": true,
+          "title": "File",
+          "type": "object"
+        },
+        "snapshot": {
+          "additionalProperties": true,
+          "title": "Snapshot",
+          "type": "object"
+        },
+        "staged": {
+          "additionalProperties": {
+            "items": {},
+            "type": "array"
+          },
+          "title": "Staged",
+          "type": "object"
+        },
+        "working": {
+          "additionalProperties": true,
+          "title": "Working",
+          "type": "object"
+        }
+      },
+      "required": [
+        "acknowledged",
+        "changed",
+        "changes",
+        "staged",
+        "file",
+        "snapshot",
+        "working"
+      ],
+      "title": "Drift",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "triage_drift": {
+    "input_schema": {
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "acknowledged": {
+          "title": "Acknowledged",
+          "type": "boolean"
+        },
+        "changed": {
+          "title": "Changed",
+          "type": "boolean"
+        },
+        "changes": {
+          "additionalProperties": {
+            "items": {},
+            "type": "array"
+          },
+          "title": "Changes",
+          "type": "object"
+        },
+        "error": {
+          "default": "",
+          "title": "Error",
+          "type": "string"
+        },
+        "file": {
+          "additionalProperties": true,
+          "title": "File",
+          "type": "object"
+        },
+        "snapshot": {
+          "additionalProperties": true,
+          "title": "Snapshot",
+          "type": "object"
+        },
+        "staged": {
+          "additionalProperties": {
+            "items": {},
+            "type": "array"
+          },
+          "title": "Staged",
+          "type": "object"
+        },
+        "working": {
+          "additionalProperties": true,
+          "title": "Working",
+          "type": "object"
+        }
+      },
+      "required": [
+        "acknowledged",
+        "changed",
+        "changes",
+        "staged",
+        "file",
+        "snapshot",
+        "working"
+      ],
+      "title": "Drift",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
+  "triage_level_delete": {
+    "input_schema": {
+      "properties": {
+        "value": {
+          "title": "Value",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "LevelRef",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "LevelOut": {
+          "properties": {
+            "builtin": {
+              "title": "Builtin",
+              "type": "boolean"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "uid": {
+              "title": "Uid",
+              "type": "string"
+            },
+            "value": {
+              "title": "Value",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "uid",
+            "value",
+            "name",
+            "builtin"
+          ],
+          "title": "LevelOut",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "levels": {
+          "items": {
+            "$ref": "#/$defs/LevelOut"
+          },
+          "title": "Levels",
+          "type": "array"
+        }
+      },
+      "required": [
+        "levels"
+      ],
+      "title": "Levels",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "triage_level_set": {
+    "input_schema": {
+      "properties": {
+        "name": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "renumber_from": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Change an existing level's number: its current number.",
+          "title": "Renumber From"
+        },
+        "value": {
+          "description": "The number, such as 5.",
+          "maximum": 99,
+          "minimum": 0,
+          "title": "Value",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value",
+        "name"
+      ],
+      "title": "LevelSet",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "LevelOut": {
+          "properties": {
+            "builtin": {
+              "title": "Builtin",
+              "type": "boolean"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "uid": {
+              "title": "Uid",
+              "type": "string"
+            },
+            "value": {
+              "title": "Value",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "uid",
+            "value",
+            "name",
+            "builtin"
+          ],
+          "title": "LevelOut",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "levels": {
+          "items": {
+            "$ref": "#/$defs/LevelOut"
+          },
+          "title": "Levels",
+          "type": "array"
+        }
+      },
+      "required": [
+        "levels"
+      ],
+      "title": "Levels",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "triage_levels": {
+    "input_schema": {
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "LevelOut": {
+          "properties": {
+            "builtin": {
+              "title": "Builtin",
+              "type": "boolean"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "uid": {
+              "title": "Uid",
+              "type": "string"
+            },
+            "value": {
+              "title": "Value",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "uid",
+            "value",
+            "name",
+            "builtin"
+          ],
+          "title": "LevelOut",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "levels": {
+          "items": {
+            "$ref": "#/$defs/LevelOut"
+          },
+          "title": "Levels",
+          "type": "array"
+        }
+      },
+      "required": [
+        "levels"
+      ],
+      "title": "Levels",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
+  "triage_message": {
+    "input_schema": {
+      "properties": {
+        "force": {
+          "default": false,
+          "description": "Rate again even if a current verdict is stored, and ask the model afresh.",
+          "title": "Force",
+          "type": "boolean"
+        },
+        "message_id": {
+          "title": "Message Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message_id"
+      ],
+      "title": "TriageMessageInput",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "cached": {
+          "title": "Cached",
+          "type": "integer"
+        },
+        "message_id": {
+          "title": "Message Id",
+          "type": "string"
+        },
+        "ran": {
+          "title": "Ran",
+          "type": "integer"
+        },
+        "rated": {
+          "description": "Whether the message has a stored verdict afterwards.",
+          "title": "Rated",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "message_id",
+        "ran",
+        "cached",
+        "rated"
+      ],
+      "title": "TriageMessageOutput",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "triage_revert": {
+    "input_schema": {
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "acknowledged": {
+          "title": "Acknowledged",
+          "type": "boolean"
+        },
+        "changed": {
+          "title": "Changed",
+          "type": "boolean"
+        },
+        "changes": {
+          "additionalProperties": {
+            "items": {},
+            "type": "array"
+          },
+          "title": "Changes",
+          "type": "object"
+        },
+        "error": {
+          "default": "",
+          "title": "Error",
+          "type": "string"
+        },
+        "file": {
+          "additionalProperties": true,
+          "title": "File",
+          "type": "object"
+        },
+        "snapshot": {
+          "additionalProperties": true,
+          "title": "Snapshot",
+          "type": "object"
+        },
+        "staged": {
+          "additionalProperties": {
+            "items": {},
+            "type": "array"
+          },
+          "title": "Staged",
+          "type": "object"
+        },
+        "working": {
+          "additionalProperties": true,
+          "title": "Working",
+          "type": "object"
+        }
+      },
+      "required": [
+        "acknowledged",
+        "changed",
+        "changes",
+        "staged",
+        "file",
+        "snapshot",
+        "working"
+      ],
+      "title": "Drift",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "triage_rule_delete": {
+    "input_schema": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "RuleRef",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "RuleOut": {
+          "properties": {
+            "category": {
+              "title": "Category",
+              "type": "string"
+            },
+            "enabled": {
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "level": {
+              "title": "Level",
+              "type": "integer"
+            },
+            "level_name": {
+              "title": "Level Name",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "position": {
+              "title": "Position",
+              "type": "integer"
+            },
+            "route": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Route",
+              "type": "array"
+            },
+            "uid": {
+              "title": "Uid",
+              "type": "string"
+            },
+            "when": {
+              "additionalProperties": true,
+              "title": "When",
+              "type": "object"
+            }
+          },
+          "required": [
+            "uid",
+            "position",
+            "name",
+            "enabled",
+            "level",
+            "level_name",
+            "category",
+            "when"
+          ],
+          "title": "RuleOut",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/RuleOut"
+          },
+          "title": "Rules",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rules"
+      ],
+      "title": "Rules",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "triage_rule_move": {
+    "input_schema": {
+      "properties": {
+        "before": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Put it just before this rule.",
+          "title": "Before"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The place, 1 for first.",
+          "title": "To"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "RuleMove",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "RuleOut": {
+          "properties": {
+            "category": {
+              "title": "Category",
+              "type": "string"
+            },
+            "enabled": {
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "level": {
+              "title": "Level",
+              "type": "integer"
+            },
+            "level_name": {
+              "title": "Level Name",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "position": {
+              "title": "Position",
+              "type": "integer"
+            },
+            "route": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Route",
+              "type": "array"
+            },
+            "uid": {
+              "title": "Uid",
+              "type": "string"
+            },
+            "when": {
+              "additionalProperties": true,
+              "title": "When",
+              "type": "object"
+            }
+          },
+          "required": [
+            "uid",
+            "position",
+            "name",
+            "enabled",
+            "level",
+            "level_name",
+            "category",
+            "when"
+          ],
+          "title": "RuleOut",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/RuleOut"
+          },
+          "title": "Rules",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rules"
+      ],
+      "title": "Rules",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "triage_rule_order": {
+    "input_schema": {
+      "properties": {
+        "order": {
+          "description": "Rule uids or names, first to last.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Order",
+          "type": "array"
+        }
+      },
+      "required": [
+        "order"
+      ],
+      "title": "RuleOrder",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "RuleOut": {
+          "properties": {
+            "category": {
+              "title": "Category",
+              "type": "string"
+            },
+            "enabled": {
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "level": {
+              "title": "Level",
+              "type": "integer"
+            },
+            "level_name": {
+              "title": "Level Name",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "position": {
+              "title": "Position",
+              "type": "integer"
+            },
+            "route": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Route",
+              "type": "array"
+            },
+            "uid": {
+              "title": "Uid",
+              "type": "string"
+            },
+            "when": {
+              "additionalProperties": true,
+              "title": "When",
+              "type": "object"
+            }
+          },
+          "required": [
+            "uid",
+            "position",
+            "name",
+            "enabled",
+            "level",
+            "level_name",
+            "category",
+            "when"
+          ],
+          "title": "RuleOut",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/RuleOut"
+          },
+          "title": "Rules",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rules"
+      ],
+      "title": "Rules",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "triage_rule_set": {
+    "input_schema": {
+      "properties": {
+        "category": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category"
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Enabled"
+        },
+        "level": {
+          "anyOf": [
+            {
+              "maximum": 99,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Level"
+        },
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "route": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The actions a message this rule matches goes to, by name.",
+          "title": "Route"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Every key must match: from, to, subject, subject_contains, body_contains, header_present, has_attachment, is_reply.",
+          "title": "When"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "RuleSet",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "RuleOut": {
+          "properties": {
+            "category": {
+              "title": "Category",
+              "type": "string"
+            },
+            "enabled": {
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "level": {
+              "title": "Level",
+              "type": "integer"
+            },
+            "level_name": {
+              "title": "Level Name",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "position": {
+              "title": "Position",
+              "type": "integer"
+            },
+            "route": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Route",
+              "type": "array"
+            },
+            "uid": {
+              "title": "Uid",
+              "type": "string"
+            },
+            "when": {
+              "additionalProperties": true,
+              "title": "When",
+              "type": "object"
+            }
+          },
+          "required": [
+            "uid",
+            "position",
+            "name",
+            "enabled",
+            "level",
+            "level_name",
+            "category",
+            "when"
+          ],
+          "title": "RuleOut",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/RuleOut"
+          },
+          "title": "Rules",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rules"
+      ],
+      "title": "Rules",
+      "type": "object"
+    },
+    "permission": "mutate",
+    "streaming": false
+  },
+  "triage_rule_test": {
+    "input_schema": {
+      "properties": {
+        "limit": {
+          "default": 200,
+          "description": "How many recent messages.",
+          "maximum": 1000,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "when": {
+          "additionalProperties": true,
+          "description": "The conditions to try (every key must match).",
+          "title": "When",
+          "type": "object"
+        }
+      },
+      "required": [
+        "when"
+      ],
+      "title": "RuleTest",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "properties": {
+        "matched": {
+          "title": "Matched",
+          "type": "integer"
+        },
+        "sample_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sample Ids",
+          "type": "array"
+        },
+        "tested": {
+          "title": "Tested",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "tested",
+        "matched",
+        "sample_ids"
+      ],
+      "title": "RuleTestOut",
+      "type": "object"
+    },
+    "permission": "read",
+    "streaming": false
+  },
+  "triage_rules": {
+    "input_schema": {
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "marks_read": false,
+    "mcp": "never",
+    "output_schema": {
+      "$defs": {
+        "RuleOut": {
+          "properties": {
+            "category": {
+              "title": "Category",
+              "type": "string"
+            },
+            "enabled": {
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "level": {
+              "title": "Level",
+              "type": "integer"
+            },
+            "level_name": {
+              "title": "Level Name",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "position": {
+              "title": "Position",
+              "type": "integer"
+            },
+            "route": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Route",
+              "type": "array"
+            },
+            "uid": {
+              "title": "Uid",
+              "type": "string"
+            },
+            "when": {
+              "additionalProperties": true,
+              "title": "When",
+              "type": "object"
+            }
+          },
+          "required": [
+            "uid",
+            "position",
+            "name",
+            "enabled",
+            "level",
+            "level_name",
+            "category",
+            "when"
+          ],
+          "title": "RuleOut",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/RuleOut"
+          },
+          "title": "Rules",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rules"
+      ],
+      "title": "Rules",
       "type": "object"
     },
     "permission": "read",

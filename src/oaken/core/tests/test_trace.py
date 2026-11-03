@@ -96,3 +96,22 @@ async def test_the_trace_rides_the_bus_to_streams_that_ask_for_it_and_nothing_el
     assert not everything._items  # nor an unfiltered stream
     await wanted.aclose()
     await everything.aclose()
+
+
+def test_every_line_is_complete_compact_json(tmp_path: Path) -> None:
+    t = tracer(tmp_path)
+    for answer in ("a", "b"):
+        t.emit("llm.call", task="triage", prompt_version="1", system="SYS", schema={"x": 1},
+               response=answer, think=None)  # fmt: skip
+    lines = (tmp_path / "trace.jsonl").read_text().splitlines()
+    for line, answer in zip(lines, ("a", "b"), strict=True):
+        d = json.loads(line)["data"]
+        assert d["system"] == "SYS" and d["schema"] == {"x": 1} and d["response"] == answer
+        assert "think" not in d and ", " not in line
+
+
+def test_only_a_model_call_drops_its_empty_fields(tmp_path: Path) -> None:
+    t = tracer(tmp_path)
+    t.emit("plugin.call", result=None)  # "returned nothing" is information
+    (row,) = (json.loads(ln) for ln in (tmp_path / "trace.jsonl").read_text().splitlines())
+    assert row["data"]["result"] is None

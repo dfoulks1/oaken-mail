@@ -17,7 +17,7 @@ set. Mode ``0600``. JSON, UTF-8:
       "pid": 12345,
       "host": "127.0.0.1",
       "port": 8123,
-      "version": "0.1.1",
+      "version": "0.2.0",
       "started_at": "2026-10-20T19:57:04.481Z"
     }
 

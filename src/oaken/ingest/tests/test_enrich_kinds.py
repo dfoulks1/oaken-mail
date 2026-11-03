@@ -48,5 +48,5 @@ def test_stages_are_listed_in_the_order_they_run() -> None:
     from oaken.ingest.pipeline import STAGE_KINDS
     from oaken.ingest.pipeline_control import STAGES
 
-    assert list(STAGES) == ["parse", "triage", "embed", "enrich"]
+    assert list(STAGES) == ["parse", "triage", "embed", "enrich", "action"]
     assert [k.removeprefix("ingest.") for k in STAGE_KINDS[:4]] == list(STAGES)

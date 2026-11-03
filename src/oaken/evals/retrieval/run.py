@@ -2,12 +2,10 @@
 """Build a mailbox from the synthetic corpus, run the retrievers over its questions, score them.
 
 Everything goes through the real ingest pipeline (sync, parse, index, embed) and the real
-``Retrieval`` object; only the models are stand-ins offline (``ConceptEmbedder`` and the extractive
-``reader``). With ``live`` models the same run measures a real embedder and language model.
+``Retrieval`` object; only the models are stand-ins offline (``ConceptEmbedder``). With ``live`` models the same run measures a real embedder.
 """
 
 import contextlib
-import re
 import tempfile
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -17,15 +15,13 @@ from pathlib import Path
 from oaken.ai import LLMCache, LLMService, Workspaces
 from oaken.ai.access import WorkspaceLLM
 from oaken.core.attrs import AttrStore
-from oaken.core.clock import FakeClock, fmt_ts
+from oaken.core.clock import FakeClock
 from oaken.core.db import Database, migrate
 from oaken.core.events import EventBus
-from oaken.core.ids import AccountId, MessageId
+from oaken.core.ids import AccountId
 from oaken.core.jobs import JobQueue, JobRunner
 from oaken.core.rawstore import RawStore
-from oaken.core.search import Evidence, HybridFilters, HybridSearch, Retrieval
-from oaken.core.search.ask import ASK, AskResult, content_hash, parts, resolve
-from oaken.core.search.context import EvidenceMessage, Excerpt
+from oaken.core.search import HybridFilters, HybridSearch, Retrieval
 from oaken.core.search.query import keyword_text
 from oaken.core.settings import (
     AISettings,
@@ -48,7 +44,6 @@ MIGRATIONS = Path(__file__).resolve().parents[2] / "core" / "migrations"
 ACCOUNT = AccountId("eval")
 RETRIEVERS = ("keyword", "vector", "hybrid", "hybrid-plain")
 DEPTH = 50  # how far down each ranking is kept
-TOP_FOR_ASK = 10
 
 
 @dataclass
@@ -69,7 +64,6 @@ async def open_setup(
     embedder: Embedder,
     llm: LLMBackend,
     *,
-    summaries: bool = True,
     settings: Settings | None = None,
     where: Path | None = None,
 ) -> AsyncIterator[Setup]:
@@ -120,8 +114,6 @@ async def open_setup(
                     if mid is not None:
                         setup.logical[mid] = logical
                         setup.message_of[logical] = mid
-                if summaries:
-                    await _store_summaries(setup, clock)
                 yield setup
             finally:
                 await index.close()
@@ -143,27 +135,7 @@ async def _drain(runner: JobRunner, clock: FakeClock) -> None:
         clock.advance(hours=2)
 
 
-_FIRST_SENTENCE = re.compile(r"^(.{20,200}?[.!?])(?:\s|$)", re.S)
 
-
-async def _store_summaries(setup: Setup, clock: FakeClock) -> None:
-    """Stand-in for the summary enricher: the first sentence of each message's cleaned text, kept
-    where the real enricher keeps its result. The report says so."""
-    import json
-
-    stamp = fmt_ts(clock.now())
-    for mid in setup.logical:
-        doc = await setup.index.get_doc(MessageId(mid))
-        if doc is None:
-            continue
-        text = " ".join(str(doc["cleaned_text"]).split())
-        m = _FIRST_SENTENCE.match(text)
-        summary = (m.group(1) if m else text[:160]).strip()
-        await setup.raw.db.execute(
-            "INSERT OR REPLACE INTO enrichments (message_id, enricher, version, model_id,"
-            " content_hash, data_json, created_at) VALUES (?, 'summary', '1', 'eval', ?, ?, ?)",
-            (mid, str(doc["content_hash"]), json.dumps({"summary": summary}), stamp),
-        )
 
 
 # -- retrieval ----------------------------------------------------------------------------------
@@ -227,110 +199,6 @@ def _scores(rankings_: list[list[str]], qs: list[Question]) -> RetrievalScores:
     )
 
 
-# -- ask ----------------------------------------------------------------------------------------
-async def full_bodies(setup: Setup, ids: list[str]) -> Evidence:
-    """The naive context: the whole cleaned text of each message, every chunk, no summaries, no
-    budget. Built from the same pieces so it can be answered and verified the same way."""
-    messages: list[EvidenceMessage] = []
-    used = 0
-    for rank, mid in enumerate(ids, 1):
-        doc = await setup.index.get_doc(MessageId(mid))
-        if doc is None:
-            continue
-        who = f"{doc['from_name']} <{doc['from_addr']}>"
-        msg = EvidenceMessage(f"M{rank}", MessageId(mid), None, who, str(doc["subject"]))
-        for row in await setup.index.chunk_rows(MessageId(mid)):
-            text = str(row["text"])
-            ref = f"M{rank}.{row['ordinal']}"
-            msg.excerpts.append(Excerpt(ref, int(row["id"]), int(row["ordinal"]), text, text, True))
-        messages.append(msg)
-    count = setup.pipeline.tokenizer.count
-    used = count("\n\n".join(m.render() for m in messages))
-    return Evidence(tuple(messages), 10**9, used, used, used, len(messages), len(messages), 0)
-
-
-@dataclass
-class AskScores:
-    questions: int = 0
-    answered: int = 0  # said something (did not answer "not enough evidence")
-    correct: int = 0  # answerable, answered, and a citation points at the planted fact
-    citations: int = 0
-    precise: int = 0  # citations to a relevant message whose quote holds the fact
-    false_answers: int = 0  # unanswerable but answered
-    abstained_right: int = 0  # unanswerable and said so
-    dropped_claims: int = 0
-    by_kind: dict[str, list[int]] = field(default_factory=dict)  # kind -> [questions, correct]
-    evidence_tokens: float = 0.0  # mean per question that reached the reader
-    reached_reader: int = 0
-
-    @property
-    def citation_precision(self) -> float:
-        return self.precise / self.citations if self.citations else 0.0
-
-
-def _precise(q: Question, result: AskResult, logical: dict[str, str]) -> tuple[int, int]:
-    fact = {w for w in re.findall(r"\w+", q.fact.lower())}
-    n = good = 0
-    for c in result.citations:
-        n += 1
-        words = set(re.findall(r"\w+", c.quote.lower()))
-        if (
-            logical.get(c.message_id) in q.relevant
-            and fact
-            and len(fact & words) / len(fact) >= 0.7
-        ):
-            good += 1
-    return n, good
-
-
-def _tally(scores: AskScores, q: Question, result: AskResult, logical: dict[str, str]) -> None:
-    scores.questions += 1
-    scores.dropped_claims += result.dropped_claims
-    if result.evidence_tokens:
-        scores.reached_reader += 1
-        scores.evidence_tokens += result.evidence_tokens
-    answered = not result.insufficient_evidence
-    scores.answered += answered
-    n, good = _precise(q, result, logical)
-    scores.citations += n
-    scores.precise += good
-    tally = scores.by_kind.setdefault(q.kind, [0, 0])
-    tally[0] += 1
-    if q.relevant:
-        scores.correct += answered and good > 0
-        tally[1] += answered and good > 0
-    elif answered:
-        scores.false_answers += 1
-    else:
-        scores.abstained_right += 1
-        tally[1] += 1
-
-
-async def ask_all(setup: Setup, questions: list[Question]) -> tuple[AskScores, AskScores, float]:
-    """The context builder against the naive baseline over every question, and the mean share of
-    full-body tokens the builder saved. Both ask the same reader through ``ask``'s own path."""
-    built, naive = AskScores(), AskScores()
-    saved: list[float] = []
-    llm = setup.retrieval.llm
-    assert llm is not None  # noqa: S101
-    for q in questions:
-        result = await setup.retrieval.ask(q.text)
-        _tally(built, q, result, setup.logical)
-        found, evidence = await setup.retrieval.evidence(q.text)
-        if evidence.tokens_full_bodies:
-            saved.append(evidence.saved_fraction)
-        top = [h.message_id for h in found.hits[:TOP_FOR_ASK]]
-        stuffed = await full_bodies(setup, top)
-        if not stuffed.messages:
-            continue
-        answer = await llm.generate_cached(
-            ASK, *parts(q.text, stuffed), content_hash="naive" + content_hash(q.text, stuffed),
-            account_id=ACCOUNT,
-        )  # fmt: skip
-        _tally(naive, q, resolve(answer, stuffed), setup.logical)
-    return built, naive, metrics.mean(saved)
-
-
 @dataclass
 class Results:
     seed: int
@@ -339,13 +207,7 @@ class Results:
     questions: dict[str, int]
     mode: str
     embedder: str
-    reader: str
-    summaries: str
     retrieval: dict[str, dict[str, RetrievalScores]]
-    context: AskScores
-    naive: AskScores
-    saved_fraction: float
-    budget: int
     date: str = field(default_factory=lambda: datetime.now(UTC).date().isoformat())
 
 
@@ -355,18 +217,15 @@ async def run(
     llm: LLMBackend,
     *,
     mode: str = "offline",
-    reader: str = "extractive stand-in (not a model)",
-    summaries: bool = True,
     settings: Settings | None = None,
     date: str | None = None,
 ) -> Results:
     if isinstance(embedder, ConceptEmbedder):
         embedder.fit(m.raw.decode(errors="replace") for m in corpus.messages)
-    async with open_setup(corpus, embedder, llm, summaries=summaries, settings=settings) as setup:
+    async with open_setup(corpus, embedder, llm, settings=settings) as setup:
         questions = corpus.questions
         ranked = {q.id: await rankings(setup, q) for q in questions if q.relevant}
         scores = score_rankings(questions, ranked)
-        built, naive, saved = await ask_all(setup, questions)
         stats = await setup.index.stats()
         counts = {k: sum(q.kind == k for q in questions) for k in KINDS}
         res = Results(
@@ -376,13 +235,7 @@ async def run(
             questions=counts,
             mode=mode,
             embedder=f"{embedder.model_id} ({'offline stand-in' if mode == 'offline' else 'live'})",
-            reader=reader,
-            summaries="first sentence (stand-in for the summary enricher)" if summaries else "none",
             retrieval=scores,
-            context=built,
-            naive=naive,
-            saved_fraction=saved,
-            budget=setup.pipeline.settings.ai.ask_context_tokens,
         )
         if date:
             res.date = date

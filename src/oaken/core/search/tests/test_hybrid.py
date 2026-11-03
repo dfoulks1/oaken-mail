@@ -108,7 +108,6 @@ async def test_search_never_marks_anything_read(box: Box) -> None:
     before = await box.read_flags()
     for text in ("zebrafinch", "is:unread", "from:alex", "budget review"):
         await box.retrieval.search(text)
-        await box.retrieval.evidence(text)
     assert await box.read_flags() == before and not any(before.values())
 
 
@@ -199,6 +198,5 @@ async def test_search_survives_hostile_and_random_queries(box: Box) -> None:
     for text in nasty:
         res = await box.retrieval.search(text)
         assert isinstance(res.degraded, bool)
-        await box.retrieval.evidence(text)
     count = await box.rig.raw_db.fetchone("SELECT COUNT(*) AS n FROM messages")
     assert count is not None and count["n"] == 3  # nothing was written

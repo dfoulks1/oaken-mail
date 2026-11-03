@@ -212,3 +212,29 @@ def remove_table(text: str, path: Sequence[str]) -> str:
     if parent is not None and path[-1] in parent:
         del parent[path[-1]]
     return tomlkit.dumps(doc)
+
+
+def set_triage(text: str, levels: Sequence[Mapping[str, Any]], rules: Sequence[Mapping[str, Any]]) -> str:
+    """``text`` with the ``[[triage.levels]]`` and ``[[triage.rules]]`` arrays set to exactly these
+    (in this order), or removed when empty. Comments and every other table are untouched."""
+    doc = _parse(text)
+    triage = _parent(doc, ("triage", "x"))  # [triage], made if the file has none
+    for key, rows in (("levels", levels), ("rules", rules)):
+        if key in triage:
+            del triage[key]
+        if not rows:
+            continue
+        aot = tomlkit.aot()
+        for row in rows:
+            table = tomlkit.table()
+            for name, value in row.items():
+                if isinstance(value, Mapping):
+                    inline = tomlkit.inline_table()
+                    inline.update(dict(value))
+                    value = inline
+                table.add(name, value)
+            aot.append(table)
+        triage[key] = aot
+    if not len(triage) and "triage" in doc:  # nothing left: no empty [triage] behind
+        del doc["triage"]
+    return tomlkit.dumps(doc)

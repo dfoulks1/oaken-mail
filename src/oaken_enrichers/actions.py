@@ -13,8 +13,9 @@ from pydantic import BaseModel, Field, field_validator
 
 from oaken.ai.prompts import PromptBuilder, SafeOutput
 from oaken.core.untrusted import UntrustedText
-from oaken.plugins.contracts import AskIntent, EnrichInput, EnrichOutput
-from oaken_enrichers._common import GatedConfig, LLMEnricher, bulk_reasons, digest, fit, labeled
+from oaken.plugins.contracts import CleanMessage, EnrichOutput
+from oaken.plugins.kit import bulk_reasons, digest, fit, labeled
+from oaken_enrichers._common import GatedConfig, LLMEnricher
 
 MAX_ITEMS = 20
 MIN_QUOTE = 4
@@ -115,17 +116,12 @@ class ActionsEnricher(LLMEnricher):
     skip_bulk = True
     config_model = GatedConfig
     prompt = ACTIONS
-    ask_intent = AskIntent(
-        "actions",
-        "The reader asks for tasks, to-dos, action items or deadlines in mail.",
-        ("action_items", "deadlines"),
-    )
     output_model = ActionsResult
 
-    def needs_model(self, msg: EnrichInput) -> bool:
+    def needs_model(self, msg: CleanMessage) -> bool:
         return not (self.skips_bulk() and bulk_reasons(msg))
 
-    async def enrich(self, msg: EnrichInput) -> EnrichOutput:
+    async def enrich(self, msg: CleanMessage) -> EnrichOutput:
         if self.skips_bulk() and bulk_reasons(msg):
             return EnrichOutput(ActionsResult(skipped="bulk").model_dump(mode="json"))
         body, truncated = fit(msg.body.unwrap(), self.budget(), self.tokenizer)
@@ -140,14 +136,14 @@ class ActionsEnricher(LLMEnricher):
         )
         return self.finish(msg, answer, body, truncated)
 
-    def from_answer(self, msg: EnrichInput, answer: ActionsAnswer) -> EnrichOutput:
+    def from_answer(self, msg: CleanMessage, answer: ActionsAnswer) -> EnrichOutput:
         """The stored result for an answer a model (or an external agent) gave: what ``enrich``
         does after the model call, so every quote is checked against the message."""
         body, truncated = fit(msg.body.unwrap(), self.budget(), self.tokenizer)
         return self.finish(msg, answer, body, truncated)
 
     def finish(
-        self, msg: EnrichInput, answer: ActionsAnswer, body: str, truncated: bool
+        self, msg: CleanMessage, answer: ActionsAnswer, body: str, truncated: bool
     ) -> EnrichOutput:
         full = msg.body.unwrap()
         dropped = 0

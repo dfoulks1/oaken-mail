@@ -58,17 +58,17 @@ async def test_settings_set_saves_one_key_says_what_to_do_next_and_keeps_the_fil
 ) -> None:
     config().parent.mkdir(parents=True, exist_ok=True)
     config().write_text("# mine\n[api]\nport = 8123  # keep\n", encoding="utf-8")
-    run = await cli("settings", "set", "ai", "ask_context_tokens=2500")
+    run = await cli("settings", "set", "ai", "enrich_max_input_tokens=2500")
     assert run.code == int(ExitCode.OK), run.err
-    assert "saved ask_context_tokens" in run.out and "previous file kept as" in run.out
+    assert "saved enrich_max_input_tokens" in run.out and "previous file kept as" in run.out
     assert "oaken reload" in run.out  # the setting reaches core only on a reload
     text = config().read_text(encoding="utf-8")
-    assert "ask_context_tokens = 2500" in text and "# mine" in text and "# keep" in text
+    assert "enrich_max_input_tokens = 2500" in text and "# mine" in text and "# keep" in text
     shown = await cli("settings", "ai")
     assert "2500" in shown.out and "file" in shown.out
-    unset = await cli("settings", "set", "ai", "--unset", "ask_context_tokens")
-    assert unset.code == int(ExitCode.OK) and "ask_context_tokens" not in config().read_text()
-    nothing = await cli("settings", "set", "ai", "ask_context_tokens=3000")  # the default
+    unset = await cli("settings", "set", "ai", "--unset", "enrich_max_input_tokens")
+    assert unset.code == int(ExitCode.OK) and "enrich_max_input_tokens" not in config().read_text()
+    nothing = await cli("settings", "set", "ai", "enrich_max_input_tokens=3000")  # the default
     assert "nothing to change" in nothing.out
 
 

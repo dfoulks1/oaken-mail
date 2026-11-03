@@ -44,6 +44,13 @@ class Box:
         return str(doc["thread_key"])
 
     async def enrich(self, mid: str, enricher: str, data: dict[str, Any]) -> None:
+        if enricher == "triage":  # the verdict has a table of its own (ADR 0017)
+            await self.rig.raw_db.execute(
+                "INSERT OR REPLACE INTO triage_verdicts(message_id, triager, version, model_id,"
+                " content_hash, data_json, created_at) VALUES (?, 'ai', '1', 'test', 'h', ?, 0)",
+                (mid, json.dumps(data)),
+            )
+            return
         await self.rig.raw_db.execute(
             "INSERT OR REPLACE INTO enrichments(message_id, enricher, version, model_id,"
             " content_hash, data_json, created_at) VALUES (?, ?, '1', 'test', 'h', ?, 0)",

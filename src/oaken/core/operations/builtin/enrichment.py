@@ -26,7 +26,8 @@ class GetEnrichmentOutput(BaseModel):
 
 @operation(
     "get_enrichment",
-    "Show the stored enrichment results (summary, triage, actions, inspector) for a message.",
+    "Show the stored enrichment results (summary, actions, inspector) for a message. The triage "
+    "verdict is `get_triage`.",
     permission="read",
     input=GetEnrichmentInput,
     output=GetEnrichmentOutput,
@@ -41,6 +42,74 @@ async def get_enrichment(ctx: OpContext, inp: GetEnrichmentInput) -> GetEnrichme
             raise NotFound(f"no stored {inp.enricher} result for {inp.message_id}")
         stored = {inp.enricher: stored[inp.enricher]}
     return GetEnrichmentOutput(message_id=inp.message_id, results=stored)
+
+
+class GetTriageInput(BaseModel):
+    message_id: str
+
+
+class GetTriageOutput(BaseModel):
+    message_id: str
+    rated: bool = Field(description="False when no triager has rated this message yet.")
+    triager: str | None = None
+    version: str | None = None
+    model: str | None = None
+    result: dict[str, Any] | None = None
+    content_is_untrusted: bool = True  # the reason is model text built from mail
+
+
+@operation(
+    "get_triage",
+    "Show the stored triage verdict for a message: which triager rated it, the category, level "
+    "(priority) and whether a reply is owed.",
+    permission="read",
+    input=GetTriageInput,
+    output=GetTriageOutput,
+    mcp="on",
+)
+async def get_triage(ctx: OpContext, inp: GetTriageInput) -> GetTriageOutput:
+    mid = MessageId(inp.message_id)
+    await ctx.svc.raw.get_message(mid)  # NotFound if there is no such message
+    row = await ctx.svc.need_pipeline().verdict_row(mid)
+    if row is None:
+        return GetTriageOutput(message_id=inp.message_id, rated=False)
+    return GetTriageOutput(message_id=inp.message_id, rated=True, **row)
+
+
+class TriageMessageInput(BaseModel):
+    message_id: str
+    force: bool = Field(
+        default=False,
+        description="Rate again even if a current verdict is stored, and ask the model afresh.",
+    )
+
+
+class TriageMessageOutput(BaseModel):
+    message_id: str
+    ran: int
+    cached: int
+    rated: bool = Field(description="Whether the message has a stored verdict afterwards.")
+
+
+@operation(
+    "triage_message",
+    "Run the triagers on one message now and store the verdict.",
+    permission="mutate",
+    input=TriageMessageInput,
+    output=TriageMessageOutput,
+    mcp="never",  # it can spend model tokens and changes stored data: the person runs it
+)
+async def triage_message(ctx: OpContext, inp: TriageMessageInput) -> TriageMessageOutput:
+    pipeline = ctx.svc.need_pipeline()
+    mid = MessageId(inp.message_id)
+    await ctx.svc.raw.get_message(mid)
+    result = await pipeline.triage_message(mid, force=inp.force)
+    return TriageMessageOutput(
+        message_id=inp.message_id,
+        ran=result.ran,
+        cached=result.cached,
+        rated=await pipeline.verdict(mid) is not None,
+    )
 
 
 class TryTriageInput(BaseModel):
@@ -126,11 +195,13 @@ async def enrich_message(ctx: OpContext, inp: EnrichMessageInput) -> EnrichMessa
     mid = MessageId(inp.message_id)
     await ctx.svc.raw.get_message(mid)
     if inp.enrichers is not None:
-        known = set(pipeline.backends.enrichers()) | {"triage"}
-        unknown = sorted(set(inp.enrichers) - known)
+        unknown = sorted(set(inp.enrichers) - set(pipeline.backends.enrichers()))
         if unknown:
-            raise InvalidInput(f"no such enricher: {', '.join(unknown)}")
-    result = await pipeline.enrich_message(mid, only=inp.enrichers, force=inp.force)
+            hint = "; triage is `triage_message`" if "triage" in unknown else ""
+            raise InvalidInput(f"no such enricher: {', '.join(unknown)}{hint}")
+    # Enrichers only: triage has its own operation (ADR 0017).
+    only = inp.enrichers if inp.enrichers is not None else list(pipeline.backends.enrichers())
+    result = await pipeline.enrich_message(mid, only=only, force=inp.force)
     return EnrichMessageOutput(
         message_id=inp.message_id,
         ran=result.ran,
@@ -139,4 +210,10 @@ async def enrich_message(ctx: OpContext, inp: EnrichMessageInput) -> EnrichMessa
     )
 
 
-OPERATIONS: tuple[AnyOperation, ...] = (try_triage, get_enrichment, enrich_message)
+OPERATIONS: tuple[AnyOperation, ...] = (
+    try_triage,
+    get_triage,
+    triage_message,
+    get_enrichment,
+    enrich_message,
+)

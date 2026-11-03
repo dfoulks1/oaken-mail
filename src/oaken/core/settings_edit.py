@@ -56,7 +56,7 @@ SECTIONS: tuple[Section, ...] = (
     Section(
         "retrieval",
         "search",
-        "Search and ask: how keyword and vector results are merged, and how much an answer reads.",
+        "Search: how keyword and vector results are merged.",
         _keys(
             "rrf_k",
             "keyword_weight",
@@ -65,9 +65,6 @@ SECTIONS: tuple[Section, ...] = (
             "exact_boost",
             "overfetch",
             "max_candidates",
-            "ask_hits",
-            "ask_chunk_hits",
-            "ask_neighbor_hits",
             "vector_timeout_seconds",
         ),
     ),
@@ -107,8 +104,6 @@ SECTIONS: tuple[Section, ...] = (
         {
             **_keys(
                 "enrich_max_input_tokens",
-                "ask_context_tokens",
-                "ask_model",
                 "triage_gate",
                 "background_yield_seconds",
                 "max_output_chars",

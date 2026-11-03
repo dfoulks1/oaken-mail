@@ -247,3 +247,6 @@ config.toml
 .pytest.lastrun
 *.lastrun
 oakentest
+
+# The trace holds mail text. It never gets committed.
+trace.jsonl*

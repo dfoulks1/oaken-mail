@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from oaken.core.untrusted import UntrustedText
-from oaken.plugins.contracts import EnrichAttachment, EnrichInput
+from oaken.plugins.contracts import EnrichAttachment, CleanMessage
 
 
 @dataclass(frozen=True)
@@ -65,8 +65,8 @@ def load_fixtures(root: Path, enricher: str | None = None) -> list[Fixture]:
     return found
 
 
-def build_input(fx: Fixture) -> EnrichInput:
-    """The ``EnrichInput`` a fixture describes."""
+def build_input(fx: Fixture) -> CleanMessage:
+    """The ``CleanMessage`` a fixture describes."""
     spec = fx.input
     sender = spec.get("from", "Alex <alex@example.com>")
     raw: dict[str, tuple[UntrustedText, ...]] = {"from": (UntrustedText(sender),)}
@@ -75,7 +75,7 @@ def build_input(fx: Fixture) -> EnrichInput:
         raw[key.lower()] = tuple(UntrustedText(v) for v in values)
     date = spec.get("date")
     parent = spec.get("parent_summary")
-    return EnrichInput(
+    return CleanMessage(
         message_id=f"eval-{fx.enricher}-{fx.name}",
         account_id="eval",
         subject=UntrustedText(spec.get("subject", "")),

@@ -11,7 +11,7 @@ Plugins run in-process with full access and are not sandboxed in v1.
 import asyncio
 import contextlib
 import inspect
-from collections.abc import Callable, Iterable
+from collections.abc import AsyncIterator, Callable, Iterable
 from dataclasses import dataclass
 from importlib.metadata import EntryPoint, entry_points
 from typing import Any, cast
@@ -29,6 +29,7 @@ from oaken.plugins.contracts import (
     CAPABILITIES,
     ENTRY_POINT_GROUPS,
     PLUGIN_KINDS,
+    Action,
     Cache,
     Embedder,
     Enricher,
@@ -186,6 +187,9 @@ class PluginHost:
         self._stop = asyncio.Event()
         # Set by core once it has an LLM service; plugins reach it through ``ctx.llm``.
         self.llm_access: LLMAccess | None = None
+        # Settings core keeps in its own tables (the reader's triage rules): merged over the
+        # [plugins] table when a plugin starts. ``(kind, name) -> table``.
+        self.runtime_config: Callable[[str, str], dict[str, Any]] = lambda _kind, _name: {}
 
     # -- lifecycle ---------------------------------------------------------------------------
     async def load(self) -> None:
@@ -298,7 +302,11 @@ class PluginHost:
 
     async def _start_one(self, rec: _Record) -> None:
         base_name = rec.name.partition(ACCOUNT_SEP)[0]
-        config = {**self.settings.plugin_table(rec.kind, base_name), **(rec.overlay or {})}
+        config = {
+            **self.settings.plugin_table(rec.kind, base_name),
+            **(rec.overlay or {}),
+            **self.runtime_config(rec.kind, base_name),
+        }
         flat = self.settings.plugins.get(base_name)
         qualified = self.settings.plugins.get(rec.kind)
         if isinstance(flat, dict) and not (isinstance(qualified, dict) and base_name in qualified):
@@ -833,6 +841,34 @@ class PluginHost:
             dict(defaults) if isinstance(defaults, dict) else {},
         )
 
+    @contextlib.asynccontextmanager
+    async def trial(self, kind: str, name: str, config: dict[str, Any]) -> AsyncIterator[Any]:
+        """A throwaway instance of an installed plugin, started on ``config`` and stopped after,
+        for trying a setting out (the triage rule wizard). The running plugin is not touched and
+        nothing is announced. Raises ``PluginError`` when ``config`` does not validate or the
+        plugin does not start, ``NotFound`` when no such plugin is installed."""
+        rec = self._records.get((kind, name))
+        if rec is None or rec.factory is None:
+            raise NotFound(f"no {kind} named {name!r}")
+        instance = self._instantiate(rec.factory)
+        ctx = PluginContext(
+            name=name, kind=kind, settings=self.settings, clock=self.clock,
+            log=get_logger(f"oaken.plugin.{kind}.{name}"), config=dict(config), bus=None,
+            account_id=None, llm=_HostLLM(self),
+        )  # fmt: skip
+        self._validate_config(instance, ctx.config)
+        await self._call(instance, "start", ctx)
+        try:
+            yield instance
+        finally:
+            await self._call(instance, "stop")
+
+    def validate_runtime(self, kind: str, name: str, config: dict[str, Any]) -> None:
+        """Raise ``PluginError`` when ``config`` would not pass the plugin's ``config_model``."""
+        rec = self._records.get((kind, name))
+        if rec is not None and rec.instance is not None:
+            self._validate_config(rec.instance, config)
+
     @staticmethod
     def _validate_config(instance: Any, config: dict[str, Any]) -> None:
         """Validate ``config`` against a plugin's ``config_model`` (a pydantic model) before it
@@ -857,7 +893,11 @@ class PluginHost:
     # -- lookup ------------------------------------------------------------------------------
     def _table(self, rec: _Record) -> dict[str, Any]:
         base = rec.name.partition(ACCOUNT_SEP)[0]
-        return {**self.settings.plugin_table(rec.kind, base), **(rec.overlay or {})}
+        return {
+            **self.settings.plugin_table(rec.kind, base),
+            **(rec.overlay or {}),
+            **self.runtime_config(rec.kind, base),
+        }
 
     def statuses(self) -> list[PluginStatus]:
         return [
@@ -931,6 +971,11 @@ class PluginHost:
         """Every healthy enricher by its entry-point name (the name results are cached under)."""
         usable = self._usable("enricher")
         return {n: cast(Enricher, usable[n].instance) for n in sorted(usable)}
+
+    def named_actions(self) -> dict[str, Action]:
+        """Every healthy action by entry-point name, by name."""
+        usable = self._usable("action")
+        return {n: cast(Action, usable[n].instance) for n in sorted(usable)}
 
     def named_triagers(self) -> dict[str, Triager]:
         """Every healthy triager by name, in ``rank`` order (then name): the order they run."""

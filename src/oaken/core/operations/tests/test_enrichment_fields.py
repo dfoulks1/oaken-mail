@@ -8,6 +8,13 @@ from oaken.core.operations.tests.conftest import Ops
 
 
 async def put(ops: Ops, mid: str, name: str, data: dict[str, object]) -> None:
+    if name == "triage":  # the verdict has a table of its own (ADR 0017)
+        await ops.svc.raw.db.execute(
+            "INSERT INTO triage_verdicts (message_id, triager, version, model_id, content_hash,"
+            " data_json, created_at) VALUES (?,?,?,?,?,?,?)",
+            (mid, "ai", "1", "m", f"h-{mid}", json.dumps(data), "2026-01-01T00:00:00Z"),
+        )
+        return
     await ops.svc.raw.db.execute(
         "INSERT INTO enrichments (message_id, enricher, version, model_id, content_hash,"
         " data_json, created_at) VALUES (?,?,?,?,?,?,?)",
@@ -18,6 +25,7 @@ async def put(ops: Ops, mid: str, name: str, data: dict[str, object]) -> None:
 async def test_list_items_and_get_message_carry_the_stored_summary_and_triage(ops: Ops) -> None:
     a, b = await ops.add(2)
     await ops.svc.raw.db.execute("DELETE FROM enrichments")
+    await ops.svc.raw.db.execute("DELETE FROM triage_verdicts")
     await put(
         ops, str(a), "summary", {"summary": "Alex wants the report.", "key_points": ["report"]}
     )

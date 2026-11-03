@@ -8,7 +8,7 @@ from oaken.core.settings import IngestSettings
 from oaken.ingest.pipeline import EMBED, ENRICH, TRIAGE, MessagePayload, enrich_kind
 from oaken.ingest.tests.conftest import Enricher, Options, mail
 from oaken.plugins.base import BaseTriager
-from oaken.plugins.contracts import EnrichInput, EnrichOutput, Triager
+from oaken.plugins.contracts import CleanMessage, Triager, TriageVerdict
 
 
 class Rater(BaseTriager):
@@ -20,9 +20,9 @@ class Rater(BaseTriager):
         self.priority = priority
         self.calls = 0
 
-    async def triage(self, msg: EnrichInput) -> EnrichOutput | None:
+    async def triage(self, msg: CleanMessage) -> TriageVerdict | None:
         self.calls += 1
-        return EnrichOutput({"category": "personal", "priority": self.priority})
+        return TriageVerdict({"category": "personal", "priority": self.priority})
 
 
 async def run(rig: Any, priority: int, bar: int | str | None) -> tuple[Rater, int]:
@@ -80,7 +80,7 @@ class Broken(BaseTriager):
     def __init__(self) -> None:
         self.calls = 0
 
-    async def triage(self, msg: EnrichInput) -> EnrichOutput | None:
+    async def triage(self, msg: CleanMessage) -> TriageVerdict | None:
         self.calls += 1
         raise RuntimeError("model down")
 
@@ -166,7 +166,7 @@ async def test_a_triage_preview_shows_the_verdict_and_stores_nothing(make_rig: A
         shown = await rig.pipeline.triage_preview(mid)
         assert shown.triager == "triage" and shown.result is not None
         assert shown.result["priority"] == 2 and rater.calls == 1
-        assert await rig.pipeline.enrichment(mid, "triage") is None  # nothing was stored
+        assert await rig.pipeline.verdict(mid) is None  # nothing was stored
         pasted = await rig.pipeline.triage_preview(None, text="Please reply", subject="Hi")
         assert pasted.triager == "triage" and await rig.queue.query(kind=TRIAGE) == []
 
@@ -213,9 +213,9 @@ class Boom(BaseTriager):
     def __init__(self) -> None:
         self.calls = 0
 
-    async def triage(self, msg: EnrichInput) -> EnrichOutput | None:
+    async def triage(self, msg: CleanMessage) -> TriageVerdict | None:
         self.calls += 1
-        return EnrichOutput({"category": "work", "priority": 3})
+        return TriageVerdict({"category": "work", "priority": 3})
 
 
 class Rules(Rater):
@@ -228,7 +228,7 @@ async def test_the_rules_triager_decides_before_any_model_is_asked(make_rig: Any
         # the model is handed over first, and its name sorts first: rank still puts the rules first
         rig.pipeline.backends.triagers = lambda: {
             "a-model": cast(Triager, ai),
-            "rules": cast(Triager, rules),
+            "spamcheck": cast(Triager, rules),
         }
         rig.provider.add_message(mail(1))
         await rig.run_sync()
@@ -245,7 +245,7 @@ async def test_the_model_is_asked_only_when_the_rules_are_off_or_leave_the_mail(
         ai = Boom()
         rig.pipeline.backends.triagers = lambda: {
             "ai": cast(Triager, ai),
-            "rules": cast(Triager, _Passes()),  # a rules triager that settles nothing
+            "spamcheck": cast(Triager, _Passes()),  # a rules triager that settles nothing
         }
         rig.provider.add_message(mail(1))
         await rig.run_sync()
@@ -256,9 +256,9 @@ async def test_the_model_is_asked_only_when_the_rules_are_off_or_leave_the_mail(
         rules = Rules(0)
         rig.pipeline.backends.triagers = lambda: {
             "ai": cast(Triager, ai2),
-            "rules": cast(Triager, rules),
+            "spamcheck": cast(Triager, rules),
         }
-        rig.pipeline.settings.plugins["triager"] = {"rules": {"enabled": False}}
+        rig.pipeline.settings.plugins["triager"] = {"spamcheck": {"enabled": False}}
         rig.provider.add_message(mail(2))
         await rig.run_sync()
         await rig.drain(rounds=3)
@@ -269,10 +269,13 @@ class _Passes(BaseTriager):
     version = "1"
     rank = 10
 
-    async def triage(self, msg: EnrichInput) -> EnrichOutput | None:
+    async def triage(self, msg: CleanMessage) -> TriageVerdict | None:
         return None
 
 
 async def _stored(rig: Any) -> Any:
-    for r in await rig.raw_db.fetchall("SELECT enricher, data_json FROM enrichments"):
+    for r in await rig.raw_db.fetchall(
+        "SELECT enricher, data_json FROM enrichments"
+        " UNION ALL SELECT 'triage', data_json FROM triage_verdicts"
+    ):
         yield r

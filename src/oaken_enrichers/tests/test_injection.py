@@ -10,7 +10,8 @@ import pytest
 from oaken.core.errors import AIBackendError
 from oaken.core.untrusted import UntrustedText
 from oaken.plugins.contracts import LLMRequest
-from oaken_enrichers import ActionsEnricher, AITriager, SummaryEnricher
+from oaken_enrichers import ActionsEnricher, SummaryEnricher
+from oaken_triagers import AITriager
 from oaken_enrichers.tests.conftest import Rig, message
 
 ATTACKS = [

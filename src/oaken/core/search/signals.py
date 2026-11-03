@@ -49,7 +49,7 @@ async def eligible(
         rows = await raw.db.fetchall(
             "SELECT m.id FROM messages m"  # noqa: S608 (placeholders only)
             " LEFT JOIN message_state s ON s.message_id = m.id"
-            " LEFT JOIN enrichments t ON t.message_id = m.id AND t.enricher = 'triage'"
+            " LEFT JOIN triage_verdicts t ON t.message_id = m.id"
             f" WHERE {' AND '.join(clauses)}",
             args,
         )

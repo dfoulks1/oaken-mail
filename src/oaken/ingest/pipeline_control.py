@@ -32,6 +32,7 @@ STAGES: dict[str, str] = {
     "triage": "ingest.triage",
     "embed": "ingest.embed",
     "enrich": "ingest.enrich",
+    "action": "ingest.action",
 }
 ENRICHER_STAGE = "enrich."  # ``enrich.<name>`` is one enricher's kind, ``ingest.enrich.<name>``
 

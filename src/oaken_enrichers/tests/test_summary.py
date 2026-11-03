@@ -7,7 +7,7 @@ from oaken.core.untrusted import UntrustedText
 from oaken.mail.tokens import EstimateTokenizer
 from oaken.testing.contracts import EnricherContract
 from oaken_enrichers import SummaryEnricher
-from oaken_enrichers._common import CUT_MARKER, fit
+from oaken.plugins.kit import CUT_MARKER, fit
 from oaken_enrichers.tests.conftest import Rig, message, with_llm
 
 OK = {"summary": "Alex wants the report by Friday.", "key_points": ["report", "Friday"]}

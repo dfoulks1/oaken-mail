@@ -24,7 +24,7 @@ from oaken.plugins.base import (
 from oaken.plugins.contracts import (
     CacheEntry,
     CacheStats,
-    EnrichInput,
+    CleanMessage,
     EnrichOutput,
     FlagChange,
     Hit,
@@ -263,7 +263,7 @@ class FakeEnricher(BaseEnricher):
     def __init__(self) -> None:
         self.seen: list[str] = []
 
-    async def enrich(self, msg: EnrichInput) -> EnrichOutput:
+    async def enrich(self, msg: CleanMessage) -> EnrichOutput:
         self.seen.append(msg.message_id)
         return EnrichOutput(
             {"words": len(msg.body.unwrap().split()), "subject_chars": len(msg.subject)}

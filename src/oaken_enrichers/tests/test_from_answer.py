@@ -3,7 +3,8 @@
 
 from typing import Any
 
-from oaken_enrichers import ActionsEnricher, AITriager, SummaryEnricher
+from oaken_enrichers import ActionsEnricher, SummaryEnricher
+from oaken_triagers import AITriager
 from oaken_enrichers.tests.conftest import Rig, message
 
 TRIAGE = {

@@ -8,12 +8,12 @@ import pytest
 
 from oaken.core.errors import InvalidInput
 from oaken.core.operations.tests.conftest import Ops
-from oaken.plugins.contracts import EnrichOutput
+from oaken.plugins.contracts import TriageVerdict
 
 
 def stand_in() -> Any:
-    async def triage(msg: Any) -> EnrichOutput:
-        return EnrichOutput({"category": "work", "priority": 2, "source": "rules"})
+    async def triage(msg: Any) -> TriageVerdict:
+        return TriageVerdict({"category": "work", "priority": 2, "source": "rules"})
 
     return SimpleNamespace(needs_llm=False, version="1", rank=10, output_model=None, triage=triage)
 
@@ -24,7 +24,7 @@ async def test_it_shows_the_verdict_for_a_stored_message_and_stores_nothing(ops:
     out = await ops.out("try_triage", {"message_id": str(mid)})
     assert (out.triager, out.rated, out.stored) == ("rules", True, False)
     assert out.result["priority"] == 2 and out.content_is_untrusted is True
-    assert await ops.svc.need_pipeline().enrichment(mid, "triage") is None
+    assert await ops.svc.need_pipeline().verdict(mid) is None
 
 
 async def test_it_triages_pasted_text(ops: Ops) -> None:

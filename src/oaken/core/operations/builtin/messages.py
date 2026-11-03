@@ -9,7 +9,7 @@ import base64
 import contextlib
 import dataclasses
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -27,7 +27,6 @@ from oaken.core.operations.context import OpContext
 from oaken.core.operations.registry import AnyOperation, operation
 from oaken.core.rawstore import header_block
 from oaken.core.search import HybridFilters
-from oaken.core.search import route as routing
 from oaken.index.query import DISPOSITIONS, parse_query
 from oaken.index.store import SORTS, SearchFilters
 from oaken.mail.parse import parse
@@ -221,7 +220,7 @@ class SearchInput(MessageFilter):
     query: str = Field(max_length=1000)
     limit: int | None = Field(default=None, ge=1)
     category: list[str] = Field(default_factory=list)  # from the triage enrichment
-    min_priority: int | None = Field(default=None, ge=0, le=3)
+    min_priority: int | None = Field(default=None, ge=0, le=99)
     offset: int = Field(default=0, ge=0)
     sort: Sort = "relevance"  # relevance (the default) keeps the ranked order
 
@@ -312,220 +311,6 @@ async def search(ctx: OpContext, inp: SearchInput) -> SearchOutput:
         offset=inp.offset,
         total=found.total,
         total_exact=found.total_exact,
-    )
-
-
-class AskInput(MessageFilter):
-    question: str = Field(max_length=2000)
-    thread_key: str | None = None
-    limit: int = Field(default=10, ge=1, le=50, description="Most messages a listing returns.")
-    raw: bool = Field(
-        default=False,
-        description="Skip the model: return the matching messages and their stored enrichments "
-        "(summary, triage, actions, inspector) verbatim, so you see the data without AI rewriting.",
-    )
-
-
-class CitationInfo(BaseModel):
-    claim: int
-    message_id: str
-    chunk_ordinal: int
-    quote: str  # mail text, verified to be in the cited chunk
-    subject: str = ""
-    sender: str = ""
-    date: datetime | None = None
-
-
-class EnrichedMessage(BaseModel):
-    message_id: str
-    subject: str = ""
-    sender: str = ""
-    date: datetime | None = None
-    enrichments: dict[str, dict[str, Any]] = Field(default_factory=dict)
-
-
-class RoutedMessage(BaseModel):
-    """A message an ``ask`` listing found, with the stored enrichment it was asked about."""
-
-    message_id: str
-    subject: str = ""
-    sender: str = ""
-    date: datetime | None = None
-    view: dict[str, Any] = Field(default_factory=dict)  # the fields of the stored result to show
-    not_enriched: bool = False  # nothing stored for this enricher yet
-
-
-class AskOutput(BaseModel):
-    intent: str = "qa"  # what the question was read as
-    interpreted: str = ""  # one plain sentence saying how it was read
-    results: list[RoutedMessage] = Field(default_factory=list)
-    answer: str
-    message_ids: list[str] = Field(default_factory=list)
-    citations: list[CitationInfo] = Field(default_factory=list)
-    confidence: Literal["high", "medium", "low"] = "low"
-    insufficient_evidence: bool = False
-    dropped_claims: int = 0
-    degraded: bool = False
-    degraded_reason: str = ""
-    evidence_tokens: int = 0
-    full_body_tokens: int = 0
-    content_is_untrusted: bool = True  # the answer is model text built from mail
-    warnings: list[str] = Field(default_factory=list)
-    # raw mode only: the matched messages with their stored enrichments, no model involved
-    evidence: list[EnrichedMessage] = Field(default_factory=list)
-
-
-@operation(
-    "ask",
-    "Answer a question from the mail, citing the messages and quoting the lines it came from.",
-    permission="read",
-    input=AskInput,
-    output=AskOutput,
-    mcp="off",  # an agent could read mail through it; the user decides (see prompt 18)
-)
-async def ask(ctx: OpContext, inp: AskInput) -> AskOutput:
-    """Every quote is checked against the message it cites; claims that fail are dropped, and
-    with none left the answer is ``insufficient_evidence``. Never marks anything read.
-
-    With ``raw`` the model is not called: the matching messages come back with their stored
-    enrichments verbatim, so a person sees the data without AI rewriting it."""
-    retrieval = ctx.svc.need_retrieval()
-    filters = hybrid_filters(inp, thread_key=inp.thread_key)
-    if inp.raw:
-        found, evidence = await retrieval.evidence(inp.question, filters)
-        pipeline = ctx.svc.need_pipeline()
-        gathered = [
-            EnrichedMessage(
-                message_id=str(m.message_id),
-                subject=m.subject,
-                sender=m.sender,
-                date=m.date,
-                enrichments=await pipeline.enrichments(m.message_id),
-            )
-            for m in evidence.messages
-        ]
-        return AskOutput(
-            answer="",
-            message_ids=[str(m.message_id) for m in evidence.messages],
-            degraded=found.degraded,
-            degraded_reason=found.degraded_reason,
-            evidence_tokens=evidence.tokens_used,
-            full_body_tokens=evidence.tokens_full_bodies,
-            warnings=list(found.warnings),
-            evidence=gathered,
-        )
-    enrichers = ctx.svc.pipeline.ask_sources() if ctx.svc.pipeline is not None else {}
-    menu = routing.catalog(enrichers)
-    model = ctx.svc.settings.ai.ask_model or None  # its own model, else the backend's
-    picked = (
-        await routing.route(ctx.svc.llm, inp.question, menu, model=model)
-        if ctx.svc.llm is not None
-        else routing.rule_route(inp.question, menu)
-    )
-    if picked.intent != "qa":
-        return await _routed(ctx, inp, picked, routing.sources(enrichers))
-    result = await retrieval.ask(inp.question, filters, model=model)
-    return AskOutput(
-        intent="qa",
-        interpreted="read as: a factual question, answered from the mail with quotes",
-        answer=result.answer,
-        message_ids=list(result.references),
-        citations=[
-            CitationInfo(
-                claim=c.claim,
-                message_id=c.message_id,
-                chunk_ordinal=c.chunk_ordinal,
-                quote=c.quote,
-                subject=c.subject,
-                sender=c.sender,
-                date=c.date,
-            )
-            for c in result.citations
-        ],
-        confidence=result.confidence,
-        insufficient_evidence=result.insufficient_evidence,
-        dropped_claims=result.dropped_claims,
-        degraded=result.degraded,
-        degraded_reason=result.degraded_reason,
-        evidence_tokens=result.evidence_tokens,
-        full_body_tokens=result.full_body_tokens,
-        warnings=list(result.warnings),
-    )
-
-
-async def _routed(
-    ctx: OpContext, inp: AskInput, picked: routing.Route, sources: dict[str, Any]
-) -> AskOutput:
-    """The messages an ``ask`` was about, with the stored result of the enricher it named. Core does
-    the dates and the lookups; the model only chose an intent and some words."""
-    sender = inp.from_ or picked.sender
-    days = picked.days
-    asked: dict[str, Any] = {
-        "query": picked.query,
-        "from": sender,
-        "after": inp.after or (ctx.svc.clock.now() - timedelta(days=days) if days else None),
-        "before": inp.before,
-        "account_id": inp.account_id,
-        "label": inp.label,
-        "location": inp.location,
-        "disposition": inp.disposition,
-        "unread_only": inp.unread_only or bool(picked.unread),
-        "starred": inp.starred,
-        "has_attachment": inp.has_attachment,
-        "thread_key": inp.thread_key,
-        "limit": min(inp.limit * 3, 50),  # room to order by priority before cutting
-        "sort": "relevance" if picked.query else "date_desc",
-    }
-    found = await search.handler(ctx, SearchInput.model_validate(asked))
-    source = sources.get(picked.intent)
-    stored = (
-        await stored_enrichments(ctx.svc.raw, [i.message_id for i in found.items], [source[0]])
-        if source
-        else {}
-    )
-    rows: list[RoutedMessage] = []
-    for item in found.items:
-        if source:
-            result = stored.get(item.message_id, {}).get(source[0])
-            fields = source[1].fields
-            view = {k: v for k, v in (result or {}).items() if not fields or k in fields}
-        else:
-            result = {}
-            view = {
-                k: v
-                for k, v in (
-                    ("summary", item.summary),
-                    ("category", item.category),
-                    ("priority", item.priority),
-                    ("needs_reply", item.needs_reply),
-                )
-                if v is not None
-            }
-        rows.append(
-            RoutedMessage(
-                message_id=item.message_id,
-                subject=item.subject,
-                sender=item.from_name or item.from_addr,
-                date=item.date,
-                view=view,
-                not_enriched=bool(source) and result is None,
-            )
-        )
-    if source and "priority" in source[1].fields:  # most important first, then newest
-        rows.sort(
-            key=lambda r: -(r.view["priority"] if isinstance(r.view.get("priority"), int) else -1)
-        )
-    rows = rows[: inp.limit]
-    wants = source[1].description if source else routing.FIND.description
-    narrowed = [f"from {sender}" if sender else "", f"last {days} day(s)" if days else "",
-                "unread only" if inp.unread_only or picked.unread else ""]  # fmt: skip
-    interpreted = "read as: " + wants.rstrip(".").lower() + "".join(f"; {n}" for n in narrowed if n)
-    return AskOutput(
-        intent=picked.intent,
-        interpreted=interpreted,
-        results=rows,
-        answer="" if rows else "No matching mail.",
-        warnings=list(found.warnings),
     )
 
 
@@ -868,7 +653,6 @@ OPERATIONS: tuple[AnyOperation, ...] = (
     list_messages,
     search_keyword,
     search,
-    ask,
     get_message,
     get_thread,
     get_raw,

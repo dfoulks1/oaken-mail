@@ -14,7 +14,7 @@ from oaken.core.logging import get_logger
 from oaken.core.settings import Settings
 from oaken.core.untrusted import UntrustedText
 from oaken.ingest.usage import UsageStore
-from oaken.plugins.contracts import EnrichAttachment, EnrichInput, PluginContext
+from oaken.plugins.contracts import EnrichAttachment, CleanMessage, PluginContext
 from oaken.testing.fakes import FakeLLM
 
 MIGRATIONS = Path(__file__).resolve().parents[2] / "oaken" / "core" / "migrations"
@@ -69,7 +69,7 @@ async def rig(tmp_path: Path) -> AsyncIterator[Rig]:
 
 
 def headers(**values: str | tuple[str, ...]) -> dict[str, tuple[UntrustedText, ...]]:
-    """Headers for an ``EnrichInput``; ``from_`` stands for ``from``, ``_`` for ``-``."""
+    """Headers for an ``CleanMessage``; ``from_`` stands for ``from``, ``_`` for ``-``."""
     out: dict[str, tuple[UntrustedText, ...]] = {}
     for key, value in values.items():
         vals = (value,) if isinstance(value, str) else value
@@ -86,8 +86,8 @@ def message(
     attachments: tuple[EnrichAttachment, ...] = (),
     parent_summary: str | None = None,
     **raw: str | tuple[str, ...],
-) -> EnrichInput:
-    return EnrichInput(
+) -> CleanMessage:
+    return CleanMessage(
         message_id="m1",
         account_id="main",
         subject=UntrustedText(subject),

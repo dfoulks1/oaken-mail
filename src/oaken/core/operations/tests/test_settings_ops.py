@@ -68,11 +68,11 @@ async def test_an_unknown_section_is_not_found_and_says_what_exists(ops: Ops) ->
 
 CASES = [
     ("index", "max_query_terms", 16),
-    ("retrieval", "ask_hits", 7),
+    ("retrieval", "overfetch", 7),
     ("read_state", "auto_mark", False),
     ("ui", "mark_read_delay_ms", 500),
     ("sync", "max_concurrent", 3),
-    ("ai", "ask_context_tokens", 2500),
+    ("ai", "enrich_max_input_tokens", 2500),
     ("log", "level", "DEBUG"),
 ]
 
@@ -159,8 +159,8 @@ async def test_a_bad_value_is_a_field_error_and_nothing_is_written(ops: Ops) -> 
     out = await ops.out("set_settings", {"section": "ai", "values": {"chunk_tokens": 1}})
     assert not out.ok and out.errors[0].key == "chunk_tokens" and out.changed == []
     assert config().read_text(encoding="utf-8") == FILE
-    cross = await ops.out("set_settings", {"section": "ai", "values": {"ask_context_tokens": "x"}})
-    assert not cross.ok and cross.errors[0].key == "ask_context_tokens"
+    cross = await ops.out("set_settings", {"section": "ai", "values": {"enrich_max_input_tokens": "x"}})
+    assert not cross.ok and cross.errors[0].key == "enrich_max_input_tokens"
 
 
 async def test_unset_goes_back_to_the_default_and_a_no_op_writes_nothing(ops: Ops) -> None:

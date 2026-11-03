@@ -410,52 +410,6 @@ async def _rebuild(client: ApiClient, args: argparse.Namespace) -> int:
     return _render_queued(args, result, "rebuild-index")
 
 
-def cmd_ask(args: argparse.Namespace) -> int:
-    return run(lambda client: _ask(client, args), args)
-
-
-async def _ask(client: ApiClient, args: argparse.Namespace) -> int:
-    result = await client.call("ask", {"question": args.question}, timeout=args.timeout)
-    out = result.output if isinstance(result.output, dict) else {}
-
-    def text() -> None:
-        from oaken_cli.output import print_text
-
-        if out.get("interpreted"):
-            print_text(f"({out['interpreted']})")
-        for r in out.get("results", []) or []:
-            print_text(
-                f"\n{str(r.get('date') or '')[:10]}  {r.get('sender', '')}: {r.get('subject', '')}"
-                f"  [{r.get('message_id', '')}]"
-            )
-            if r.get("not_enriched"):
-                print_text("    (not enriched yet)")
-            for key, value in (r.get("view") or {}).items():
-                shown = ", ".join(map(str, value)) if isinstance(value, list) else value
-                print_text(f"    {key}: {shown}")
-        print_text(out.get("answer", ""))
-        if out.get("insufficient_evidence"):
-            print_text("(not enough in the mail to answer this)")
-        cites = out.get("citations", []) or []
-        if cites:
-            print_text("\nsources:")
-        for c in cites:
-            print_text(
-                f"  [{c.get('claim')}] {c.get('subject', '')} ({c.get('sender', '')}, "
-                f"{str(c.get('date') or '')[:10]}) {c.get('message_id', '')}"
-            )
-            print_text(f'      "{c.get("quote", "")}"')
-        if out.get("degraded"):
-            print_text(f"note: keyword evidence only ({out.get('degraded_reason', '')})")
-        for w in out.get("warnings", []) or []:
-            print_text(f"warning: {w}")
-
-    return emit(args, data=result.output, text=text)
-
-
-# --- watch (SSE) ----------------------------------------------------------------------------
-
-
 def cmd_watch(args: argparse.Namespace) -> int:
     return run(lambda client: _watch(client, args), args)
 

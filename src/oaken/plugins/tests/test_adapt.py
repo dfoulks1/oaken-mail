@@ -17,7 +17,7 @@ from oaken.plugins.adapt import (
     to_vectors,
 )
 from oaken.plugins.base import BaseProvider, enricher, inferred_capabilities
-from oaken.plugins.contracts import EnrichInput, EnrichOutput, PullBatch, RawMessage
+from oaken.plugins.contracts import CleanMessage, EnrichOutput, PullBatch, RawMessage
 from oaken.plugins.validate import check_plugin
 
 
@@ -128,12 +128,12 @@ def test_hits_must_respect_k_and_be_ordered() -> None:
 
 async def test_the_enricher_decorator_builds_a_working_class() -> None:
     @enricher("count", version="2", output=Out)
-    async def count(msg: EnrichInput) -> Any:
+    async def count(msg: CleanMessage) -> Any:
         """Count words."""
         return {"words": len(msg.body.unwrap().split())}
 
     e = count()
-    out = await e.enrich(EnrichInput("m", "a", UntrustedText("s"), UntrustedText("one two three")))
+    out = await e.enrich(CleanMessage("m", "a", UntrustedText("s"), UntrustedText("one two three")))
     assert out.data == {"words": 3} and e.version == "2" and e.output_schema["title"] == "Out"
     info, problems = check_plugin("enricher", "count", e)
     assert not problems and info is not None and info.version == "2"

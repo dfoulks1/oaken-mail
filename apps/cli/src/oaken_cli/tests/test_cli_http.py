@@ -264,19 +264,11 @@ class _Capture(httpx2.AsyncBaseTransport):
 async def test_a_call_can_wait_longer_than_the_transport_default() -> None:
     transport = _Capture()
     client = HttpApiClient(Endpoint("http://127.0.0.1:1", TOKEN), transport=transport)
-    await client.call("ask", {"question": "q"})
-    await client.call("ask", {"question": "q"}, timeout=300.0)
+    await client.call("status", {})
+    await client.call("status", {}, timeout=300.0)
     await client.aclose()
     default, longer = transport.timeouts
     assert default["read"] == 60.0 and longer["read"] == 300.0
-
-
-async def test_ask_takes_a_timeout_and_defaults_to_five_minutes() -> None:
-    from oaken_cli.main import build_parser
-
-    parser = build_parser()
-    assert parser.parse_args(["ask", "q"]).timeout == 300.0
-    assert parser.parse_args(["ask", "q", "--timeout", "900"]).timeout == 900.0
 
 
 async def test_the_http_client_follows_a_plugin_in_the_trace_as_it_is_pushed(

@@ -19,10 +19,11 @@ Message text never reaches a log.
 """
 
 import asyncio
+import contextlib
 import json
 import sqlite3
 import time
-from collections.abc import Collection, Mapping
+from collections.abc import AsyncIterator, Collection, Mapping
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any, Literal
@@ -50,11 +51,13 @@ from oaken.core.jobs import (
     Job,
     JobQueue,
     JobRunner,
+    PermanentJobError,
 )
 from oaken.core.logging import get_logger
 from oaken.core.rawstore import RawStore
 from oaken.core.settings import Settings
 from oaken.core.trace import Tracer
+from oaken.core.triage import urgency
 from oaken.core.untrusted import UntrustedText
 from oaken.index import Indexer, IndexStore, RebuildPayload, enqueue_rebuild
 from oaken.ingest.backends import Backends, Vectors
@@ -64,11 +67,11 @@ from oaken.mail.filtering import FilterEngine
 from oaken.mail.parse import parse, read_attachment
 from oaken.mail.threading import normalize_subject
 from oaken.mail.tokens import Tokenizer, load_tokenizer
-from oaken.plugins.adapt import to_enrich_output, to_vectors
+from oaken.plugins.adapt import to_action_result, to_enrich_output, to_triage_verdict, to_vectors
 from oaken.plugins.contracts import (
     EnrichAttachment,
     Enricher,
-    EnrichInput,
+    CleanMessage,
     PluginStageInput,
     Triager,
     VectorItem,
@@ -80,13 +83,19 @@ PARSE = "ingest.parse"
 EMBED = "ingest.embed"
 ENRICH = "ingest.enrich"  # legacy: a job of this kind queues the per-enricher jobs and ends
 ENRICH_PREFIX = ENRICH + "."  # ``ingest.enrich.<enricher>``: one kind per enricher but the gate
+ACTION = "ingest.action"  # a route no installed action answers: the job parks (ADR 0019)
+ACTION_PREFIX = ACTION + "."  # ``ingest.action.<action>``: one kind per action plugin
 TRIAGE = "ingest.triage"  # the gate enricher alone; its result decides what is owed after it
 REPROCESS = "ingest.reprocess"
-STAGE_KINDS = (PARSE, TRIAGE, EMBED, ENRICH, REPROCESS)
+STAGE_KINDS = (PARSE, TRIAGE, EMBED, ENRICH, ACTION, REPROCESS)
 
 
 def enrich_kind(name: str) -> str:
     return ENRICH_PREFIX + name
+
+
+def action_kind(name: str) -> str:
+    return ACTION_PREFIX + name
 
 
 def split_enricher(kind: str) -> str | None:
@@ -118,6 +127,7 @@ class MessagePayload(BaseModel):
     message_id: str
     backfill: bool = False
     triage_failed: bool = False  # triage gave up on this message: gated enrichers run anyway
+    route: str = ""  # an action job only: the route triage sent this message by
 
 
 class ReprocessPayload(BaseModel):
@@ -274,7 +284,20 @@ class Pipeline:
             except ValueError:  # already registered
                 continue
             added.append(enrich_kind(name))
+        self.register_actions(runner)
         return added
+
+    def register_actions(self, runner: JobRunner) -> None:
+        """One job kind per action plugin, and the generic kind that parks an unanswered route.
+        Kinds already registered are left alone."""
+        for kind, handler in (
+            *((action_kind(n), self._action_job(n)) for n in self.backends.actions()),
+            (ACTION, self._unrouted_job),
+        ):
+            with contextlib.suppress(ValueError):  # already registered
+                runner.register(
+                    kind, MessagePayload, handler, concurrency=1, result_model=StageJobResult
+                )
 
     # -- enqueueing -------------------------------------------------------------------------
     async def enqueue_parse(
@@ -396,7 +419,7 @@ class Pipeline:
         bar = self.cfg.embed_min_priority
         if bar is None or not self._triage_on():
             return False
-        triage = await self.enrichment(mid, GATE)
+        triage = await self.verdict(mid)
         priority = triage.get("priority") if triage else None
         return isinstance(priority, int) and priority < bar
 
@@ -509,8 +532,9 @@ class Pipeline:
         """Queue what waits on triage: embedding, and the enrichers its result owes."""
         if self.embedding_enabled() and not await self._embed_skipped(mid):
             await self._enqueue_stage(EMBED, EMBED_STEP, mid, account, backfill)
-        result = await self.enrichment(mid, GATE)
+        result = await self.verdict(mid)
         await self._queue_enrichers(mid, account, backfill, barred=True, failed=failed)
+        await self._queue_actions(mid, account, backfill, result)
         if result is not None and self.bus:
             await self.bus.publish(
                 MessageTriaged(
@@ -532,9 +556,9 @@ class Pipeline:
         ``barred`` keeps only enrichers with a ``min_priority`` (True) or only those without
         (False). ``failed``: triage gave up, so nothing is held back. A job's urgency follows the
         triage priority, below parse."""
-        triage = await self.enrichment(mid, GATE)
+        triage = await self.verdict(mid)
         priority = triage.get("priority") if triage else None
-        step = ENRICH_STEP + (3 - priority if isinstance(priority, int) else 0)
+        step = ENRICH_STEP + urgency(priority)
         for name, enricher in self.backends.enrichers().items():
             if name == GATE or not self._enabled(name, "enricher"):
                 continue
@@ -589,15 +613,6 @@ class Pipeline:
                 return t
         return None
 
-    def ask_sources(self) -> dict[str, Any]:
-        """What ``ask`` may route to: the enrichers, and the first triager that declares an intent
-        under the name its verdict is stored by (``triage``)."""
-        out: dict[str, Any] = dict(self.backends.enrichers())
-        for name, t in self._triagers().items():
-            if self._enabled(name) and getattr(t, "ask_intent", None) is not None:
-                out.setdefault(GATE, t)
-        return out
-
     async def triage_preview(
         self,
         message_id: MessageId | None,
@@ -625,7 +640,7 @@ class Pipeline:
                 if not accounts:
                     raise InvalidInput("there is no account to run the triage under")
                 account_id = AccountId(accounts[0].id)
-            msg = EnrichInput(
+            msg = CleanMessage(
                 message_id="preview",
                 account_id=account_id,
                 subject=UntrustedText(subject),
@@ -642,7 +657,7 @@ class Pipeline:
             verdict = await triager.triage(msg)
             if verdict is None:
                 continue
-            out = to_enrich_output(
+            out = to_triage_verdict(
                 verdict, f"triager {name}", getattr(triager, "output_model", None)
             )
             model = None
@@ -663,7 +678,7 @@ class Pipeline:
             return out
         llm = self.backends.llm()
         account = AccountId(doc["account_id"])
-        msg_input: EnrichInput | None = None
+        msg_input: CleanMessage | None = None
         for name, triager in self._triagers().items():
             if not self._enabled(name):
                 continue
@@ -678,9 +693,9 @@ class Pipeline:
                     if (configured and (not available or configured in available))
                     else llm.model_id
                 )
-            key = (doc["content_hash"], GATE, triager.version, model)
+            key = (doc["content_hash"], name, triager.version, model)
             tokens = self.tokenizer.count(doc["cleaned_text"])
-            if not force and await self._cached_enrichment(message_id, key):
+            if not force and await self._cached_verdict(message_id, key):
                 out.cached += 1
                 await self.usage.record(
                     "enrich", model or name, tokens_in=tokens, cached=True,
@@ -692,11 +707,11 @@ class Pipeline:
             verdict = await triager.triage(msg_input)
             if verdict is None:
                 continue  # not this triager's: the next one
-            result = to_enrich_output(
+            result = to_triage_verdict(
                 verdict, f"triager {name}", getattr(triager, "output_model", None)
             )
             data = json.dumps(result.data, sort_keys=True)
-            await self._store_enrichment(message_id, key, data)
+            await self._store_verdict(message_id, key, data)
             out.ran += 1
             await self.usage.record(
                 "enrich", model or name, tokens_in=tokens, tokens_out=self.tokenizer.count(data),
@@ -715,6 +730,163 @@ class Pipeline:
         return out
 
     # -- ingest.enrich.<name> and the legacy ingest.enrich ---------------------------------
+    # -- actions (ADR 0019) -----------------------------------------------------------------
+    def _answering(self, route: str) -> list[str]:
+        """The enabled action plugins that answer ``route``, by name."""
+        return [
+            n
+            for n, a in self.backends.actions().items()
+            if route in a.routes and self._enabled(n, "action")
+        ]
+
+    async def _queue_actions(
+        self, mid: MessageId, account: AccountId, backfill: bool, verdict: dict[str, object] | None
+    ) -> None:
+        """Queue one job for each route triage sent this message by, to each action answering it;
+        a route nothing answers is queued on the generic kind, which parks it."""
+        routes = verdict.get("route") if verdict else None
+        for route in routes if isinstance(routes, list) else []:
+            for kind in [action_kind(n) for n in self._answering(str(route))] or [ACTION]:
+                await self.queue.enqueue(
+                    kind,
+                    MessagePayload(message_id=mid, backfill=backfill, route=str(route)),
+                    priority=(PRIORITY_BACKFILL if backfill else PRIORITY_INGEST) - ENRICH_STEP,
+                    account_id=account,
+                    dedupe_key=f"{kind}:{mid}:{route}",
+                    max_attempts=self.cfg.stage_max_attempts,
+                )
+
+    async def _unrouted_job(self, p: MessagePayload, _job: Job) -> StageJobResult:
+        """A route nothing answered when it was queued. If an action answers it now (it was
+        installed since), send it there; else park, and ``retry_job`` releases it later."""
+        names = self._answering(p.route)
+        if not names:
+            raise PermanentJobError(f"no action answers route {p.route!r}")
+        doc = await self.index.get_doc(MessageId(p.message_id))
+        if doc is not None:
+            for n in names:
+                await self.queue.enqueue(
+                    action_kind(n), p, priority=PRIORITY_INGEST - ENRICH_STEP,
+                    account_id=AccountId(doc["account_id"]),
+                    dedupe_key=f"{action_kind(n)}:{p.message_id}:{p.route}",
+                )  # fmt: skip
+        return StageJobResult(done=len(names))
+
+    def _action_job(self, name: str) -> Any:
+        async def run(p: MessagePayload, job: Job) -> StageJobResult:
+            return await self.run_action(name, MessageId(p.message_id), p.route, job.attempts)
+
+        return run
+
+    async def run_action(
+        self, name: str, mid: MessageId, route: str, attempts: int = 1
+    ) -> StageJobResult:
+        """Do one action's work for one message and route, unless it waits for the person. An
+        action's approval is the reader's setting (default ``ask``): the job parks "awaiting
+        approval" until ``approve_action`` says yes. Success, failure and a skip are stored and
+        logged (never the message text)."""
+        action = self.backends.actions().get(name)
+        if action is None or not self._enabled(name, "action"):
+            raise PermanentJobError(f"action {name!r} is not available")
+        table = self.settings.plugin_table("action", name)
+        if table.get("approval", "ask") != "auto":
+            row = await self.action_row(mid, name, route)
+            if row is None or row["status"] != "approved":
+                raise PermanentJobError("awaiting approval")
+        doc = await self.index.get_doc(mid)
+        if doc is None:
+            return StageJobResult(skipped=1, note="the message is gone")
+        msg = await self._enrich_input(mid, doc)
+        status, data, error = "done", {}, ""
+        try:
+            out = await action.act(msg, route)
+            if out is None:
+                status = "skipped"
+            else:
+                data = to_action_result(
+                    out, f"action {name}", getattr(action, "output_model", None)
+                ).data
+        except Exception as exc:
+            status, error = "failed", type(exc).__name__  # the type only: a message can quote mail
+            await self._store_action(mid, name, route, status, action.version, data, error, attempts)
+            log.warning("action failed", action=name, route=route, message_id=mid, error=error)
+            raise
+        await self._store_action(mid, name, route, status, action.version, data, error, attempts)
+        log.info("action ran", action=name, route=route, message_id=mid, status=status)
+        return StageJobResult(done=int(status == "done"), skipped=int(status == "skipped"))
+
+    async def _store_action(
+        self, mid: MessageId, name: str, route: str, status: str, version: str,
+        data: dict[str, Any], error: str, attempts: int,
+    ) -> None:  # fmt: skip
+        now = fmt_ts(self.clock.now())
+        await self.raw.db.execute(
+            "INSERT INTO action_results (message_id, action, route, status, version, result_json,"
+            " error, attempts, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)"
+            " ON CONFLICT (message_id, action, route) DO UPDATE SET status = excluded.status,"
+            " version = excluded.version, result_json = excluded.result_json,"
+            " error = excluded.error, attempts = excluded.attempts, updated_at = excluded.updated_at",
+            (mid, name, route, status, version, json.dumps(data, sort_keys=True), error, attempts,
+             now, now),
+        )  # fmt: skip
+
+    async def action_row(self, mid: MessageId, name: str, route: str) -> dict[str, Any] | None:
+        row = await self.raw.db.fetchone(
+            "SELECT * FROM action_results WHERE message_id = ? AND action = ? AND route = ?",
+            (mid, name, route),
+        )
+        return dict(row) if row else None
+
+    async def action_rows(self, mid: MessageId) -> list[dict[str, Any]]:
+        """What the actions did about a message, newest first."""
+        rows = await self.raw.db.fetchall(
+            "SELECT * FROM action_results WHERE message_id = ? ORDER BY updated_at DESC", (mid,)
+        )
+        return [dict(r) for r in rows]
+
+    async def waiting_actions(self) -> list[dict[str, str]]:
+        """Parked action jobs: ``awaiting approval`` (``kind`` is the action's name) or ``no action
+        answers`` (``kind`` is ``unrouted``). Newest first, at most 100."""
+        rows = await self.queue.db.fetchall(
+            "SELECT kind, payload_json, last_error FROM jobs WHERE status = 'failed'"
+            " AND (kind = ? OR kind LIKE ?) ORDER BY created_at DESC LIMIT 100",
+            (ACTION, ACTION_PREFIX + "%"),
+        )
+        out = []
+        for r in rows:
+            payload = json.loads(r["payload_json"])
+            out.append(
+                {
+                    "kind": r["kind"].removeprefix(ACTION_PREFIX) if r["kind"] != ACTION else "unrouted",
+                    "message_id": payload.get("message_id", ""),
+                    "route": payload.get("route", ""),
+                    "why": r["last_error"] or "",
+                }
+            )
+        return out
+
+    async def recent_actions(self, limit: int = 25) -> list[dict[str, Any]]:
+        """What the actions did lately, across messages, newest first."""
+        rows = await self.raw.db.fetchall(
+            "SELECT * FROM action_results ORDER BY updated_at DESC LIMIT ?", (limit,)
+        )
+        return [dict(r) for r in rows]
+
+    async def approve_action(self, mid: MessageId, name: str, route: str) -> bool:
+        """Say yes to a parked action: record the approval and release its job. False when no job
+        for that message, action and route is waiting."""
+        kind = action_kind(name)
+        job = await self.queue.db.fetchone(
+            "SELECT id FROM jobs WHERE kind = ? AND dedupe_key = ? AND status = 'failed'"
+            " ORDER BY created_at DESC LIMIT 1",
+            (kind, f"{kind}:{mid}:{route}"),
+        )
+        if job is None:
+            return False
+        await self._store_action(mid, name, route, "approved", "", {}, "", 0)
+        await self.queue.retry(JobId(job["id"]))
+        return True
+
     def _enricher_job(self, name: str) -> Any:
         async def run(p: MessagePayload, job: Job) -> StageJobResult:
             mid = MessageId(p.message_id)
@@ -742,7 +914,7 @@ class Pipeline:
         if doc is None:
             return StageJobResult(note="gone")
         account = AccountId(doc["account_id"])
-        if self._triage_on() and not p.triage_failed and await self.enrichment(mid, GATE) is None:
+        if self._triage_on() and not p.triage_failed and await self.verdict(mid) is None:
             await self._enqueue_stage(TRIAGE, ENRICH_STEP, mid, account, p.backfill)
             return StageJobResult(note="queued triage")
         await self._queue_enrichers(
@@ -789,7 +961,7 @@ class Pipeline:
             return out
         llm = self.backends.llm()
         account = AccountId(doc["account_id"])
-        msg_input: EnrichInput | None = None
+        msg_input: CleanMessage | None = None
         for name, enricher in self.backends.enrichers().items():
             if only is not None and name not in only:
                 continue
@@ -853,12 +1025,12 @@ class Pipeline:
 
     # -- enrichment by an external agent (the swarm, prompt 33) ------------------------------
     async def _owed_to_agent(
-        self, message_id: MessageId, doc: sqlite3.Row, msg: EnrichInput
+        self, message_id: MessageId, doc: sqlite3.Row, msg: CleanMessage
     ) -> dict[str, Enricher]:
         """The enrichers an agent could still supply for this message: model-backed, switched on,
         able to say what they ask a model, needing one for this message, and not stored yet."""
         owed: dict[str, Enricher] = {}
-        triage = await self.enrichment(message_id, GATE)  # what its priority already rules out
+        triage = await self.verdict(message_id)  # what its priority already rules out
         priority = triage.get("priority") if triage else None
         for name, enricher in self.backends.enrichers().items():
             if not enricher.needs_llm or getattr(enricher, "prompt", None) is None:
@@ -889,9 +1061,9 @@ class Pipeline:
                     rated = True
                     break
             have = await self.raw.db.fetchone(
-                "SELECT 1 FROM enrichments WHERE message_id = ? AND enricher = ? AND version = ?"
+                "SELECT 1 FROM triage_verdicts WHERE message_id = ? AND version = ?"
                 " AND content_hash = ?",
-                (message_id, GATE, ai.version, doc["content_hash"]),
+                (message_id, ai.version, doc["content_hash"]),
             )
             if not rated and not have:
                 owed[GATE] = ai  # type: ignore[assignment]
@@ -1038,9 +1210,11 @@ class Pipeline:
         model = f"agent:{label or 'agent'}"
         tokens = self.tokenizer.count(doc["cleaned_text"])
         for name, data in checked.items():
-            await self._store_enrichment(
-                message_id, (doc["content_hash"], name, owed[name].version, model), data
-            )
+            key = (doc["content_hash"], name, owed[name].version, model)
+            if name == GATE:  # the agent wire keeps its name for the verdict; it is stored apart
+                await self._store_verdict(message_id, (key[0], "ai", key[2], key[3]), data)
+            else:
+                await self._store_enrichment(message_id, key, data)
             await self.usage.record(
                 "enrich", model, tokens_in=tokens, tokens_out=self.tokenizer.count(data),
                 account_id=account, message_id=message_id,
@@ -1071,7 +1245,7 @@ class Pipeline:
             return None
 
     async def _rated_below(self, message_id: MessageId, bar: int, gate_open: bool = False) -> bool:
-        triage = await self.enrichment(message_id, GATE)
+        triage = await self.verdict(message_id)
         return self._held_back(triage.get("priority") if triage else None, bar, gate_open)
 
     def _held_back(self, priority: object, bar: int, gate_open: bool = False) -> bool:
@@ -1127,9 +1301,18 @@ class Pipeline:
             subject=UntrustedText(doc["subject"]),
             body=UntrustedText(doc["cleaned_text"]),
             enrichments=enrichments,
+            triage=await self.verdict(message_id),
         )
 
-    async def _enrich_input(self, message_id: MessageId, doc: sqlite3.Row) -> EnrichInput:
+    async def recent_inputs(self, limit: int) -> AsyncIterator[CleanMessage]:
+        """What a triager is handed for each of the newest ``limit`` stored messages, newest first.
+        For trying a rule out; nothing is stored."""
+        for mid in await self.index.recent_doc_ids(limit=limit):
+            doc = await self.index.get_doc(MessageId(mid))
+            if doc is not None:
+                yield await self._enrich_input(MessageId(mid), doc)
+
+    async def _enrich_input(self, message_id: MessageId, doc: sqlite3.Row) -> CleanMessage:
         """What an enricher is handed: the cleaned text, every header, the attachments' metadata
         (never their bytes) and, for a reply, the stored summary of the message before it."""
         raw = await self.raw.get_raw(message_id)
@@ -1137,7 +1320,7 @@ class Pipeline:
         parent = await self.index.previous_in_thread(message_id)
         summary = await self.enrichment(parent, "summary") if parent else None
         parent_summary = summary.get("summary") if summary else None
-        return EnrichInput(
+        return CleanMessage(
             message_id=message_id,
             account_id=doc["account_id"],
             subject=UntrustedText(doc["subject"]),
@@ -1207,6 +1390,72 @@ class Pipeline:
             " data_json = excluded.data_json, created_at = excluded.created_at",
             (message_id, name, version, model, content_hash, data, fmt_ts(self.clock.now())),
         )
+
+    async def _cached_verdict(
+        self, message_id: MessageId, key: tuple[str, str, str, str]
+    ) -> bool:
+        """True if a verdict is stored for this message by this triager; if only another message
+        with the same content has it, copy it here (and say True). An external agent's row counts."""
+        content_hash, triager, version, model = key
+        mine = await self.raw.db.fetchone(
+            "SELECT 1 FROM triage_verdicts WHERE message_id = ? AND triager = ? AND version = ?"
+            " AND (model_id = ? OR model_id LIKE 'agent:%') AND content_hash = ?",
+            (message_id, triager, version, model, content_hash),
+        )
+        if mine:
+            return True
+        other = await self.raw.db.fetchone(
+            "SELECT data_json, model_id FROM triage_verdicts WHERE content_hash = ? AND triager = ?"
+            " AND version = ? AND (model_id = ? OR model_id LIKE 'agent:%') LIMIT 1",
+            (content_hash, triager, version, model),
+        )
+        if other:  # copied under the model that made it, so who produced it is never lost
+            await self._store_verdict(
+                message_id, (content_hash, triager, version, other["model_id"]), other["data_json"]
+            )
+            return True
+        return False
+
+    async def _store_verdict(
+        self, message_id: MessageId, key: tuple[str, str, str, str], data: str
+    ) -> None:
+        content_hash, triager, version, model = key
+        if self.tracer is not None:
+            self.tracer.emit(
+                "ingest.stored", message_id=message_id, enricher=GATE, version=version,
+                model=model, result=json.loads(data),
+            )  # fmt: skip
+        await self.raw.db.execute(
+            "INSERT INTO triage_verdicts (message_id, triager, version, model_id, content_hash,"
+            " data_json, created_at) VALUES (?,?,?,?,?,?,?)"
+            " ON CONFLICT (message_id) DO UPDATE SET triager = excluded.triager,"
+            " version = excluded.version, model_id = excluded.model_id,"
+            " content_hash = excluded.content_hash, data_json = excluded.data_json,"
+            " created_at = excluded.created_at",
+            (message_id, triager, version, model, content_hash, data, fmt_ts(self.clock.now())),
+        )
+
+    async def verdict(self, message_id: MessageId) -> dict[str, object] | None:
+        """The stored triage verdict for a message, or None when it is unrated."""
+        row = await self.raw.db.fetchone(
+            "SELECT data_json FROM triage_verdicts WHERE message_id = ?", (message_id,)
+        )
+        return json.loads(row["data_json"]) if row else None
+
+    async def verdict_row(self, message_id: MessageId) -> dict[str, Any] | None:
+        """The stored verdict with who made it: ``triager``, ``version``, ``model`` and ``result``."""
+        row = await self.raw.db.fetchone(
+            "SELECT triager, version, model_id, data_json FROM triage_verdicts WHERE message_id = ?",
+            (message_id,),
+        )
+        if row is None:
+            return None
+        return {
+            "triager": row["triager"],
+            "version": row["version"],
+            "model": row["model_id"] or None,
+            "result": json.loads(row["data_json"]),
+        }
 
     async def enrichments(self, message_id: MessageId) -> dict[str, dict[str, object]]:
         """Every stored enricher result for a message, by enricher name."""
@@ -1398,9 +1647,14 @@ class Pipeline:
             )
 
         enricher_kinds = [enrich_kind(n) for n in self.backends.enrichers() if n != GATE]
+        action_kinds = [action_kind(n) for n in self.backends.actions()]
         stages = {
             kind.removeprefix("ingest."): await status_of(
-                [kind, *enricher_kinds] if kind == ENRICH else [kind]
+                [kind, *enricher_kinds]
+                if kind == ENRICH
+                else [kind, *action_kinds]
+                if kind == ACTION
+                else [kind]
             )
             for kind in STAGE_KINDS
             if only is None or kind.removeprefix("ingest.") in only

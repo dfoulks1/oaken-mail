@@ -73,6 +73,16 @@ def test_a_log_file_gets_the_lines_and_stderr_still_does(tmp_path: Path) -> None
     assert path.stat().st_mode & 0o077 == 0
 
 
+def test_the_log_file_is_json_even_when_the_console_is_not(tmp_path: Path) -> None:
+    path = tmp_path / "oaken.log"
+    out = io.StringIO()
+    configure_logging(LogSettings(format="console", file=str(path)), stream=out)
+    get_logger().info("hello", n=1)
+    get_logger().warning("again")
+    assert [json.loads(ln)["event"] for ln in path.read_text().splitlines()] == ["hello", "again"]
+    assert "hello" in out.getvalue() and not out.getvalue().lstrip().startswith("{")
+
+
 def test_a_log_file_rotates_by_size_and_keeps_the_configured_backups(tmp_path: Path) -> None:
     path = tmp_path / "oaken.log"
     configure_logging(

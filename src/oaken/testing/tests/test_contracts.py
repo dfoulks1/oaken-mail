@@ -9,7 +9,7 @@ import pytest
 from oaken.core.errors import Conflict
 from oaken.plugins.base import BaseEnricher, BaseLLMBackend, BaseProvider
 from oaken.plugins.contracts import (
-    EnrichInput,
+    CleanMessage,
     EnrichOutput,
     LLMRequest,
     PullBatch,
@@ -98,7 +98,7 @@ class NotAnAnswerLLM(BaseLLMBackend):
 
 
 class UnserializableEnricher(BaseEnricher):
-    async def enrich(self, msg: EnrichInput) -> EnrichOutput:
+    async def enrich(self, msg: CleanMessage) -> EnrichOutput:
         return EnrichOutput({"seen": {msg.message_id}})  # a set is not JSON
 
 

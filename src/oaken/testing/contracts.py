@@ -33,14 +33,16 @@ from oaken.core.untrusted import UntrustedText
 from oaken.plugins.adapt import (
     iter_pull,
     to_enrich_output,
+    to_action_result,
     to_hits,
+    to_triage_verdict,
     to_llm_response,
     to_stats,
     to_vectors,
 )
 from oaken.plugins.contracts import (
     CacheEntry,
-    EnrichInput,
+    CleanMessage,
     LLMRequest,
     PluginContext,
     PluginKind,
@@ -210,7 +212,7 @@ LLM_CHECKS = (check_llm_valid, check_llm_text, check_llm_untrusted_parts, check_
 
 
 # -- Enricher ----------------------------------------------------------------------------------
-SAMPLE = EnrichInput(
+SAMPLE = CleanMessage(
     message_id="m1",
     account_id="a1",
     subject=UntrustedText("Quarterly budget"),
@@ -219,13 +221,13 @@ SAMPLE = EnrichInput(
 )
 
 
-async def check_enricher_valid(enricher: Any, sample: EnrichInput = SAMPLE) -> None:
+async def check_enricher_valid(enricher: Any, sample: CleanMessage = SAMPLE) -> None:
     _valid("enricher", enricher)
     assert isinstance(enricher.needs_llm, bool), "needs_llm must be True or False"
     assert isinstance(enricher.output_schema, dict), "output_schema must be a dict"
 
 
-async def check_enricher_output(enricher: Any, sample: EnrichInput = SAMPLE) -> None:
+async def check_enricher_output(enricher: Any, sample: CleanMessage = SAMPLE) -> None:
     model = getattr(enricher, "output_model", None)
     out = to_enrich_output(await enricher.enrich(sample), "enricher", model)
     assert isinstance(out.data, dict)
@@ -235,21 +237,41 @@ ENRICHER_CHECKS = (check_enricher_valid, check_enricher_output)
 
 
 # -- Triager -----------------------------------------------------------------------------------
-async def check_triager_valid(triager: Any, sample: EnrichInput = SAMPLE) -> None:
+async def check_triager_valid(triager: Any, sample: CleanMessage = SAMPLE) -> None:
     _valid("triager", triager)
     assert isinstance(triager.needs_llm, bool), "needs_llm must be True or False"
     assert isinstance(triager.rank, int), "rank must be an int (lowest runs first)"
     assert isinstance(triager.output_schema, dict), "output_schema must be a dict"
 
 
-async def check_triager_output(triager: Any, sample: EnrichInput = SAMPLE) -> None:
+async def check_triager_output(triager: Any, sample: CleanMessage = SAMPLE) -> None:
     out = await triager.triage(sample)
     if out is not None:  # None leaves the message to the next triager
         model = getattr(triager, "output_model", None)
-        assert isinstance(to_enrich_output(out, "triager", model).data, dict)
+        assert isinstance(to_triage_verdict(out, "triager", model).data, dict)
 
 
 TRIAGER_CHECKS = (check_triager_valid, check_triager_output)
+
+
+# -- Action ------------------------------------------------------------------------------------
+async def check_action_valid(action: Any, sample: CleanMessage = SAMPLE) -> None:
+    _valid("action", action)
+    assert isinstance(action.needs_llm, bool), "needs_llm must be True or False"
+    routes = action.routes
+    assert isinstance(routes, tuple) and routes, "routes must be a non-empty tuple of route names"
+    assert all(isinstance(r, str) and r for r in routes), "a route name is a non-empty string"
+    assert isinstance(action.output_schema, dict), "output_schema must be a dict"
+
+
+async def check_action_output(action: Any, sample: CleanMessage = SAMPLE) -> None:
+    out = await action.act(sample, action.routes[0])
+    if out is not None:  # None means there was nothing to do
+        model = getattr(action, "output_model", None)
+        assert isinstance(to_action_result(out, "action", model).data, dict)
+
+
+ACTION_CHECKS = (check_action_valid, check_action_output)
 
 
 # -- Vector store ------------------------------------------------------------------------------
@@ -352,12 +374,16 @@ async def verify_llm(make: Callable[[], Any]) -> None:
     await _verify(LLM_CHECKS, make, "llm_backend")
 
 
-async def verify_enricher(make: Callable[[], Any], sample: EnrichInput = SAMPLE) -> None:
+async def verify_enricher(make: Callable[[], Any], sample: CleanMessage = SAMPLE) -> None:
     await _verify(ENRICHER_CHECKS, make, "enricher", sample)
 
 
-async def verify_triager(make: Callable[[], Any], sample: EnrichInput = SAMPLE) -> None:
+async def verify_triager(make: Callable[[], Any], sample: CleanMessage = SAMPLE) -> None:
     await _verify(TRIAGER_CHECKS, make, "triager", sample)
+
+
+async def verify_action(make: Callable[[], Any], sample: CleanMessage = SAMPLE) -> None:
+    await _verify(ACTION_CHECKS, make, "action", sample)
 
 
 async def verify_vector_store(make: Callable[[], Any]) -> None:
@@ -485,39 +511,57 @@ class LLMContract:
 
 
 class EnricherContract:
-    """Override ``enricher``, and optionally ``sample`` (an ``EnrichInput`` it can handle)."""
+    """Override ``enricher``, and optionally ``sample`` (an ``CleanMessage`` it can handle)."""
 
     enricher = _abstract("enricher")
 
     @pytest.fixture
-    def sample(self) -> EnrichInput:
+    def sample(self) -> CleanMessage:
         return SAMPLE
 
-    async def test_is_valid(self, enricher: Any, sample: EnrichInput) -> None:
+    async def test_is_valid(self, enricher: Any, sample: CleanMessage) -> None:
         async with running(enricher, "enricher"):
             await check_enricher_valid(enricher, sample)
 
-    async def test_output(self, enricher: Any, sample: EnrichInput) -> None:
+    async def test_output(self, enricher: Any, sample: CleanMessage) -> None:
         async with running(enricher, "enricher"):
             await check_enricher_output(enricher, sample)
 
 
 class TriagerContract:
-    """Override ``triager``, and optionally ``sample`` (an ``EnrichInput`` it can handle)."""
+    """Override ``triager``, and optionally ``sample`` (an ``CleanMessage`` it can handle)."""
 
     triager = _abstract("triager")
 
     @pytest.fixture
-    def sample(self) -> EnrichInput:
+    def sample(self) -> CleanMessage:
         return SAMPLE
 
-    async def test_is_valid(self, triager: Any, sample: EnrichInput) -> None:
+    async def test_is_valid(self, triager: Any, sample: CleanMessage) -> None:
         async with running(triager, "triager"):
             await check_triager_valid(triager, sample)
 
-    async def test_output(self, triager: Any, sample: EnrichInput) -> None:
+    async def test_output(self, triager: Any, sample: CleanMessage) -> None:
         async with running(triager, "triager"):
             await check_triager_output(triager, sample)
+
+
+class ActionContract:
+    """Override ``action``, and optionally ``sample`` (a ``CleanMessage`` it can handle)."""
+
+    action = _abstract("action")
+
+    @pytest.fixture
+    def sample(self) -> CleanMessage:
+        return SAMPLE
+
+    async def test_is_valid(self, action: Any, sample: CleanMessage) -> None:
+        async with running(action, "action"):
+            await check_action_valid(action, sample)
+
+    async def test_output(self, action: Any, sample: CleanMessage) -> None:
+        async with running(action, "action"):
+            await check_action_output(action, sample)
 
 
 class CacheContract:

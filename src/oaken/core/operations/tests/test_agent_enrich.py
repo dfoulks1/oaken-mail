@@ -15,7 +15,7 @@ from oaken.core.operations.tests.conftest import Ops
 from oaken.core.settings import McpSettings, SwarmSettings, WorkspaceSettings
 from oaken.ingest.pipeline import ENRICH, MessagePayload, StageJobResult, enrich_kind
 from oaken.plugins.base import BaseEnricher
-from oaken.plugins.contracts import EnrichInput, EnrichOutput
+from oaken.plugins.contracts import CleanMessage, EnrichOutput
 
 
 class Gist(SafeOutput):
@@ -45,14 +45,14 @@ class Gister(BaseEnricher):
         self.bulk = False
         self.native_runs = 0
 
-    def needs_model(self, msg: EnrichInput) -> bool:
+    def needs_model(self, msg: CleanMessage) -> bool:
         return not self.bulk
 
-    async def enrich(self, msg: EnrichInput) -> EnrichOutput:
+    async def enrich(self, msg: CleanMessage) -> EnrichOutput:
         self.native_runs += 1
         return EnrichOutput({"gist": "", "skipped": "bulk"})
 
-    def from_answer(self, msg: EnrichInput, answer: Gist) -> EnrichOutput:
+    def from_answer(self, msg: CleanMessage, answer: Gist) -> EnrichOutput:
         return EnrichOutput({"gist": answer.gist})
 
 
@@ -62,10 +62,10 @@ class Toner(BaseEnricher):
     prompt = PromptBuilder("enrich.tone", "1", "Name the tone.", Tone)
     output_model = ToneResult
 
-    async def enrich(self, msg: EnrichInput) -> EnrichOutput:
+    async def enrich(self, msg: CleanMessage) -> EnrichOutput:
         raise AssertionError("an agent should have been asked")
 
-    def from_answer(self, msg: EnrichInput, answer: Tone) -> EnrichOutput:
+    def from_answer(self, msg: CleanMessage, answer: Tone) -> EnrichOutput:
         return EnrichOutput({"tone": answer.tone})
 
 
@@ -81,6 +81,7 @@ class Swarm:
         """A stored message and its account with nothing enriched, and only the test's enrichers."""
         (mid,) = await self.ops.add(1)  # the rig's own enrichers run here, then are cleared
         await self.ops.svc.raw.db.execute("DELETE FROM enrichments")
+        await self.ops.svc.raw.db.execute("DELETE FROM triage_verdicts")
         (account,) = await self.ops.svc.raw.list_accounts()
         self.use({"gist": self.gister, "tone": self.toner})
         return str(mid), str(account.id)
@@ -214,13 +215,13 @@ async def test_work_that_needs_no_model_is_settled_in_core_and_not_offered(
     job_id = await swarm.job(mid)
 
     class NoToner(Toner):
-        def needs_model(self, msg: EnrichInput) -> bool:
+        def needs_model(self, msg: CleanMessage) -> bool:
             return False
 
-        async def enrich(self, msg: EnrichInput) -> EnrichOutput:
+        async def enrich(self, msg: CleanMessage) -> EnrichOutput:
             return EnrichOutput({"tone": "n/a"})
 
-        def from_answer(self, msg: EnrichInput, answer: Tone) -> EnrichOutput:
+        def from_answer(self, msg: CleanMessage, answer: Tone) -> EnrichOutput:
             return EnrichOutput({"tone": answer.tone})
 
     swarm.use({"gist": swarm.gister, "tone": NoToner()})
@@ -285,10 +286,10 @@ class Rater(BaseEnricher):
     prompt = PromptBuilder("enrich.rate", "1", "Rate it.", Gist)
     output_model = RatedResult
 
-    async def enrich(self, msg: EnrichInput) -> EnrichOutput:
+    async def enrich(self, msg: CleanMessage) -> EnrichOutput:
         raise AssertionError("an agent should have been asked")
 
-    def from_answer(self, msg: EnrichInput, answer: Gist) -> EnrichOutput:
+    def from_answer(self, msg: CleanMessage, answer: Gist) -> EnrichOutput:
         return EnrichOutput({"tone": answer.gist, "priority": int(answer.gist)})
 
 

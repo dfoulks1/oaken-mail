@@ -2,6 +2,7 @@
 {#- Shared pieces for the pages that list plugins: a stage's controls, a kind's plugin table and the
     settings dialogs. Import with context: they read pipeline, plugins and models. -#}
 {% import "_macros.html" as m with context %}
+{% import "_triage_rules.html" as tr with context %}
 
 {% macro setting(plugin, field, spec, val, row) %}
   {% set kinds = (spec.anyOf | map(attribute="type") | list) if spec.anyOf else [spec.type] %}
@@ -45,7 +46,7 @@
   {% call m.post("model", back) %}
     <input type="hidden" name="kind" value="{{ c.kind }}"><input type="hidden" name="plugin" value="{{ c.name }}">
     <select class="select select-sm mono" name="model" aria-label="Model for {{ label }}">
-      {% if c.kind in ("enricher", "triager", "embedder", "ask") %}<option value=""{% if not c.model %} selected{% endif %}>default ({{ c.default }})</option>{% endif %}
+      {% if c.kind in ("enricher", "triager", "embedder") %}<option value=""{% if not c.model %} selected{% endif %}>default ({{ c.default }})</option>{% endif %}
       {% for ch in c.choices %}<option value="{{ ch }}"{% if ch == c.model %} selected{% endif %}>{{ ch }}</option>{% endfor %}
       {% if c.model and c.model not in c.choices %}<option value="{{ c.model }}" selected>{{ c.model }} (not installed)</option>{% endif %}
     </select>
@@ -173,7 +174,7 @@
             <td>{{ "{:,}".format(u.tokens_in) }}</td><td>{{ "{:,}".format(u.tokens_out) }}</td>
             <td class="ok">{{ "{:,}".format(u.tokens_saved) }}</td>
             <td class="right">
-              {% if c and c.kind != "ask" %}
+              {% if c %}
               <div class="menu">
                 <button type="button" class="menu-btn" aria-haspopup="true" aria-label="Actions for {{ c.label }}">{{ m.icon("dots") }}</button>
                 <div class="menu-list">
@@ -254,10 +255,11 @@
         </tbody></table>
       </div>
       {% endif %}
+      {% if c.kind == "triager" and c.name == "rules" and triage is defined %}<div class="dialog-body">{{ tr.manage(back) }}</div>{% endif %}
       <form method="post" action="/ui/plugin-settings">
         {{ m.guard(back) }}<input type="hidden" name="plugin" value="{{ c.name }}"><input type="hidden" name="kind" value="{{ c.kind }}">
         <div class="dialog-body">
-          {% for field, spec in c.config_schema.properties.items() if field != "model" and not (c.steps and field == "skip_rules") %}{{ setting(c.name, field, spec, c.config.get(field, spec.default), c) }}{% endfor %}
+          {% for field, spec in c.config_schema.properties.items() if field not in ("model", "rules") and not (c.steps and field == "skip_rules") %}{{ setting(c.name, field, spec, c.config.get(field, spec.default), c) }}{% endfor %}
         </div>
         <div class="dialog-foot">
           <p class="note">Saved to <code>config.toml</code>. Reload the plugin for it to take effect.</p>

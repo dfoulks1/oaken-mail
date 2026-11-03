@@ -92,9 +92,15 @@ class Tracer(EventLog):
             return
         row = self._cut({**(_CONTEXT.get() or {}), **data})
         now = self.clock.now()
-        self.append_line(now.isoformat(), kind, row)
+        self.append_line(now.isoformat(timespec="milliseconds"), kind, self._lean(kind, row))
         if self.bus is not None:  # to the open trace streams only; never to a persisting handler
             self.bus.publish_nowait(TraceEvent(ts=now, kind=kind, data=row))
+
+    @staticmethod
+    def _lean(kind: str, row: dict[str, Any]) -> dict[str, Any]:
+        """The row as written to the file. A model call drops its empty fields; a None elsewhere
+        means something (a plugin that returned nothing), so other events keep theirs."""
+        return {k: v for k, v in row.items() if v is not None} if kind == "llm.call" else row
 
     def _cut(self, value: Any) -> Any:
         if isinstance(value, str):

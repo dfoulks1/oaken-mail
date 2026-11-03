@@ -5,7 +5,7 @@ import pytest
 
 from oaken.core.errors import AIBackendError
 from oaken.testing.contracts import TriagerContract
-from oaken_enrichers import AITriager, RulesTriager
+from oaken_triagers import AITriager, SpamCheckTriager
 from oaken_enrichers.tests.conftest import Rig, message, with_llm
 
 WORK = {
@@ -20,10 +20,10 @@ class TestAITriagerContract(TriagerContract):
         return with_llm(AITriager)()
 
 
-class TestRulesTriagerContract(TriagerContract):
+class TestSpamCheckTriagerContract(TriagerContract):
     @pytest.fixture
     def triager(self) -> Any:
-        return RulesTriager()
+        return SpamCheckTriager()
 
 
 @pytest.mark.parametrize(
@@ -43,7 +43,7 @@ class TestRulesTriagerContract(TriagerContract):
 async def test_bulk_and_automated_mail_is_classified_without_the_model(
     rig: Rig, headers: dict[str, Any], sender: str, category: str, rule: str
 ) -> None:
-    enricher = await rig.start(RulesTriager())
+    enricher = await rig.start(SpamCheckTriager())
     out = (await enricher.triage(message(sender=sender, **headers))).data
     assert (out["category"], out["source"], out["rule"]) == (category, "rules", rule)
     assert (out["priority"], out["needs_reply"], out["waiting_on_others"]) == (0, False, False)
@@ -64,19 +64,19 @@ async def test_bulk_and_automated_mail_is_classified_without_the_model(
 async def test_system_and_spam_mail_is_settled_without_the_model(
     rig: Rig, kw: dict[str, Any], category: str, rule: str
 ) -> None:
-    enricher = await rig.start(RulesTriager())
+    enricher = await rig.start(SpamCheckTriager())
     out = (await enricher.triage(message("Body text here.", **kw))).data
     assert (out["category"], out["source"], out["rule"]) == (category, "rules", rule)
     assert out["priority"] == 0 and len(rig.llm.requests) == 0
 
 
 async def test_spam_status_no_is_not_spam(rig: Rig) -> None:
-    enricher = await rig.start(RulesTriager())
+    enricher = await rig.start(SpamCheckTriager())
     assert await enricher.triage(message(x_spam_status="No, score=0.1")) is None
 
 
 async def test_auto_submitted_no_is_not_automated(rig: Rig) -> None:
-    enricher = await rig.start(RulesTriager())
+    enricher = await rig.start(SpamCheckTriager())
     assert await enricher.triage(message(auto_submitted="no")) is None
 
 
@@ -89,7 +89,7 @@ async def test_auto_submitted_no_is_not_automated(rig: Rig) -> None:
     ],
 )
 async def test_list_mail_is_left_for_the_model(rig: Rig, headers: dict[str, Any]) -> None:
-    enricher = await rig.start(RulesTriager())
+    enricher = await rig.start(SpamCheckTriager())
     assert await enricher.triage(message("Can you send the report?", **headers)) is None
 
 
@@ -130,7 +130,7 @@ async def test_an_unchanged_message_is_answered_from_the_cache(rig: Rig) -> None
 
 
 async def test_a_spam_flagged_message_is_settled_by_rule_with_no_model_call(rig: Rig) -> None:
-    enricher = await rig.start(RulesTriager())
+    enricher = await rig.start(SpamCheckTriager())
     msg = message(body="Win a prize now, click here.", subject="You won", x_spam_flag="YES")
     out = (await enricher.triage(msg)).data
     assert out["source"] == "rules" and out["rule"] == "spam-flag" and out["priority"] == 0
@@ -138,7 +138,7 @@ async def test_a_spam_flagged_message_is_settled_by_rule_with_no_model_call(rig:
 
 
 async def test_an_empty_message_with_a_short_subject_is_settled_by_rule(rig: Rig) -> None:
-    enricher = await rig.start(RulesTriager())
+    enricher = await rig.start(SpamCheckTriager())
     msg = message(body="", subject="delete")
     out = (await enricher.triage(msg)).data
     assert out["rule"] == "empty-message" and out["priority"] == 0 and not rig.llm.requests
@@ -147,26 +147,26 @@ async def test_an_empty_message_with_a_short_subject_is_settled_by_rule(rig: Rig
 async def test_a_short_message_with_a_real_subject_or_an_attachment_still_goes_to_the_model(
     rig: Rig,
 ) -> None:
-    enricher = await rig.start(RulesTriager())
+    enricher = await rig.start(SpamCheckTriager())
     assert await enricher.triage(message(body="", subject="Quarterly report is attached")) is None
     assert await enricher.triage(message(body="Thanks", subject="Re: lunch")) is None
 
 
 async def test_a_rule_can_be_switched_off_in_the_triagers_config(rig: Rig) -> None:
-    enricher = await rig.start(RulesTriager(), config={"skip_rules": ["cron"]})
+    enricher = await rig.start(SpamCheckTriager(), config={"skip_rules": ["cron"]})
     assert await enricher.triage(message(x_cron_env="<SHELL=/bin/sh>")) is None
 
 
 async def test_the_values_a_rule_matches_on_are_configurable(rig: Rig) -> None:
-    default = await rig.start(RulesTriager())
+    default = await rig.start(SpamCheckTriager())
     assert await default.triage(message(precedence="list")) is None  # people reply through lists
-    wider = await rig.start(RulesTriager(), config={"bulk_precedence": ["bulk", "List"]})
+    wider = await rig.start(SpamCheckTriager(), config={"bulk_precedence": ["bulk", "List"]})
     out = await wider.triage(message(precedence="list"))
     assert out is not None and out.data["rule"] == "precedence"  # now it counts (and is lowered)
-    quiet = await rig.start(RulesTriager(), config={"empty_max_subject_words": 0})
+    quiet = await rig.start(SpamCheckTriager(), config={"empty_max_subject_words": 0})
     assert await quiet.triage(message(body="", subject="delete")) is None
     assert (await default.triage(message(body="", subject="delete"))) is not None
-    custom = await rig.start(RulesTriager(), config={"autoreply_headers": ["x-vacation"]})
+    custom = await rig.start(SpamCheckTriager(), config={"autoreply_headers": ["x-vacation"]})
     assert (await custom.triage(message(x_vacation="yes"))) is not None
     assert await custom.triage(message(x_autoreply="yes")) is None  # the default list was replaced
 
@@ -175,11 +175,11 @@ async def test_a_rule_name_that_does_not_exist_is_refused(rig: Rig) -> None:
     from oaken.core.errors import PluginError
 
     with pytest.raises(PluginError, match="skip_rules"):
-        await rig.start(RulesTriager(), config={"skip_rules": ["cron", "nope"]})
+        await rig.start(SpamCheckTriager(), config={"skip_rules": ["cron", "nope"]})
 
 
 async def test_the_rules_are_listed_in_the_order_they_run_with_their_state(rig: Rig) -> None:
-    plugin = await rig.start(RulesTriager(), config={"skip_rules": ["cron"]})
+    plugin = await rig.start(SpamCheckTriager(), config={"skip_rules": ["cron"]})
     rules = plugin.describe()
     assert [r["name"] for r in rules] == [
         "auto_submitted", "bulk", "no_reply", "cron", "auto_reply", "spam", "empty",

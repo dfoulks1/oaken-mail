@@ -1,54 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
-"""What the three model-backed enrichers share: the model handle, the token budget, and the
-rule for mail that nobody wrote to the reader."""
+"""What the model-backed enrichers share: their settings and the base that holds the model handle."""
 
-import hashlib
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from oaken.ai.prompts import PromptBuilder
-from oaken.core.errors import PluginError
-from oaken.core.untrusted import UntrustedText
-from oaken.mail.clean import bulk_signals
-from oaken.mail.tokens import Tokenizer, load_tokenizer
-from oaken.plugins.base import BaseEnricher, BaseTriager
-from oaken.plugins.contracts import EnrichInput, LLMAccess, PluginContext
-
-CUT_MARKER = "\n[... the middle of this message was cut to fit the size limit ...]\n"
-
-
-def header_values(msg: EnrichInput) -> dict[str, tuple[str, ...]]:
-    """Every header as plain strings, for rules only (never passed to a model)."""
-    return {k: tuple(v.unwrap() for v in vals) for k, vals in msg.raw_headers.items()}
-
-
-def bulk_reasons(msg: EnrichInput) -> tuple[str, ...]:
-    return bulk_signals(header_values(msg))
-
-
-def digest(*parts: str) -> str:
-    h = hashlib.sha256()
-    for p in parts:
-        h.update(p.encode())
-        h.update(b"\x00")
-    return h.hexdigest()
-
-
-def fit(text: str, budget: int, tokenizer: Tokenizer) -> tuple[str, bool]:
-    """``text`` within ``budget`` tokens: kept whole, or as its head and tail with a marker between
-    (the start says who and what, the end says what is asked). The flag says whether it was cut."""
-    total = tokenizer.count(text)
-    if total <= budget:
-        return text, False
-    keep = max(int(len(text) * budget / total * 0.9), 40)
-    while True:
-        head = text[: keep * 2 // 3]
-        tail = text[len(text) - (keep - keep * 2 // 3) :]
-        out = f"{head}{CUT_MARKER}{tail}"
-        if tokenizer.count(out) <= budget or keep <= 40:
-            return out, True
-        keep = int(keep * 0.85)
+from oaken.plugins.base import BaseEnricher
+from oaken.plugins.contracts import CleanMessage
+from oaken.plugins.kit import ModelHandle
 
 
 class EnricherConfig(BaseModel):
@@ -76,37 +35,21 @@ class GatedConfig(EnricherConfig):
     min_priority: int | None = Field(
         default=None,
         ge=0,
-        le=3,
+        le=99,
         description="Skip mail that triage rated below this (0 ignore, 1 low, 2 normal, 3 soon) "
         "to save model calls. Leave unset to run on everything. Needs the triage enricher on; "
         "mail triage has not rated yet is never skipped.",
     )
 
 
-class LLMEnricher(BaseEnricher):
+class LLMEnricher(ModelHandle, BaseEnricher):
     """Base of the model-backed enrichers: ``self.llm`` and ``self.tokenizer`` after ``start``."""
 
     needs_llm = True
     skip_bulk: ClassVar[bool] = False  # a default, overridden by [plugins.<name>] skip_bulk
     config_model = EnricherConfig
-    # The instructions and answer shape the model gets. An external agent (the swarm) is handed
-    # the same, so it answers what a native model would.
-    prompt: ClassVar[PromptBuilder[Any] | None] = None
 
-    llm: LLMAccess
-    tokenizer: Tokenizer
-
-    async def start(self, ctx: PluginContext) -> None:
-        await super().start(ctx)
-        self.tokenizer = load_tokenizer(ctx.settings.mail)
-
-    def access(self) -> LLMAccess:
-        llm = self.ctx.llm
-        if llm is None:
-            raise PluginError(f"{self.ctx.name} needs a language model and none was provided")
-        return llm
-
-    def needs_model(self, msg: EnrichInput) -> bool:
+    def needs_model(self, msg: CleanMessage) -> bool:
         """False when this message can be settled without a model (bulk mail, a header rule): core
         then runs the enricher itself and an external agent is never asked for it."""
         return True
@@ -114,45 +57,3 @@ class LLMEnricher(BaseEnricher):
     def skips_bulk(self) -> bool:
         chosen = self.config.skip_bulk if self.config is not None else None
         return self.skip_bulk if chosen is None else chosen
-
-    def model_for(self) -> str | None:
-        """The model this enricher is configured to run, or None for the backend default. Validity
-        is checked in the LLM service (which holds the backend); an unknown model falls back."""
-        return self.config.model if self.config is not None else None
-
-    def budget(self) -> int:
-        return int(self.ctx.settings.ai.enrich_max_input_tokens)
-
-
-class LLMTriager(BaseTriager):
-    """A triager that asks a model: ``self.llm`` and ``self.tokenizer`` after ``start``. It runs
-    after the deterministic ones (higher ``rank``)."""
-
-    needs_llm = True
-    rank = 90
-    config_model = EnricherConfig
-    prompt: ClassVar[PromptBuilder[Any] | None] = None
-
-    llm: LLMAccess
-    tokenizer: Tokenizer
-
-    async def start(self, ctx: PluginContext) -> None:
-        await super().start(ctx)
-        self.tokenizer = load_tokenizer(ctx.settings.mail)
-
-    def access(self) -> LLMAccess:
-        llm = self.ctx.llm
-        if llm is None:
-            raise PluginError(f"{self.ctx.name} needs a language model and none was provided")
-        return llm
-
-    def model_for(self) -> str | None:
-        """The model this triager is configured to run, or None for the backend default."""
-        return self.config.model if self.config is not None else None
-
-    def budget(self) -> int:
-        return int(self.ctx.settings.ai.enrich_max_input_tokens)
-
-
-def labeled(text: UntrustedText, label: str) -> UntrustedText:
-    return UntrustedText(text.unwrap(), label)

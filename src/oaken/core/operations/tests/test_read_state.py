@@ -24,7 +24,7 @@ def examples(a: MessageId, job_id: str = "none") -> dict[str, Any]:
         "search_keyword": {"query": "quokkas"}, "get_message": {"message_id": a},
         "get_thread": {"message_id": a},
         "get_raw": {"message_id": a, "include_raw": True}, "get_message_rules": {"message_id": a},
-        "message_dismissed": {"message_id": a}, "search": {"query": "x"}, "ask": {"question": "x"},
+        "message_dismissed": {"message_id": a}, "search": {"query": "x"},
         "sync_now": {"account_id": "main"}, "reprocess": {"stage": "parse"}, "rebuild_index": {},
         "set_schedule": {"account_id": "main", "schedule": "every 20m"},
         "pause_schedule": {"account_id": "main"}, "resume_schedule": {"account_id": "main"},
@@ -34,7 +34,8 @@ def examples(a: MessageId, job_id: str = "none") -> dict[str, Any]:
         "create_agent": {"label": "x", "kinds": ["enrich"]}, "list_agents": {},
         "revoke_agent": {"agent_id": "none"},
         "get_enrichment": {"message_id": a}, "enrich_message": {"message_id": a},
-        "try_triage": {"message_id": a}, "trace_status": {}, "trace_tail": {},
+        "try_triage": {"message_id": a}, "get_triage": {"message_id": a},
+        "triage_message": {"message_id": a}, "trace_status": {}, "trace_tail": {},
         "sieve_check": {"script": 'keep;'}, "sieve_list": {},
         "sieve_test": {"script": "keep;", "message_id": a},
         "get_account": {"account_id": "main"},
@@ -75,6 +76,12 @@ FLAGGING = {"set_flagged"}
 SIGNALING = {"config_reload"}
 # trace_set flips an in-memory flag (the trace); it touches no mail and no read state.
 SWITCHING = {"trace_set"}
+# The triage rule operations edit the reader's own rules in core's database; no mail, no read state.
+TRIAGE_RULES = {
+    "triage_levels", "triage_level_set", "triage_level_delete", "triage_rules", "triage_rule_set",
+    "triage_rule_delete", "triage_rule_move", "triage_rule_order", "triage_drift", "triage_ack",
+    "triage_revert", "triage_apply", "triage_discard", "triage_rule_test",
+}  # fmt: skip
 
 
 async def test_no_operation_that_does_not_mark_read_changes_read_state(ops: Ops) -> None:
@@ -89,7 +96,7 @@ async def test_no_operation_that_does_not_mark_read_changes_read_state(ops: Ops)
     job = await ops.svc.queue.enqueue("ingest.enrich", _P())
     table = examples(a, str(job.job_id))
     declared = {o.name for o in core_operations() if o.marks_read}
-    assert set(table) | MARKING | FLAGGING | SIGNALING | SWITCHING == {
+    assert set(table) | MARKING | FLAGGING | SIGNALING | SWITCHING | TRIAGE_RULES == {
         o.name for o in core_operations()
     }, "add a case for the new one"
     assert declared == MARKING | {"summarize_message"}

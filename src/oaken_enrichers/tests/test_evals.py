@@ -9,13 +9,8 @@ import pytest
 
 from oaken.evals import Fixture, build_input, load_fixtures, score
 from oaken.evals.__main__ import default_fixture_root, first_verdict, main
-from oaken_enrichers import (
-    ActionsEnricher,
-    AITriager,
-    InspectorEnricher,
-    RulesTriager,
-    SummaryEnricher,
-)
+from oaken_enrichers import ActionsEnricher, InspectorEnricher, SummaryEnricher
+from oaken_triagers import AITriager, SpamCheckTriager
 from oaken_enrichers.tests.conftest import Rig
 
 ROOT = Path(__file__).parent / "evals"
@@ -45,7 +40,7 @@ async def test_fixture_passes_against_its_scripted_reply(rig: Rig, fx: Fixture) 
         rig.llm.reply(fx.fake_reply)
     msg = build_input(fx)
     if fx.enricher == "triage":
-        chain = [await rig.start(RulesTriager()), await rig.start(CLASSES["triage"]())]
+        chain = [await rig.start(SpamCheckTriager()), await rig.start(CLASSES["triage"]())]
         result = (await first_verdict(chain, msg)).data
     else:
         enricher = await rig.start(CLASSES[fx.enricher]())

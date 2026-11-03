@@ -9,23 +9,23 @@ from oaken.core.clock import FakeClock
 from oaken.core.trace import Tracer
 from oaken.core.untrusted import UntrustedText
 from oaken.plugins.base import BaseEnricher, BaseTriager
-from oaken.plugins.contracts import EnrichInput, EnrichOutput
+from oaken.plugins.contracts import CleanMessage, EnrichOutput, TriageVerdict
 from oaken.testing.contracts import make_context
 
 
 class Greeter(BaseEnricher):
-    async def enrich(self, msg: EnrichInput) -> EnrichOutput:
+    async def enrich(self, msg: CleanMessage) -> EnrichOutput:
         self.trace("greeter.note", saw=msg.subject.unwrap())
         return EnrichOutput({"hello": msg.subject.unwrap()})
 
 
 class Sorter(BaseTriager):
-    async def triage(self, msg: EnrichInput) -> EnrichOutput | None:
+    async def triage(self, msg: CleanMessage) -> TriageVerdict | None:
         return None
 
 
-def message() -> EnrichInput:
-    return EnrichInput(
+def message() -> CleanMessage:
+    return CleanMessage(
         message_id="m1", account_id="a", subject=UntrustedText("Report"), body=UntrustedText("body")
     )
 

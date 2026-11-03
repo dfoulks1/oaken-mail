@@ -31,10 +31,10 @@ from oaken.plugins.authorize import Authorizations
 from oaken.plugins.contracts import (
     CAPABILITIES,
     PLUGIN_API_VERSION,
-    AskIntent,
+    ActionResult,
     CacheEntry,
     CacheStats,
-    EnrichInput,
+    CleanMessage,
     EnrichOutput,
     Health,
     Hit,
@@ -45,6 +45,7 @@ from oaken.plugins.contracts import (
     PluginOpContext,
     PluginOperation,
     PullBatch,
+    TriageVerdict,
     VectorItem,
     VectorStats,
 )
@@ -435,48 +436,49 @@ class BaseLLMBackend(BasePlugin):
         return [self.model_id] if self.model_id else []
 
 
-class BaseEnricher(BasePlugin):
-    """Set ``version`` and, ideally, ``output_model`` (a pydantic model): the host then checks the
-    result against it and publishes its JSON schema. Override ``enrich``."""
+class BaseAnalyzer(BasePlugin):
+    """What the plugins that read a message and return a result share (ADR 0017): an enricher, a
+    triager and an action. It is a helper for their base classes, not a kind of its own: it has no
+    entry-point group and nothing outside the plugin classes names it. A plugin extends exactly one
+    of ``BaseEnricher``, ``BaseTriager`` or ``BaseAction``.
 
-    kind: ClassVar[PluginKind] = "enricher"
+    ``version`` is part of the identity of a stored result: bump it when the output could change.
+    ``needs_llm`` says whether it asks a model. ``output_model`` is the pydantic model its result
+    must match; the host checks it and publishes its JSON schema."""
+
     version: ClassVar[str] = "1"
     needs_llm: bool = False
     output_model: ClassVar[type[BaseModel] | None] = None
-    # What this enricher lets ``ask`` understand. Declared, the router can choose it by name and
-    # show this enricher's stored result for the messages the question is about.
-    ask_intent: ClassVar[AskIntent | None] = None
 
     @property
     def output_schema(self) -> dict[str, Any]:
         return self.output_model.model_json_schema() if self.output_model else {}
 
+
+class BaseEnricher(BaseAnalyzer):
+    """Set ``version`` and, ideally, ``output_model`` (a pydantic model): the host then checks the
+    result against it and publishes its JSON schema. Override ``enrich``."""
+
+    kind: ClassVar[PluginKind] = "enricher"
+
     @_default
-    async def enrich(self, msg: EnrichInput) -> EnrichOutput:
+    async def enrich(self, msg: CleanMessage) -> EnrichOutput:
         raise NotImplementedError
 
 
-class BaseTriager(BasePlugin):
+class BaseTriager(BaseAnalyzer):
     """The first step of the pipeline: rate a message so core can decide what else it is owed.
-    This is the deterministic kind: override ``triage`` to return the verdict (an
-    ``EnrichOutput``), or None to leave the message to the next triager. One that asks a model
+    This is the deterministic kind: override ``triage`` to return the verdict (a
+    ``TriageVerdict``), or None to leave the message to the next triager. One that asks a model
     extends ``LLMTriager``. Triagers run in ``rank`` order (lowest first) and the first verdict
     wins, so the model is asked only for what the cheaper ones leave. Set ``output_model`` as for
     an enricher."""
 
     kind: ClassVar[PluginKind] = "triager"
-    version: ClassVar[str] = "1"
     rank: ClassVar[int] = 50
-    needs_llm: bool = False
-    output_model: ClassVar[type[BaseModel] | None] = None
-    ask_intent: ClassVar[AskIntent | None] = None
-
-    @property
-    def output_schema(self) -> dict[str, Any]:
-        return self.output_model.model_json_schema() if self.output_model else {}
 
     @_default
-    async def triage(self, msg: EnrichInput) -> EnrichOutput | None:
+    async def triage(self, msg: CleanMessage) -> TriageVerdict | None:
         raise NotImplementedError
 
     def describe(self) -> list[dict[str, Any]]:
@@ -484,6 +486,21 @@ class BaseTriager(BasePlugin):
         ``name``, a one-line ``summary`` and whether it is ``enabled``. Empty by default; a
         triager made of several checks (the rules) lists them."""
         return []
+
+
+class BaseAction(BaseAnalyzer):
+    """Does something about a message triage routed to it (ADR 0019). Set ``routes`` to the route
+    names it answers to and override ``act``. Return an ``ActionResult`` (or None when there was
+    nothing to do); raise to fail. It should be idempotent: a retry after a crash can run it again
+    for the same message and route. Whether it runs on its own or waits for the person is the
+    reader's setting, ``approval = "ask" | "auto"`` in its table, and the default is ``ask``."""
+
+    kind: ClassVar[PluginKind] = "action"
+    routes: ClassVar[tuple[str, ...]] = ()
+
+    @_default
+    async def act(self, msg: CleanMessage, route: str) -> ActionResult | None:
+        raise NotImplementedError
 
 
 class BaseVectorStore(BasePlugin):
@@ -542,21 +559,21 @@ def enricher(
     version: str = "1",
     needs_llm: bool = False,
     output: type[BaseModel] | None = None,
-) -> Callable[[Callable[[EnrichInput], Awaitable[object]]], type[BaseEnricher]]:
+) -> Callable[[Callable[[CleanMessage], Awaitable[object]]], type[BaseEnricher]]:
     """Turn one async function into an enricher class, ready to register as an entry point:
 
         class Result(BaseModel):
             words: int
 
         @enricher("word-count", output=Result)
-        async def word_count(msg: EnrichInput) -> Result:
+        async def word_count(msg: CleanMessage) -> Result:
             return Result(words=len(msg.body.unwrap().split()))
 
     The function may return the model, a dict or an ``EnrichOutput``; the host coerces it.
     """
 
-    def wrap(fn: Callable[[EnrichInput], Awaitable[object]]) -> type[BaseEnricher]:
-        async def enrich(self: BaseEnricher, msg: EnrichInput) -> EnrichOutput:
+    def wrap(fn: Callable[[CleanMessage], Awaitable[object]]) -> type[BaseEnricher]:
+        async def enrich(self: BaseEnricher, msg: CleanMessage) -> EnrichOutput:
             return to_enrich_output(await fn(msg), name, output)
 
         return type(

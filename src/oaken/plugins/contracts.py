@@ -31,7 +31,8 @@ if TYPE_CHECKING:  # ``oaken.ai.prompts`` imports this module
 PLUGIN_API_VERSION = 2
 
 PluginKind = Literal[
-    "provider", "embedder", "llm_backend", "triager", "enricher", "vector_store", "cache_store"
+    "provider", "embedder", "llm_backend", "triager", "enricher", "action", "vector_store",
+    "cache_store",
 ]
 PLUGIN_KINDS: tuple[PluginKind, ...] = (
     "provider",
@@ -39,6 +40,7 @@ PLUGIN_KINDS: tuple[PluginKind, ...] = (
     "llm_backend",
     "triager",
     "enricher",
+    "action",
     "vector_store",
     "cache_store",
 )
@@ -50,6 +52,7 @@ ENTRY_POINT_GROUPS: dict[str, str] = {
     "llm_backend": "oaken.llm_backends",
     "triager": "oaken.triagers",
     "enricher": "oaken.enrichers",
+    "action": "oaken.actions",
     "vector_store": "oaken.vector_stores",
     "cache_store": "oaken.cache_stores",
 }
@@ -66,6 +69,7 @@ CAPABILITIES: dict[str, dict[str, str]] = {
     "llm_backend": {},
     "triager": {},
     "enricher": {},
+    "action": {},
     "vector_store": {},
     "cache_store": {},
 }
@@ -77,6 +81,7 @@ REQUIRED_MEMBERS: dict[str, list[str]] = {
     "llm_backend": ["model_id", "context_window", "generate"],
     "triager": ["version", "needs_llm", "rank", "triage"],
     "enricher": ["version", "needs_llm", "enrich"],
+    "action": ["version", "needs_llm", "routes", "act"],
     "vector_store": ["upsert", "delete", "query", "stats"],
     "cache_store": ["key", "get", "put", "stats", "clear"],
 }
@@ -318,14 +323,15 @@ class PluginStageContext:
 class PluginStageInput:
     """The message a stage runs on, after its enrichers. Everything derived from the mail is
     ``UntrustedText``. ``enrichments`` is the message's stored enrichment results by enricher name
-    (``summary``, ``triage``, ...), so a stage can roll up or tag from them without re-reading the
-    body."""
+    (``summary``, ``actions``, ...) and ``triage`` its stored triage verdict (None when unrated), so
+    a stage can roll up or tag from them without re-reading the body."""
 
     message_id: str
     account_id: str
     subject: UntrustedText
     body: UntrustedText
     enrichments: dict[str, dict[str, Any]] = field(default_factory=dict)
+    triage: dict[str, Any] | None = None
 
 
 # ``handler(ctx, msg) -> dict``. The returned dict must be JSON-serializable; core stores it under
@@ -532,7 +538,7 @@ class EnrichAttachment:
 
 
 @dataclass(frozen=True)
-class EnrichInput:
+class CleanMessage:
     """A cleaned message. Everything derived from the mail is ``UntrustedText``.
 
     ``headers`` holds a few display values (``from``). ``raw_headers`` has every header, keys in
@@ -557,27 +563,6 @@ _INTENT_NAME = re.compile(r"^[a-z][a-z_]{0,31}$")
 
 
 @dataclass(frozen=True)
-class AskIntent:
-    """What an enricher lets ``ask`` understand: ``name`` is the intent a router may choose,
-    ``description`` says in one plain sentence what a person asking for it wants, and ``fields``
-    are the keys of the stored result worth showing (empty: all of it). It is written in the
-    enricher's code, never taken from mail, and is checked when the class is defined."""
-
-    name: str
-    description: str
-    fields: tuple[str, ...] = ()
-
-    def __post_init__(self) -> None:
-        if not _INTENT_NAME.match(self.name):
-            raise ValueError(f"ask intent name {self.name!r}: 1 to 32 lowercase letters and _")
-        text = self.description
-        if not text.strip() or len(text) > 120 or "\n" in text or "<<<" in text:
-            raise ValueError(
-                "ask intent description: one plain sentence of at most 120 characters, no line breaks"
-            )
-
-
-@dataclass(frozen=True)
 class EnrichOutput:
     """A JSON-serializable result, which must match the enricher's ``output_schema``."""
 
@@ -593,9 +578,17 @@ class Enricher(Plugin, Protocol):
     needs_llm: bool
     output_schema: dict[str, Any]
 
-    async def enrich(self, msg: EnrichInput) -> EnrichOutput:
+    async def enrich(self, msg: CleanMessage) -> EnrichOutput:
         """Derive this enricher's result for ``msg``."""
         ...
+
+
+@dataclass(frozen=True)
+class TriageVerdict:
+    """A triager's verdict: a JSON-serializable dict that must match the triager's
+    ``output_schema``. It is not an enricher's result, and is stored apart from one."""
+
+    data: dict[str, Any]
 
 
 @runtime_checkable
@@ -609,8 +602,33 @@ class Triager(Plugin, Protocol):
     rank: int
     output_schema: dict[str, Any]
 
-    async def triage(self, msg: EnrichInput) -> EnrichOutput | None:
+    async def triage(self, msg: CleanMessage) -> TriageVerdict | None:
         """The verdict for ``msg``, or None to leave it to the next triager."""
+        ...
+
+
+@dataclass(frozen=True)
+class ActionResult:
+    """What an action did, as a JSON-serializable dict that must match its ``output_schema``. It
+    holds no mail text. Success is returning one; failure is raising."""
+
+    data: dict[str, Any] = field(default_factory=dict)
+
+
+@runtime_checkable
+class Action(Plugin, Protocol):
+    """Does something about a message triage routed to it (ADR 0019): save an attachment, open a
+    ticket, fill in a report. ``routes`` are the route names it answers to. ``version`` is part of
+    the result's identity: bump it when the output could change. An action should be idempotent,
+    because a retry after a crash can run it again for the same message and route."""
+
+    version: str
+    needs_llm: bool
+    routes: tuple[str, ...]
+    output_schema: dict[str, Any]
+
+    async def act(self, msg: CleanMessage, route: str) -> ActionResult | None:
+        """Do the work for ``msg``, routed here as ``route``; None means there was nothing to do."""
         ...
 
 

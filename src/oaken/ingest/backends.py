@@ -17,6 +17,7 @@ from typing import Any
 
 from oaken.core.errors import OakenError, PluginError
 from oaken.plugins.contracts import (
+    Action,
     Embedder,
     Enricher,
     Hit,
@@ -44,6 +45,7 @@ class Backends:
     llm: Callable[[], LLMBackend | None] = _none
     enrichers: Callable[[], dict[str, Enricher]] = field(default=dict)
     triagers: Callable[[], dict[str, Triager]] = field(default=dict)  # in rank order
+    actions: Callable[[], dict[str, Action]] = field(default=dict)
     vector_store: Callable[[], VectorStore | None] = _none
     # Plugin pipeline stages (run after the enrichers) and a factory for a stage's context.
     pipeline_stages: Callable[[], list["OfferedPipelineStage"]] = _no_stages
@@ -68,6 +70,7 @@ class Backends:
             llm=quietly(host.llm_backend),
             enrichers=host.named_enrichers,
             triagers=host.named_triagers,
+            actions=host.named_actions,
             vector_store=quietly(host.vector_store),
             pipeline_stages=host.offered_pipeline_stages,
             stage_context=host.stage_context,

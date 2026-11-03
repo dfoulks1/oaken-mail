@@ -1,0 +1,12 @@
+{#- SPDX-License-Identifier: Apache-2.0 -#}
+{#- A new triage rule (CORE_54, ADR 0015): the form and a test on recent mail. It stages the rule;
+    the rules plugin's dialog on the Triage page lists the rules and applies them. No script. -#}
+{% extends "_base.html" %}
+{% import "_macros.html" as m with context %}
+{% import "_triage_rules.html" as tr with context %}
+{% block title %}New triage rule · Oaken Mail{% endblock %}
+{% block main %}
+<h1>New triage rule</h1>
+<p><a href="/triage">← Triage</a> <span class="muted">(open the rules plugin's settings there to see, order and apply your rules)</span></p>
+{{ tr.wizard("/triage/rules/new") }}
+{% endblock %}
