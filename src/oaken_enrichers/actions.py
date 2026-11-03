@@ -126,7 +126,7 @@ class ActionsEnricher(LLMEnricher):
             return EnrichOutput(ActionsResult(skipped="bulk").model_dump(mode="json"))
         body, truncated = fit(msg.body.unwrap(), self.budget(), self.tokenizer)
         answer = await self.access().generate_cached(
-            ACTIONS,
+            self.builder(),
             labeled(msg.subject, "subject"),
             UntrustedText(body, "body"),
             content_hash=digest(msg.subject.unwrap(), body),

@@ -102,7 +102,7 @@ class AITriager(LLMTriager):
         sender = msg.headers.get("from", UntrustedText("")).unwrap()
         body, truncated = fit(msg.body.unwrap(), self.budget(), self.tokenizer)
         answer = await self.access().generate_cached(
-            TRIAGE,
+            self.builder(),
             UntrustedText(sender, "from"),
             labeled(msg.subject, "subject"),
             UntrustedText(body, "body"),

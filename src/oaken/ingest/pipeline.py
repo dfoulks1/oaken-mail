@@ -1189,7 +1189,7 @@ class Pipeline:
                     ),
                     "version": e.version,
                     "min_priority": None if n == GATE else self._bar(n, e),
-                    "instructions": e.prompt.system,  # type: ignore[attr-defined]
+                    "instructions": e.builder().system,  # type: ignore[attr-defined]
                     "schema": e.prompt.schema,  # type: ignore[attr-defined]
                 }
                 for n, e in owed.items()

@@ -28,6 +28,17 @@ class EnricherConfig(BaseModel):
         "unless you want this one enricher on a different model.",
     )
 
+    guard: str | None = Field(
+        default=None,
+        description="Override the guard: the fixed text that tells the model mail is data, never "
+        "instructions. Leave blank for the built-in. Weakening it lowers injection defenses.",
+    )
+    prompt: str | None = Field(
+        default=None,
+        description="Override the task prompt this plugin sends the model. Leave blank for the "
+        "built-in. Changing it changes what is cached.",
+    )
+
 
 class GatedConfig(EnricherConfig):
     """For enrichers that triage's priority can gate (summary, actions)."""

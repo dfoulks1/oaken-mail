@@ -19,6 +19,17 @@ class TriagerConfig(BaseModel):
         "unless you want this one triager on a different model.",
     )
 
+    guard: str | None = Field(
+        default=None,
+        description="Override the guard: the fixed text that tells the model mail is data, never "
+        "instructions. Leave blank for the built-in. Weakening it lowers injection defenses.",
+    )
+    prompt: str | None = Field(
+        default=None,
+        description="Override the task prompt this plugin sends the model. Leave blank for the "
+        "built-in. Changing it changes what is cached.",
+    )
+
 
 class LLMTriager(ModelHandle, BaseTriager):
     """A triager that asks a model: ``self.llm`` and ``self.tokenizer`` after ``start``. It runs

@@ -85,6 +85,12 @@ class ModelHandle:
             raise PluginError(f"{self.ctx.name} needs a language model and none was provided")
         return llm
 
+    def builder(self) -> PromptBuilder[Any]:
+        """``prompt`` with this plugin's ``guard`` / ``prompt`` settings applied, if any."""
+        assert self.prompt is not None
+        cfg = self.config
+        return self.prompt.overridden(getattr(cfg, "guard", None), getattr(cfg, "prompt", None))
+
     def model_for(self) -> str | None:
         """The model this plugin is configured to run, or None for the backend default. Validity is
         checked in the LLM service (which holds the backend); an unknown model falls back."""

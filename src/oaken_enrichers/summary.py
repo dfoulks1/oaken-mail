@@ -79,7 +79,7 @@ class SummaryEnricher(LLMEnricher):
         if msg.parent_summary and parent:
             parts.insert(0, labeled(msg.parent_summary, "parent_summary"))
         answer = await self.access().generate_cached(
-            SUMMARY,
+            self.builder(),
             *parts,
             content_hash=digest(msg.subject.unwrap(), body, parent),
             account_id=msg.account_id,

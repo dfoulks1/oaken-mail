@@ -71,12 +71,31 @@ class PromptBuilder(Generic[T]):
         self._version = version
         self.output = output
         self.max_output_tokens = max_output_tokens
+        self.guard: str = DATA_RULES
+        self.instructions: str = instructions
         self.system: str = f"{DATA_RULES}\n\n{instructions}"
         self.schema = output.model_json_schema()
         digest = hashlib.sha256(
             (self.system + json.dumps(self.schema, sort_keys=True)).encode()
         ).hexdigest()[:8]
         self.prompt_version = f"{version}-{digest}"
+
+    def overridden(self, guard: str | None, instructions: str | None) -> "PromptBuilder[T]":
+        """This task with the user's own guard and/or task text (from the plugin's settings, never
+        mail). A blank part keeps the default. The version hash covers the result, so answers
+        cached under one wording are never served for another."""
+        guard, instructions = (guard or "").strip(), (instructions or "").strip()
+        if not guard and not instructions:
+            return self
+        clone = copy.copy(self)
+        clone.guard = guard or self.guard
+        clone.instructions = instructions or self.instructions
+        clone.system = f"{clone.guard}\n\n{clone.instructions}"
+        digest = hashlib.sha256(
+            (clone.system + json.dumps(self.schema, sort_keys=True)).encode()
+        ).hexdigest()[:8]
+        clone.prompt_version = f"{self._version}-{digest}"
+        return clone
 
     def extended(self, catalog: Sequence[tuple[str, str]]) -> "PromptBuilder[T]":
         """This task with a catalog of options added under a fixed header. Each ``(name,

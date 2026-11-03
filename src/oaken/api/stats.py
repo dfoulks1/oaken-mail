@@ -355,8 +355,14 @@ class StatsCollector:
                         self._svc.plugins.named_triagers().get(s.name), "describe", None
                     )
                     steps = list(lister()) if callable(lister) else []
+            plug = {
+                "triager": self._svc.plugins.named_triagers,
+                "enricher": self._svc.plugins.named_enrichers,
+            }.get(s.kind, dict)().get(s.name)
+            built = getattr(plug, "prompt", None)
             rows.append(
                 {
+                    "prompts": {"guard": built.guard, "prompt": built.instructions} if built else None,
                     "kind": s.kind,
                     "name": s.name,
                     "label": s.name,
