@@ -180,7 +180,7 @@ class Core:
             raw=self.raw, index=self.index, attrs=self.attrs, queue=self.queue, audit=self.audit,
             settings=s, clock=clock, bus=bus, readstate=self.readstate, pipeline=self.pipeline,
             indexer=self.indexer, usage=self.usage, sync=self.sync, plugins=self.host,
-            llm=self.llm, agents=self.agents, pipeline_control=self.pipeline_control, triage=self.triage,
+            llm=self.llm, agents=self.agents, pipeline_control=self.pipeline_control,
             eventlog=self.eventlog, tracer=self.tracer, version=oaken.__version__,
         )  # fmt: skip
         registry = core_registry()
