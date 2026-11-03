@@ -5,7 +5,7 @@ All notable changes to Oaken are recorded here. The format follows
 [Semantic Versioning](https://semver.org/). All three distributions (`oaken`, `oaken-cli`,
 `oaken-core`) release in lockstep at one version (ADR 0014).
 
-## [0.2.0] — Unreleased
+## [0.2.0] — 2026-11-03
 
 > 0.1.1 was never released. The work done under that label, and everything since, ships as 0.2.0.
 
@@ -37,13 +37,26 @@ Makes a fresh install usable without reading the docs.
   core rule tables (ADR 0016).
 - Plugins gain `ui()` (pages, buttons) and the `store`, `folders` and `draft` capabilities; an
   action gains `attachments` (ADR 0016, 0018, 0019).
-- Quarantine is the `attachment` action's (`oaken_actions`, `[plugins.action.attachment]`). Core no
-  longer writes it: it queues the `quarantine` route for a flagged attachment when the action is
-  installed, and the files are under `OAKEN_HOME/plugins/action/attachment/quarantine`.
-  `[mail.attachments] quarantine_dir` is no longer read.
+- Attachments no longer live in `raw.db` (ADR 0020). Core moves every attachment into a mode-0000
+  quarantine folder when mail is stored, before Sieve or any plugin sees it, and leaves a stub in the
+  message (`X-Oaken-Detached`). A scanner (an action on the new `scan` route) must say `clean` before
+  anything is released; with no scanner installed nothing is. The `attachment` action only has a
+  `save` route now, and saves clean files. `PluginAttachments.read` is `copy_to`; plugins never hold
+  attachment bytes in memory. The `quarantine` route and `oaken_actions.quarantine` are gone.
+  `[mail.attachments] quarantine_dir` is read again (relative to the data folder; settable in the
+  console) and `quarantine = false` leaves attachments inline. Migration 0024 adds
+  `quarantined_files`. **Mail stored before 0.2.0 keeps its attachments inline** (not backfilled).
 
 ### Added
 
+- `reprocess` takes the other redos as stages, one shape for all of them: `triage`, `action` (with a
+  `route`), `scan` and `start` (the whole chain, from parse), beside `parse`, `filter`, `embed` and
+  `enrich`.
+- A provider can say which messages have attachments without downloading them
+  (`attachments.detect`; IMAP and Gmail).
+- The console: a Pipeline page (Providers by default, with Sieve, LLM backends, vector stores and
+  caches), stage pages with settings, and a quarantine-folder field on the Action page. Pages load
+  faster. The Core demo is rendered from the real templates (`scripts/render_demo.py`).
 - The action kind (ADR 0019): `BaseAction`, `oaken.actions`, one `ingest.action.<name>` job per
   action and route, `route` in a triage verdict and on a rule (migration 0021), results in
   `action_results` (migration 0020), `get_action`, `list_actions` and `approve_action`, `oaken action
