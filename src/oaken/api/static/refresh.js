@@ -47,6 +47,22 @@
     setInterval(refreshTables, every);
   }
 
+  // Live running-jobs card on the LLM backends tab: swap in the server's own HTML.
+  if (document.querySelector("[data-running-jobs]")) {
+    setInterval(function () {
+      fetch("/running_refresh", { headers: { Accept: "text/html" }, cache: "no-store" })
+        .then(function (r) { return r.ok ? r.text() : null; })
+        .then(function (html) {
+          var el = document.querySelector("[data-running-jobs]");
+          if (html == null || !el) return;
+          el.innerHTML = html;
+          var v = el.querySelector("[data-agents-value]");  // the plugin table's Agents cell
+          if (v && v.textContent) document.querySelectorAll("[data-agents-live]").forEach(function (c) { c.textContent = v.textContent; });
+        })
+        .catch(function () { /* keep the last table */ });
+    }, Math.min(every, 5000));
+  }
+
   var url = body.getAttribute("data-refresh");
   if (!url) return;
 
@@ -76,3 +92,34 @@
   if (body.hasAttribute("data-lazy")) tick();
   setInterval(tick, every);
 })();
+
+// Prompt override: the unlock box enables its textarea; locking puts the built-in text back, and
+// a disabled textarea is not submitted, so the default is never saved as an override.
+document.addEventListener("change", function (ev) {
+  var id = ev.target.getAttribute && ev.target.getAttribute("data-unlock");
+  var ta = id && document.getElementById(id);
+  if (!ta) return;
+  ta.disabled = !ev.target.checked;
+  if (!ev.target.checked) ta.value = ta.getAttribute("data-default");
+});
+
+// Select-all box in a table header ticks every job box in that table.
+document.addEventListener("change", function (ev) {
+  if (!ev.target.hasAttribute || !ev.target.hasAttribute("data-select-all")) return;
+  ev.target.closest("table").querySelectorAll('tbody input[type="checkbox"]').forEach(function (c) {
+    c.checked = ev.target.checked;
+  });
+});
+
+// Job log: a [data-job-log] button fills the shared #job-log modal with the server's own HTML for
+// that job (/job_log), fetched on click so the table carries no logs.
+document.addEventListener("click", function (ev) {
+  var btn = ev.target.closest && ev.target.closest("[data-job-log]");
+  var body = document.getElementById("job-log-body");
+  if (!btn || !body) return;
+  body.textContent = "Loading…";
+  fetch("/job_log?job_id=" + encodeURIComponent(btn.getAttribute("data-job-log")), { cache: "no-store" })
+    .then(function (r) { return r.ok ? r.text() : "No log."; })
+    .then(function (html) { body.innerHTML = html; })
+    .catch(function () { body.textContent = "Could not load the log."; });
+});

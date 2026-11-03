@@ -15,6 +15,13 @@
         {% for c in row.choices %}<option value="{{ c }}"{% if c == val %} selected{% endif %}>{{ c }}</option>{% endfor %}
         {% if val and val not in row.choices %}<option value="{{ val }}" selected>{{ val }} (not installed)</option>{% endif %}
       </select>
+    {% elif field in ("guard", "prompt") and row.prompts %}
+      {# Shown read-only with the built-in text; unlocking lets you override. Locked sends nothing
+         (the textarea is disabled), so the default is never saved as an override. #}
+      {% set dflt = row.prompts[field] %}
+      <input type="hidden" name="type:{{ field }}" value="string">
+      <textarea class="input mono" rows="{{ 8 if field == 'prompt' else 5 }}" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}" data-default="{{ dflt }}" {% if not val %}disabled{% endif %}>{{ val or dflt }}</textarea>
+      {{ m.toggle("", val, "Unlock " ~ field ~ " to override", "unlocked", "locked", 'data-unlock="pf-' ~ plugin ~ '-' ~ field ~ '"') }}
     {% elif "boolean" in kinds and "null" in kinds %}
       <input type="hidden" name="type:{{ field }}" value="tristate">
       <select class="select" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}">
@@ -24,7 +31,7 @@
       </select>
     {% elif "boolean" in kinds %}
       <input type="hidden" name="type:{{ field }}" value="boolean">
-      <label class="check"><input type="checkbox" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}" value="1"{% if val %} checked{% endif %}> on</label>
+      {{ m.toggle("s:" ~ field, val, field, id="pf-" ~ plugin ~ "-" ~ field) }}
     {% elif "integer" in kinds or "number" in kinds %}
       <input type="hidden" name="type:{{ field }}" value="number">
       <input class="input" type="number" step="any" id="pf-{{ plugin }}-{{ field }}" name="s:{{ field }}" value="{{ val if val is not none else '' }}">
@@ -102,7 +109,7 @@
   <div class="card">
     <div class="card-head">{{ label }}</div>
     <div class="table-wrap"><table class="table nowrap">
-      <thead><tr><th>Plugin</th><th>Version</th>{% if kind == "enricher" %}<th>At once</th>{% endif %}<th>Health</th>{% if stage %}<th>Model</th>{% endif %}<th>Enabled</th>{% if kind == "enricher" %}<th>Pause</th>{% endif %}<th class="right">Actions</th></tr></thead>
+      <thead><tr><th>Plugin</th>{% if kind == "enricher" %}<th>At once</th>{% endif %}<th>Health</th>{% if kind == "llm_backend" %}<th>Agents</th>{% endif %}{% if stage %}<th>Backlog</th><th>Failed</th><th>Model</th>{% endif %}<th>Enabled</th><th class="right">Actions</th></tr></thead>
       <tbody>
       {% set names = plugins | map(attribute="name") | list %}
       {# The active table: enabled plugins, with their full controls (model, config, pause). A
@@ -114,7 +121,7 @@
         {% set sr = (settings_rows | selectattr("kind", "equalto", p.kind) | selectattr("name", "equalto", p.name) | list) if settings_rows is defined else [] %}
         {% set has_options = sr and (sr[0].config_schema.properties.keys() | reject("equalto", "model") | list) %}
         <tr>
-          <td class="mono">{{ p.name }}</td><td class="mono">{{ p.version }}</td>
+          <td class="mono">{{ p.name }}</td>
           {% if kind == "enricher" %}{% set es = pipeline.enrichers.get("enrich." ~ p.name) if pipeline else none %}
           <td>{% call m.post("limit", back) %}
             <input type="hidden" name="stage" value="enrich.{{ p.name }}">
@@ -122,14 +129,15 @@
             <button class="btn btn-sm btn-icon" type="submit" title="Set" aria-label="Set jobs at once for {{ p.name }}">{{ m.icon("check") }}</button>
           {% endcall %}</td>{% endif %}
           <td>{{ health(p) }}</td>
-          {% if stage %}<td>
+          {% if kind == "llm_backend" %}<td title="Running now / the most this backend may run at once (triage, embed, enrich)" data-agents-live>{{ agents_live | default("—") }}</td>{% endif %}
+          {% if stage %}{% set ns = es if kind == "enricher" else (none if kind == "triager" else s) %}
+          <td>{{ ns.pending if ns and ns.loaded else "—" }}</td>
+          <td{% if ns and ns.failed %} class="bad"{% endif %}>{{ ns.failed if ns and ns.loaded else "—" }}</td>
+          <td>
             {% if c and c.choices %}{{ model_picker(c, back, p.name) }}
             {% else %}<span class="muted">—</span>{% endif %}
           </td>{% endif %}
           <td>{{ m.switch("plugin", back, p.enabled, "Enable " ~ p.name, {"name": p.name}, "verb", "enable", "disable") }}</td>
-          {% if kind == "enricher" %}
-          <td>{{ stage_toggle("enrich." ~ p.name, pipeline.enrichers.get("enrich." ~ p.name) if pipeline else none, back) }}</td>
-          {% endif %}
           <td class="right"><div class="row actions-cell">
             {% if kind == "provider" %}{% if accounts | selectattr("provider", "equalto", p.name) | list %}<button type="button" class="btn btn-sm btn-icon" popovertarget="sm-{{ p.name }}" popovertargetaction="show" title="Configure {{ p.name }}" aria-label="Configure {{ p.name }}">{{ m.icon("gear") }}</button>{% endif %}
             {% elif has_options %}<button type="button" class="btn btn-sm btn-icon" popovertarget="pm-{{ p.kind }}-{{ p.name }}" popovertargetaction="show" title="Configure {{ p.name }}" aria-label="Configure {{ p.name }}">{{ m.icon("gear") }}</button>{% endif %}
@@ -138,10 +146,9 @@
         </tr>
         {% for ch in plugins if p.kind == kind and ch.kind == kind and "@" not in p.name and ch.name.startswith(p.name ~ "@") %}
         <tr class="sub">
-          <td class="mono muted">&nbsp;&nbsp;↳ {{ ch.name.split("@", 1)[1] }}</td><td></td>{% if kind == "enricher" %}<td></td>{% endif %}
-          <td>{{ health(ch) }}</td>{% if stage %}<td><span class="muted">—</span></td>{% endif %}
+          <td class="mono muted">&nbsp;&nbsp;↳ {{ ch.name.split("@", 1)[1] }}</td>{% if kind == "enricher" %}<td></td>{% endif %}
+          <td>{{ health(ch) }}</td>{% if stage %}<td></td><td></td><td><span class="muted">—</span></td>{% endif %}
           <td>{{ m.switch("plugin", back, ch.enabled, "Enable " ~ ch.name, {"name": ch.name}, "verb", "enable", "disable") }}</td>
-          {% if kind == "enricher" %}<td></td>{% endif %}
           <td class="right"><div class="row actions-cell">{% call m.post("plugin", back) %}<input type="hidden" name="name" value="{{ ch.name }}"><input type="hidden" name="verb" value="reload"><button class="btn btn-sm btn-icon" type="submit" title="Reload {{ ch.name }}" aria-label="Reload {{ ch.name }}">{{ m.icon("recycle") }}</button>{% endcall %}</div></td>
         </tr>
         {% endfor %}
@@ -150,14 +157,14 @@
       {% endfor %}
       </tbody>
     </table></div>
-    {# The inactive (disabled) plugins of this kind, folded out of the way at the bottom, with just
+    {% if kind != "enricher" %}<div class="card-foot">Turn a plugin off to take it out of the pipeline for now; turn it on to put it back.</div>{% endif %}
+  </div>
+  {# The inactive (disabled) plugins of this kind, in their own collapsed card below, with just
        the essentials (health, and the switch to turn one back on). Its own render path, server-
        rendered, so refresh.js can swap it live from /table_refresh without touching the active
        controls above. #}
-    <div data-plugin-tables="{{ kind }}">
-      {% include "_plugin_tables.html" %}
-    </div>
-    {% if kind != "enricher" %}<div class="card-foot">Turn a plugin off to take it out of the pipeline for now; turn it on to put it back.</div>{% endif %}
+  <div data-plugin-tables="{{ kind }}">
+    {% include "_plugin_tables.html" %}
   </div>
 {% endmacro %}
 

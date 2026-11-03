@@ -90,11 +90,12 @@
             <td><span class="badge {{ {'succeeded': 'badge-ok', 'failed': 'badge-danger', 'running': 'badge-warn', 'queued': 'badge-muted', 'cancelled': 'badge-muted'}.get(j.status, 'badge-muted') }}">{{ j.status }}</span></td>
             <td>{{ j.attempts }}/{{ j.max_attempts }}</td>
             <td class="bad small clip" title="{{ j.last_error or '' }}">{{ j.last_error or "" }}</td>
-            <td class="right">
+            <td class="right"><div class="row actions-cell">
+              {{ m.job_log_button(j.id) }}
               {% set back = "/general?tab=queue&status=" ~ status if status else "/general?tab=queue" %}
               {% if j.status in ("queued", "running") %}{{ m.confirm("cancel", back, "Cancel the job", "Cancel this job?", "Cancel job", {"job_id": j.id}, "x") }}{% endif %}
               {% if j.status in ("failed", "cancelled") %}{% call m.post("retry", back) %}<input type="hidden" name="job_id" value="{{ j.id }}"><button class="btn btn-sm btn-icon" type="submit" title="Retry" aria-label="Retry the job">{{ m.icon("retry") }}</button>{% endcall %}{% endif %}
-            </td>
+            </div></td>
           </tr>
         {% else %}
           <tr><td colspan="6" class="muted">No jobs.</td></tr>
@@ -108,18 +109,19 @@
         {% call m.post("retry-parked", "/general?tab=queue") %}<button class="btn btn-sm btn-icon" type="submit" title="Retry all" aria-label="Retry all parked jobs">{{ m.icon("retry") }}</button>{% endcall %}
       </div>
       <div class="table-wrap"><table class="table">
-        <thead><tr><th>Job</th><th>Stage</th><th>Message</th><th>Attempts</th><th>Error</th></tr></thead>
+        <thead><tr><th>Job</th><th>Stage</th><th>Message</th><th>Attempts</th><th>Error</th><th class="right">Log</th></tr></thead>
         <tbody>
         {% for j in parked %}
           <tr><td class="mono">{{ j.job_id }}</td><td>{{ j.stage }}</td>
               <td class="mono muted">{{ j.message_id or "—" }}</td><td>{{ j.attempts }}</td>
-              <td class="bad">{{ j.error }}</td></tr>
+              <td class="bad">{{ j.error }}</td><td class="right">{{ m.job_log_button(j.job_id) }}</td></tr>
         {% endfor %}
         </tbody>
       </table></div>
     </div>
     {% endif %}
     {% if agents %}{{ pl.agents_card(agents, "/general?tab=queue", "Agents not tied to a stage") }}{% endif %}
+    {{ m.job_log_dialog() }}
   </section>
   {% endif %}
 

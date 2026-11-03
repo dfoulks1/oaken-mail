@@ -676,6 +676,14 @@ class Console:
         await self.op("retry_parked", {"all": True})
         return ok("Parked jobs were queued again.")
 
+    async def do_retry_selected(self, f: Form) -> Flash:
+        ids = f.many("job_id")
+        if not ids:
+            return warn("Tick the jobs to retry first.")
+        for job_id in ids:
+            await self.op("retry_job", {"job_id": job_id})
+        return ok(f"{len(ids)} job(s) queued again.")
+
     async def do_cancel(self, f: Form) -> Flash:
         await self.op("cancel_job", {"job_id": f.one("job_id")})
         return ok("Job cancelled.")
@@ -745,6 +753,7 @@ ACTIONS: dict[str, Action] = {
     "resume": Console.do_resume,
     "limit": Console.do_limit,
     "retry-parked": Console.do_retry_parked,
+    "retry-selected": Console.do_retry_selected,
     "cancel": Console.do_cancel,
     "retry": Console.do_retry,
     "config-save": Console.do_config_save,

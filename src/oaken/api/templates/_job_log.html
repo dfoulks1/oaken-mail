@@ -1,0 +1,8 @@
+{#- SPDX-License-Identifier: Apache-2.0 -#}
+{#- One job's log, for the inspect modal. Fetched by refresh.js from /job_log. -#}
+<p class="mono small">{{ job_id }}</p>
+{% if job %}<p class="small">{{ job.kind }} · {{ job.status }} · attempt {{ job.attempts }}/{{ job.max_attempts }}</p>
+{% if job.last_error %}<p class="bad small">{{ job.last_error }}</p>{% endif %}{% endif %}
+<pre class="mono small log">{% for e in events %}{{ e.ts }}  {{ e.kind }}  {% for k, v in e.data.items() if k != "job_id" %}{{ k }}={{ v }} {% endfor %}
+{% else %}No events recorded for this job (the event log may be off, or the job older than its history).
+{% endfor %}</pre>

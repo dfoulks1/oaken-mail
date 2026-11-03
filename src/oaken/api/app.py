@@ -263,6 +263,8 @@ class Api:
             Route("/general", safe(self.general), methods=["GET"]),
             Route("/general.json", safe(self.general_json), methods=["GET"]),
             Route("/table_refresh", safe(self.table_refresh), methods=["GET"]),
+            Route("/job_log", safe(self.job_log), methods=["GET"]),
+            Route("/running_refresh", safe(self.running_refresh), methods=["GET"]),
             Route("/config", safe(self.config_editor), methods=["GET"]),
             Route("/getting-started", safe(self.getting_started), methods=["GET"]),
             # Older paths still lead somewhere: the page moved, or got a tidier name.
@@ -431,6 +433,11 @@ class Api:
             )
             listed = await self.console.op("list_actions", {})
             data["action_waiting"], data["action_recent"] = listed.waiting, listed.recent
+        failed = (await self._op("list_jobs", {"status": "failed", "limit": 200})).get("jobs", [])
+        pre = f"ingest.{stage}"  # enrich runs one job kind per enricher: ingest.enrich.<name>
+        data["stage_failed"] = [
+            j for j in failed if str(j["kind"]) == pre or str(j["kind"]).startswith(pre + ".")
+        ][:50]
         data.update(
             stage_kind=kind,
             stage_name=stage,
@@ -502,7 +509,7 @@ class Api:
     PIPELINE_PARTS: ClassVar[dict[str, frozenset[str]]] = {
         "provider": frozenset({"plugins", "schedules", "accounts", "settings"}),
         "sieve": frozenset(),
-        "llm_backend": frozenset({"plugins", "models", "usage", "settings"}),
+        "llm_backend": frozenset({"plugins", "models", "usage", "settings", "pipeline"}),
         "vector_store": frozenset({"plugins", "settings"}),
         "cache_store": frozenset({"plugins", "settings"}),
     }
@@ -515,6 +522,9 @@ class Api:
         data["usage_rows"] = [
             r for r in data.get("usage_rows", []) if self._usage_stage(r["stage"]) == "pipeline"
         ]
+        if tab == "llm_backend":
+            data["running_jobs"] = (await self._op("list_jobs", {"status": "running", "limit": 50})).get("jobs", [])
+            data["agents_live"] = self._agents_live(data.get("pipeline"))
         if tab == "sieve":
             data["sieve"] = await self._sieve_view(request.query_params.get("script", ""))
         return self.console.render(request, "pipeline.html", "pipeline", data)
@@ -589,6 +599,40 @@ class Api:
             data = await self._stats_collector().collect()
         return _json(data)
 
+    @staticmethod
+    def _agents_live(pipeline: dict[str, Any] | None) -> str:
+        """``running / limit`` across the model stages: jobs in flight now, over the 'At once'
+        limits that are set (the limit is left off when none is)."""
+        stages = (pipeline or {}).get("stages", {})
+        picked = [stages[s] for s in ("triage", "embed", "enrich") if s in stages]
+        running = sum(s["running"] for s in picked)
+        cap = sum(s.get("concurrency") or 0 for s in picked)
+        return f"{running} / {cap}" if cap else str(running)
+
+    async def running_refresh(self, request: Request) -> Response:
+        """The running-jobs card as HTML for the script to swap in. Loopback-only like `/general`."""
+        jobs = (await self._op("list_jobs", {"status": "running", "limit": 50})).get("jobs", [])
+        data = await self._stats_collector().collect({"pipeline"})
+        return self.console.render(
+            request,
+            "_running_jobs.html",
+            "",
+            {"running_jobs": jobs, "agents_live": self._agents_live(data.get("pipeline"))},
+        )
+
+    async def job_log(self, request: Request) -> Response:
+        """One job's log as an HTML fragment for the inspect modal: the job's own fields and the
+        events the event log holds for it. Ids, states and numbers, never mail text (the trace,
+        which has mail text, stays off the console). Loopback-only like `/general`."""
+        job_id = request.query_params.get("job_id", "")
+        if not job_id:
+            return Response("no job", status_code=404)
+        jobs = (await self._op("list_jobs", {"limit": 500})).get("jobs", [])
+        job = next((j for j in jobs if j["id"] == job_id), None)
+        rows = (await self._op("events_tail", {"limit": 1000})).get("events", [])
+        events = [e for e in rows if str(e["data"].get("job_id")) == job_id]
+        return self.console.render(request, "_job_log.html", "", {"job": job, "job_id": job_id, "events": events})
+
     async def table_refresh(self, request: Request) -> Response:
         """The plugin tables (active and inactive) for one kind, rendered as HTML the script swaps
         into place. One render path: the same row markup the page uses, so the live view cannot
@@ -598,13 +642,14 @@ class Api:
         kind = request.query_params.get("kind", "")
         if kind not in PLUGIN_KINDS:
             return Response("unknown kind", status_code=404)
-        data = await self._stats_collector().collect({"plugins"})
+        data = await self._stats_collector().collect({"plugins", "settings"})
         return self.console.render(
             request,
             "_plugin_tables.html",
             "",
             {
                 "plugins": data.get("plugins", []),
+                "settings_rows": data.get("settings_rows", []),
                 "kind": kind,
                 "back": request.query_params.get("back", "/general"),
             },

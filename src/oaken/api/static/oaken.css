@@ -296,6 +296,15 @@ input.input-sm[type="number"] { width: 5rem; }
 .switch[aria-checked="true"] { background: var(--brand); border-color: var(--brand); }
 .switch[aria-checked="true"] .knob { transform: translateX(1.05rem); background: var(--on-accent); }
 .switch:disabled { opacity: .45; cursor: not-allowed; }
+.toggle { display: inline-flex; align-items: center; cursor: pointer; position: relative; }
+.toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.toggle .switch { display: inline-block; }
+.toggle input:checked + .switch { background: var(--brand); border-color: var(--brand); }
+.toggle input:checked + .switch .knob { transform: translateX(1.05rem); background: var(--on-accent); }
+.toggle input:focus-visible + .switch { outline: 2px solid var(--brand); outline-offset: 2px; }
+.toggle .t-on, .toggle input:checked ~ .switch-text .t-off { display: none; }
+.toggle input:checked ~ .switch-text .t-on { display: inline; }
+textarea:disabled { opacity: .55; background: var(--surface-2); cursor: not-allowed; }
 .switch-text { margin-left: .4rem; font-size: .82rem; color: var(--muted); }
 
 /* ---- Badges, alerts, toast ------------------------------------------------------------------- */

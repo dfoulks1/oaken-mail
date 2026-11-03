@@ -15,20 +15,24 @@
   {%- set _ = inactive.append(p) %}
 {% endfor %}
 {% if inactive %}
-<details class="fold" id="inactive-{{ kind }}">
-  <summary class="muted small">{{ inactive | length }} inactive (disabled)</summary>
+<details class="card fold" id="inactive-{{ kind }}">
+  <summary class="card-head">{{ inactive | length }} inactive (disabled)</summary>
   <div class="table-wrap"><table class="table nowrap">
-    <thead><tr><th>Plugin</th><th>Version</th><th>Health</th><th class="right">Enable</th></tr></thead>
+    <thead><tr><th>Plugin</th><th>Health</th><th class="right">Configure</th><th class="right">Enable</th></tr></thead>
     <tbody>
     {% for p in inactive %}
       <tr>
-        <td class="mono muted">{{ p.name }}</td><td class="mono muted">{{ p.version }}</td>
+        <td class="mono muted">{{ p.name }}</td>
         <td>
           {%- set d = p.detail or "" %}{% set short = d.split(" (")[0] if " (" in d else d %}
           {%- if p.healthy %}<span class="badge badge-ok">healthy</span>
           {%- elif p.started %}<span class="badge badge-danger" title="{{ d }}">{{ short or "unhealthy" }}</span>
           {%- else %}<span class="badge badge-muted" title="{{ d }}">off</span>{% endif -%}
         </td>
+        {#- An unconfigured plugin is off by default, so a disabled one must be configurable: the gear opens the same settings dialog the active table uses. -#}
+        {%- set sr = (settings_rows | selectattr("kind", "equalto", p.kind) | selectattr("name", "equalto", p.name) | list) if settings_rows is defined else [] %}
+        {%- set has_options = sr and (sr[0].config_schema.properties.keys() | reject("equalto", "model") | list) %}
+        <td class="right">{% if has_options %}<button type="button" class="btn btn-sm btn-icon" popovertarget="pm-{{ p.kind }}-{{ p.name }}" popovertargetaction="show" title="Configure {{ p.name }}" aria-label="Configure {{ p.name }}">{{ m.icon("gear") }}</button>{% endif %}</td>
         <td class="right">{{ m.switch("plugin", back, p.enabled, "Enable " ~ p.name, {"name": p.name}, "verb", "enable", "disable") }}</td>
       </tr>
     {% endfor %}

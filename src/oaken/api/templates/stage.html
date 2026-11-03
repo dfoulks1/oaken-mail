@@ -8,6 +8,28 @@
 {% block main %}
 <h1>{{ stage_label }}</h1>
 {{ pl.kind_body(stage_kind, stage_plural, stage_name, "/" ~ stage_name) }}
+{% if stage_failed %}
+<div class="card">
+  {% call m.post("retry-selected", "/" ~ stage_name, "") %}
+  <div class="card-head"><span>Failed jobs <span class="muted small">{{ stage_failed | length }}</span></span>
+    <button class="btn btn-sm btn-icon" type="submit" title="Retry the ticked jobs" aria-label="Retry the ticked jobs">{{ m.icon("retry") }}</button></div>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th><input type="checkbox" data-select-all aria-label="Select all failed jobs"></th><th>Job</th><th>Kind</th><th>Attempts</th><th>Error</th><th class="right">Log</th></tr></thead>
+    <tbody>
+    {% for j in stage_failed %}
+      <tr>
+        <td><input type="checkbox" name="job_id" value="{{ j.id }}" aria-label="Select {{ j.id }}"></td>
+        <td class="mono small">{{ j.id }}</td><td class="mono small">{{ j.kind }}</td>
+        <td>{{ j.attempts }}/{{ j.max_attempts }}</td>
+        <td class="bad small clip" title="{{ j.last_error or '' }}">{{ j.last_error or "" }}</td>
+        <td class="right">{{ m.job_log_button(j.id) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endcall %}
+</div>
+{% endif %}
 {% if stage_name == "action" and action_waiting is defined %}
 <div class="card">
   <div class="card-head"><span>Waiting</span><span class="muted">actions that need a yes, and routes nothing answers</span></div>
@@ -38,5 +60,6 @@
 {{ pl.usage_card(usage_rows, "/" ~ stage_name, "Model & token usage") }}
 {{ pl.agents_card(agents, "/" ~ stage_name, "Agents working " ~ (stage_label | lower)) }}
 {{ pl.dialogs("/" ~ stage_name) }}
+{{ m.job_log_dialog() }}
 {% endblock %}
 {% block scripts %}<script src="/refresh.js"></script>{% endblock %}
