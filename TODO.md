@@ -18,14 +18,16 @@ Working items. ROADMAP.md holds the why; this file holds the next concrete steps
 
 ## Triage rules (ADR 0015, proposed; CORE_54 built)
 
-- [ ] Ratify ADR 0015 (only the owner can).
+- [x] Ratify ADRs 0015, 0016, 0017, 0018, 0019 (and 0020): done 2026-11-03. The owner verified the
+  built implementation works for 0.2.0, so the reality is ratified; statuses flipped to accepted.
 - [ ] Prompt overrides: `oaken prompts` and `[prompts.<task>]` (the owner asked; not built).
 - [ ] Labels a rule applies, and automations from a label (CORE_51 goals 2, 3, 6).
 - [ ] Restart core for the 0018 migration and the `rules` / `spamcheck` entry points (refresh the editable install first).
-- [ ] Move the triage rule operations into the `rules` plugin and the level operations into `BaseTriager` (ADR 0016, proposed): plugin `store` and `draft`, a `wizard` declaration the CLI and console render, then drop `oaken rule`/`oaken level`.
-- [ ] Separate triagers from enrichers (ADR 0017 proposed, `CORE_55` draft): review the prompt, ratify, then build; it blocks ADR 0016 and the 0.2.0 tag.
-- [ ] Plugin web UI contract (ADR 0018 proposed, `CORE_56` draft): review, ratify, build after CORE_55 and before ADR 0016; in 0.2.0.
-- [ ] Run the checks on what was built 2026-11-03 (ADR 0017 and 0019, `ask` removed): ruff, mypy, pytest, the docs check and build, and `uv.lock`. Back up `~/.oaken` first: migrations 0019 to 0021 run on the next start.
+- [ ] Move the triage rule operations into the `rules` plugin and the level operations into `BaseTriager` (ADR 0016, accepted): plugin `store` and `draft`, a `wizard` declaration the CLI and console render, then drop `oaken rule`/`oaken level`.
+- [x] Separate triagers from enrichers (ADR 0017 accepted, `CORE_55` built): `oaken_triagers` package, triagers on `BaseTriager` not `BaseEnricher`, `triage_verdicts` table + migration, `get_triage`.
+- [x] Plugin web UI contract (ADR 0018 accepted, `CORE_56` built): `ui()`/`UiSpec`, core renders, no plugin markup or script.
+- [x] Attachment handler, `BaseScanner` and the ClamAV scanner (`CORE_57`, ADR 0020): built, tested, checks pass (ruff, mypy, pytest). Was `CORE_52`; renumbered.
+- [ ] Run the full checks once more before the tag: ruff, mypy, pytest, the docs check and build, and `uv.lock`. Back up `~/.oaken` first: migrations 0019 to 0021 run on the next start.
 - [ ] Next: the plugin capabilities (ADR 0016: `store`, `folders`, `draft`), the rules plugin owning its rules and the wizard page (ADR 0018), then the `attachment` action. Open: the grant mechanism, the result-store helper, the lazy triage chain.
 
 

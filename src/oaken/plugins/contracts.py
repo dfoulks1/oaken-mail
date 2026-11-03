@@ -33,7 +33,13 @@ if TYPE_CHECKING:  # ``oaken.ai.prompts`` imports this module
 PLUGIN_API_VERSION = 2
 
 PluginKind = Literal[
-    "provider", "embedder", "llm_backend", "triager", "enricher", "action", "vector_store",
+    "provider",
+    "embedder",
+    "llm_backend",
+    "triager",
+    "enricher",
+    "action",
+    "vector_store",
     "cache_store",
 ]
 PLUGIN_KINDS: tuple[PluginKind, ...] = (
@@ -149,7 +155,11 @@ class PluginStore(Protocol):
     async def get(self, table: str, uid: str) -> dict[str, Any] | None: ...
 
     async def find(
-        self, table: str, where: Mapping[str, Any] | None = None, *, order_by: str = "created_at",
+        self,
+        table: str,
+        where: Mapping[str, Any] | None = None,
+        *,
+        order_by: str = "created_at",
         limit: int = 1000,
     ) -> list[dict[str, Any]]: ...
 
@@ -171,6 +181,32 @@ class AttachmentRef:
     size: int
     quarantine: bool
     scan: str = ""
+
+
+ScanStatus = Literal["clean", "infected", "error"]
+
+
+@dataclass(frozen=True)
+class Verdict:
+    """What a scanner says of one file (CORE_57): ``clean``, ``infected`` or ``error``, with a
+    ``detail`` string (the signature name for ``infected``, the reason for ``error``). On any doubt
+    a scanner says ``error``, never ``clean``: only an explicit OK from the engine is ``clean``,
+    because a ``clean`` is the one verdict that releases the file."""
+
+    status: ScanStatus
+    detail: str = ""
+
+    @classmethod
+    def clean(cls, detail: str = "") -> "Verdict":
+        return cls("clean", detail)
+
+    @classmethod
+    def infected(cls, detail: str = "") -> "Verdict":
+        return cls("infected", detail)
+
+    @classmethod
+    def error(cls, detail: str = "") -> "Verdict":
+        return cls("error", detail)
 
 
 class PluginAttachments(Protocol):

@@ -1,6 +1,6 @@
 # 19. The kinds of analyzer: enrich, triage and action, and the attachment lane
 
-- Status: proposed (drafted 2026-11-03 from the owner's answers; open questions remain; awaiting ratification)
+- Status: accepted (ratified 2026-11-03 by the owner, who verified the built implementation for 0.2.0; decision 5 is superseded by ADR 0020)
 - Date: 2026-11-03
 - Rests on: ADR 0017 (the separation, `BaseAnalyzer`, triage as a core concept)
 - Amends: ADR 0012 (a third pipeline kind, with effects outside the mail store)
@@ -126,6 +126,7 @@ Premises, checked 2026-11-03:
 
 - 2026-11-03: drafted from the owner's answers in a working session. Not ratified. Only the owner
   ratifies.
+- 2026-11-03: ratified by the owner, who verified the built implementation works for 0.2.0.
 - 2026-11-03 (same session, before ratification): the owner ruled approval is a per-action setting
   (default ask), the reader grants what an action may touch, triage routes by a `route` field, and
   attachments wait until after the action kind. Decisions 3a, 4a and 4b added.

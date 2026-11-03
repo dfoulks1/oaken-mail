@@ -70,7 +70,11 @@ async def test_a_retry_saves_nothing_twice(tmp_path: Path) -> None:
     action = _action(tmp_path, access)
     await action.act(_msg(), "save")
     again: Any = await action.act(_msg(), "save")
-    assert again.data["saved"] == 3 and access.released == ["0.1", "0.3", "0.5"]  # found, not copied
+    assert again.data["saved"] == 3 and access.released == [
+        "0.1",
+        "0.3",
+        "0.5",
+    ]  # found, not copied
 
 
 def test_the_declaration_is_sound() -> None:

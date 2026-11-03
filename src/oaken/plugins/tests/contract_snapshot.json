@@ -80,6 +80,32 @@
     ]
   },
   "bases": {
+    "BaseAction": [
+      "act",
+      "api_version",
+      "auto_routes",
+      "config",
+      "config_example",
+      "config_model",
+      "ctx",
+      "enabled_default",
+      "folders",
+      "health",
+      "kind",
+      "needs_llm",
+      "operations",
+      "output_model",
+      "output_schema",
+      "requires_config",
+      "routes",
+      "setup_help",
+      "start",
+      "stop",
+      "tables",
+      "trace",
+      "ui",
+      "version"
+    ],
     "BaseEmbedder": [
       "api_version",
       "config",
@@ -176,6 +202,34 @@
       "start",
       "stop",
       "supports_folders",
+      "tables",
+      "trace",
+      "ui",
+      "version"
+    ],
+    "BaseScanner": [
+      "act",
+      "api_version",
+      "auto_routes",
+      "config",
+      "config_example",
+      "config_model",
+      "ctx",
+      "enabled_default",
+      "folders",
+      "handler",
+      "health",
+      "kind",
+      "needs_llm",
+      "operations",
+      "output_model",
+      "output_schema",
+      "requires_config",
+      "routes",
+      "scan",
+      "setup_help",
+      "start",
+      "stop",
       "tables",
       "trace",
       "ui",
@@ -387,6 +441,10 @@
       "count",
       "model_id",
       "dimensions"
+    ],
+    "Verdict": [
+      "status",
+      "detail"
     ]
   },
   "protocols": {

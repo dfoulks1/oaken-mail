@@ -1,6 +1,6 @@
 # 20. Attachments live in a core quarantine, and only a clean scan releases one
 
-- Status: proposed (drafted 2026-11-03 from the owner's words and four answers; awaiting ratification)
+- Status: accepted (ratified 2026-11-03 by the owner)
 - Date: 2026-11-03
 - Rests on: ADR 0019 (the action kind, the attachment lane), ADR 0016 (plugin folders)
 - Amends: ADR 0019 decision 5 (rewritten in place; 0019 is not yet ruled)
@@ -77,3 +77,5 @@ mode 0000.
 - 2026-11-03: drafted from the owner's words and four answers (edit 0019 in place; infected files
   kept; no override; rescan by the existing requeue, with a prompt). Not ratified. Only the owner
   ratifies.
+- 2026-11-03: ratified by the owner. `AttachmentHandler` and `BaseScanner(BaseAction)` built on it
+  (CORE_57).

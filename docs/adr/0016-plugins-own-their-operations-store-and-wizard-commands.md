@@ -1,6 +1,6 @@
 # 16. A plugin owns its operations, its small store and its wizard commands
 
-- Status: proposed (drafted 2026-11-03 from the owner's words in one session; awaiting ratification)
+- Status: accepted (ratified 2026-11-03 by the owner, who verified the built implementation for 0.2.0)
 - Date: 2026-11-03
 - Rests on: ADR 0017 (triagers and enrichers are separate kinds) and ADR 0018 (a web UI contract for
   plugins), built first, in that order
@@ -132,6 +132,7 @@ Premises, each checked on 2026-11-03:
 
 - 2026-11-03: drafted from the owner's words in a working session. Not ratified. Only the owner
   ratifies.
+- 2026-11-03: ratified by the owner, who verified the built implementation works for 0.2.0.
 - 2026-11-03 (same session, before ratification): the owner ruled the names are fine, `guided` is
   `wizard`, the console page is a web form that can run the wizard, and levels belong to the base
   triager. Decisions 1 and 3 reworded; the first draft put levels in the `rules` plugin and called

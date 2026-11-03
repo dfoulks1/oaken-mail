@@ -1,6 +1,6 @@
 # 17. Triagers and enrichers are separate kinds
 
-- Status: proposed (drafted 2026-11-03 from the owner's answers in one session; awaiting ratification)
+- Status: accepted (ratified 2026-11-03 by the owner, who verified the built implementation for 0.2.0)
 - Date: 2026-11-03
 - Amends: ADR 0012 (the `Triager` and `Enricher` protocols stop sharing types) and ADR 0010 (the
   contract snapshot changes; `PLUGIN_API_VERSION` is already 2 for 0.2.0, against 1 in 0.1.0, and the
@@ -119,6 +119,7 @@ holding old `triage` rows, and a read of `docs/plugins.md` by the owner.
 
 - 2026-11-03: drafted from the owner's answers in a working session. Not ratified. Only the owner
   ratifies.
+- 2026-11-03: ratified by the owner, who verified the built implementation works for 0.2.0.
 - 2026-11-03 (after the first build, before ratification): the owner ruled decision 1 goes to a
   `BaseAnalyzer` (an internal helper, not callable) and not `BasePlugin`; added decisions 2a (triage
   is a core concept) and 2b (the mechanism once). The first draft and the first build put the shared

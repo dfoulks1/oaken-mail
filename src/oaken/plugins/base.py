@@ -20,6 +20,7 @@ import functools
 import inspect
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Sequence
+from pathlib import Path
 from typing import Any, ClassVar, Literal, TypeVar
 
 from pydantic import BaseModel, Field, ValidationError
@@ -28,6 +29,7 @@ from oaken.core.errors import InvalidInput, OakenError, PluginError
 from oaken.core.trace import brief, trace_context
 from oaken.core.triage import BUILTIN_LEVELS
 from oaken.plugins.adapt import to_enrich_output
+from oaken.plugins.attachments import AttachmentHandler
 from oaken.plugins.authorize import Authorizations
 from oaken.plugins.contracts import (
     CAPABILITIES,
@@ -51,6 +53,7 @@ from oaken.plugins.contracts import (
     UiSpec,
     VectorItem,
     VectorStats,
+    Verdict,
 )
 from oaken.plugins.provider_auth import AuthIn, AuthOut, AuthStatusOut, PasswordAuthIn
 
@@ -211,6 +214,7 @@ class BasePlugin:
     # (``ctx.folders``). Declare nothing and the plugin has neither.
     tables: ClassVar[tuple[PluginTable, ...]] = ()
     folders: ClassVar[tuple[str, ...]] = ()
+
     def ui(self) -> UiSpec | None:
         """The plugin's web UI as data (ADR 0018): settings sections, buttons and pages. None: the
         settings modal is built from the config schema alone. Optional, additive."""
@@ -596,6 +600,58 @@ class BaseAction(BaseAnalyzer):
 
     @_default
     async def act(self, msg: CleanMessage, route: str) -> ActionResult | None:
+        raise NotImplementedError
+
+
+class ScanResult(BaseModel):
+    scanned: int = 0
+    infected: int = 0
+    errors: int = 0
+    skipped: int = 0
+
+
+class BaseScanner(BaseAction):
+    """An attachment scanner: an action on the ``scan`` route (ADR 0020, CORE_57). The author
+    overrides one method, ``scan(path) -> Verdict``, and the base does the rest through an
+    ``AttachmentHandler``: list the message's attachments, open each one still owed a verdict (0400,
+    only inside the block), call ``scan`` and record what it said. It is idempotent: a ``clean`` or
+    ``infected`` file is left alone, so a rescan or a retry after a crash is cheap and safe.
+
+    ``scan`` is an ``auto_route`` because it only reads a file and records a verdict (it releases
+    nothing), so it is safe to run unasked; the reader can still set ``approval = "ask"``. A scanner
+    must never say ``clean`` on doubt: an open that fails or a ``scan`` that raises is recorded as
+    ``error`` for that one file, which keeps it held, and ``reprocess(stage="scan")`` retries it.
+
+    The scanner's name in the recorded verdict is the plugin's name (``ctx.name``)."""
+
+    kind: ClassVar[PluginKind] = "action"
+    routes: ClassVar[tuple[str, ...]] = ("scan",)
+    auto_routes: ClassVar[tuple[str, ...]] = ("scan",)
+    output_model: ClassVar[type[BaseModel] | None] = ScanResult
+
+    _handler: AttachmentHandler | None = None
+
+    def handler(self) -> AttachmentHandler:
+        access = self.ctx.attachments
+        if access is None:
+            raise PluginError(f"{self.ctx.name}: a scanner needs core's attachment access")
+        if self._handler is None:
+            self._handler = AttachmentHandler(access, scanner_name=self.ctx.name)
+        return self._handler
+
+    async def act(self, msg: CleanMessage, route: str) -> ActionResult | None:
+        out = await self.handler().scan(msg.message_id, self.scan)
+        data = out.as_dict()
+        # Nothing owed a verdict: there was nothing to do.
+        if not (data["scanned"] or data["infected"] or data["errors"]):
+            return None
+        return ActionResult(data)
+
+    @_default
+    async def scan(self, path: Path) -> Verdict:
+        """The one method a scanner writes: look at the file at ``path`` (readable only now) and say
+        ``Verdict.clean()``, ``Verdict.infected(signature)`` or ``Verdict.error(reason)``. Never
+        ``clean`` on doubt. Stream the file in blocks; do not read it whole into memory."""
         raise NotImplementedError
 
 

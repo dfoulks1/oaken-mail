@@ -22,7 +22,9 @@ def check_ui(spec: object) -> list[str]:
     seen: set[str] = set()
     for page in spec.pages:
         if not isinstance(page, UiPage) or not _NAME.match(page.name):
-            problems.append(f"a page needs a plain lowercase name, got {getattr(page, 'name', page)!r}")
+            problems.append(
+                f"a page needs a plain lowercase name, got {getattr(page, 'name', page)!r}"
+            )
             continue
         if page.name in seen:
             problems.append(f"two pages are named {page.name}")
@@ -30,7 +32,9 @@ def check_ui(spec: object) -> list[str]:
         for role, op in (("load", page.load), ("submit", page.submit), ("test", page.test),
                          ("order", page.order)):  # fmt: skip
             if (role == "load" or op) and not _OP.match(op or ""):
-                problems.append(f"page {page.name}: {role} must name one of the plugin's operations")
+                problems.append(
+                    f"page {page.name}: {role} must name one of the plugin's operations"
+                )
         names = [f.name for f in page.fields]
         if len(set(names)) != len(names):
             problems.append(f"page {page.name}: two fields share a name")

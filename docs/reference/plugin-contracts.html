@@ -262,6 +262,29 @@
 </tr>
 </tbody>
 </table></div>
+<h3 id="verdict"><code>Verdict</code></h3>
+<p>What a scanner says of one file (CORE_57): <code>clean</code>, <code>infected</code> or <code>error</code>, with a <code>detail</code> string (the signature name for <code>infected</code>, the reason for <code>error</code>). On any doubt a scanner says <code>error</code>, never <code>clean</code>: only an explicit OK from the engine is <code>clean</code>, because a <code>clean</code> is the one verdict that releases the file.</p>
+<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>status</code></td>
+<td><code>ScanStatus</code></td>
+<td><code>required</code></td>
+</tr>
+<tr>
+<td><code>detail</code></td>
+<td><code>str</code></td>
+<td><code>''</code></td>
+</tr>
+</tbody>
+</table></div>
 <h3 id="plugincontext"><code>PluginContext</code></h3>
 <p>Handed to <code>start()</code>. <code>config</code> is the plugin's own <code>[plugins.&lt;kind&gt;.&lt;name&gt;]</code> table.</p>
 <div class="table-responsive"><table class="table table-sm table-striped align-middle">
@@ -1736,6 +1759,20 @@
 <p>Override:</p>
 <ul>
 <li><code>async def act(self, msg: CleanMessage, route: str) -&gt; ActionResult | None</code></li>
+</ul>
+<h3 id="basescanner"><code>BaseScanner</code></h3>
+<p>An attachment scanner: an action on the <code>scan</code> route (ADR 0020, CORE_57). The author overrides one method, <code>scan(path) -&gt; Verdict</code>, and the base does the rest through an <code>AttachmentHandler</code>: list the message's attachments, open each one still owed a verdict (0400, only inside the block), call <code>scan</code> and record what it said. It is idempotent: a <code>clean</code> or <code>infected</code> file is left alone, so a rescan or a retry after a crash is cheap and safe. <code>scan</code> is an <code>auto_route</code> because it only reads a file and records a verdict (it releases nothing), so it is safe to run unasked; the reader can still set <code>approval = &quot;ask&quot;</code>. A scanner must never say <code>clean</code> on doubt: an open that fails or a <code>scan</code> that raises is recorded as <code>error</code> for that one file, which keeps it held, and <code>reprocess(stage=&quot;scan&quot;)</code> retries it. The scanner's name in the recorded verdict is the plugin's name (<code>ctx.name</code>).</p>
+<p>Set:</p>
+<ul>
+<li><code>kind: ClassVar[PluginKind] = 'action'</code></li>
+<li><code>routes: ClassVar[tuple[str, ...]] = ('scan',)</code></li>
+<li><code>auto_routes: ClassVar[tuple[str, ...]] = ('scan',)</code></li>
+<li><code>output_model: ClassVar[type[BaseModel] | None] = ScanResult</code></li>
+<li><code>_handler: AttachmentHandler | None = None</code></li>
+</ul>
+<p>Override:</p>
+<ul>
+<li><code>async def scan(self, path: Path) -&gt; Verdict</code></li>
 </ul>
 <h3 id="basevectorstore"><code>BaseVectorStore</code></h3>
 <p>Set:</p>

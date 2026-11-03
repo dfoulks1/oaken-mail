@@ -48,6 +48,7 @@ _DATACLASSES = [
     "VectorItem",
     "Hit",
     "VectorStats",
+    "Verdict",
 ]
 
 # The contract Protocols (lifecycle + the five kinds) and LLMAccess.
@@ -68,6 +69,8 @@ _BASES = [
     "BaseLLMBackend",
     "BaseEnricher",
     "BaseVectorStore",
+    "BaseAction",
+    "BaseScanner",
 ]
 
 

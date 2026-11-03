@@ -1,6 +1,6 @@
 # 15. The reader's triage rules: `config.toml` is trusted, the database is the last known good
 
-- Status: proposed (drafted 2026-11-03 from the owner's words in one session; awaiting ratification)
+- Status: accepted (ratified 2026-11-03 by the owner, who verified the built implementation for 0.2.0)
 - Date: 2026-11-03
 - Amends: `docs/prompts/CORE_51-triage-labels-and-automations.md`, Q2 (where rules live: both places,
   the file wins)
@@ -159,6 +159,7 @@ Premises, each checked on 2026-11-03:
 
 - 2026-11-03: drafted from the owner's words in a working session. Not ratified. Only the owner
   ratifies.
+- 2026-11-03: ratified by the owner, who verified the built implementation works for 0.2.0.
 - 2026-11-03 (same session, before ratification): the owner ruled `config.toml` is a source of truth
   and the rules live in both places; drift must be acknowledged. Decision 1 rewritten, decision 8
   added, the database-only draft moved to Alternatives. The first draft said "The reader's levels

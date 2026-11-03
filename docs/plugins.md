@@ -21,6 +21,7 @@ Every AI-powered and mail-transport component in Oaken is a plugin seam. The fiv
 | `BaseTriager` | `oaken.triagers` | The first pipeline step: rates a message (`rules`, `ai`, custom). Deterministic; `LLMTriager` in `oaken_triagers` adds a model. Not an enricher: its own base, verdict (`TriageVerdict`) and store |
 | `BaseEnricher` | `oaken.enrichers` | Per-message derivation (summary, actions, custom) |
 | `BaseAction` | `oaken.actions` | Does something about a message triage routed to it (save a file, open a ticket). Waits for a yes by default |
+| `BaseScanner` | `oaken.actions` | A specialized action on the `scan` route: scans a quarantined attachment and records `clean`/`infected`/`error`. Write one method, `scan(path) -> Verdict`; `clamav` ships on it |
 | `BaseVectorStore` | `oaken.vector_stores` | Vector storage and nearest-neighbor queries |
 | `BaseCache` | `oaken.cache_stores` | The LLM answer cache: which question maps to which stored answer |
 
@@ -287,6 +288,41 @@ To try settings before saving them, `oaken plugins check` (the operation `check_
 validates them against your `config_model` and then starts a throwaway instance on them and asks its `health()`. It never
 touches the running plugin, so keep `start()` free of side effects beyond connecting. A secret is
 never accepted in these settings; it belongs in the keyring.
+
+## A scanner (attachments)
+
+An attachment scanner is a specialized action: `BaseScanner`, on the `scan` route. Core quarantines
+every attachment on the way in (mode 0000; ADR 0020) and releases one only after a scanner calls it
+`clean`, so with no scanner installed nothing is ever released. You write one method:
+
+```python
+from pathlib import Path
+from oaken.plugins.base import BaseScanner
+from oaken.plugins.contracts import Verdict
+
+class MyScanner(BaseScanner):
+    version = "1"
+
+    async def scan(self, path: Path) -> Verdict:
+        # path is readable only now (0400), relocked after. Stream it; do not read it whole.
+        return Verdict.clean()          # or Verdict.infected("Sig-Name") / Verdict.error("why")
+```
+
+The base does the rest through `AttachmentHandler`: it lists the message's attachments, opens each
+one still owed a verdict (`pending` or a previous `error`), calls your `scan`, and records the
+result. It is idempotent (a `clean` or `infected` file is left alone) and safe on retry. Two rules
+carry the weight:
+
+- **Never `clean` on doubt.** Only an explicit OK from your engine is `clean`; a failure, a timeout
+  or an exception becomes `error`, and the file stays held. `clean` is the one verdict that releases
+  the file.
+- **`scan` is an `auto_route`.** It only reads and records (it releases nothing), so it is safe to
+  run unasked; the reader can still set `approval = "ask"`.
+
+When a scanner is first installed, files already held are `pending`; rescan them with
+`oaken reprocess scan`. The first-party `clamav` plugin (`oaken_scanners`) ships on this base and
+talks to a running `clamd`; see `AttachmentHandler` (`oaken.plugins.attachments`) for the shared
+loops.
 
 ## Registering it
 

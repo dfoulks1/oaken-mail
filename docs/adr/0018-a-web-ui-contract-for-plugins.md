@@ -1,6 +1,6 @@
 # 18. A web UI contract for plugins: settings, pages and wizards from data
 
-- Status: proposed (drafted 2026-11-03 from the owner's answers in one session; awaiting ratification)
+- Status: accepted (ratified 2026-11-03 by the owner, who verified the built implementation for 0.2.0)
 - Date: 2026-11-03
 - Rests on: ADR 0017 (built first); ADR 0016 is built on this one
 - Amends: ADR 0012 (a plugin gains one optional method, `ui()`, and one context-free declaration) and
@@ -103,6 +103,7 @@ a form.
 
 - 2026-11-03: drafted from the owner's answers in a working session. Not ratified. Only the owner
   ratifies.
+- 2026-11-03: ratified by the owner, who verified the built implementation works for 0.2.0.
 - 2026-11-03 (same session, before ratification): the owner ruled rule order is a position field with
   Update, not drag and drop. Decision 4a added.
 - 2026-11-03 (same session, before ratification): the owner ruled collisions downshift to make room.
