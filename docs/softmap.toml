@@ -463,13 +463,11 @@ layer = "plugins"
 status = "built"
 prompt = "14"
 path = "src/oaken_enrichers"
-summary = "Summary, triage, actions and the header/MIME inspector: first-party enrichers whose results are stored once at ingest. The three that use a model reach it only through ctx.llm and generate_cached."
+summary = "Summary, actions and the header/MIME inspector: first-party enrichers whose results are stored once at ingest. The two that use a model reach it only through ctx.llm and generate_cached."
 uses = ["safety"]
 untrusted = true
 types = [
   ["SummaryEnricher", "class", "Sentences and key points; a reply is summarized from its new text plus the parent's stored summary."],
-  ["RulesTriager", "class", "The deterministic triager: header and message rules (bulk, automated, no-reply, cron, auto-reply, spam, empty) rate mail priority 0 with no model call."],
-  ["AITriager", "class", "The model triager: category, priority and reply flags for mail the rules leave."],
   ["ActionsEnricher", "class", "Action items and deadlines; an item whose quote is not in the message is dropped."],
   ["InspectorEnricher", "class", "SPF, DKIM, DMARC, ARC, hops, date, Reply-To, List-* and risky attachments. No model."],
 ]
@@ -477,7 +475,25 @@ funcs = [
   ["PluginContext.llm.generate_cached(builder, *parts, content_hash, account_id)", "The one way a plugin reaches a model; core picks the account's workspace."],
   ["python -m oaken.evals enrich", "Scores the eval fixtures against the configured model; manual, never CI."],
 ]
-notes = ["Built means: the four enrichers run in the real pipeline against FakeLLM, with tests for every rule, the injection fixtures and the cache. Not yet run against a live model: do that with oaken.evals.", "summary and actions skip bulk mail by default (skip_bulk).", "Core does not yet attach an LLM service to the host (no daemon until 16): host.llm_access = WorkspaceLLM(service, raw)."]
+notes = ["Built means: the three enrichers run in the real pipeline against FakeLLM, with tests for every rule, the injection fixtures and the cache. Not yet run against a live model: do that with oaken.evals.", "summary and actions skip bulk mail by default (skip_bulk).", "Core does not yet attach an LLM service to the host (no daemon until 16): host.llm_access = WorkspaceLLM(service, raw)."]
+
+[[components]]
+id = "triagers"
+name = "Triagers"
+layer = "plugins"
+status = "built"
+prompt = "47"
+path = "src/oaken_triagers"
+summary = "The first step of the pipeline: rate a message so core knows what else it is owed (ADR 0017). Not enrichers: their own package, base class, verdict type and store."
+uses = ["safety"]
+untrusted = true
+types = [
+  ["SpamCheckTriager", "class", "The built-in checks: header and message rules (bulk, automated, no-reply, cron, auto-reply, spam, empty) rate mail priority 0 with no model call."],
+  ["CustomRulesTriager", "class", "The reader's own rules: conditions on sender, subject, body, headers and attachments give mail a level (0 to 99) and category with no model call; first match in order wins."],
+  ["AITriager", "class", "The model triager: category, priority and reply flags for mail the rules leave."],
+]
+funcs = []
+notes = ["Rank order: rules (5), the built-in checks (10), the model (90); the first verdict wins."]
 
 [[components]]
 id = "vectorstore"

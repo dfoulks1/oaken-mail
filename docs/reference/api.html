@@ -177,7 +177,7 @@ tokens. See <a href="../mcp.html">Connect an AI client</a>.</p>
 <td>POST</td>
 <td><code>/v1/operations/{name}</code></td>
 <td>API token</td>
-<td>Call one operation. 90 exist.</td>
+<td>Call one operation. 103 exist.</td>
 </tr>
 </tbody>
 </table></div>
@@ -714,6 +714,84 @@ Status codes: <code>422</code> input or result does not validate, <code>403</cod
 <td>read</td>
 <td>never</td>
 <td><code>POST /v1/operations/trace_tail</code></td>
+</tr>
+<tr>
+<td><code>triage_ack</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/triage_ack</code></td>
+</tr>
+<tr>
+<td><code>triage_apply</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/triage_apply</code></td>
+</tr>
+<tr>
+<td><code>triage_discard</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/triage_discard</code></td>
+</tr>
+<tr>
+<td><code>triage_drift</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/triage_drift</code></td>
+</tr>
+<tr>
+<td><code>triage_level_delete</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/triage_level_delete</code></td>
+</tr>
+<tr>
+<td><code>triage_level_set</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/triage_level_set</code></td>
+</tr>
+<tr>
+<td><code>triage_levels</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/triage_levels</code></td>
+</tr>
+<tr>
+<td><code>triage_revert</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/triage_revert</code></td>
+</tr>
+<tr>
+<td><code>triage_rule_delete</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/triage_rule_delete</code></td>
+</tr>
+<tr>
+<td><code>triage_rule_move</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/triage_rule_move</code></td>
+</tr>
+<tr>
+<td><code>triage_rule_order</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/triage_rule_order</code></td>
+</tr>
+<tr>
+<td><code>triage_rule_set</code></td>
+<td>mutate</td>
+<td>never</td>
+<td><code>POST /v1/operations/triage_rule_set</code></td>
+</tr>
+<tr>
+<td><code>triage_rules</code></td>
+<td>read</td>
+<td>never</td>
+<td><code>POST /v1/operations/triage_rules</code></td>
 </tr>
 <tr>
 <td><code>try_triage</code></td>

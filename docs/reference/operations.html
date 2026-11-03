@@ -703,6 +703,97 @@
 <td>The most recent trace events (oldest first), optionally for one plugin (plugin.KIND.NAME), one job or one message: prompts, responses, thinking, tool calls, timings and what was committed. Holds mail text.</td>
 </tr>
 <tr>
+<td><code>triage_ack</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Accept config.toml's triage rules as they are now: they become the running copy and the rules plugin reloads on them. Refused while edits are staged (apply or discard them first). They are checked first; a set the plugin refuses is not taken.</td>
+</tr>
+<tr>
+<td><code>triage_apply</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Write the staged triage edits to config.toml once (one backup), make them the running copy and reload the rules plugin. Any config reload does the same first.</td>
+</tr>
+<tr>
+<td><code>triage_discard</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Throw away the staged triage edits: the working copy goes back to the running copy.</td>
+</tr>
+<tr>
+<td><code>triage_drift</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>The state of the triage rules: whether config.toml differs from the last known good copy (which is what runs), and whether edits are staged and not yet written to the file.</td>
+</tr>
+<tr>
+<td><code>triage_level_delete</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Delete a level the reader added. A built-in level, or one a rule still uses, stays.</td>
+</tr>
+<tr>
+<td><code>triage_level_set</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Add a triage level (4 and up), or rename one. With renumber_from, change a level's number: its rules keep it.</td>
+</tr>
+<tr>
+<td><code>triage_levels</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>The triage levels: 0 to 3 are built in; others are the reader's own.</td>
+</tr>
+<tr>
+<td><code>triage_revert</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Throw away config.toml's unacknowledged triage rules: the running copy is written back over them (the file is backed up first).</td>
+</tr>
+<tr>
+<td><code>triage_rule_delete</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Delete a triage rule by name.</td>
+</tr>
+<tr>
+<td><code>triage_rule_move</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Change when a rule runs: to a place in the order (1 is first), or just before another rule.</td>
+</tr>
+<tr>
+<td><code>triage_rule_order</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Set the whole order of the rules at once (what dragging them in the console does).</td>
+</tr>
+<tr>
+<td><code>triage_rule_set</code></td>
+<td>mutate</td>
+<td>never</td>
+<td>no</td>
+<td>Add a triage rule (it goes last), or change the one with this name. The rule is checked before it is saved.</td>
+</tr>
+<tr>
+<td><code>triage_rules</code></td>
+<td>read</td>
+<td>never</td>
+<td>no</td>
+<td>The reader's triage rules, in the order they run. The first that matches decides.</td>
+</tr>
+<tr>
 <td><code>try_triage</code></td>
 <td>read</td>
 <td>on by default</td>
@@ -1251,6 +1342,84 @@
 <li>Input: <code>limit</code>?, <code>since</code>?, <code>kinds</code>?, <code>plugin</code>?, <code>job_id</code>?, <code>message_id</code>?</li>
 <li>Output: <code>events</code>, <code>enabled</code>, <code>content_is_untrusted</code>?</li>
 </ul>
+<h3 id="triage-ack"><code>triage_ack</code></h3>
+<p>Accept config.toml's triage rules as they are now: they become the running copy and the rules plugin reloads on them. Refused while edits are staged (apply or discard them first). They are checked first; a set the plugin refuses is not taken.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>acknowledged</code>, <code>changed</code>, <code>changes</code>, <code>error</code>?, <code>staged</code>, <code>file</code>, <code>snapshot</code>, <code>working</code></li>
+</ul>
+<h3 id="triage-apply"><code>triage_apply</code></h3>
+<p>Write the staged triage edits to config.toml once (one backup), make them the running copy and reload the rules plugin. Any config reload does the same first.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>acknowledged</code>, <code>changed</code>, <code>changes</code>, <code>error</code>?, <code>staged</code>, <code>file</code>, <code>snapshot</code>, <code>working</code></li>
+</ul>
+<h3 id="triage-discard"><code>triage_discard</code></h3>
+<p>Throw away the staged triage edits: the working copy goes back to the running copy.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>acknowledged</code>, <code>changed</code>, <code>changes</code>, <code>error</code>?, <code>staged</code>, <code>file</code>, <code>snapshot</code>, <code>working</code></li>
+</ul>
+<h3 id="triage-drift"><code>triage_drift</code></h3>
+<p>The state of the triage rules: whether config.toml differs from the last known good copy (which is what runs), and whether edits are staged and not yet written to the file.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>acknowledged</code>, <code>changed</code>, <code>changes</code>, <code>error</code>?, <code>staged</code>, <code>file</code>, <code>snapshot</code>, <code>working</code></li>
+</ul>
+<h3 id="triage-level-delete"><code>triage_level_delete</code></h3>
+<p>Delete a level the reader added. A built-in level, or one a rule still uses, stays.</p>
+<ul>
+<li>Input: <code>value</code></li>
+<li>Output: <code>levels</code></li>
+</ul>
+<h3 id="triage-level-set"><code>triage_level_set</code></h3>
+<p>Add a triage level (4 and up), or rename one. With renumber_from, change a level's number: its rules keep it.</p>
+<ul>
+<li>Input: <code>value</code>, <code>name</code>, <code>renumber_from</code>?</li>
+<li>Output: <code>levels</code></li>
+</ul>
+<h3 id="triage-levels"><code>triage_levels</code></h3>
+<p>The triage levels: 0 to 3 are built in; others are the reader's own.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>levels</code></li>
+</ul>
+<h3 id="triage-revert"><code>triage_revert</code></h3>
+<p>Throw away config.toml's unacknowledged triage rules: the running copy is written back over them (the file is backed up first).</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>acknowledged</code>, <code>changed</code>, <code>changes</code>, <code>error</code>?, <code>staged</code>, <code>file</code>, <code>snapshot</code>, <code>working</code></li>
+</ul>
+<h3 id="triage-rule-delete"><code>triage_rule_delete</code></h3>
+<p>Delete a triage rule by name.</p>
+<ul>
+<li>Input: <code>name</code></li>
+<li>Output: <code>rules</code></li>
+</ul>
+<h3 id="triage-rule-move"><code>triage_rule_move</code></h3>
+<p>Change when a rule runs: to a place in the order (1 is first), or just before another rule.</p>
+<ul>
+<li>Input: <code>name</code>, <code>to</code>?, <code>before</code>?</li>
+<li>Output: <code>rules</code></li>
+</ul>
+<h3 id="triage-rule-order"><code>triage_rule_order</code></h3>
+<p>Set the whole order of the rules at once (what dragging them in the console does).</p>
+<ul>
+<li>Input: <code>order</code></li>
+<li>Output: <code>rules</code></li>
+</ul>
+<h3 id="triage-rule-set"><code>triage_rule_set</code></h3>
+<p>Add a triage rule (it goes last), or change the one with this name. The rule is checked before it is saved.</p>
+<ul>
+<li>Input: <code>name</code>, <code>level</code>?, <code>category</code>?, <code>when</code>?, <code>enabled</code>?</li>
+<li>Output: <code>rules</code></li>
+</ul>
+<h3 id="triage-rules"><code>triage_rules</code></h3>
+<p>The reader's triage rules, in the order they run. The first that matches decides.</p>
+<ul>
+<li>Input: none</li>
+<li>Output: <code>rules</code></li>
+</ul>
 <h3 id="try-triage"><code>try_triage</code></h3>
 <p>Run triage on one stored message, or on pasted text, and show the verdict without storing it: which triager decided (a header rule or a model), the category, priority and whether a reply is owed. For tuning: change a rule or the triage model, then try again.</p>
 <ul>
@@ -1351,6 +1520,12 @@
 </tr>
 <tr>
 <td><code>rules</code></td>
+<td>triager</td>
+<td>1</td>
+<td>none yet</td>
+</tr>
+<tr>
+<td><code>spamcheck</code></td>
 <td>triager</td>
 <td>1</td>
 <td>none yet</td>

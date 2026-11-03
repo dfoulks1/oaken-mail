@@ -76,7 +76,7 @@ answers in JSON.
 The tool list is generated from the operation registry: there is no separate list to keep in step.
 You choose which tools are offered. A tool marked "off" starts hidden; turn one on or off with the
 `set_operation_exposure` operation, for example `oaken operation set_operation_exposure --json-input
-'{"scope":"operation","name":"ask","mcp":true}' --yes`. Nothing you set can offer a tool the table
+'{"scope":"operation","name":"search","mcp":true}' --yes`. Nothing you set can offer a tool the table
 does not list.
 
 TOOLS_TABLE

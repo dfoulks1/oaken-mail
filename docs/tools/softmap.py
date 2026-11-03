@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The software map: a generated page showing what is built and how the pieces layer.
 
-Modelled on Libra's software map. The data lives in docs/softmap.toml, and building the page
+A software map in the style of a layered system diagram. The data lives in docs/softmap.toml, and building the page
 fails when the data contradicts the repository or the architecture, so the map cannot drift:
 
 * ids are unique, every layer sits in exactly one stack, every ``uses``/``notifies`` target exists;
@@ -78,7 +78,7 @@ CSS = """
   @media print { #q { display: none !important; } }
 """
 
-# Interactive part, ported from Libra: click a node to draw its relationships.
+# Interactive part, click a node to draw its relationships.
 JS = r"""
 (function () {
   var NODES = @NODES@, EDGES = @EDGES@, INFO = @INFO@, NAMES = @NAMES@;

@@ -55,7 +55,7 @@ docs against reality** — every command in them must run.
     `TODO(user)` items, which the report lists (name story, security contact). Verify the
     Pages workflow file with `actionlint` if available; confirm the deploy needs only the
     manual *Settings → Pages → Source: GitHub Actions* step.
-12. **Look check against Libra** (light, dark, 390 px) with screenshots in the scratchpad if
+12. **Look check against the reference site** (light, dark, 390 px) with screenshots in the scratchpad if
     a headless browser is available; otherwise say it wasn't visually verified.
 
 ## Verification (required)

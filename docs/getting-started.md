@@ -119,6 +119,9 @@ oaken plugins                 # your account's provider row should say healthy
 oaken admin account show <id> # a "problem:" line says why one is not
 ```
 
+If `oaken start` fails (for example "core exited while starting"), run `oaken start --fg`. It stays
+attached and prints the real error, such as a port already in use.
+
 Core serves a small API on loopback only. Its token is the file `api_token` in the config
 directory. [The daemon and the local API](architecture/daemon.html) explains the rest.
 

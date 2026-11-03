@@ -1,6 +1,10 @@
 # 51 — Pluggable triagers: custom labels, and rules that launch automations (DRAFT)
 
 **Status:** draft. Harden it (questions, ADR) before anyone builds it.
+**Partly built 2026-11-03, ahead of this hardening:** the reader's own rules and levels (Goal 1's
+"user-added rules", part of Goal 4's CLI) are written, kept in the database, not in `config.toml`.
+`docs/adr/0015-database-backed-triage-rules.md` (proposed) records it and amends Q2 below. Labels,
+automations from a label, the demo plugin and the MCP dry run (Goals 2, 3, 4 in part, 6) are not built.
 **Depends on:** 47 (built: triage is its own kind, `BaseTriager`/`LLMTriager`, `rules` and `ai`, the
 fan-out asks one predicate, `MessageTriaged` exists). Goal 1's `BaseTriager` text below is done.
 **Track:** CORE. Changes the plugin contract, so it needs an ADR first.

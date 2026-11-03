@@ -5,17 +5,16 @@
 ## Goal
 
 A **generated** HTML documentation site for Oaken Mail, published to
-`https://dfoulks1.github.io/oaken-mail/`, that looks like the Libra site
-(`https://voltpop.github.io/Libra/`). It is also the project's website. Every later
+`https://dfoulks1.github.io/oaken-mail/`, that looks like the reference site
+the owner supplied. It is also the project's website. Every later
 prompt adds or updates pages through this tooling, so build the *mechanism* well now and
 seed only a few pages.
 
 ## Reference (read-only; port the design, not the content)
 
-Libra's source is a sibling checkout (`Libra/docs/`) — read `index.html`, and
-`tools/pagebase.py`, `tools/docnav.py`, `tools/build_index.py`, `tools/check_docs.py`.
-Do **not** copy Libra content, hardware/wiring code (`wiring.py`, `softmap_data.py`,
-`build_hardware.py`, …) or any Libra-specific text. Keep the SPDX header on all files.
+The reference site's source is a sibling checkout: read its `index.html` and its page,
+nav, index and check tools. Do **not** copy its content, hardware/wiring code or any
+reference-specific text. Keep the SPDX header on all files.
 
 ## The look to reproduce
 
@@ -84,7 +83,7 @@ Do **not** copy Libra content, hardware/wiring code (`wiring.py`, `softmap_data.
    `--strict` additionally fails on any `TODO(user)` left in site content (used for release).
    Support `repo:path/to/file` link syntax in Markdown that expands to a GitHub blob/tree
    URL **and fails the build if the path doesn't exist**.
-5. **`check_docs.py`** (mirrors Libra's guard; exit 1 on any failure): build to a temp
+5. **`check_docs.py`** (mirrors the reference site's guard; exit 1 on any failure): build to a temp
    dir and fail on — Markdown file under `docs/` that is neither registered nor excluded
    (orphan), registered page with no source, front-matter errors, broken internal links and
    anchors, duplicate heading ids, heading-level skips, images without `alt`, any `http://`
@@ -104,9 +103,9 @@ Do **not** copy Libra content, hardware/wiring code (`wiring.py`, `softmap_data.
   `actions/upload-pages-artifact`, `actions/deploy-pages` with the minimal
   `permissions` (`contents: read`, `pages: write`, `id-token: write`), a `pages`
   concurrency group, and actions **pinned by full commit SHA** (tag in a comment).
-- This **deliberately differs from Libra**, which commits the generated HTML into
+- This **deliberately differs from the reference site**, which commits the generated HTML into
   `docs/`. Here generated output stays out of git. State this in the report and give the
-  one-line change (`--out docs-out` + serve from a branch) if the user prefers Libra's way.
+  one-line change (`--out docs-out` + serve from a branch) if the user prefers that way.
 - **Manual step for the user (do not attempt it):** repository *Settings → Pages →
   Build and deployment → Source: GitHub Actions*. Put this in the report.
 - Add `site/` to `.gitignore` (and its test from prompt 01 stays green).
@@ -126,8 +125,8 @@ Do **not** copy Libra content, hardware/wiring code (`wiring.py`, `softmap_data.
   parsing every generated page).
 - **Visual verification:** if a headless browser is available, take light, dark and
   390 px-wide screenshots of the home page and one content page into the scratchpad and
-  describe how they compare with the Libra pages; if none is available, say plainly that
-  the look was **not** visually verified and list the CSS values copied from Libra.
+  describe how they compare with the reference pages; if none is available, say plainly that
+  the look was **not** visually verified and list the CSS values copied from the reference.
 - `uv run ruff check`, `mypy` (tools included where practical), and `pytest` pass.
 
 ## Out of scope
@@ -138,5 +137,5 @@ versioned docs, i18n, analytics.
 ## Checkpoint
 
 Standard report. Include: the file tree of `docs/tools/`, the SRI computation method,
-the exact manual GitHub step, the list of excluded paths, and anything about the Libra
+the exact manual GitHub step, the list of excluded paths, and anything about the reference
 look you chose **not** to reproduce and why.

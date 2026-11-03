@@ -127,7 +127,7 @@ The `mailmind-unified` checkout (a sibling of this repository) is the previous i
 - open or copy `.env`, `.env.bak.*`, `token.json`, `credentials.json`, or any `*.db`,
 - reference its paths from code or docs in the new repo.
 
-The user's real mail database (`…/OllMCP/Memories/mailmind.db`) is a legacy
+The user's real mail database (`mailmind.db`, from the earlier implementation) is a legacy
 BM25 index with no raw bytes. It is **not** migrated. It is backed up and left alone.
 
 ## Rules for every prompt

@@ -16,10 +16,11 @@ Every AI-powered and mail-transport component in Oaken is a plugin seam. The fiv
 | Base class | Entry-point group | Seam it owns |
 |---|---|---|
 | `BaseProvider` | `oaken.providers` | Mail in, flags back, mail out |
-| `BaseEmbedder` | `oaken.embedders` | Text → vectors (feeds search and `ask`) |
-| `BaseLLMBackend` | `oaken.llm_backends` | Language model calls (enrichers, `ask`, workspaces) |
-| `BaseTriager` | `oaken.triagers` | The first pipeline step: rates a message (`rules`, `ai`, custom). Deterministic; `LLMTriager` in `oaken_enrichers` adds a model |
+| `BaseEmbedder` | `oaken.embedders` | Text → vectors (feeds search) |
+| `BaseLLMBackend` | `oaken.llm_backends` | Language model calls (enrichers, triagers, workspaces) |
+| `BaseTriager` | `oaken.triagers` | The first pipeline step: rates a message (`rules`, `ai`, custom). Deterministic; `LLMTriager` in `oaken_triagers` adds a model. Not an enricher: its own base, verdict (`TriageVerdict`) and store |
 | `BaseEnricher` | `oaken.enrichers` | Per-message derivation (summary, actions, custom) |
+| `BaseAction` | `oaken.actions` | Does something about a message triage routed to it (save a file, open a ticket). Waits for a yes by default |
 | `BaseVectorStore` | `oaken.vector_stores` | Vector storage and nearest-neighbor queries |
 | `BaseCache` | `oaken.cache_stores` | The LLM answer cache: which question maps to which stored answer |
 
@@ -29,9 +30,9 @@ A few things worth knowing before you pick one:
 LM Studio, vLLM, or any other model server. The one required attribute is `locality`: set it to
 `"local"` (this machine) or `"remote"`. A `secure` workspace refuses any backend not marked
 `"local"`, so forgetting it is treated as remote. Register the class under `oaken.llm_backends`
-and set `ai.llm_backend` in `config.toml` to activate it. No enricher or `ask` logic changes.
+and set `ai.llm_backend` in `config.toml` to activate it. No enricher logic changes.
 
-**`BaseEmbedder` feeds both search and `ask`.** It is global, not per-workspace. Switching it
+**`BaseEmbedder` feeds search.** It is global, not per-workspace. Switching it
 triggers a re-index: the vector partition is keyed to `model_id`, so vectors from the old model
 are never mixed with the new ones. Name `model_id` specifically enough to be unique
 (`lmstudio:nomic-embed-text-v1.5`, not just `nomic-embed-text`).
@@ -55,8 +56,9 @@ always valid.
 | Provider | `oaken.providers` | Brings mail in from a service and writes flags back. |
 | Embedder | `oaken.embedders` | Turns text into vectors. |
 | LLM backend | `oaken.llm_backends` | Runs a language model. |
-| Triager | `oaken.triagers` | Rates one message first, so core can decide what else it is owed. Runs in `rank` order; the first verdict wins and is stored under `triage`. Implement `async triage(msg)`: return an `EnrichOutput`, or None to leave it to the next. |
+| Triager | `oaken.triagers` | Rates one message first, so core can decide what else it is owed. Runs in `rank` order; the first verdict wins and is stored as the message's triage verdict (read it with `get_triage`). Implement `async triage(msg)`: return a `TriageVerdict`, or None to leave it to the next. |
 | Enricher | `oaken.enrichers` | Derives something from one message (a summary, a category, actions). |
+| Action | `oaken.actions` | Does something about a message a triager routed to it. Set `routes` to the route names it answers to and implement `async act(msg, route)`: return an `ActionResult`, or None for nothing to do; raise to fail. It should be idempotent. The reader's `approval = "ask" \| "auto"` in `[plugins.action.<name>]` decides whether it waits for a yes (default `ask`; `oaken action approve`). A route no action answers parks the job. |
 | Vector store | `oaken.vector_stores` | Stores vectors and finds the nearest ones. |
 | Cache | `oaken.cache_stores` | Keeps validated model answers so a repeated question costs no model call. |
 
@@ -173,7 +175,7 @@ sets `needs_llm=True`.
 
 ### What an enricher is given
 
-An `EnrichInput` has the message's cleaned text (`body`), `subject`, a few display `headers`, every
+An `CleanMessage` has the message's cleaned text (`body`), `subject`, a few display `headers`, every
 header in `raw_headers` (lower-case names, all values), the attachments' metadata (`attachments`:
 name, type, size, whether core flagged it; never the bytes), the `date`, whether it `is_reply`, and,
 for a reply, the stored `parent_summary` of the message before it. Everything derived from the mail
@@ -204,31 +206,9 @@ Core picks the workspace from the account (a `secure` one only reaches a local m
 repeated question from its cache, validates the reply against `Answer` and records the tokens.
 The instructions are a literal in your source; the mail goes in as `UntrustedText` parts, and a
 lint test fails a module that builds a request any other way. The first-party enrichers
-(`oaken_enrichers`: `summary`, `triage`, `actions`, `inspector`) are the worked examples. Turn one
+(`oaken_enrichers`: `summary`, `actions`, `inspector`) and the first-party triagers (`oaken_triagers`: `spamcheck`, `rules`, `ai`) are the worked examples. Turn one
 off with `[plugins.enricher.<name>] enabled = false`; `summary` and `actions` skip bulk mail unless you set
 `skip_bulk = false`.
-
-### Teaching `ask` what an enricher knows
-
-An enricher can declare an `ask_intent`, so a person's question like "any deadlines this week?" or
-"how upbeat was that thread?" is understood and answered from what the enricher has stored:
-
-```python
-from oaken.plugins.base import BaseEnricher
-from oaken.plugins.contracts import AskIntent
-
-
-class Sentiment(BaseEnricher):
-    ask_intent = AskIntent(
-        "sentiment",  # the name the router may choose: lowercase letters and _
-        "The reader asks how upbeat or upset a message is.",  # one plain sentence, 120 characters
-        ("score",),  # the keys of your stored result worth showing; empty means all of it
-    )
-```
-
-The description is written into the router's prompt, so keep it plain and about what a person would
-say. It is checked when your class is defined (a bad name or a long description is an error naming
-the field). It must never contain mail text.
 
 ## A cache
 
@@ -389,8 +369,9 @@ from oaken.plugins.contracts import PluginStage, PluginStageContext, PluginStage
 
 
 async def tag(ctx: PluginStageContext, msg: PluginStageInput) -> dict:
-    # msg.enrichments holds this message's enricher results (summary, triage, ...)
-    priority = msg.enrichments.get("triage", {}).get("priority", 3)
+    # msg.enrichments holds this message's enricher results (summary, actions, ...);
+    # msg.triage is its triage verdict, or None when it is unrated
+    priority = (msg.triage or {}).get("priority", 3)
     return {"tag": "urgent" if priority == 0 else "normal"}
 
 

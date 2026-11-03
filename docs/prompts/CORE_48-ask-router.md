@@ -1,5 +1,8 @@
 # 48 — `ask` as a router: understand the request, then do the right thing
 
+> **Superseded (0.2.0): `ask` was removed** (ADR 0017, decision 2c). The router, `AskIntent` and
+> `ask_intent` are gone; this prompt is history.
+
 > **Status: built (the first slice).** `AskIntent` and `BaseEnricher.ask_intent` (snapshot updated),
 > declared by `summary`, `triage`, `actions` and `inspector`; `PromptBuilder.extended(catalog)`;
 > `core/search/route.py` (the `ROUTE` prompt, `Route`, `catalog`, `sources`, `rule_route`); `ask`

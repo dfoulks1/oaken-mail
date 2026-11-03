@@ -252,6 +252,14 @@
 <td>The enrichment cache: how it is doing, or clear it.</td>
 </tr>
 <tr>
+<td><a href="#level"><code>level</code></a></td>
+<td>Triage levels: list them, add one (4 and up), rename or renumber, remove.</td>
+</tr>
+<tr>
+<td><a href="#rule"><code>rule</code></a></td>
+<td>Your own triage rules: list, add, turn on or off, move, remove.</td>
+</tr>
+<tr>
 <td><a href="#events"><code>events</code></a></td>
 <td>Recent events from core's event log (--follow keeps watching).</td>
 </tr>
@@ -312,7 +320,7 @@
 <tr>
 <td><code>mill</code></td>
 <td>The Oaken core daemon: run it, configure it, look after its storage.</td>
-<td><code>start</code> · <code>stop</code> · <code>restart</code> · <code>reload</code> · <code>status</code> · <code>plugins</code> · <code>config</code> · <code>settings</code> · <code>storage</code> · <code>vacuum</code> · <code>cache</code> · <code>events</code> · <code>mcp</code> · <code>help</code></td>
+<td><code>start</code> · <code>stop</code> · <code>restart</code> · <code>reload</code> · <code>status</code> · <code>plugins</code> · <code>config</code> · <code>settings</code> · <code>storage</code> · <code>vacuum</code> · <code>cache</code> · <code>level</code> · <code>rule</code> · <code>events</code> · <code>mcp</code> · <code>help</code></td>
 </tr>
 <tr>
 <td><code>sawyer</code></td>
@@ -754,6 +762,35 @@
 <li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
 <li><code>--task</code> — With clear: only this task's answers.</li>
 <li><code>--yes</code> — With clear: do not ask.</li>
+</ul>
+<h3 id="level"><code>level</code></h3>
+<p>0 ignore, 1 low, 2 normal and 3 soon are built in. <code>oaken level add 5 vip</code> adds a level your own rules can give. Renumbering keeps the rules that use it.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>action</code> —</li>
+<li><code>value</code> — The level's number.</li>
+<li><code>name</code> — The level's name (add, rename).</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+<li><code>--number</code> — With rename: the new number.</li>
+</ul>
+<h3 id="rule"><code>rule</code></h3>
+<p>A rule gives mail a level and a category when every condition holds; the first rule in order that matches wins, and no model is asked. <code>oaken rule add NAME</code> with no conditions asks for them. Conditions: from, to, subject, subject_contains, body_contains, header_present, has_attachment, is_reply. Rules are kept in config.toml (trusted) and in core's database (a working copy, and the last known good copy, which is what runs). Edits are staged: <code>apply</code> (or any <code>oaken reload</code>) writes the batch to the file once and reloads the rules; <code>discard</code> drops them. After a hand edit of the file, <code>diff</code> shows what changed, <code>ack</code> accepts it, <code>revert</code> undoes it.</p>
+<p>Arguments:</p>
+<ul>
+<li><code>action</code> —</li>
+<li><code>name</code> — The rule's name.</li>
+</ul>
+<p>Options:</p>
+<ul>
+<li><code>--debug</code> — DEBUG logging for this command, to the terminal and the configured logfile.</li>
+<li><code>--level</code> — With add: the level it gives.</li>
+<li><code>--category</code> — With add: the category it gives.</li>
+<li><code>--when</code> — With add: a condition (repeat).</li>
+<li><code>--to</code> — With move: the place, 1 is first.</li>
+<li><code>--before</code> — With move: just before this rule.</li>
 </ul>
 <h3 id="events"><code>events</code></h3>
 <p>What core published recently, including before it was last restarted: ids, states and numbers, never mail text. --follow prints the history and then the live stream.</p>

@@ -8,6 +8,10 @@ order = 55
 description = "How hybrid search merges BM25 and vector results with rank fusion, how the context is built within a token budget, how cited answers are verified, what happens when the vector side is down, and how it is measured."
 +++
 
+> **`ask` was removed in 0.2.0** (ADR 0017, decision 2c). The parts of this page that describe it,
+> the context builder, the cited answer and the router, are history; search is current.
+
+
 ## Search
 
 `search` asks two retrievers at once and merges what they find.

@@ -5,16 +5,49 @@ All notable changes to Oaken are recorded here. The format follows
 [Semantic Versioning](https://semver.org/). All three distributions (`oaken`, `oaken-cli`,
 `oaken-core`) release in lockstep at one version (ADR 0014).
 
-## [0.1.1] — Unreleased
+## [0.2.0] — Unreleased
+
+> 0.1.1 was never released. The work done under that label, and everything since, ships as 0.2.0.
 
 Makes a fresh install usable without reading the docs.
 
+### Breaking: plugin API and operations
+
+- Triagers and enrichers are separate kinds (ADR 0017). `EnrichInput` is now `CleanMessage`; a
+  triager returns a `TriageVerdict`, not an `EnrichOutput`. An out-of-tree enricher fixes this by
+  changing its import. The shared members (`version`, `needs_llm`, `output_model`) live on
+  `BaseAnalyzer`, a helper under `BaseEnricher`, `BaseTriager` and the new `BaseAction`; a plugin
+  extends exactly one. `PluginStageInput` gains `triage`.
+- The first-party triagers (`spamcheck`, `rules`, `ai`) moved to the `oaken_triagers` package. Their
+  entry-point names, and so their `[plugins.triager.*]` settings, are unchanged.
+- The triage verdict has its own table, `triage_verdicts` (migration 0019 moves the old rows).
+  `get_enrichment` no longer returns it: use `get_triage`. `enrich_message` runs enrichers only: use
+  `triage_message` (`oaken triage run`). `oaken enrich try` is `oaken triage try`.
+- `ask` is removed: the operation, `oaken ask`, `AskIntent` and `ask_intent`, and the settings
+  `ai.ask_model`, `ai.ask_context_tokens` and `search.ask_*` (a `config.toml` that sets them must
+  drop them). A model with MCP reads the mail through `search`, `get_message`, `get_enrichment`,
+  `get_triage` and `get_action`.
+- The swarm agent wire is unchanged in this release, though the verdict is stored apart.
+
 ### Added
 
+- The action kind (ADR 0019): `BaseAction`, `oaken.actions`, one `ingest.action.<name>` job per
+  action and route, `route` in a triage verdict and on a rule (migration 0021), results in
+  `action_results` (migration 0020), `get_action`, `list_actions` and `approve_action`, `oaken action
+  show|approve`, and an Action tab with what waits for a yes and what ran. An action waits for the
+  reader's yes unless `approval = "auto"`; a route no action answers parks the job.
+
 - Triage is its own first step and its own plugin kind, `triager` (`oaken.triagers`, `BaseTriager`,
-  `LLMTriager`). Two ship by default: `rules` (header and message rules, no model) and `ai` (a
+  `LLMTriager`). Two ship by default: `spamcheck` (header and message rules, no model) and `ai` (a
   model); they run in `rank` order and the first verdict wins, stored under `triage`. New rules
   settle cron output, auto-replies and `X-Spam-Status`.
+- Your own triage rules and levels (ADR 0015, proposed): a third triager, `rules`, runs before
+  `spamcheck`, so a rule of yours overrides a spam or bulk verdict. `[[triage.rules]]` and
+  `[[triage.levels]]` in `config.toml` are the source of truth; core keeps the last acknowledged copy
+  in its database and runs that until you accept an edit (`oaken rule diff`, `ack`, `revert`).
+  Levels go to 99 (4 and up are yours). `oaken rule add NAME` asks for what is missing;
+  `oaken level add 5 vip`. **Breaking:** the built-in checks moved from `[plugins.triager.rules]` to
+  `[plugins.triager.spamcheck]`; the old table now fails the `rules` plugin with a clear error.
 - One job kind per enricher, `ingest.enrich.<name>`, with `ingest.triage` for the gate. Triage fans
   out: embedding and the enrichers with a `min_priority` are queued once it has rated the message.
   An agent claims one enricher's job and answers just that. The old `ingest.enrich` job drains into
