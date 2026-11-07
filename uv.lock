@@ -9,6 +9,15 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "aiosmtplib"
+version = "5.1.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9b/5c/9cabc5db6d607616e81ba6d8f1f231cd5a75955807a308c1090a59072d6d/aiosmtplib-5.1.3.tar.gz", hash = "sha256:ac2b418d3260ba62d9cfd0fe7359726e9dc009a4e8e8d9909fdfae332f522a7c", size = 77010, upload-time = "2026-09-08T02:11:20.532Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9c/0a/b56ab8163d54960337fdca475d3dfd56c8badf6172e79cf2ad00d5335dc1/aiosmtplib-5.1.3-py3-none-any.whl", hash = "sha256:f7d76ce3d4995a65a178c1f11e1bd1607706b921d00cb768e7a2c7f7ef5517a8", size = 30116, upload-time = "2026-09-08T02:11:19.352Z" },
+]
+
+[[package]]
 name = "aiosqlite"
 version = "0.22.1"
 source = { registry = "https://pypi.org/simple" }
@@ -297,6 +306,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f5/08/8eea9d4b8302028f3abb2c0813953f7aec26d33b7a8960ed760e65ff29fa/idna-3.20.tar.gz", hash = "sha256:a7db850025b95ded1eae8a46181a1a6c56c92c96f0e2b005d9ff8dc0210cab44", size = 216463, upload-time = "2026-09-17T14:11:04.752Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/58/a2/bb081bab032533a855d44de1d56f8e8426114ff1ba5d1f07a438a0a654f8/idna-3.20-py3-none-any.whl", hash = "sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c", size = 69583, upload-time = "2026-09-17T14:11:03.168Z" },
+]
+
+[[package]]
+name = "imapclient"
+version = "4.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8d/f7/4e2d2e93313d7d7542a8378200ea931ff4e29b730d9eb5a9d8debafcbc68/imapclient-4.1.0.tar.gz", hash = "sha256:b7cefa7c9bf3ec029c007dfade191480b82eb3816fc20ab23ef48e7aec841a7f", size = 71344, upload-time = "2026-09-18T11:21:57.568Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/52/49/12fe5860e37f2e915ecbcc6c743bc71c84c6d0f4c9002f3c5a66f79b172d/imapclient-4.1.0-py3-none-any.whl", hash = "sha256:5fd62ab2a099494ed2a5a21e7bda03c1e99e3d55bdedb4e9c12c8176873a8fe4", size = 56039, upload-time = "2026-09-18T11:21:56.499Z" },
 ]
 
 [[package]]
@@ -652,7 +670,7 @@ version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "oaken-core" },
-    { name = "oaken-plugins" },
+    { name = "oaken-plugins", extra = ["imap", "smtp"] },
 ]
 
 [package.dev-dependencies]
@@ -664,7 +682,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "oaken-core", editable = "../oaken-core" },
-    { name = "oaken-plugins", editable = "../oaken-plugins" },
+    { name = "oaken-plugins", extras = ["imap", "smtp"], editable = "../oaken-plugins" },
 ]
 
 [package.metadata.requires-dev]
@@ -681,8 +699,21 @@ dependencies = [
     { name = "oaken-core" },
 ]
 
+[package.optional-dependencies]
+imap = [
+    { name = "imapclient" },
+]
+smtp = [
+    { name = "aiosmtplib" },
+]
+
 [package.metadata]
-requires-dist = [{ name = "oaken-core", editable = "../oaken-core" }]
+requires-dist = [
+    { name = "aiosmtplib", marker = "extra == 'smtp'", specifier = ">=5.1.3" },
+    { name = "imapclient", marker = "extra == 'imap'", specifier = ">=4.1.0" },
+    { name = "oaken-core", editable = "../oaken-core" },
+]
+provides-extras = ["imap", "smtp"]
 
 [package.metadata.requires-dev]
 dev = [

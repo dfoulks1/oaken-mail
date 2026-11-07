@@ -6,4 +6,4 @@ unmatched_format = "fail"
 failed_format = "fail"
 
 # Mail in: Intake splits a message into parts (the rfc822 formatter) and the mail ingestor stores it under its Message-ID, threaded. Both load
-# by themselves. Gmail is a template: make one instance per account with the + on the Providers page (or `oknpost plugin add provider.gmail --name ACCOUNT`).
+# by themselves. Gmail, IMAP and SMTP are templates: make one instance per account with the + on the Providers page (or `oknpost plugin add provider.gmail --name ACCOUNT`, and likewise for `imap` and `smtp`).

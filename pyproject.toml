@@ -5,7 +5,7 @@ description = "Oaken Mail: Oaken Core with a coat of paint. A config bundle and 
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.11"
-dependencies = ["oaken-core", "oaken-plugins"]
+dependencies = ["oaken-core", "oaken-plugins[imap,smtp]"]  # the extras bring the IMAP and SMTP client libraries
 
 [project.scripts]
 oknpost = "oknpost:main"  # the only command: `oaken` belongs to core and is not offered
@@ -14,6 +14,8 @@ oknpost = "oknpost:main"  # the only command: `oaken` belongs to core and is not
 # declared here can have any number of accounts added with `plugin add`; one declared only by a `class =` config table cannot.
 [project.entry-points."oaken_core.providers"]
 gmail = "oaken_plugins.provider_gmail:GmailProvider"
+imap = "oaken_plugins.provider_imap:ImapProvider"
+smtp = "oaken_plugins.provider_smtp:SmtpProvider"
 
 [project.entry-points."oaken_core.formatters"]
 rfc822 = "oaken_plugins.formatter_rfc822:Rfc822Formatter"
