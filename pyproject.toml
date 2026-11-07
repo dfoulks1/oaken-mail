@@ -10,6 +10,17 @@ dependencies = ["oaken-core", "oaken-plugins"]
 [project.scripts]
 oknpost = "oknpost:main"  # the only command: `oaken` belongs to core and is not offered
 
+# The plugins Oaken Mail loads, from oaken-plugins. Core finds a plugin to make instances of through entry points, so a template (Gmail)
+# declared here can have any number of accounts added with `plugin add`; one declared only by a `class =` config table cannot.
+[project.entry-points."oaken_core.providers"]
+gmail = "oaken_plugins.provider_gmail:GmailProvider"
+
+[project.entry-points."oaken_core.formatters"]
+rfc822 = "oaken_plugins.formatter_rfc822:Rfc822Formatter"
+
+[project.entry-points."oaken_core.ingestors"]
+mail = "oaken_plugins.ingestor_mail:MailIngestor"
+
 # shortcut: sibling checkouts while core and its plugins are unreleased; use their PyPI versions once published.
 [tool.uv.sources]
 oaken-core = { path = "../oaken-core", editable = true }
