@@ -36,8 +36,8 @@ async def test_plugin_add_by_class_path_refuses_a_provider_that_is_not_mail(tmp_
     await core.open()
     try:
         with pytest.raises(PluginError, match="not mail"):
-            core.host.plan_add(EXEC)
-        assert core.host.plan_add(GMAIL).kind == "provider"
+            core.host.plan_add(EXEC, name="x")
+        assert core.host.plan_add(GMAIL, name="second").kind == "provider"  # a mail provider is let through, under a new name: Gmail itself is already loaded
     finally:
         await core.host.stop()
 
