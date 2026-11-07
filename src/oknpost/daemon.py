@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The daemon side of the coat: core with the one rule applied to what it loads. Imported only where a core runs."""
 
+import re
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,9 @@ from oknpost import ALLOWED_TAGS, LIMITED, _clean, permitted
 LOGO_CSS = '\n/* Oaken Mail: the mark before the wordmark */\n.brand::before { content: ""; flex: none; width: 2.3rem; height: 2.3rem; background: url(/static/logo.png) center / contain no-repeat; }\n'
 
 
+QUEUE_ROW = re.compile(rb'(<tr><td>)default(?=( <span class="muted">\(paused\)</span>)?</td><td>\d)')  # a row of a queue table: the first stage is called Intake
+
+
 class Brand:
     """The logo in the nav bar with no change to core's templates: serves the picture, and core's stylesheet with one rule added.
     It sits inside the console's guard, so Host and Origin are still checked."""
@@ -35,7 +39,28 @@ class Brand:
             reply.headers["Cache-Control"] = "no-cache"
             await reply(scope, receive, send)
             return
+        if scope["type"] == "http" and scope["method"] == "GET" and scope["path"] in ("/", "/queues"):
+            await self._intake(scope, receive, send)
+            return
         await self.app(scope, receive, send)
+
+    async def _intake(self, scope: Any, receive: Any, send: Any) -> None:
+        """Core's queue tables print the queue's key, `default`; its card calls it Intake. Say `intake`, in the rows of those tables only.
+        shortcut: a rewrite of core's HTML, so it depends on core's markup; a title in core's template would replace it."""
+        start: dict[str, Any] = {}
+        chunks: list[bytes] = []
+
+        async def grab(message: Any) -> None:
+            if message["type"] == "http.response.start":
+                start.update(message)
+            elif message["type"] == "http.response.body":
+                chunks.append(message.get("body", b""))
+
+        await self.app(scope, receive, grab)
+        body = QUEUE_ROW.sub(rb"\1intake", b"".join(chunks))
+        headers = [(k, v) for k, v in start["headers"] if k.lower() != b"content-length"] + [(b"content-length", str(len(body)).encode())]
+        await send({**start, "headers": headers})
+        await send({"type": "http.response.body", "body": body})
 
 
 def _discover(group: str) -> Iterable[Any]:

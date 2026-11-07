@@ -51,3 +51,16 @@ async def test_the_brand_layer_serves_the_logo_and_one_more_rule_and_passes_ever
         css = (await c.get("/static/oaken.css")).text
         assert ".brand::before" in css and ".wordmark" in css  # core's stylesheet, plus ours
         assert (await c.get("/pipeline")).text == "inner"
+
+
+async def test_the_brand_layer_calls_the_default_queue_intake_in_the_rows_of_the_queue_tables_only() -> None:
+    page = b'<td>default</td><tr><td>default</td><td>0</td><td>0</td></tr><tr><td>store</td><td>1</td></tr><tr><td>default <span class="muted">(paused)</span></td><td>2</td></tr>'
+
+    async def inner(scope: object, receive: object, send: object) -> None:
+        await Response(page, media_type="text/html")(scope, receive, send)  # type: ignore[arg-type]
+
+    async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=Brand(inner)), base_url="http://console") as c:
+        html = (await c.get("/")).text
+        assert html.startswith("<td>default</td>")  # a cell that is not a queue row is left alone
+        assert "<tr><td>intake</td><td>0</td>" in html and "<tr><td>intake <span" in html and "<tr><td>store</td>" in html
+        assert (await c.get("/plugins")).text.count("default") == 3  # other pages are not touched
