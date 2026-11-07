@@ -1,5 +1,0 @@
---=_other
-Content-Type: text/plain
-
-Body under the wrong boundary.
---=_other--

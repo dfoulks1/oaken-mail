@@ -1,1 +1,0 @@
-A reply whose client dropped every reference header.

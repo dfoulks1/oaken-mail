@@ -1,0 +1,17 @@
+# Oaken Mail's starting config: written to your config folder the first time `oknpost` runs, then yours to edit.
+
+[jobs]
+# An item nobody can format stays in Intake's failed jobs (shown on the console, kept to requeue) instead of passing on as non-mail.
+unmatched_format = "fail"
+failed_format = "fail"
+
+# Mail in: Intake splits a message into parts (rfc822) and the mail ingestor stores it under its Message-ID, threaded.
+[plugins.formatter.rfc822]
+class = "oaken_plugins.formatter_rfc822:Rfc822Formatter"
+
+[plugins.ingestor.mail]
+class = "oaken_plugins.ingestor_mail:MailIngestor"
+
+# Gmail is a template: make one instance per account with the + on the Intake page (or `oknpost plugin add`).
+[plugins.provider.gmail]
+class = "oaken_plugins.provider_gmail:GmailProvider"
