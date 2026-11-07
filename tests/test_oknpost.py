@@ -49,7 +49,8 @@ async def test_the_brand_layer_serves_the_logo_and_one_more_rule_and_passes_ever
     async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=Brand(inner)), base_url="http://console") as c:
         assert (await c.get("/static/logo.png")).content[:4] == b"\x89PNG"
         css = (await c.get("/static/oaken.css")).text
-        assert ".brand::before" in css and ".wordmark" in css  # core's stylesheet, plus ours
+        assert ".brand .logo { background: url(/static/logo.png)" in css and "mask: none" in css and ".wordmark" in css  # core's stylesheet, plus ours: the acorn, unmasked
+        assert "::before" not in css.split("Oaken Mail:")[-1]  # one mark, not two
         assert (await c.get("/pipeline")).text == "inner"
 
 

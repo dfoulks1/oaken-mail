@@ -17,7 +17,7 @@ from oaken_core.settings import Settings
 from oknpost import ALLOWED_TAGS, LIMITED, _clean, permitted
 
 
-LOGO_CSS = '\n/* Oaken Mail: the mark before the wordmark */\n.brand::before { content: ""; flex: none; width: 2.3rem; height: 2.3rem; background: url(/static/logo.png) center / contain no-repeat; }\n'
+LOGO_CSS = '\n/* Oaken Mail: its own mark in place of core\'s, in full colour (core draws /static/logo.png as a mask in the brand colour) */\n.brand .logo { background: url(/static/logo.png) center / contain no-repeat; -webkit-mask: none; mask: none; }\n'
 
 
 QUEUE_ROW = re.compile(rb'(<tr><td>)default(?=( <span class="muted">\(paused\)</span>)?</td><td>\d)')  # a row of a queue table: the first stage is called Intake
