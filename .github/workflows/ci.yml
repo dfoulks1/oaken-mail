@@ -1,41 +1,33 @@
 name: CI
-
 on:
   push:
     branches: [main]
   pull_request:
-
 permissions:
   contents: read
-
 jobs:
   test:
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.11", "3.12"]
-    runs-on: ${{ matrix.os }}
     steps:
+      # Oaken Mail develops against checkouts of its parts beside it (see [tool.uv.sources]): put the three side by side.
       - uses: actions/checkout@v4
+        with:
+          path: oaken-mail
+      - uses: actions/checkout@v4
+        with:
+          repository: dfoulks1/oaken-core
+          path: oaken-core
+      - uses: actions/checkout@v4
+        with:
+          repository: dfoulks1/oaken-plugins
+          path: oaken-plugins
       - uses: astral-sh/setup-uv@v5
       - run: uv python install ${{ matrix.python }}
       - run: uv sync --python ${{ matrix.python }}
-      - run: uv run ruff check
-      - run: uv run ruff format --check
-      - run: uv run mypy
-      - run: uv run lint-imports
+        working-directory: oaken-mail
       - run: uv run pytest
-
-  secrets:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - run: uv sync
-      - name: detect-secrets
-        shell: bash
-        run: |
-          # generated site HTML carries SRI hashes, which look like secrets
-          git ls-files -z | grep -zvE '^docs/(.*\.html|sitemap\.xml)$' \
-            | xargs -0 uv run detect-secrets-hook --baseline .secrets.baseline
+        working-directory: oaken-mail

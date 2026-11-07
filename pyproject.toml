@@ -4,8 +4,25 @@ version = "1.0.0"
 description = "Oaken Mail: Oaken Core with a coat of paint. A config bundle and a few filters; the work is core's and its plugins'."
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
+readme = "README.md"
+keywords = ["email", "mail", "imap", "smtp", "gmail", "mcp", "local-first", "ai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Email",
+]
 requires-python = ">=3.11"
-dependencies = ["oaken-core", "oaken-plugins[imap,smtp]"]  # the extras bring the IMAP and SMTP client libraries
+dependencies = ["oaken-core>=1.0.0,<2", "oaken-plugins[imap,smtp]>=1.0.0,<2"]  # the extras bring the IMAP and SMTP client libraries
+
+[project.urls]
+Repository = "https://github.com/dfoulks1/oaken-mail"
+Issues = "https://github.com/dfoulks1/oaken-mail/issues"
 
 [project.scripts]
 oknpost = "oknpost:main"  # the only command: `oaken` belongs to core and is not offered
@@ -40,3 +57,5 @@ packages = ["src/oknpost"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"  # the tests are async; without this, pytest-asyncio's strict mode would not run them
+asyncio_default_fixture_loop_scope = "function"
