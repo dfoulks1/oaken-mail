@@ -712,11 +712,13 @@ requires-dist = [
     { name = "aiosmtplib", marker = "extra == 'smtp'", specifier = ">=5.1.3" },
     { name = "imapclient", marker = "extra == 'imap'", specifier = ">=4.1.0" },
     { name = "oaken-core", editable = "../oaken-core" },
+    { name = "selectolax", marker = "extra == 'clean'", specifier = ">=1.0.1" },
 ]
-provides-extras = ["imap", "smtp"]
+provides-extras = ["imap", "smtp", "clean"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "hypothesis" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
