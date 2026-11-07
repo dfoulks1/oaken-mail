@@ -3,12 +3,15 @@
 
 from pathlib import Path
 
+import httpx2
 import pytest
+from starlette.responses import Response
 
 from oaken_core.errors import PluginError
 from oaken_core.plugins.host import PluginTables
 from oaken_core.settings import Settings
-from oknpost import _clean, make, permitted
+from oknpost import _clean, permitted
+from oknpost.daemon import Brand, make
 
 GMAIL = "oaken_plugins.provider_gmail:GmailProvider"
 EXEC = "oaken_plugins.provider_exec:ExecProvider"
@@ -37,3 +40,14 @@ async def test_plugin_add_by_class_path_refuses_a_provider_that_is_not_mail(tmp_
         assert core.host.plan_add(GMAIL).kind == "provider"
     finally:
         await core.host.stop()
+
+
+async def test_the_brand_layer_serves_the_logo_and_one_more_rule_and_passes_everything_else_on() -> None:
+    async def inner(scope: object, receive: object, send: object) -> None:
+        await Response("inner")(scope, receive, send)  # type: ignore[arg-type]
+
+    async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=Brand(inner)), base_url="http://console") as c:
+        assert (await c.get("/static/logo.png")).content[:4] == b"\x89PNG"
+        css = (await c.get("/static/oaken.css")).text
+        assert ".brand::before" in css and ".wordmark" in css  # core's stylesheet, plus ours
+        assert (await c.get("/pipeline")).text == "inner"

@@ -8,17 +8,12 @@ ingestor (``ingestor.mail``) still refuses anything that is not really mail: tha
 """
 
 import importlib.util
-from collections.abc import Iterable
+import sys
 from pathlib import Path
-from typing import Any
 
 from oaken_core import identity, paths
 from oaken_core.cli.commands import main as core_main
-from oaken_core.daemon.core import Core
-from oaken_core.errors import PluginError
 from oaken_core.plugins import catalog
-from oaken_core.plugins.host import discover_entry_points
-from oaken_core.plugins.kinds import KindRegistry
 from oaken_core.settings import Settings
 
 ALLOWED_TAGS = frozenset({"mail"})  # what a provider must carry (any one of these) to load: the registry of what Oaken Mail takes in
@@ -40,11 +35,6 @@ def permitted(kind: str, value: str) -> bool:
     return bool(ALLOWED_TAGS & set(catalog.declared(where).get("tags", "").split(",")))
 
 
-def _discover(group: str) -> Iterable[Any]:
-    kind = next((k.name for k in KindRegistry.shipped() if k.group == group), "")
-    return [ep for ep in discover_entry_points(group) if permitted(kind, ep.value)]
-
-
 def _clean(s: Settings) -> Settings:
     s.extensions.dirs = []  # shortcut: a directory of plugins is a door no tag check reaches; drop them all, allow some when a product needs one
     tables = s.plugins.tables.get(LIMITED, {})
@@ -53,34 +43,21 @@ def _clean(s: Settings) -> Settings:
     return s
 
 
-class MailCore(Core):
-    async def open(self) -> None:
-        await super().open()
-        add = self.host.plan_add
-
-        def guarded(target: str, **kw: Any) -> Any:  # `plugin add` by a class path or a catalog name resolves outside discovery
-            plan = add(target, **kw)
-            cls = plan.table.get("class") or (plan.base[1].get("class") if plan.base else None)
-            if plan.kind == LIMITED and cls and not permitted(LIMITED, str(cls)):
-                raise PluginError(f"{plan.kind} {plan.name!r} is not mail: Oaken Mail takes providers tagged {', '.join(sorted(ALLOWED_TAGS))}")
-            return plan
-
-        self.host.plan_add = guarded  # type: ignore[method-assign]
-
-
-def make(settings: Settings) -> Core:
-    return MailCore(_clean(settings), discover=_discover)
-
-
 def _first_run() -> None:
     config = paths.config_dir() / "config.toml"
     if not config.exists():
         config.write_bytes(Path(__file__).with_name("default.toml").read_bytes())
 
 
+def _make(settings: Settings):  # type: ignore[no-untyped-def]
+    from oknpost.daemon import make  # the daemon's imports (the MCP library alone is a third of a second) are not paid by a client command
+
+    return make(settings)
+
+
 def main(argv: list[str] | None = None) -> int:
-    identity.configure(app="oaken-mail", title="Oaken Mail", prog="oknpost")
+    identity.configure(app="oaken-mail", title="Oaken Mail", prog="oknpost", daemon=[sys.executable, "-m", "oknpost"])
     real = catalog.entries
     catalog.entries = lambda kinds: [e for e in real(kinds) if e.kind != LIMITED or ALLOWED_TAGS & set(e.tags)]  # the listing and add-by-name see only mail providers
     _first_run()
-    return core_main(argv, prog="oknpost", make=make)
+    return core_main(argv, prog="oknpost", make=_make)
