@@ -19,7 +19,7 @@ import json
 import os
 import signal
 import socket
-import subprocess  # noqa: S404 (starts our own interpreter, never a shell)
+import subprocess
 import sys
 import time
 from collections.abc import Sequence
@@ -27,11 +27,11 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-
-from oaken_core.api.runtime import pid_alive
 from oaken_core import identity, paths
+from oaken_core.api.runtime import pid_alive
 from oaken_core.cli.discovery import Endpoint, discover
 from oaken_core.cli.exits import CoreUnavailable, ExitCode
+
 from oaken_webui import __version__
 from oaken_webui.app import build_app
 
@@ -67,7 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="?",
         choices=COMMANDS,
         default="start",
-        help="start (the default; foreground unless --detach), stop, restart, or status.",
+        help="start (the default; in the background unless --fg), stop, restart, or status.",
     )
     parser.add_argument(
         "--port",
@@ -76,10 +76,11 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"port to listen on (default {DEFAULT_PORT} or ${PORT_ENV}; restart keeps the running one's)",
     )
     parser.add_argument(
-        "--detach",
+        "--fg",
         action="store_true",
-        help="with start or restart: run in the background and return once it is serving.",
+        help="with start or restart: stay attached to the terminal (the default is the background, returning once it is serving).",
     )
+    parser.add_argument("--detach", action="store_true", help=argparse.SUPPRESS)  # old spelling: background is the default now
     parser.add_argument("--stop", action="store_true", help=argparse.SUPPRESS)  # old spelling
     parser.add_argument(
         "--url",
@@ -140,7 +141,7 @@ def _listening(port: int) -> bool:
 
 def _child_args(args: argparse.Namespace) -> list[str]:
     """The arguments that start the same server in the foreground."""
-    out = ["start", "--port", str(args.port)]
+    out = ["start", "--fg", "--port", str(args.port)]
     if args.url:
         out += ["--url", args.url]
     if args.token_file:
@@ -163,7 +164,7 @@ def _detach(args: argparse.Namespace) -> int:
         flags["creationflags"] = 0x00000008 | 0x00000200  # DETACHED_PROCESS | NEW_PROCESS_GROUP
     else:
         flags["start_new_session"] = True
-    child = subprocess.Popen(  # noqa: S603 (our own interpreter, fixed arguments)
+    child = subprocess.Popen(
         [sys.executable, "-m", "oaken_webui.main", *_child_args(args)],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -189,7 +190,7 @@ def _detach(args: argparse.Namespace) -> int:
         if child.poll() is not None:
             print(
                 f"{PROG}: exited while starting (code {child.returncode}); is port "
-                f"{args.port} in use? Run without --detach to see why.",
+                f"{args.port} in use? Run with --fg to see why.",
                 file=sys.stderr,
             )
             return int(ExitCode.ERROR)
@@ -231,7 +232,7 @@ def _status() -> int:
 def main(argv: Sequence[str] | None = None) -> int:
     # Without this the app is plain core: paths follow OAKEN_HOME, not OAKEN_MAIL_HOME, and discovery misses the daemon.
     identity.configure(app="oaken-mail", title="Oaken Mail", prog="oknpost", daemon=[sys.executable, "-m", "oknpost"])
-    args =build_parser().parse_args(list(sys.argv[1:] if argv is None else argv))
+    args = build_parser().parse_args(list(sys.argv[1:] if argv is None else argv))
     command = "stop" if args.stop else args.command
     if command == "status":
         return _status()
@@ -245,7 +246,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.port = before["port"]  # the UI comes back where the browser tab expects it
     if args.port is None:
         args.port = _default_port()
-    if args.detach:
+    if not args.fg:
         return _detach(args)
     _configure_logging(args.verbose)
     try:

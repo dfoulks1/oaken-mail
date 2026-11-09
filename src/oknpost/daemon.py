@@ -6,16 +6,15 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from starlette.responses import Response
-
 from oaken_core.console.app import HERE as CONSOLE
 from oaken_core.daemon.core import Core
 from oaken_core.errors import PluginError
 from oaken_core.plugins.host import discover_entry_points
 from oaken_core.plugins.kinds import KindRegistry
 from oaken_core.settings import Settings
-from oknpost import ALLOWED_TAGS, LIMITED, _clean, permitted
+from starlette.responses import Response
 
+from oknpost import ALLOWED_TAGS, LIMITED, _clean, permitted
 
 LOGO_CSS = '\n/* Oaken Mail: its own mark in place of core\'s, in full colour (core draws /static/logo.png as a mask in the brand colour) */\n.brand .logo { background: url(/static/logo.png) center / contain no-repeat; -webkit-mask: none; mask: none; }\n'
 

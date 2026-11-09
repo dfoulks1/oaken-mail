@@ -5,11 +5,11 @@ from pathlib import Path
 
 import httpx2
 import pytest
-from starlette.responses import Response
-
 from oaken_core.errors import PluginError
 from oaken_core.plugins.host import PluginTables
 from oaken_core.settings import Settings
+from starlette.responses import Response
+
 from oknpost import _clean, permitted
 from oknpost.daemon import Brand, make
 

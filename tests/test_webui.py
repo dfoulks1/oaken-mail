@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import ClassVar
 
 from oaken_core.cli.client import ApiClient, CallResult, Proposal
+
 from oaken_webui.app import build_app
 from oaken_webui_core.actions import ACTIONS
 
@@ -15,7 +17,7 @@ HOST = {"host": "127.0.0.1:62584"}
 
 
 class FakeClient(ApiClient):
-    calls: list[tuple[str, dict, bool]] = []
+    calls: ClassVar[list[tuple[str, dict, bool]]] = []
 
     async def health(self):
         return {}

@@ -50,7 +50,9 @@ def _first_run() -> None:
 
 
 def _make(settings: Settings):  # type: ignore[no-untyped-def]
-    from oknpost.daemon import make  # the daemon's imports (the MCP library alone is a third of a second) are not paid by a client command
+    from oknpost.daemon import (
+        make,  # the daemon's imports (the MCP library alone is a third of a second) are not paid by a client command
+    )
 
     return make(settings)
 

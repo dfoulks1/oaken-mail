@@ -54,7 +54,7 @@ async def search(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
 async def get_message(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
     m = await _call(client, "mail.get", {"subject_id": inp["message_id"]})
     parts, headers = m["parts"], m["parts"].get("headers", {})
-    header = lambda k: (headers.get(k) or [""])[0]  # noqa: E731
+    header = lambda k: (headers.get(k) or [""])[0]
     return {
         "message_id": m["subject_id"], "thread_key": m["thread_id"], "subject": m["subject"], "from_name": "", "from_addr": m["from_addr"],
         "to_addrs": m["to"], "cc_addrs": [], "date": m["sent_at"], "labels": [], "location": "", "is_read": m["is_read"], "starred": False,

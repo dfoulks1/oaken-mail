@@ -15,12 +15,13 @@ from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
 import httpx2
-from quart import Quart, Response, abort, redirect, request, send_from_directory
-
 from oaken_core.cli.client import ApiClient
 from oaken_core.cli.discovery import Endpoint, discover
 from oaken_core.cli.exits import CliError, CoreUnavailable
 from oaken_core.cli.http import HttpApiClient
+from quart import Quart, Response, abort, redirect, request, send_from_directory
+from werkzeug.wrappers import Response as WerkzeugResponse
+
 from oaken_webui import __version__
 from oaken_webui_core import ui_ops
 from oaken_webui_core.actions import UnknownAction, dispatch
@@ -178,7 +179,7 @@ def build_app(
         return Response(stream(), status=upstream.status_code, headers=out)
 
     @app.get("/login.html")
-    async def login() -> Response:
+    async def login() -> WerkzeugResponse:
         return redirect("/", 302)  # loopback, single user: the server holds the token
 
     @app.get("/", defaults={"path": "index.html"})

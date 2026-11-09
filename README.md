@@ -43,7 +43,7 @@ oknpost-webui                   # the UI, on http://127.0.0.1:62584/
 
 Loopback only, default port 62584 (`--port` to change). It holds core's API token and adds it on the way through, so the token never
 reaches the browser; the browser sees one same-origin server. It does not start core: if core is down the UI says so, same as the CLI.
-`oknpost-webui` takes `start` (the default), `stop`, `restart`, `status`, and `--detach` to run in the background.
+`oknpost-webui` takes `start` (the default), `stop`, `restart`, `status`, and `--fg` to stay attached to the terminal (it runs in the background otherwise).
 
 ## What it does and does not
 
