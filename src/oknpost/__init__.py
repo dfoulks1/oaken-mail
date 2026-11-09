@@ -35,8 +35,14 @@ def permitted(kind: str, value: str) -> bool:
     return bool(ALLOWED_TAGS & set(catalog.declared(where).get("tags", "").split(",")))
 
 
+# Filtering is part of Oaken Mail: both filter plugins load in every stack, and are written to no config file.
+FILTERING = {"sieve": {"class": "oaken_plugins.triager_sieve:SieveTriager"}, "filters": {"class": "oaken_plugins.triager_filters:FiltersTriager"}}
+
+
 def _clean(s: Settings) -> Settings:
     s.extensions.dirs = []  # shortcut: a directory of plugins is a door no tag check reaches; drop them all, allow some when a product needs one
+    for name, table in FILTERING.items():
+        s.plugins.tables.setdefault("triager", {}).setdefault(name, dict(table))  # the owner's own [plugins.triager.<name>] (even enabled = false) wins
     tables = s.plugins.tables.get(LIMITED, {})
     for name in [n for n, t in tables.items() if t.get("class") and not permitted(LIMITED, str(t["class"]))]:
         del tables[name]

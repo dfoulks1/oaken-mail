@@ -7,24 +7,6 @@
     set: (k, v) => { try { localStorage.setItem("oaken." + k, v); } catch {} },
   };
 
-  /* ---- Theme: oak-light | oak-dark | birch | system ---- */
-  const mq = window.matchMedia("(prefers-color-scheme: dark)");
-  function applyTheme(choice) {
-    const resolved = choice === "system" ? (mq.matches ? "oak-dark" : "oak-light") : choice;
-    root.setAttribute("data-oaken-theme", resolved);
-    root.setAttribute("data-bs-theme", resolved === "oak-dark" ? "dark" : "light");
-    root.setAttribute("data-oaken-theme-choice", choice);
-    document.querySelectorAll("[data-theme-set]").forEach((el) => {
-      el.classList.toggle("active", el.dataset.themeSet === choice);
-      if (el.type === "radio") el.checked = el.dataset.themeSet === choice;
-    });
-    const icon = { "oak-light": "bi-sun", "oak-dark": "bi-moon-stars", birch: "bi-tree", system: "bi-circle-half" }[choice];
-    document.querySelectorAll("[data-theme-icon]").forEach((el) => (el.className = "bi " + icon));
-  }
-  function setTheme(choice) { store.set("theme", choice); applyTheme(choice); }
-  applyTheme(store.get("theme", "system"));
-  mq.addEventListener("change", () => store.get("theme", "system") === "system" && applyTheme("system"));
-
   /* ---- Density + layout ---- */
   function applyDensity(d) {
     root.setAttribute("data-oaken-density", d);
@@ -43,14 +25,12 @@
   applyDensity(store.get("density", "comfortable"));
 
   document.addEventListener("DOMContentLoaded", () => {
-    applyTheme(store.get("theme", "system"));
     applyDensity(store.get("density", "comfortable"));
     applyLayout(store.get("layout", "split"));
 
     document.addEventListener("click", (e) => {
-      const t = e.target.closest("[data-theme-set],[data-density-set],[data-layout-set],[data-action]");
+      const t = e.target.closest("[data-density-set],[data-layout-set],[data-action]");
       if (!t) return;
-      if (t.dataset.themeSet) setTheme(t.dataset.themeSet);
       if (t.dataset.densitySet) { store.set("density", t.dataset.densitySet); applyDensity(t.dataset.densitySet); }
       if (t.dataset.layoutSet) { store.set("layout", t.dataset.layoutSet); applyLayout(t.dataset.layoutSet); }
       const a = t.dataset.action;
@@ -62,7 +42,9 @@
       if (a === "expand-float") { e.stopPropagation(); expandFloat(t.closest(".ok-float")); }
       if (a === "popout-float") { e.stopPropagation(); popoutFloat(t.closest(".ok-float")); }
       if (a === "popout") { e.preventDefault(); window.open(t.getAttribute("href") || t.dataset.href, "_blank", "popup,width=900,height=760"); }
-      if (a === "star") { e.stopPropagation(); e.preventDefault(); t.classList.toggle("on"); t.querySelector(".bi")?.classList.toggle("bi-star-fill"); t.querySelector(".bi")?.classList.toggle("bi-star"); }
+      if (a === "star") { e.stopPropagation(); e.preventDefault(); const on = !t.classList.contains("on"); const row = t.closest(".ok-msg");
+        if (row && window.Oaken && window.Oaken.api) window.Oaken.api("set_starred", { ids: [row.dataset.id], starred: on }, { confirm: true }).catch((err) => { toast((err && err.message) || "Could not star."); t.classList.toggle("on"); t.querySelector(".bi")?.classList.toggle("bi-star-fill"); t.querySelector(".bi")?.classList.toggle("bi-star"); });
+        t.classList.toggle("on"); t.querySelector(".bi")?.classList.toggle("bi-star-fill"); t.querySelector(".bi")?.classList.toggle("bi-star"); }
       if (a === "toggle-thread") t.closest(".ok-thread-msg")?.classList.toggle("collapsed");
       if (a === "select-all") document.querySelectorAll(".ok-msg input[type=checkbox]").forEach((c) => (c.checked = t.checked));
     });
@@ -85,6 +67,7 @@
 
     /* Recipient chips: Enter or comma turns input into a chip */
     document.querySelectorAll("[data-chips]").forEach(initChips);
+    window.Oaken.fillSenders?.(document); // defined by the second IIFE below
 
     /* Keyboard shortcuts (c = compose, / = search, ? = shortcuts) */
     document.addEventListener("keydown", (e) => {
@@ -129,6 +112,7 @@
     node.querySelector("header").addEventListener("click", () => node.classList.toggle("minimized"));
     dock.appendChild(node);
     node.querySelectorAll("[data-chips]").forEach(initChips);
+    window.Oaken.fillSenders?.(node);
     node.querySelector("[data-chips] input")?.focus();
   }
   function expandFloat(f) {
@@ -146,7 +130,7 @@
   }
 
   // Add to the namespace api.js already created; replacing it would drop Oaken.api.
-  window.Oaken = Object.assign(window.Oaken || {}, { setTheme, openFloatingCompose });
+  window.Oaken = Object.assign(window.Oaken || {}, { openFloatingCompose });
 })();
 
 /* ===========================================================================================
@@ -169,11 +153,13 @@
   const qs = (sel, el) => (el || document).querySelector(sel);
   const qsa = (sel, el) => Array.from((el || document).querySelectorAll(sel));
 
-  function toast(msg) {
+  function toast(msg, kind) {
+    kind = kind || (/(could not|couldn.t|cannot|can.t|failed|refused|error|not valid|not found|select messages first|nothing changed)/i.test(msg) ? "error" : "");
     let host = qs(".ok-toast-host");
     if (!host) { host = document.createElement("div"); host.className = "ok-toast-host"; document.body.appendChild(host); }
     const t = document.createElement("div");
-    t.className = "ok-toast";
+    t.className = "ok-toast" + (kind ? " " + kind : "");
+    t.setAttribute("role", kind === "error" ? "alert" : "status");
     t.textContent = msg;
     host.appendChild(t);
     setTimeout(() => t.classList.add("show"), 10);
@@ -186,6 +172,31 @@
   function tag(text, color) {
     const dot = color ? `<span class="ok-label-dot" style="background:${color}"></span>` : "";
     return `<span class="ok-tag">${dot}${esc(text)}</span>`;
+  }
+
+  // What each stage did to a message, from the labels its plugins wrote: icon, name, and how many results.
+  const STAGE_BADGES = [["triage", "bi-bandaid", "Triage"], ["enrich", "bi-stars", "Enrich"], ["act", "bi-clipboard-check", "Act"]];
+  function stageBadges(m) {
+    return STAGE_BADGES.map(([k, icon, name]) => {
+      const n = ((m.stages || {})[k] || []).length;
+      return n ? `<span class="ok-stg" title="${name}: ${n} result${n === 1 ? "" : "s"}"><i class="bi ${icon}"></i>${n}</span>` : "";
+    }).join("");
+  }
+  // The reading pane shows the same icons as the list. Pick one to load that stage's results below it.
+  const STAGE_CACHE = {}; // message_id -> the message the panel last drew, so a pick needs no fetch
+  function stagePanelHtml(m, open) {
+    STAGE_CACHE[m.message_id] = m;
+    const st = m.stages || {};
+    const btns = STAGE_BADGES.filter(([k]) => (st[k] || []).length).map(([k, icon, name]) =>
+      `<button class="btn btn-sm btn-ghost ok-stg${open === k ? " active" : ""}" data-stage-pick="${k}" title="${name}: ${st[k].length}"><i class="bi ${icon}"></i>${name} ${st[k].length}</button>`).join("");
+    const r = st[open] || [];
+    const hit = STAGE_BADGES.find(([k]) => k === open);
+    const detail = r.length ? `<div class="mt-2">` + r.map((x) => `<div class="small"><span class="text-muted">${esc(x.key)}</span> ${esc(x.value)}</div>`).join("") +
+      (open === "enrich" ? `<button class="btn btn-sm btn-ghost py-0 mt-1" data-stage-rerun="enrich" title="Run the enrichers on this message again"><i class="bi bi-arrow-repeat"></i> Run again</button>` : "") + `</div>` : "";
+    const folder = m.location ? `<div class="small mb-2"><i class="bi bi-folder2 me-1"></i>Filed in <strong>${esc(m.location.split(".").join(" › "))}</strong> ` +
+      `<code>mail.folder = ${esc(m.location)}</code>${m.location_by ? ` <span class="text-muted">set by ${esc(m.location_by)}</span>` : ""}</div>` : "";
+    return folder + `<div class="d-flex align-items-center gap-1">${btns || '<span class="small text-muted">No stage results yet.</span>'}` +
+      `<button class="btn btn-sm btn-ghost ms-auto" data-stage-refresh title="Fetch the results again"><i class="bi bi-arrow-clockwise"></i></button></div>` + detail;
   }
 
   function rowHtml(m) {
@@ -206,7 +217,7 @@
       `<span class="from">${esc(m.from_name || m.from_addr)}</span>` +
       `<span class="date">${clip}${esc(fmtDate(m.date))}</span>` +
       `<span class="line2"><span class="subject">${esc(m.subject)}</span>` +
-      `<span class="snippet">— ${snippet}…</span>${tags}</span>` +
+      `<span class="snippet">— ${snippet}…</span>${tags}${stageBadges(m)}</span>` +
       `</li>`
     );
   }
@@ -344,6 +355,8 @@
     if (location) { input.location = location; input.disposition = "any"; }
     const folder = url.searchParams.get("folder");
     if (folder && ["inbox", "filed", "discarded"].includes(folder)) input.disposition = folder;
+    const v = url.searchParams.get("view");
+    if (v) input.view = v;
     input.sort = view.sort;
     return { input, key: op + "|" + view.sort + "|" + url.search };
   }
@@ -359,6 +372,29 @@
     sel.value = view.sort;
   }
 
+  /* The search box offers the kinds of search the server lists (a magnifier for key:value search; a plugin may add more, such as an AI
+   * sparkle). One kind: the box alone. Two or more: a small menu picks which one the box submits to. */
+  async function wireSearchModes() {
+    const forms = qsa(".ok-search");
+    if (!forms.length) return;
+    let modes = [];
+    try { modes = ((await api("list_search_modes", {})).output || {}).modes || []; } catch (_) { return; }
+    if (!modes.length) return;
+    forms.forEach((form) => {
+      const input = qs("input", form), icon = qs(":scope > .bi", form);
+      const apply = (m) => { form.action = m.action; input.placeholder = m.placeholder; if (icon) icon.className = `bi ${m.icon}`; };
+      apply(modes[0]);
+      if (modes.length < 2) return;
+      const menu = document.createElement("select");
+      menu.className = "ok-search-mode";
+      menu.setAttribute("aria-label", "Kind of search");
+      modes.forEach((m) => menu.add(new Option(m.label, m.id)));
+      menu.addEventListener("change", () => apply(modes.find((m) => m.id === menu.value)));
+      form.append(menu);
+      input.style.paddingRight = "9rem";
+    });
+  }
+
   async function fetchPage(op, input, offset, limit) {
     const { output } = await api(op, { ...input, limit, offset });
     return output || {};
@@ -367,6 +403,8 @@
   // (Re)load the list: a fresh view starts at the top; a refresh of the same view re-fetches the
   // rows already loaded (so a read-state change shows) and keeps the scroll position.
   async function loadList(container, keepChecked) {
+    const empty = qs('[data-oaken-action="empty-discarded"]');
+    if (empty) empty.hidden = new URL(location.href).searchParams.get("view") !== "discarded";
     const list = qs(".ok-list", container) || container;
     const op = container.dataset.oakenList || "list_messages"; // "list_messages" | "search"
     view.sort = chosenSort(op);
@@ -524,6 +562,7 @@
       const b = output || {};
       const thread = await fetchThread(b.message_id);
       container.innerHTML = readerHtml(b, thread);
+      if (b.html) { const cur = qs(".ok-thread-msg.current .ok-msg-body", container); cur && showBody(cur, { text: b.text, html: b.html }); }
       // The reader starts hidden (d-none) beside the "Select a message" placeholder: swap them.
       container.classList.remove("d-none");
       qs(".ok-empty", container.parentElement)?.classList.add("d-none");
@@ -542,6 +581,22 @@
     }
   }
 
+  // A message body. Mail is untrusted: text goes in as text; HTML goes in a frame with no scripts, no forms,
+  // no navigation, and a policy that loads nothing remote (remote images are how senders track opens).
+  const HTML_POLICY = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">`;
+  function showBody(el, { text, html }) {
+    const keep = qs(":scope > .mt-3", el); // the attachment links ride in the same box
+    if (!html) { el.style.whiteSpace = "pre-wrap"; el.textContent = text || "(no text)"; keep && el.append(keep); return; }
+    el.style.whiteSpace = "normal";
+    const f = document.createElement("iframe");
+    f.setAttribute("sandbox", "allow-same-origin"); // same-origin only so we can read its height; scripts stay off
+    f.setAttribute("referrerpolicy", "no-referrer");
+    f.style.cssText = "width:100%;border:0;min-height:12rem;background:#fff";
+    f.srcdoc = HTML_POLICY + html;
+    f.onload = () => { f.style.height = (f.contentDocument?.documentElement.scrollHeight || 400) + "px"; };
+    el.replaceChildren(f, ...(keep ? [keep] : []));
+  }
+
   // Expanding a collapsed card of the thread fetches its text the first time. Mail is untrusted:
   // the body goes in as text, never markup.
   async function openThreadCard(card) {
@@ -551,7 +606,7 @@
     if (body) body.textContent = "Loading…";
     try {
       const { output } = await api("get_message", { message_id: card.dataset.id, include_text: true });
-      if (body) body.textContent = (output && output.text) || "(no text)";
+      if (body) showBody(body, output || {});
       api("message_presented", { message_id: card.dataset.id }, { confirm: true }).catch(() => {});
     } catch (e) {
       delete card.dataset.loaded;
@@ -619,7 +674,8 @@
       `<div class="ok-reader-inner">` +
       `<h1>${esc(b.subject)}</h1>` +
       (many ? `<div class="small text-muted mb-2">${thread.total || nodes.length} messages in this conversation</div>` : "") +
-      `<div class="d-flex gap-2 mb-4 flex-wrap">${tags}</div>` + body +
+      `<div class="d-flex gap-2 mb-3 flex-wrap">${tags}</div>` +
+      `<div class="ok-stage-panel mb-4" data-stage-panel data-id="${esc(b.message_id)}">${stagePanelHtml(b)}</div>` + body +
       (thread && thread.cut ? `<div class="small text-muted">Showing ${nodes.length} of ${thread.total} messages.</div>` : "") +
       `</div>`
     );
@@ -648,14 +704,102 @@
     }
   }
 
+  /* ---- compose: the From box lists every account that can send (list_senders), whatever its provider ---- */
+  let sendersP = null;
+  function fillSenders(root) {
+    sendersP = sendersP || api("list_senders", {}).then((r) => r.output.senders || []).catch(() => { sendersP = null; return []; });
+    sendersP.then((senders) => {
+      if (!senders.length) return; // keep the page's placeholder options when core offers none
+      root.querySelectorAll("select[name=from]").forEach((sel) => {
+        sel.innerHTML = senders.map((s) => `<option value="${esc(s.account)}">${esc(s.account)}${s.provider ? ` (${esc(s.provider)})` : ""}</option>`).join("");
+      });
+    });
+  }
+
+  window.Oaken.fillSenders = fillSenders;
+
+  async function sendFrom(box, btn) {
+    if (!box) return;
+    const chips = (n) => {
+      const wrap = box.querySelector(`[name=${n}]`)?.closest("[data-chips]");
+      if (!wrap) return [];
+      const typed = wrap.querySelector("input").value.trim(); // an address typed but not yet turned into a chip still counts
+      return [...qsa(".ok-chip span:first-child", wrap).map((c) => c.textContent), ...(typed ? [typed] : [])];
+    };
+    const input = {
+      account: box.querySelector("[name=from]")?.value || "",
+      to: chips("to"), cc: chips("cc"), bcc: chips("bcc"),
+      subject: box.querySelector("[name=subject]")?.value || "",
+      body: box.querySelector(".ok-editor")?.innerText || "",
+    };
+    btn.disabled = true;
+    try {
+      await api("send", input, { confirm: true });
+      toast("Sent.");
+      box.querySelector("[data-action=close-float]")?.click();
+      bootstrap.Modal.getInstance(box.closest(".modal"))?.hide();
+    } catch (e) {
+      toast(e.message || "Send failed.");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   function wireActions() {
-    document.addEventListener("click", (e) => {
+    document.addEventListener("click", async (e) => {
+      const again = e.target.closest("[data-stage-rerun]");
+      if (again) { // run a later stage again for this message: the stages before it are skipped
+        const panel = again.closest("[data-stage-panel]");
+        if (await mutate("rerun_stage", { message_id: panel.dataset.id, stage: again.dataset.stageRerun }, "Queued. Refresh in a moment for the new results.")) { /* results arrive when the stage finishes */ }
+        return;
+      }
+      const pick = e.target.closest("[data-stage-pick]");
+      if (pick) { // load one stage's results into the panel; a second click closes it
+        const panel = pick.closest("[data-stage-panel]");
+        panel.dataset.open = panel.dataset.open === pick.dataset.stagePick ? "" : pick.dataset.stagePick;
+        panel.innerHTML = stagePanelHtml(STAGE_CACHE[panel.dataset.id], panel.dataset.open);
+        return;
+      }
+      const refresh = e.target.closest("[data-stage-refresh]");
+      if (refresh) { // fetch this message's stage results again, from the reading pane
+        const panel = refresh.closest("[data-stage-panel]");
+        try { panel.innerHTML = stagePanelHtml((await api("get_message", { message_id: panel.dataset.id })).output, panel.dataset.open); }
+        catch (err) { toast((err && err.message) || "Could not fetch the results."); }
+        return;
+      }
       const t = e.target.closest("[data-oaken-action]");
       if (!t) return;
       const a = t.dataset.oakenAction;
       const list = qs("[data-oaken-list]");
       if (a === "refresh") { list && loadList(list); }
-      else if (a === "sync") { mutate("sync_now", {}, "Sync started."); }
+      else if (a === "sync") { mutate("sync_now", {}).then((o) => { if (o) { toast(o.started.length ? `Sync started (${o.started.length}).` : "Nothing to sync."); setTimeout(() => list && loadList(list), 4000); } }); }
+      else if (a === "discard" || a === "empty-discarded") {
+        const inDiscarded = new URL(location.href).searchParams.get("view") === "discarded";
+        if (a === "empty-discarded") {
+          if (!confirm("Delete every discarded message for good? This cannot be undone.")) return;
+          mutate("empty_discarded", {}).then((out) => { if (out) { toast(`${out.purged} deleted.`); list && loadList(list); renderSidebar(); } });
+          return;
+        }
+        const ids = list ? selectedIds(list) : [];
+        if (!ids.length) { toast("Select messages first."); return; }
+        mutate("set_discarded", { ids, discarded: !inDiscarded }).then((out) => {
+          if (!out) return;
+          ids.forEach((id) => qs(`.ok-msg[data-id="${CSS.escape(id)}"]`, list)?.remove());
+          renderSidebar();
+          toast(`${ids.length} ${inDiscarded ? "restored" : "discarded"}.`);
+        });
+      }
+      else if (a === "archive") {
+        const ids = list ? selectedIds(list) : [];
+        if (!ids.length) { toast("Select messages first."); return; }
+        const inArchive = new URL(location.href).searchParams.get("view") === "archive";
+        mutate("set_archived", { ids, archived: inArchive }).then((out) => {
+          if (!out) return;
+          ids.forEach((id) => qs(`.ok-msg[data-id="${CSS.escape(id)}"]`, list)?.remove()); // it leaves this view either way
+          renderSidebar();
+          toast(`${ids.length} ${inArchive ? "moved back to the inbox" : "archived"}.`);
+        });
+      }
       else if (a === "mark-read" || a === "mark-unread") {
         const ids = list ? selectedIds(list) : [];
         if (!ids.length) { toast("Select messages first."); return; }
@@ -675,9 +819,7 @@
       }
       else if (a === "send") {
         e.preventDefault();
-        // There is no send operation in the registry yet (send is a later phase, and is never
-        // exposed over MCP). Be honest rather than pretend.
-        toast("Sending isn't wired up yet — this is a preview.");
+        sendFrom(t.closest(".ok-float, .modal-content"), t);
       }
     });
   }
@@ -719,6 +861,11 @@
    * index.html with the ?view/?folder/?label the list reads; the active one is marked from the
    * current URL. Folders and labels are then filled from the backend by renderSidebar(). Keeping
    * the markup here means one definition instead of a copy per page. */
+  // The four locked stages: id, full name, icon. Used by the masthead, the sidebar and the stage page.
+  const STAGE_META = [["intake", "Intake & Store", "bi-database"], ["triage", "Triage", "bi-bandaid"], ["enrich", "Enrich", "bi-stars"], ["act", "Act", "bi-clipboard-check"]];
+  const stageLink = (id, name, icon, cls, label) =>
+    `<a ${cls} href="stage.html?s=${id}" data-stage-link="${id}" data-stage="${id}" title="${esc(name)}"><i class="bi ${icon}"></i>${label ? esc(name) : ""}<span class="ok-pip" hidden></span></a>`;
+
   const SIDEBAR_HTML = `
     <button class="btn btn-oaken btn-compose" data-action="compose"><i class="bi bi-pencil-square"></i>Compose</button>
     <nav class="ok-nav" data-oaken-nav>
@@ -727,16 +874,15 @@
       <a href="index.html?view=sent" data-view="sent"><i class="bi bi-send"></i>Sent</a>
       <a href="index.html?view=drafts" data-view="drafts"><i class="bi bi-file-earmark"></i>Drafts</a>
       <a href="index.html?view=archive" data-view="archive"><i class="bi bi-archive"></i>Archive</a>
-      <a href="index.html?view=spam" data-view="spam"><i class="bi bi-exclamation-octagon"></i>Spam</a>
       <div class="ok-nav-heading">Folders</div>
       <div data-oaken-folders><div class="small text-muted px-3 py-1">No folders yet.</div></div>
       <a href="index.html?view=discarded" data-view="discarded"><i class="bi bi-trash3"></i>Discarded</a>
       <div class="ok-nav-heading">Labels</div>
       <div data-oaken-labels><div class="small text-muted px-3 py-1">No tags yet.</div></div>
       <div class="ok-nav-heading">More</div>
-      <a href="contacts.html" data-page="contacts.html"><i class="bi bi-person-lines-fill"></i>Contacts</a>
+${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join("")}
       <a href="accounts.html" data-page="accounts.html"><i class="bi bi-person-badge"></i>Accounts</a>
-      <a href="sieve.html" data-page="sieve.html"><i class="bi bi-funnel"></i>Filters</a>
+      <a href="sieve.html" data-page="sieve.html" data-feature="sieve filters" hidden><i class="bi bi-funnel"></i>Filters</a>
       <a href="settings.html" data-page="settings.html"><i class="bi bi-gear"></i>Settings</a>
     </nav>`;
 
@@ -751,9 +897,205 @@
       (page === "index.html" && folder && nav.querySelector(`a[href*="location=${encodeURIComponent(folder)}"]`)) ||
       (page === "index.html" && label && nav.querySelector(`a[href*="label=${encodeURIComponent(label)}"]`)) ||
       (page === "index.html" && view && nav.querySelector(`a[data-view="${view}"]`)) ||
+      (page === "stage.html" && nav.querySelector(`a[data-stage="${url.searchParams.get("s") || "intake"}"]`)) ||
       nav.querySelector(`a[data-page="${page}"]`);
     if (hit) hit.classList.add("active");
   }
+
+  /* ---- masthead: the four stages and settings, far right. A red pip says something in that stage failed. ---- */
+  function buildMasthead() {
+    qsa("[data-oaken-masthead]").forEach((m) => {
+      m.innerHTML = STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, 'class="btn btn-ghost position-relative"', false)).join("") +
+        `<a class="btn btn-ghost" href="settings.html" title="Settings"><i class="bi bi-gear"></i></a>`;
+    });
+  }
+
+  async function refreshPips() {
+    try {
+      const { output } = await api("stage_health", {});
+      for (const st of (output && output.stages) || []) {
+        qsa(`[data-stage-link="${st.stage}"]`).forEach((a) => {
+          const pip = qs(".ok-pip", a);
+          if (pip) pip.hidden = !st.failed;
+          a.title = st.failed ? `${st.title}: ${st.failed} failed` : st.title;
+        });
+      }
+    } catch { /* core is away: no pips rather than a wrong one */ }
+  }
+
+  async function initStagePage() {
+    const card = qs("[data-stage-card]");
+    if (!card) return;
+    const id = new URLSearchParams(location.search).get("s") || "intake";
+    let templates = [];
+
+    const show = (st) => {
+      qs("[data-stage-title]").textContent = st.title;
+      qs("[data-stage-queue]").innerHTML = (st.queues || []).map((q) => esc(q.title || q.queue) + (q.default ? ' <span class="text-muted fw-normal small">(default)</span>' : "")).join(", ") || "No queue";
+      qs("[data-stage-counts]").textContent = `${st.queued} waiting · ${st.running} running · ${st.done} done (1h)`;
+      qs("[data-stage-run]").checked = !st.paused;
+      qs("[data-stage-workers]").value = st.workers;
+      qs("[data-stage-jobs-tab] .ok-pip").hidden = !st.failed; // the look-at-me pip rides on the tab name
+      card.hidden = false;
+      refreshPips();
+    };
+    const reload = () => api("get_stage", { stage: id }).then((r) => show(r.output)).catch(() => {});
+    const act = async (op, input, ok) => { const out = await mutate(op, { stage: id, ...input }, ok); if (out) { show(out); loadJobs(); } else reload(); };
+
+    /* -- General: the queue card -- */
+    try { show((await api("get_stage", { stage: id })).output); } catch (e) { toast(e.message || "Could not load this stage."); return; }
+    qs("[data-stage-run]").addEventListener("change", (e) => act(e.target.checked ? "stage_resume" : "stage_pause", {}, e.target.checked ? "Started." : "Paused."));
+    qs("[data-stage-save]").addEventListener("click", () => act("stage_set_workers", { workers: Number(qs("[data-stage-workers]").value) }, "Saved. The service is reloading."));
+    qs("[data-stage-requeue]").addEventListener("click", () => act("stage_requeue_failed", {}, "Failures requeued."));
+
+    /* -- General: the stage's plugins -- */
+    const pluginDetail = (p) =>
+      (p.doc ? `<pre class="small text-wrap mb-2" style="white-space:pre-wrap">${esc(p.doc.trim())}</pre>` : "") +
+      (p.setup_help ? `<p class="mb-2"><span class="text-muted">Setup</span> ${esc(p.setup_help)}</p>` : "") +
+      ((p.settings || []).length ? `<div class="text-muted">Settings (defaults)</div>` + p.settings.map((x) =>
+        `<div><code>${esc(x.name)}</code> <span class="text-muted">${esc(x.type)}${x.required ? ", required" : ""}${x.default != null && x.default !== "" ? `, default ${esc(JSON.stringify(x.default))}` : ""}</span> ${esc(x.description || "")}</div>`).join("") : "") +
+      ((p.commands || []).length ? `<div class="text-muted mt-2">Commands</div>` + p.commands.map((c) => `<div><code>${esc(c.name)}</code> ${esc(c.summary || "")}</div>`).join("") : "") +
+      `<div class="text-muted mt-2">v${esc(p.version || "?")}</div>`;
+    // The settings editor: the instance's own values, one field each. Only what you changed is sent.
+    const editField = (f) => {
+      const id = `pc-${esc(f.name)}`, val = f.value, lbl = `<label class="form-label small mb-1" for="${id}">${esc(f.name)}${f.required ? " *" : ""}</label>`;
+      const hint = f.description ? `<div class="form-text">${esc(f.description)}</div>` : "";
+      if (f.type === "boolean") return `<div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="${id}" data-cfg="${esc(f.name)}" data-type="boolean" ${val ? "checked" : ""}><label class="form-check-label small" for="${id}">${esc(f.name)}</label>${hint}</div>`;
+      const num = f.type === "integer" || f.type === "number";
+      const shown = val == null ? "" : typeof val === "object" ? JSON.stringify(val) : val;
+      const area = f.type !== "string" && !num;
+      return `<div class="mb-2">${lbl}` + (area ? `<textarea class="form-control form-control-sm font-monospace" rows="2" id="${id}" data-cfg="${esc(f.name)}" data-type="json">${esc(shown)}</textarea>`
+        : `<input class="form-control form-control-sm" id="${id}" type="${num ? "number" : "text"}" data-cfg="${esc(f.name)}" data-type="${esc(f.type)}" value="${esc(shown)}">`) + `${hint}</div>`;
+    };
+    async function openSettings(row) {
+      const d = qs("[data-plugin-edit]", row);
+      if (!d.hidden) { d.hidden = true; return; }
+      d.innerHTML = '<div class="text-muted">Loading…</div>'; d.hidden = false;
+      try {
+        const { settings } = (await api("get_plugin_config", { plugin: row.dataset.plugin })).output;
+        d._orig = Object.fromEntries(settings.map((x) => [x.name, x.value]));
+        d.innerHTML = (settings.length ? settings.map(editField).join("") : '<div class="text-muted">This plugin has no settings.</div>') +
+          (settings.length ? '<button class="btn btn-oaken btn-sm mt-1" data-plugin-save>Save and reload</button> <span class="text-muted" data-plugin-note></span>' : "");
+      } catch (err) { d.textContent = (err && err.message) || "Could not load its settings."; }
+    }
+    async function saveSettings(row) {
+      const d = qs("[data-plugin-edit]", row), config = {};
+      try {
+        qsa("[data-cfg]", d).forEach((el) => {
+          const name = el.dataset.cfg, t = el.dataset.type;
+          let v = t === "boolean" ? el.checked : el.value;
+          if (t === "integer") v = v === "" ? null : parseInt(v, 10);
+          else if (t === "number") v = v === "" ? null : Number(v);
+          else if (t === "json") v = v.trim() === "" ? null : JSON.parse(v);
+          if (JSON.stringify(v) !== JSON.stringify(d._orig[name]) && v !== null) config[name] = v;
+        });
+      } catch (err) { toast("One value is not valid JSON."); return; }
+      if (!Object.keys(config).length) { toast("Nothing changed."); return; }
+      const out = await mutate("set_plugin_config", { plugin: row.dataset.plugin, config }, "Saved. Core is reloading.");
+      if (out) { qs("[data-plugin-note]", d).textContent = out.note || ""; setTimeout(loadPlugins, 3000); }
+    }
+    async function loadPlugins() {
+      const box = qs("[data-stage-plugins]");
+      try {
+        const { output } = await api("get_stage_plugins", { stage: id });
+        templates = output.templates || [];
+        qs("[data-stage-add]").hidden = !(templates.length || (output.plugins || []).some((p) => !p.enabled));
+        box.innerHTML = (output.plugins || []).map((p) =>
+          `<div class="d-flex justify-content-between align-items-center py-2 border-top" data-plugin="${esc(p.id)}">` +
+          `<div class="flex-grow-1"><a href="#" class="fw-semibold text-reset text-decoration-none" data-plugin-look title="Show what it is and how it is set up">${esc(p.name)}</a> ${p.started ? (p.healthy ? "" : '<span class="badge text-bg-warning">Unhealthy</span>') : '<span class="badge text-bg-secondary">Off</span>'}` +
+          `<div class="text-muted small">${esc(p.summary || "")}${p.warning ? ` <span class="text-danger">${esc(p.warning)}</span>` : ""}</div>` +
+          `<div class="small mt-2" data-plugin-detail hidden>${pluginDetail(p)}</div><div class="small mt-2" data-plugin-edit hidden></div></div>` +
+          `<div class="d-flex gap-2 align-items-center"><button class="btn btn-sm btn-ghost text-muted" data-plugin-settings title="Settings"><i class="bi bi-gear"></i></button><button class="btn btn-sm btn-ghost text-muted" data-plugin-remove title="Remove this instance"><i class="bi bi-trash3"></i></button>` +
+          `<div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" role="switch" data-plugin-toggle ${p.enabled ? "checked" : ""} aria-label="Switch ${esc(p.name)}"></div></div></div>`
+        ).join("") || '<div class="text-muted small">Nothing here yet.</div>';
+      } catch (e) { box.textContent = e.message || "Could not load plugins."; }
+    }
+    qs("[data-stage-plugins]").addEventListener("change", async (e) => {
+      const t = e.target.closest("[data-plugin-toggle]"); if (!t) return;
+      const plugin = t.closest("[data-plugin]").dataset.plugin;
+      const out = await mutate("stage_plugin_toggle", { plugin, enabled: t.checked }, t.checked ? "Switched on." : "Switched off.");
+      if (!out) t.checked = !t.checked; // refused: put the switch back
+      loadPlugins();
+    });
+    qs("[data-stage-plugins]").addEventListener("click", async (e) => {
+      const gear = e.target.closest("[data-plugin-settings]");
+      if (gear) { openSettings(gear.closest("[data-plugin]")); return; }
+      const save = e.target.closest("[data-plugin-save]");
+      if (save) { saveSettings(save.closest("[data-plugin]")); return; }
+      const look = e.target.closest("[data-plugin-look]");
+      if (look) { e.preventDefault(); const d = look.closest("[data-plugin]").querySelector("[data-plugin-detail]"); d.hidden = !d.hidden; return; }
+      const t = e.target.closest("[data-plugin-remove]"); if (!t) return;
+      const plugin = t.closest("[data-plugin]").dataset.plugin;
+      if (!confirm(`Remove ${plugin}? Its settings are deleted.`)) return;
+      if (await mutate("stage_plugin_remove", { plugin }, "Removed.")) loadPlugins();
+    });
+
+    /* -- General: add an instance from a template or plugin -- */
+    const modalEl = qs("#addPluginModal"), body = qs("[data-add-body]", modalEl);
+    const fieldFor = (f) => {
+      const label = `<label class="form-label small mb-1" for="af-${esc(f.name)}">${esc(f.name)}${f.required ? " *" : ""}</label>`;
+      const hint = f.description ? `<div class="form-text">${esc(f.description)}</div>` : "";
+      if (f.type === "boolean") return `<div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" id="af-${esc(f.name)}" data-cfg="${esc(f.name)}" data-type="boolean" ${f.default ? "checked" : ""}><label class="form-check-label" for="af-${esc(f.name)}">${esc(f.name)}</label>${hint}</div>`;
+      const type = f.type === "integer" || f.type === "number" ? "number" : "text";
+      return `<div class="mb-3">${label}<input class="form-control" id="af-${esc(f.name)}" type="${type}" data-cfg="${esc(f.name)}" data-type="${esc(f.type)}" value="${f.default == null ? "" : esc(f.default)}">${hint}</div>`;
+    };
+    qs("[data-stage-add]").addEventListener("click", () => {
+      body.innerHTML = `<div class="mb-3"><label class="form-label small mb-1" for="af-pick">What to add</label><select class="form-select" id="af-pick">` +
+        templates.map((t, i) => `<option value="${i}">${esc(t.name)} — ${esc(t.summary || "")}</option>`).join("") + `</select></div><div data-add-fields></div>`;
+      const render = () => {
+        const t = templates[Number(qs("#af-pick", body).value)]; if (!t) return;
+        qs("[data-add-fields]", body).innerHTML =
+          `<div class="mb-3"><label class="form-label small mb-1" for="af-name">Name this one</label><input class="form-control" id="af-name" placeholder="for example work" autocomplete="off"></div>` +
+          (t.setup_help ? `<p class="small text-muted">${esc(t.setup_help)}</p>` : "") + (t.settings || []).map(fieldFor).join("");
+      };
+      qs("#af-pick", body).addEventListener("change", render); render();
+      bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    });
+    qs("[data-add-go]").addEventListener("click", async () => {
+      const t = templates[Number(qs("#af-pick", body)?.value)]; if (!t) return;
+      const config = {};
+      qsa("[data-cfg]", body).forEach((el) => {
+        const type = el.dataset.type;
+        if (type === "boolean") { config[el.dataset.cfg] = el.checked; return; }
+        if (el.value === "") return; // blank means the plugin's own default
+        config[el.dataset.cfg] = type === "integer" || type === "number" ? Number(el.value) : el.value;
+      });
+      const out = await mutate("stage_plugin_add", { template: t.id, name: qs("#af-name", body)?.value || "", config }, "Added.");
+      if (out) { bootstrap.Modal.getInstance(modalEl)?.hide(); loadPlugins(); }
+    });
+
+    /* -- Jobs -- */
+    async function loadJobs() {
+      const box = qs("[data-stage-jobs]"), status = qs("[data-jobs-status]").value;
+      try {
+        const { output } = await api("list_stage_jobs", { stage: id, status });
+        const jobs = output.jobs || [];
+        qs("[data-jobs-count]").textContent = jobs.length ? `${jobs.length} ${status === "queued" ? "waiting" : status}` : "";
+        box.innerHTML = jobs.length ? `<div class="table-responsive"><table class="table table-sm align-middle mb-0 bg-transparent"><tbody>` + jobs.map((j) =>
+          `<tr data-job="${esc(j.id)}"><td class="text-nowrap"><div class="fw-semibold">${esc(j.kind)}</div><div class="small text-muted">${esc(j.subject || "")}</div></td>` +
+          `<td class="small text-muted">${j.attempts}/${j.max_attempts}</td><td class="small ${j.last_error ? "text-danger" : "text-muted"}">${esc(j.last_error || "")}</td>` +
+          `<td class="small text-muted text-nowrap" title="${status === "failed" ? "Failed" : "Queued"}: ${esc(new Date(status === "failed" ? j.updated_at : j.created_at).toLocaleString())}">${esc(new Date(status === "failed" ? j.updated_at : j.created_at).toLocaleString([], { dateStyle: "short", timeStyle: "medium" }))}</td>` +
+          `<td class="text-end text-nowrap">${status === "failed" ? '<button class="btn btn-sm btn-outline-oaken me-1" data-job-retry>Retry</button>' : ""}${status !== "running" || true ? '<button class="btn btn-sm btn-ghost text-muted" data-job-cancel title="Cancel"><i class="bi bi-x-lg"></i></button>' : ""}</td></tr>`
+        ).join("") + `</tbody></table></div>` : `<div class="text-muted small">No ${status === "queued" ? "waiting" : status} jobs.</div>`;
+      } catch (e) { box.textContent = e.message || "Could not load jobs."; }
+    }
+    qs("[data-jobs-status]").addEventListener("change", loadJobs);
+    qs("[data-stage-jobs]").addEventListener("click", async (e) => {
+      const retry = e.target.closest("[data-job-retry]"), cancel = e.target.closest("[data-job-cancel]");
+      if (!retry && !cancel) return;
+      const job_id = e.target.closest("[data-job]").dataset.job;
+      if (await mutate(retry ? "job_retry" : "job_cancel", { job_id }, retry ? "Requeued." : "Cancelled.")) { loadJobs(); reload(); }
+    });
+    loadPlugins(); loadJobs();
+  }
+
+  // A page that needs a plugin (Sieve) is shown only when core has that plugin: its links carry data-feature and start hidden.
+  let featuresP = null;
+  function revealFeatures() {
+    featuresP = featuresP || api("get_features", {}).then((r) => r.output || {}).catch(() => ({}));
+    featuresP.then((f) => qsa("[data-feature]").forEach((el) => { el.hidden = !el.dataset.feature.split(" ").some((k) => f[k]); }));
+  }
+  document.addEventListener("DOMContentLoaded", revealFeatures);
 
   function buildSidebar() {
     qsa("[data-oaken-sidebar]").forEach((mount) => {
@@ -761,6 +1103,7 @@
       const nav = qs("[data-oaken-nav]", mount);
       if (nav) markActive(nav);
     });
+    revealFeatures();
   }
 
   async function renderSidebar() {
@@ -772,6 +1115,8 @@
       mailbox = { folders: (output && output.folders) || [], labels: (output && output.labels) || [] };
       topBadge("inbox", (output && output.inbox && output.inbox.unread) || 0);
       topBadge("discarded", (output && output.discarded && output.discarded.unread) || 0);
+      topBadge("starred", (output && output.starred && output.starred.unread) || 0);
+      topBadge("archive", (output && output.archive && output.archive.unread) || 0);
       if (folders) {
         folders.innerHTML = mailbox.folders.length
           ? mailbox.folders.map((f) =>
@@ -932,8 +1277,13 @@
   document.addEventListener("DOMContentLoaded", () => {
     wireActions();
     wireMailboxUi();
+    buildMasthead();
     buildSidebar();
     renderSidebar();
+    refreshPips();
+    setInterval(refreshPips, 30000);
+    initStagePage();
+    wireSearchModes();
     watchEvents();
     // Reflect the current ?q into the search box and any results heading.
     const q = new URL(window.location.href).searchParams.get("q") || "";

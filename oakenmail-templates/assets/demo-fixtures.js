@@ -4,7 +4,22 @@
  * published mockups under docs/demo carry. A real oaken-webui serves the same pages with that
  * marker stripped, so this script is never loaded there and no dummy data ships in the live app.
  *
- * It exposes window.OakenDemoFixtures.demoCall(name, input, opts), which answers each registry
+ * It exposes   // Sample stage results so the badges and the reading pane's panel show in the preview.
+  const FIX_RESULTS = [
+    { triage: [{ key: "spamfilter.verdict", value: "allowed" }], enrich: [{ key: "summary.text", value: "A vote to release 2.4.63" }, { key: "summary.topic", value: "release" }, { key: "summary.urgency", value: "normal" }], act: [] },
+    { triage: [{ key: "spamfilter.verdict", value: "allowed" }, { key: "sieve.folder", value: "Lists" }], enrich: [], act: [] },
+    { triage: [], enrich: [{ key: "summary.text", value: "Mail relay rotation" }], act: [{ key: "notify.sent", value: "true" }] },
+  ];
+  const none = { triage: [], enrich: [], act: [] };
+  async function demoCall(name, input, opts) {
+    const res = await rawDemoCall(name, input, opts);
+    const out = res && res.output;
+    if (out && Array.isArray(out.items)) out.items.forEach((m, i) => { if (!m.stages) m.stages = FIX_RESULTS[i] || none; });
+    if (out && out.message_id && out.subject !== undefined && !out.stages) out.stages = FIX_RESULTS[Math.max(0, FIX_MESSAGES.findIndex((m) => m.message_id === out.message_id))] || none;
+    return res;
+  }
+
+window.OakenDemoFixtures.demoCall(name, input, opts), which answers each registry
  * operation from the fake data below, shaped exactly like the real operation output
  * (MessageList / MessageItem, GetMessageOutput, …) so the same render code works unchanged.
  *
@@ -79,10 +94,18 @@
     "20-newsletters.sieve": 'require ["fileinto"];\nif header :contains "from" "newsletter" {\n  fileinto "Newsletters";\n}\n',
   };
 
+  // Stage state for the preview: Triage has failures, Enrich is paused, so the pips and the switch show.
+  const FIX_STAGES = {
+    intake: { stage: "intake", title: "Intake & Store", paused: false, queued: 3, running: 1, failed: 0, workers: 2, done: 212, last_error: null, queues: [{ queue: "default", title: "Intake", workers: 2, default: true }] },
+    triage: { stage: "triage", title: "Triage", paused: false, queued: 0, running: 0, failed: 2, workers: 1, done: 209, last_error: "sieve: script 'work' failed on line 4", queues: [{ queue: "triage", title: "Triage", workers: 1, default: false }] },
+    enrich: { stage: "enrich", title: "Enrich", paused: true, queued: 12, running: 0, failed: 0, workers: 1, done: 40, last_error: null, queues: [{ queue: "enrich", title: "Enrich", workers: 1, default: false }] },
+    act: { stage: "act", title: "Act", paused: false, queued: 0, running: 0, failed: 0, workers: 1, done: 7, last_error: null, queues: [{ queue: "act", title: "Act", workers: 1, default: false }] },
+  };
+
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
   // Answers an operation from the fixtures, shaped like the real output.
-  async function demoCall(name, input, _opts) {
+  async function rawDemoCall(name, input, _opts) {
     await sleep(40); // a touch of latency so loading states are visible
     switch (name) {
       case "list_messages":
@@ -115,6 +138,22 @@
         const body = FIX_BODY[input.message_id] || FIX_BODY["m-vote-2463"];
         return { request_id: "demo", status: "ok", output: { message_id: body.message_id, headers: body.raw, size_raw: body.raw.length } };
       }
+      case "stage_health":
+        return { request_id: "demo", status: "ok", output: { stages: Object.values(FIX_STAGES) } };
+      case "get_stage":
+      case "stage_pause":
+      case "stage_resume":
+      case "stage_requeue_failed":
+      case "stage_set_workers": {
+        const st = FIX_STAGES[input.stage] || FIX_STAGES.intake;
+        if (name === "stage_pause") st.paused = true;
+        if (name === "stage_resume") st.paused = false;
+        if (name === "stage_requeue_failed") st.failed = 0;
+        if (name === "stage_set_workers") st.workers = input.workers;
+        return { request_id: "demo", status: "ok", output: { ...st } };
+      }
+      case "list_senders":
+        return { request_id: "demo", status: "ok", output: { senders: [{ account: "work", provider: "gmail" }, { account: "out", provider: "smtp" }] } };
       case "list_accounts":
         return { request_id: "demo", status: "ok", output: { accounts: FIX_ACCOUNTS } };
       case "get_account": {
