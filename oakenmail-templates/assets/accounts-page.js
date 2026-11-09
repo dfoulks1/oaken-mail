@@ -85,6 +85,9 @@
     card.dataset.provider = acct.provider;
     $("[data-acct-id]", card).textContent = acct.account_id;
     $("[data-acct-provider]", card).textContent = acct.provider;
+    const ic = $("[data-acct-icon]", card);
+    if (acct.icon) { ic.classList.add(acct.icon); ic.hidden = false; } // the plugin's own icon, vetted in ui_ops
+    $("[data-acct-role]", card).textContent = acct.role ? "· " + acct.role : "";
     const pill = $("[data-acct-pill]", card), bad = !!acct.problem || acct.healthy === false;
     pill.textContent = acct.enabled === false ? "off" : bad ? "needs attention" : "healthy";
     pill.className = "badge rounded-pill ok-acct-pill " + (acct.enabled === false ? "text-bg-secondary" : bad ? "text-bg-warning" : "text-bg-success");

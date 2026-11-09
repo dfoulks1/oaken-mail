@@ -4,7 +4,7 @@ Repo: `~/local/oaken-core` (remote `dfoulks1/oaken-core`), branch `plugin-choice
 Made by Claude (model: Sonnet 5.5) at the owner's request while building the oaken-mail UI. No PR is open. Nothing was run:
 no tests, ruff or mypy. The owner reviews before merge.
 
-## What I wrote (two changes)
+## What I wrote
 
 ### 1. New operation `plugin_choices` (commit `4a675d9`)
 
@@ -16,7 +16,7 @@ File: `src/oaken_core/operations/builtin/system.py`, beside `plugin_config_get`.
   instance, or a throwaway one if it has not started, with a 3 second cap, and returns `{}` on any failure or when the plugin
   offers nothing. The operation adds no logic of its own.
 - **Flags:** `permission="read"`, `mcp="never"`, `group="plugin"`. Registered in the module's `OPERATIONS` tuple.
-- **CLI:** `oknpost plugin choices llm_backend.ollama` (confirmed in the running core's command list, through `oknpost operations`).
+- **CLI:** `oknpost plugin choices llm_backend.ollama`. A core built-in takes its target last, like `plugin describe` and `plugin config_get`; the three-level `NOUN NAME CMD` form (`oknpost gmail warwalrux auth`) is for a plugin's own commands. Not yet run against a live core: `oknpost operations` confirms the name.
 - **Why:** the Model dropdown in oaken-mail's plugin settings modal. Ollama's plugin answers `setting_choices` with the models it
   has pulled, but core exposed that only to its own console (`console/app.py`), not as an operation, so a UI built on operations
   could not reach it.
@@ -38,6 +38,43 @@ File: `src/oaken_core/operations/builtin/intake.py`, one line:
   against the running core: `oknpost operations` listed `item get` and `item show` but no `item rerun`.
 - **Effect:** after a core restart the operation exists. Per its description it sends a stored message back to one later stage
   (enrich or act), skipping intake and triage. It has no priority argument and cannot rerun triage.
+
+### 3. LLM backends list their own models (commit `e27ad73`)
+
+File: `src/oaken_core/plugins/base.py`, `BaseLLMBackend`.
+
+- `setting_choices(config)` returns `{"model": await self.available_models()}` (or `{}`), so a backend overrides one method,
+  `available_models()`, and every settings form and `plugin_choices` offers its models. Ollama keeps its own override.
+- Each backend gets a `models` command under its own name (`oknpost ollama models`), from the same method.
+- Listing models is optional: only `generate()` is required of a backend.
+
+### 4. `--oaken-home PATH` on the CLI (commit `7a55b56`)
+
+File: `src/oaken_core/cli/commands.py`, `take_home()`, called first in `main`. It sets the app's home variable
+(`identity.home_env()`: `OAKEN_HOME` for plain core, `OAKEN_MAIL_HOME` for `oknpost`) and removes the flag from the arguments. The flag
+wins over the environment; a daemon started by the command inherits it. Not in `--help` (pre-parse).
+
+### 5. A user's request runs next, and runs on a paused queue
+
+Files: `jobs.py`, `stagerun.py`, `intake.py`, `daemon/core.py`, `operations/builtin/intake.py`, `docs/architecture/jobs.md`.
+
+- `Jobs.claim`: a paused queue now hands out jobs at `PRIORITY_USER` (100) or above, and nothing else. Within a queue the order is
+  still highest priority first. This is a behaviour change for any job enqueued at `PRIORITY_USER`; nothing used that priority before.
+- `item_rerun` takes `priority` (0 to 100, default 100). It reaches `StageRunner.rerun`, which passes it to the enrich and act
+  `enqueue` calls. A user job keeps its priority across later enrich stages; anything lower resets to the default, as before.
+- The rerun hook now takes a fifth argument (`priority`). A trusted envelope's `rerun` may carry one; without it, `PRIORITY_INGEST`.
+
+### 6. Plugins declare an icon
+
+`BasePlugin.icon` (a Bootstrap Icons name, default empty). `PluginHost.describe` returns it, `PluginDocs.icon` publishes it through
+`plugin_describe`, and the catalog reads it from source (`Entry.icon`). Every plugin in `oaken-plugins` (22) and eight core built-ins
+set one; a test in `oaken-plugins` fails if one is missing. The web UI accepts only `bi-` plus lowercase letters, digits and dashes.
+
+### In `oaken-plugins`: `action_exec`
+
+A template action: runs a configured program on a message when one of its `routes` fires. The message goes to stdin as JSON; exit 0
+is success; stdout JSON becomes the result's data. No shell, stderr dropped, confidential mail refused unless
+`allow_confidential = true`. Next to `provider_exec`, which stays a provider.
 
 ## What else is in the commit I did not write
 

@@ -657,3 +657,11 @@ h1, h2, h3, h4, h5, h6, .ok-brand, .modal-title { font-family: var(--ok-font-hea
 @media (max-width: 900px) { .ok-stage-pill { left: auto; right: .6rem; top: .6rem; flex-direction: row; } .ok-reader-inner { padding-right: 2rem; } }
 .ok-nav-plus { padding: 0 .35rem; line-height: 1; color: var(--ok-muted); border: 0; font-size: .8rem; }
 .ok-nav-plus:hover { color: var(--ok-fg); }
+
+/* Plugins table: a kind label per group, plain names, no banded header. */
+.ok-ptable { --bs-table-bg: transparent; --bs-table-color: var(--ok-fg); }
+.ok-ptable thead th { padding: 1.1rem .25rem .35rem; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--ok-muted); font-weight: 600;
+  border-bottom: 1px solid var(--ok-border); background: transparent; }
+.ok-ptable tbody td { padding: .6rem .25rem; border-bottom: 1px solid color-mix(in srgb, var(--ok-border) 55%, transparent); }
+.ok-ptable tbody tr:last-child td { border-bottom: 0; }
+.ok-pname .bi { color: var(--ok-muted); }

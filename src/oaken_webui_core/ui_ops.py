@@ -336,9 +336,17 @@ def _stage_act(op: str) -> Handler:
 STAGE_KINDS: Mapping[str, tuple[str, ...]] = {"intake": ("formatter", "ingestor"), "triage": ("triager",), "enrich": ("enricher",), "act": ("action",)}
 
 
+def _nature(kind: str, plugin: str, tags: Any) -> str:
+    """"ai" for a plugin that asks a model, "deterministic" for one that does not, "" when it cannot be told.
+    shortcut: read from the kind, the template name and the "model" tag; core does not publish needs_llm, so an analyzer that asks a model without them reads as deterministic."""
+    if kind in ("llm_backend", "embedder") or plugin == "llm" or "model" in (tags or []):
+        return "ai"
+    return "deterministic" if kind in ("triager", "enricher", "action", "formatter", "ingestor", "provider") else ""
+
+
 def _plugin_row(d: Mapping[str, Any]) -> dict[str, Any]:
     keys = ("name", "summary", "template", "enabled", "started", "healthy", "warning", "hint", "setup_help", "contextual", "tags", "doc", "version")
-    return {"id": f"{d['kind']}.{d['name']}", "kind": d["kind"], **{k: d.get(k) for k in keys},
+    return {"id": f"{d['kind']}.{d['name']}", "kind": d["kind"], "nature": _nature(d["kind"], str(d.get("plugin") or d["name"]), d.get("tags")), "icon": _icon(d.get("icon")), **{k: d.get(k) for k in keys},
             "commands": [{k: c.get(k) for k in ("name", "summary")} for c in d.get("commands", [])], "settings": [
         {k: x.get(k) for k in ("name", "type", "required", "default", "description")} for x in d.get("settings", [])]}
 
@@ -460,12 +468,18 @@ def _cmds(p: Mapping[str, Any]) -> list[str]:
 
 async def list_plugins(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
     return {"plugins": [{"name": p["plugin"] if p["template"] else p["name"], "kind": p["kind"], "capabilities": p["tags"], "operations": _cmds(p),
-                         "setup_help": p["setup_help"], "account_defaults": {}} for p in await _plugins(client) if p["template"] or p["kind"] != "provider"]}  # fmt: skip
+                         "setup_help": p["setup_help"], "icon": _icon(p.get("icon")), "account_defaults": {}} for p in await _plugins(client) if p["template"] or p["kind"] != "provider"]}  # fmt: skip
+
+
+def _icon(value: Any) -> str:
+    """A plugin's own icon, kept only if it is a Bootstrap Icons class name: it becomes a class in the page, so nothing else gets through."""
+    return value if isinstance(value, str) and re.fullmatch(r"bi-[a-z0-9-]{1,40}", value) else ""
 
 
 def _account(p: Mapping[str, Any]) -> dict[str, Any]:
     # shortcut: an account is a running provider plugin; config values, receive_only and rename are not in core yet, so they read empty
     return {"account_id": p["name"], "provider": p["plugin"], "display_name": p["name"], "config": {}, "receive_only": False,
+            "icon": _icon(p.get("icon")), "role": "mail identity" if "mail" in (p.get("tags") or []) else "",
             "capabilities": [c.rpartition(".")[2] for c in _cmds(p)], "enabled": p["enabled"], "healthy": p["healthy"],
             "problem": p["warning"] or ("" if p["healthy"] else p["hint"] or "not running")}  # fmt: skip
 
@@ -576,7 +590,7 @@ async def list_all_plugins(client: ApiClient, inp: Mapping[str, Any]) -> dict[st
     out = []
     for p in (await _call(client, "plugin_list", {}))["plugins"]:
         kind = p["id"].partition(".")[0]
-        out.append({**{k: p.get(k) for k in ("id", "provider", "version", "started", "healthy", "enabled", "detail", "warning", "hint")}, "kind": kind, "switchable": kind in _SWITCHABLE})
+        out.append({**{k: p.get(k) for k in ("id", "provider", "version", "started", "healthy", "enabled", "detail", "warning", "hint")}, "kind": kind, "nature": _nature(kind, str(p.get("provider") or ""), p.get("tags")), "icon": _icon(p.get("icon")), "switchable": kind in _SWITCHABLE})
     return {"plugins": sorted(out, key=lambda x: (x["kind"], x["id"]))}
 
 

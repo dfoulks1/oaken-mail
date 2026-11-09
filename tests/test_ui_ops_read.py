@@ -120,3 +120,17 @@ async def test_get_plugin_config_gives_wiring_with_choices_and_hides_capabilitie
     w = {x["name"]: x for x in out["wiring"]}
     assert w["stage"]["choices"] == ["analyze"] and w["route.backend"]["choices"] == ["", "ollama"]
     assert w["route.model"]["choices"] == ["", "m", "n"] and w["route.model"]["value"] == "m" and w["enabled"]["value"] is True and "capabilities" not in w and w["odd"]["type"] == "integer"
+
+
+def test_nature_tells_model_plugins_from_rule_plugins_and_leaves_the_rest_blank():
+    assert ui_ops._nature("llm_backend", "ollama", []) == "ai"
+    assert ui_ops._nature("enricher", "llm", []) == "ai"
+    assert ui_ops._nature("triager", "x", ["model"]) == "ai"
+    assert ui_ops._nature("triager", "sieve", ["mail"]) == "deterministic"
+    assert ui_ops._nature("gateway", "x", []) == ""
+
+
+def test_icon_keeps_only_bootstrap_class_names_and_an_account_says_it_is_a_mail_identity():
+    assert ui_ops._icon("bi-google") == "bi-google" and ui_ops._icon('bi-x" onclick="y') == "" and ui_ops._icon(None) == ""
+    a = ui_ops._account({"name": "me", "plugin": "gmail", "enabled": True, "healthy": True, "warning": "", "hint": "", "commands": [], "icon": "bi-google", "tags": ["mail"]})
+    assert (a["icon"], a["role"]) == ("bi-google", "mail identity")

@@ -59,12 +59,18 @@
       const { plugins = [] } = (await api("list_all_plugins", {})).output || {};
       const badge = (p) => !p.enabled ? '<span class="badge text-bg-secondary">off</span>' : p.started && p.healthy ? '<span class="badge text-bg-success">running</span>'
         : `<span class="badge text-bg-warning">${p.started ? "unhealthy" : "not running"}</span>`;
-      box.innerHTML = `<div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Plugin</th><th>Version</th><th>State</th><th></th></tr></thead><tbody>` +
-        plugins.map((p) => `<tr data-plugin="${esc(p.id)}"><td><code>${esc(p.id)}</code><div class="small text-muted">${esc(p.provider)}${p.warning ? ` · <span class="text-danger">${esc(p.warning)}</span>` : ""}${p.hint ? ` ${esc(p.hint)}` : ""}</div></td>` +
-          `<td>${esc(p.version)}</td><td>${badge(p)}</td><td class="text-end text-nowrap">` + (p.switchable ?
+      const mark = (p) => p.icon ? `<i class="bi ${esc(p.icon)} me-2" title="${esc(p.kind)}"></i>` : ((window.Oaken && window.Oaken.natureIcon) ? window.Oaken.natureIcon(p.nature).replace("me-1", "me-2") : "");
+      const row = (p) => {
+        const name = p.id.slice(p.id.indexOf(".") + 1);
+        return `<tr data-plugin="${esc(p.id)}"><td class="ok-pname">${mark(p)}<span class="fw-semibold">${esc(name)}</span>` +
+          `<div class="small text-muted">${esc(p.provider)}${p.warning ? ` · <span class="text-danger">${esc(p.warning)}</span>` : ""}${p.hint ? ` ${esc(p.hint)}` : ""}</div></td>` +
+          `<td class="text-muted small">${esc(p.version)}</td><td>${badge(p)}</td><td class="text-end text-nowrap ok-pact">` + (p.switchable ?
             `<button class="btn btn-sm btn-ghost" data-reload title="Reload it"><i class="bi bi-arrow-repeat"></i></button>
-             <div class="form-check form-switch d-inline-block align-middle m-0 ms-2"><input class="form-check-input" type="checkbox" role="switch" data-switch ${p.enabled ? "checked" : ""} aria-label="Switch ${esc(p.id)}"></div>` : "") +
-          "</td></tr>").join("") + "</tbody></table></div>";
+             <div class="form-check form-switch d-inline-block align-middle m-0 ms-2"><input class="form-check-input" type="checkbox" role="switch" data-switch ${p.enabled ? "checked" : ""} aria-label="Switch ${esc(p.id)}"></div>` : "") + "</td></tr>";
+      };
+      const kinds = [...new Set(plugins.map((p) => p.kind))];
+      box.innerHTML = `<table class="table ok-ptable align-middle mb-0"><colgroup><col><col style="width:5rem"><col style="width:8rem"><col style="width:7rem"></colgroup>` +
+        kinds.map((k) => `<thead><tr><th colspan="4">${esc(k.replace("_", " "))}</th></tr></thead><tbody>` + plugins.filter((p) => p.kind === k).map(row).join("") + "</tbody>").join("") + "</table>";
     },
 
     async storage(box) {

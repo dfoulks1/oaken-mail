@@ -185,6 +185,11 @@
   }
 
   // What each stage did to a message, from the labels its plugins wrote: icon, name, and how many results.
+  // A plugin either asks a model ("ai") or follows fixed rules ("deterministic"); "" when that cannot be told.
+  const NATURE = { ai: ["bi-robot", "Asks a model"], deterministic: ["bi-diagram-2", "Fixed rules, no model"] };
+  const natureIcon = (n) => NATURE[n] ? `<i class="bi ${NATURE[n][0]} text-muted me-1" title="${NATURE[n][1]}" aria-label="${NATURE[n][1]}"></i>` : "";
+  window.Oaken = window.Oaken || {};
+  window.Oaken.natureIcon = natureIcon;
   const STAGE_BADGES = [["triage", "bi-bandaid", "Triage"], ["enrich", "bi-stars", "Enrich"], ["act", "bi-clipboard-check", "Act"]];
   function stageBadges(m) {
     return STAGE_BADGES.map(([k, icon, name]) => {
@@ -1073,7 +1078,7 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
         qs("[data-stage-add]").hidden = !(templates.length || (output.plugins || []).some((p) => !p.enabled));
         box.innerHTML = (output.plugins || []).map((p) =>
           `<div class="d-flex justify-content-between align-items-center py-2 border-top" data-plugin="${esc(p.id)}">` +
-          `<div class="flex-grow-1"><a href="#" class="fw-semibold text-reset text-decoration-none" data-plugin-look title="Show what it is and how it is set up">${esc(p.name)}</a> ${p.started ? (p.healthy ? "" : '<span class="badge text-bg-warning">Unhealthy</span>') : '<span class="badge text-bg-secondary">Off</span>'}` +
+          `<div class="flex-grow-1"><a href="#" class="fw-semibold text-reset text-decoration-none" data-plugin-look title="Show what it is and how it is set up">${natureIcon(p.nature)}${esc(p.name)}</a> ${p.started ? (p.healthy ? "" : '<span class="badge text-bg-warning">Unhealthy</span>') : '<span class="badge text-bg-secondary">Off</span>'}` +
           `<div class="text-muted small">${esc(p.summary || "")}${p.warning ? ` <span class="text-danger">${esc(p.warning)}</span>` : ""}</div>` +
           `<div class="small mt-2" data-plugin-detail hidden>${pluginDetail(p)}</div></div>` +
           `<div class="d-flex gap-2 align-items-center"><button class="btn btn-sm btn-ghost text-muted" data-plugin-settings title="Settings"><i class="bi bi-gear"></i></button><button class="btn btn-sm btn-ghost text-muted" data-plugin-remove title="Remove this instance"><i class="bi bi-trash3"></i></button>` +
@@ -1110,9 +1115,10 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
     };
     qs("[data-stage-add]").addEventListener("click", () => {
       body.innerHTML = `<div class="mb-3"><label class="form-label small mb-1" for="af-pick">What to add</label><select class="form-select" id="af-pick">` +
-        templates.map((t, i) => `<option value="${i}">${esc(t.name)} — ${esc(t.summary || "")}</option>`).join("") + `</select></div><div data-add-fields></div>`;
+        templates.map((t, i) => `<option value="${i}">${esc(t.name)} — ${esc(t.summary || "")}</option>`).join("") + `</select><div class="form-text" data-add-nature></div></div><div data-add-fields></div>`;
       const render = () => {
         const t = templates[Number(qs("#af-pick", body).value)]; if (!t) return;
+        qs("[data-add-nature]", body).innerHTML = NATURE[t.nature] ? natureIcon(t.nature) + NATURE[t.nature][1] : "";
         qs("[data-add-fields]", body).innerHTML =
           `<div class="mb-3"><label class="form-label small mb-1" for="af-name">Name this one</label><input class="form-control" id="af-name" placeholder="for example work" autocomplete="off"></div>` +
           (t.setup_help ? `<p class="small text-muted">${esc(t.setup_help)}</p>` : "") + (t.settings || []).map(fieldFor).join("");
