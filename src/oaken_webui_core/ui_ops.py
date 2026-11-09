@@ -239,7 +239,7 @@ def _mark(read: bool) -> Handler:
                 await _call(client, f"{instance}.set_read", {"item_keys": item_keys, "read": read}, confirm=True)
             except CliError as exc:
                 raise CliError(f"marked here, but not at {source}: {exc}") from exc  # shortcut: no retry queue yet, so the two now differ until the next change
-        return {"changed": len(ids), "unchanged": 0}
+        return {"changed": ids, "unchanged": [], "local_only": [], "missing": []}  # the page reads these as id lists; shortcut: local_only/missing are not told apart yet
 
     return run
 

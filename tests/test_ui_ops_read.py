@@ -66,3 +66,12 @@ async def test_create_account_adds_a_provider_instance_and_returns_it():
     a = await ui_ops.run(C(), "create_account", {"account_id": "me", "provider": "gmail", "config": {}})
     assert calls[0] == ("plugin_add", {"plugin": "gmail", "kind": "provider", "name": "me", "config": {}})
     assert a["account_id"] == "me"
+
+
+async def test_mark_read_answers_with_id_lists_the_page_can_iterate():
+    class C:
+        async def call(self, name, payload=None, **_):
+            return CallResult("r", output={"mail.get": {**GET, "item_key": ""}}.get(name, {}))
+
+    out = await ui_ops.run(C(), "mark_read", {"ids": ["s1", "s2"]})
+    assert out["changed"] == ["s1", "s2"] and out["unchanged"] == []

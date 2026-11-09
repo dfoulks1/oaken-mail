@@ -874,7 +874,7 @@
       <a href="index.html?view=sent" data-view="sent"><i class="bi bi-send"></i>Sent</a>
       <a href="index.html?view=drafts" data-view="drafts"><i class="bi bi-file-earmark"></i>Drafts</a>
       <a href="index.html?view=archive" data-view="archive"><i class="bi bi-archive"></i>Archive</a>
-      <div class="ok-nav-heading">Folders</div>
+      <div class="ok-nav-heading" data-fold-folders role="button" tabindex="0" aria-expanded="true" style="cursor:pointer"><span>Folders</span><i class="bi bi-chevron-down"></i></div>
       <div data-oaken-folders><div class="small text-muted px-3 py-1">No folders yet.</div></div>
       <a href="index.html?view=discarded" data-view="discarded"><i class="bi bi-trash3"></i>Discarded</a>
       <div class="ok-nav-heading">Labels</div>
@@ -885,6 +885,30 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
       <a href="sieve.html" data-page="sieve.html" data-feature="sieve filters" hidden><i class="bi bi-funnel"></i>Filters</a>
       <a href="settings.html" data-page="settings.html"><i class="bi bi-gear"></i>Settings</a>
     </nav>`;
+
+  // Folders heading folds the tree; the choice is remembered in this browser only.
+  function foldFolders(open) {
+    const h = qs("[data-fold-folders]"), box = qs("[data-oaken-folders]");
+    if (!h || !box) return;
+    box.hidden = !open;
+    h.setAttribute("aria-expanded", String(open));
+    qs("i", h).className = "bi " + (open ? "bi-chevron-down" : "bi-chevron-right");
+    try { localStorage.setItem("oaken.foldersOpen", open ? "1" : "0"); } catch { /* private mode: it just resets */ }
+  }
+  document.addEventListener("click", (e) => { const h = e.target.closest("[data-fold-folders]"); if (h) foldFolders(h.getAttribute("aria-expanded") !== "true"); });
+  document.addEventListener("keydown", (e) => { const h = e.target.closest && e.target.closest("[data-fold-folders]"); if (h && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); foldFolders(h.getAttribute("aria-expanded") !== "true"); } });
+
+  // Folders the person folded, by path; kept in this browser only.
+  function foldedPaths() { try { return new Set(JSON.parse(localStorage.getItem("oaken.foldedPaths") || "[]")); } catch { return new Set(); } }
+  document.addEventListener("click", (e) => {
+    const c = e.target.closest("[data-fold-path]");
+    if (!c) return;
+    e.preventDefault(); e.stopPropagation(); // the caret folds; the row still opens the folder
+    const set = foldedPaths(), p = c.dataset.foldPath;
+    set.has(p) ? set.delete(p) : set.add(p);
+    try { localStorage.setItem("oaken.foldedPaths", JSON.stringify([...set])); } catch { /* private mode: it just resets */ }
+    renderSidebar();
+  });
 
   function markActive(nav) {
     const url = new URL(window.location.href);
@@ -1101,7 +1125,7 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
     qsa("[data-oaken-sidebar]").forEach((mount) => {
       mount.innerHTML = SIDEBAR_HTML;
       const nav = qs("[data-oaken-nav]", mount);
-      if (nav) markActive(nav);
+      if (nav) { markActive(nav); let open = true; try { open = localStorage.getItem("oaken.foldersOpen") !== "0"; } catch {} foldFolders(open); }
     });
     revealFeatures();
   }
@@ -1118,12 +1142,17 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
       topBadge("starred", (output && output.starred && output.starred.unread) || 0);
       topBadge("archive", (output && output.archive && output.archive.unread) || 0);
       if (folders) {
+        const shut = foldedPaths(), here = new URL(location.href).searchParams.get("location") || "";
+        const isShut = (p) => shut.has(p) && !here.startsWith(p + "."); // never hide the folder you are in
         folders.innerHTML = mailbox.folders.length
-          ? mailbox.folders.map((f) =>
-              `<a href="index.html?location=${encodeURIComponent(f.path)}" title="Inbox/${esc(f.path)}" ` +
-              `style="padding-left:${0.75 + f.depth * 1.1}rem"><i class="bi ${FOLDER_ICON.filed}"></i>` +
-              `${esc(f.name)}${badge(f.tree.unread)}</a>`
-            ).join("")
+          ? mailbox.folders.map((f, i) => {
+              const kids = mailbox.folders[i + 1] && mailbox.folders[i + 1].depth > f.depth;
+              const hidden = mailbox.folders.some((a) => f.path.startsWith(a.path + ".") && isShut(a.path));
+              const caret = kids ? `<i class="bi ${isShut(f.path) ? "bi-chevron-right" : "bi-chevron-down"} ms-n1" data-fold-path="${esc(f.path)}" style="font-size:.7rem"></i>` : `<i style="width:.7rem;display:inline-block"></i>`;
+              return `<a href="index.html?location=${encodeURIComponent(f.path)}" title="Inbox/${esc(f.path)}"${hidden ? " hidden" : ""} ` +
+                `style="padding-left:${0.75 + f.depth * 1.1}rem">${caret}<i class="bi ${FOLDER_ICON.filed}"></i>` +
+                `${esc(f.name)}${badge(f.tree.unread)}</a>`;
+            }).join("")
           : '<div class="small text-muted px-3 py-1">No folders yet.</div>';
       }
       if (labelsBox) {
