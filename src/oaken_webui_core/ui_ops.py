@@ -118,6 +118,8 @@ async def list_messages(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, 
         ask["folder"] = str(inp["location"]).strip(".")
     if inp.get("label"):
         ask["tag"] = str(inp["label"])
+    if "folder" in ask or "tag" in ask:
+        ask["view"] = "all"  # the inbox view leaves out mail filed in a folder, so a folder or tag asks across views
     out = await _call(client, "mail.index", ask)
     stage_of = await _stage_of_prefix(client)
     items = [{"message_id": r["subject_id"], "subject": r["subject"], "from_name": r["from_name"], "from_addr": r["from_addr"], "date": r["sent_at"] or r["sort_at"],
@@ -358,18 +360,56 @@ def _in_a_stage(plugin_id: str) -> str:
     return plugin_id
 
 
+# Keys of an instance's table that belong to the host or to the stage, not to the plugin's own settings.
+# shortcut: when/unless are accepted by core's config writer, but nothing reads them yet; capabilities is left out (nothing reads it).
+_WIRING = (("enabled", "boolean", "Run this plugin. Off keeps it set up but stopped.", True),
+           ("stage", "choice", "Which step of the pipeline this plugin runs in.", None),
+           ("route.backend", "choice", "Which model server answers. Blank uses the default.", None),
+           ("route.model", "choice", "The model's name on that server, for example qwen3.5:4b. Blank uses the server's default.", None),
+           ("when", "object", "Only items matching this (not applied by core yet).", None),
+           ("unless", "object", "Skip items matching this (not applied by core yet).", None))
+
+
+def _kind_of(v: Any) -> str:
+    return "boolean" if isinstance(v, bool) else "integer" if isinstance(v, int) else "number" if isinstance(v, float) else "string" if isinstance(v, str) else "object"
+
+
 async def get_plugin_config(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
-    """An instance's settings with the value it runs on now (config.toml's, else the default)."""
+    """An instance's settings with the value it runs on now (config.toml's, else the default), then its wiring: the dials around the plugin."""
     plugin = _in_a_stage(str(inp.get("plugin") or ""))
     doc = (await _call(client, "plugin_describe", {"plugin": plugin}))["plugins"][0]
     have = (await _call(client, "plugin_config_get", {"plugin": plugin}))["config"]
-    return {"plugin": plugin, "settings": [{**{k: x.get(k) for k in ("name", "type", "required", "description")},
-                                            "value": have.get(x["name"], x.get("default")), "set": x["name"] in have} for x in doc.get("settings", [])]}  # fmt: skip
+    declared = {x["name"] for x in doc.get("settings", [])}
+    settings = [{**{k: x.get(k) for k in ("name", "type", "required", "description")},
+                 "value": have.get(x["name"], x.get("default")), "set": x["name"] in have} for x in doc.get("settings", [])]  # fmt: skip
+    queues = [r["queue"] for r in (await _call(client, "queue_list", {}))["queues"]]
+    backends = [p["name"] for p in await _plugins(client) if p["kind"] == "llm_backend" and not p["template"]]
+    route = have.get("route") if isinstance(have.get("route"), dict) else {}
+    backend = str(route.get("backend") or (backends[0] if backends else ""))
+    try:  # the chosen backend lists what it can run; a backend that cannot (or an older core) leaves a plain text box
+        models = (await _call(client, "plugin_choices", {"plugin": f"llm_backend.{backend}"}))["choices"].get("model", []) if backend else []
+    except CliError:
+        models = []
+    choices = {"stage": queues, "route.backend": [""] + backends, "route.model": [""] + models if models else None}
+    def value(n: str, dflt: Any) -> Any:
+        return route.get(n.partition(".")[2]) if n.startswith("route.") else have.get(n, dflt)
+    wiring = [{"name": n, "type": t, "required": False, "description": d, "value": value(n, dflt), "choices": choices.get(n)} for n, t, d, dflt in _WIRING]
+    known = {n.partition(".")[0] for n, *_ in _WIRING}
+    # any other key already in the table (plugin, a setting the plugin no longer declares) is shown too, so nothing is hidden
+    wiring += [{"name": k, "type": _kind_of(v), "required": False, "description": "", "value": v}
+               for k, v in have.items() if k not in declared and k not in known and k not in ("class", "capabilities")]
+    return {"plugin": plugin, "settings": settings, "wiring": wiring}
 
 
 async def set_plugin_config(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
     plugin = _in_a_stage(str(inp.get("plugin") or ""))
-    out = await _call(client, "plugin_config_set", {"plugin": plugin, "config": dict(inp.get("config") or {})}, confirm=True)
+    config = dict(inp.get("config") or {})
+    dotted = {k: config.pop(k) for k in [k for k in config if k.startswith("route.")]}
+    if dotted:  # route.backend / route.model go into the route table, keeping its other keys (fallback, escalate)
+        have = (await _call(client, "plugin_config_get", {"plugin": plugin}))["config"]
+        merged = {**(have.get("route") if isinstance(have.get("route"), dict) else {}), **{k.partition(".")[2]: v for k, v in dotted.items()}}
+        config["route"] = {k: v for k, v in merged.items() if v != ""}  # a blank means "use the default": leave the key out
+    out = await _call(client, "plugin_config_set", {"plugin": plugin, "config": config}, confirm=True)
     return {"plugin": plugin, "note": out.get("note", "")}
 
 
@@ -441,6 +481,19 @@ async def create_account(client: ApiClient, inp: Mapping[str, Any]) -> dict[str,
         raise CliError("an account id and a provider are required")
     await _call(client, "plugin_add", {"plugin": provider, "kind": "provider", "name": acct, "config": dict(inp.get("config") or {})}, confirm=True)
     return await get_account(client, {"account_id": acct})
+
+
+async def create_folder(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    """A folder is the mail.folder label (dotted sub-labels), so it exists once a message carries it: file the selected messages into it."""
+    path = ".".join(x.strip() for x in str(inp.get("path") or "").replace("/", ".").split(".") if x.strip())
+    ids = _ids(inp)
+    if not path:
+        raise CliError("a folder needs a name")
+    if not ids:
+        raise CliError("select the messages to file in it first: a folder exists once a message is in it")
+    for sid in ids:
+        await _call(client, "label_set", {"subject_id": sid, "key": "mail.folder", "value": path}, confirm=True)
+    return {"path": path, "created": [path]}
 
 
 async def get_account(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
@@ -657,7 +710,7 @@ HANDLERS: Mapping[str, Handler] = {
     "get_stage_plugins": get_stage_plugins, "stage_plugin_toggle": stage_plugin_toggle, "get_plugin_config": get_plugin_config, "set_plugin_config": set_plugin_config, "stage_plugin_add": stage_plugin_add,
     "stage_plugin_remove": stage_plugin_remove, "list_stage_jobs": list_stage_jobs, "job_retry": job_retry, "sync_now": sync_now, "get_features": get_features, **_script_ops("sieve"), **_script_ops("filters"), "list_schedules": list_schedules, "run_schedule": run_schedule, "get_logs": get_logs, "get_events": get_events,
     "get_ai": get_ai, "clear_cache": clear_cache, "list_all_plugins": list_all_plugins, "plugin_reload": plugin_reload, "get_storage": get_storage, "run_vacuum": run_vacuum, "set_starred": _flag("mail.starred", "starred"), "set_archived": _flag("mail.archived", "archived"), "set_discarded": _flag("mail.discarded", "discarded"), "empty_discarded": empty_discarded, "list_plugins": list_plugins, "list_accounts": list_accounts, "get_account": get_account, "list_operations": list_operations, "account_auth": account_auth, "account_check": account_check,
-    "create_account": create_account, "account_toggle": account_toggle, "remove_account": remove_account, "job_cancel": job_cancel, "list_search_modes": list_search_modes,
+    "create_account": create_account, "create_folder": create_folder, "account_toggle": account_toggle, "remove_account": remove_account, "job_cancel": job_cancel, "list_search_modes": list_search_modes,
 }
 
 

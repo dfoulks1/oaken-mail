@@ -631,12 +631,29 @@ h1, h2, h3, h4, h5, h6, .ok-brand, .modal-title { font-family: var(--ok-font-hea
 [data-oaken-mode="light"] {
   --ok-rail: color-mix(in srgb, var(--ok-sidebar) 90%, var(--ok-primary));
   --ok-lift: color-mix(in srgb, var(--ok-bg) 55%, #fff);
-  --ok-card: color-mix(in srgb, var(--ok-bg) 15%, #fff);
+  --ok-card: #fff;
 }
 [data-oaken-mode="light"] .ok-sidebar { background: var(--ok-rail); }
 [data-oaken-mode="light"] .ok-reader, [data-oaken-mode="light"] .ok-reader .ok-toolbar { background: var(--ok-lift); }
-[data-oaken-mode="light"] .ok-thread-msg, [data-oaken-mode="light"] .ok-stage-panel { background: var(--ok-card); }
+/* Rule: every content card is white; parchment is only ever the page. */
+[data-oaken-mode="light"] :is(.card, .modal-content, .dropdown-menu, .list-group-item, .ok-section, .ok-thread-msg, .ok-stage-panel,
+  .ok-float, .ok-theme-swatch, .ok-file-card, .ok-file-head, .ok-metric, .ok-attach, .ok-log, .ok-file-text, .ok-toast, .form-control:not(.ok-search .form-control), .form-select) { background-color: var(--ok-card); }
 [data-oaken-mode="light"] .ok-msg.selected { background: var(--ok-lift); box-shadow: inset 3px 0 0 var(--ok-primary); }
 /* Stronger "you are here": primary-tinted fill with an edge, on the rail and in the list. */
 [data-oaken-mode="light"] .ok-nav a.active { background: color-mix(in srgb, var(--ok-primary) 22%, var(--ok-rail)); box-shadow: inset 3px 0 0 var(--ok-primary); }
 [data-oaken-mode="light"] .ok-msg.selected { background: color-mix(in srgb, var(--ok-primary) 12%, var(--ok-lift)); }
+
+/* Stage pill: three ghost icons in a vertical pill at the right edge of an expanded card, same top edge, so it reads as that card's. */
+.ok-thread-msg { position: relative; }
+.ok-stage-pill { position: absolute; top: .9rem; left: calc(100% + .6rem); display: flex; flex-direction: column; gap: .15rem; padding: .3rem; border-radius: 999px;
+  background: color-mix(in srgb, var(--ok-fg) 6%, transparent); }
+.ok-thread-msg.collapsed .ok-stage-pill { display: none; }
+.ok-stg-icon { width: 2rem; height: 2rem; border: 0; border-radius: 50%; background: transparent; color: var(--ok-muted); display: grid; place-items: center; cursor: pointer; }
+.ok-stg-icon:hover { background: var(--ok-hover); color: var(--ok-fg); }
+.ok-stg-icon.active { background: var(--ok-primary-ghost); color: var(--ok-primary-ink, var(--ok-primary)); }
+.ok-thread-msg.has-stage { border-color: var(--ok-primary); }
+.ok-stage-results { margin: 0 1.25rem .75rem 4.1rem; padding: .6rem .9rem; border-radius: .5rem; background: color-mix(in srgb, var(--ok-fg) 4%, transparent); }
+.ok-reader-inner { padding-right: 4rem; }
+@media (max-width: 900px) { .ok-stage-pill { left: auto; right: .6rem; top: .6rem; flex-direction: row; } .ok-reader-inner { padding-right: 2rem; } }
+.ok-nav-plus { padding: 0 .35rem; line-height: 1; color: var(--ok-muted); border: 0; font-size: .8rem; }
+.ok-nav-plus:hover { color: var(--ok-fg); }

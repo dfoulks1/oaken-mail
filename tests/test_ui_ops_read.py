@@ -75,3 +75,48 @@ async def test_mark_read_answers_with_id_lists_the_page_can_iterate():
 
     out = await ui_ops.run(C(), "mark_read", {"ids": ["s1", "s2"]})
     assert out["changed"] == ["s1", "s2"] and out["unchanged"] == []
+
+
+async def test_create_folder_files_the_selected_messages_under_a_dotted_label():
+    calls = []
+
+    class C:
+        async def call(self, name, payload=None, **_):
+            calls.append((name, payload))
+            return CallResult("r", output={})
+
+    out = await ui_ops.run(C(), "create_folder", {"path": "ASF/noise", "ids": ["s1"]})
+    assert out["path"] == "ASF.noise"
+    assert calls == [("label_set", {"subject_id": "s1", "key": "mail.folder", "value": "ASF.noise"})]
+
+
+async def test_list_messages_for_a_folder_or_tag_asks_across_views():
+    asked = []
+
+    class C:
+        async def call(self, name, payload=None, **_):
+            if name == "mail.index":
+                asked.append(payload)
+                return CallResult("r", output={"rows": [], "total": 0})
+            return CallResult("r", output={"plugins": []})
+
+    await ui_ops.run(C(), "list_messages", {"location": "ASF.infra"})
+    await ui_ops.run(C(), "list_messages", {"label": "noise"})
+    assert [a["view"] for a in asked] == ["all", "all"]
+
+
+async def test_get_plugin_config_gives_wiring_with_choices_and_hides_capabilities():
+    class C:
+        async def call(self, name, payload=None, **_):
+            if name == "plugin_describe":
+                return CallResult("r", output={"plugins": [{"name": "ollama", "kind": "llm_backend", "template": False, "settings": [{"name": "instructions", "type": "string", "required": True, "description": "d"}]}]})
+            if name == "queue_list":
+                return CallResult("r", output={"queues": [{"queue": "analyze"}]})
+            if name == "plugin_choices":
+                return CallResult("r", output={"choices": {"model": ["m", "n"]}})
+            return CallResult("r", output={"config": {"stage": "analyze", "instructions": "sum", "route": {"model": "m"}, "capabilities": ["x"], "odd": 3}})
+
+    out = await ui_ops.run(C(), "get_plugin_config", {"plugin": "enricher.summary"})
+    w = {x["name"]: x for x in out["wiring"]}
+    assert w["stage"]["choices"] == ["analyze"] and w["route.backend"]["choices"] == ["", "ollama"]
+    assert w["route.model"]["choices"] == ["", "m", "n"] and w["route.model"]["value"] == "m" and w["enabled"]["value"] is True and "capabilities" not in w and w["odd"]["type"] == "integer"

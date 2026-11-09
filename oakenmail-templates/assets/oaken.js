@@ -46,7 +46,17 @@
         if (row && window.Oaken && window.Oaken.api) window.Oaken.api("set_starred", { ids: [row.dataset.id], starred: on }, { confirm: true }).catch((err) => { toast((err && err.message) || "Could not star."); t.classList.toggle("on"); t.querySelector(".bi")?.classList.toggle("bi-star-fill"); t.querySelector(".bi")?.classList.toggle("bi-star"); });
         t.classList.toggle("on"); t.querySelector(".bi")?.classList.toggle("bi-star-fill"); t.querySelector(".bi")?.classList.toggle("bi-star"); }
       if (a === "toggle-thread") t.closest(".ok-thread-msg")?.classList.toggle("collapsed");
-      if (a === "select-all") document.querySelectorAll(".ok-msg input[type=checkbox]").forEach((c) => (c.checked = t.checked));
+      if (a === "select-all") selectLoaded(t.checked);
+    });
+    document.addEventListener("click", async (e) => {
+      const all = e.target.closest("[data-select-everything]");
+      if (!all) return;
+      e.preventDefault();
+      all.textContent = "Loading every message…";
+      while (view.more && view.next) { const n = view.items.length; await view.next(); if (view.items.length === n) break; } // shortcut: pages the rest in; a very large view loads slowly
+      qsa(".ok-msg input[type=checkbox]").forEach((c) => (c.checked = true));
+      const text = qs("[data-oaken-pager-text]");
+      if (text) text.textContent = `All ${view.items.length.toLocaleString()} selected`;
     });
 
     /* Clicking a message: split layout shows it in reader; list layout navigates */
@@ -184,19 +194,23 @@
   }
   // The reading pane shows the same icons as the list. Pick one to load that stage's results below it.
   const STAGE_CACHE = {}; // message_id -> the message the panel last drew, so a pick needs no fetch
-  function stagePanelHtml(m, open) {
-    STAGE_CACHE[m.message_id] = m;
+  // One vertical pill per message, drawn beside its own card and shown only while that card is expanded.
+  function stagePillHtml(id) {
+    return `<aside class="ok-stage-pill" data-stage-panel data-id="${esc(id)}" aria-label="Stage results for this message">` +
+      STAGE_BADGES.map(([k, icon, name]) => `<button type="button" class="ok-stg-icon" data-stage-pick="${k}" title="${name}" aria-pressed="false"><i class="bi ${icon}"></i></button>`).join("") + `</aside>`;
+  }
+
+  // The open stage's results, inside the card it belongs to. Fetch re-reads; Run now sends the message back through the stage.
+  function stageResultsHtml(m, open) {
     const st = m.stages || {};
-    const btns = STAGE_BADGES.filter(([k]) => (st[k] || []).length).map(([k, icon, name]) =>
-      `<button class="btn btn-sm btn-ghost ok-stg${open === k ? " active" : ""}" data-stage-pick="${k}" title="${name}: ${st[k].length}"><i class="bi ${icon}"></i>${name} ${st[k].length}</button>`).join("");
     const r = st[open] || [];
-    const hit = STAGE_BADGES.find(([k]) => k === open);
-    const detail = r.length ? `<div class="mt-2">` + r.map((x) => `<div class="small"><span class="text-muted">${esc(x.key)}</span> ${esc(x.value)}</div>`).join("") +
-      (open === "enrich" ? `<button class="btn btn-sm btn-ghost py-0 mt-1" data-stage-rerun="enrich" title="Run the enrichers on this message again"><i class="bi bi-arrow-repeat"></i> Run again</button>` : "") + `</div>` : "";
-    const folder = m.location ? `<div class="small mb-2"><i class="bi bi-folder2 me-1"></i>Filed in <strong>${esc(m.location.split(".").join(" › "))}</strong> ` +
-      `<code>mail.folder = ${esc(m.location)}</code>${m.location_by ? ` <span class="text-muted">set by ${esc(m.location_by)}</span>` : ""}</div>` : "";
-    return folder + `<div class="d-flex align-items-center gap-1">${btns || '<span class="small text-muted">No stage results yet.</span>'}` +
-      `<button class="btn btn-sm btn-ghost ms-auto" data-stage-refresh title="Fetch the results again"><i class="bi bi-arrow-clockwise"></i></button></div>` + detail;
+    const name = (STAGE_BADGES.find(([k]) => k === open) || [])[2] || open;
+    const rows = r.length ? r.map((x) => `<div class="small"><span class="text-muted">${esc(x.key)}</span> ${esc(x.value)}</div>`).join("") : `<div class="small text-muted">No ${esc(name.toLowerCase())} results yet.</div>`;
+    const folder = open === "triage" && m.location ? `<div class="small mb-1"><i class="bi bi-folder2 me-1"></i>Filed in <strong>${esc(m.location.split(".").join(" › "))}</strong>${m.location_by ? ` <span class="text-muted">set by ${esc(m.location_by)}</span>` : ""}</div>` : "";
+    // shortcut: core's item_rerun takes enrich and act only, and has no priority; triage re-run and priority wait on core
+    const rerun = open === "enrich" ? `<button class="btn btn-sm btn-ghost" data-stage-rerun="enrich" title="Send this message back through the enrichers now"><i class="bi bi-arrow-repeat"></i> Run now</button>` : "";
+    return `<div class="d-flex align-items-start gap-2"><div class="flex-grow-1"><div class="fw-semibold small mb-1">${esc(name)}</div>${folder}${rows}</div>` +
+      `<div class="d-flex flex-column gap-1">${rerun}<button class="btn btn-sm btn-ghost" data-stage-refresh title="Fetch the results again"><i class="bi bi-arrow-clockwise"></i> Fetch</button></div></div>`;
   }
 
   function rowHtml(m) {
@@ -325,6 +339,14 @@
       const el = qs(".ok-fold-count", h);
       if (el) el.textContent = n ? String(n) : "";
     });
+  }
+
+  // Select-all ticks what is loaded; if more exists, offer to load and tick the rest (Gmail's "select all N").
+  function selectLoaded(on) {
+    qsa(".ok-msg input[type=checkbox]").forEach((c) => (c.checked = on));
+    const text = qs("[data-oaken-pager-text]");
+    if (!on || !view.more || !view.next || view.total === null || !text) { renderStatus(); return; }
+    text.innerHTML = `${view.items.length.toLocaleString()} selected. <a href="#" data-select-everything>Select all ${view.total.toLocaleString()}</a>`;
   }
 
   function renderStatus() {
@@ -489,6 +511,7 @@
     if (observer) observer.disconnect();
     if (!("IntersectionObserver" in window)) return;
     const token = view.token;
+    view.next = () => loadMore(container, list, op, input, token);
     observer = new IntersectionObserver((entries) => {
       if (entries.some((e) => e.isIntersecting)) loadMore(container, list, op, input, token);
     }, { root: container, rootMargin: "0px 0px 400px 0px" });
@@ -639,12 +662,15 @@
       (replyTo ? `<div class="small text-muted">in reply to ${esc(replyTo)}</div>` : "") +
       (current ? "" : `<div class="small text-muted ok-thread-snippet">${esc(m.snippet || "")}</div>`) + `</div>` +
       `<span class="small text-muted ok-thread-date">${esc(current ? m.date || "" : fmtDate(m.date))}</span></header>` +
+      `<div class="ok-stage-results" data-stage-results hidden></div>` +
       `<div class="ok-msg-body" style="white-space:pre-wrap">${current ? (text ? esc(text) : "(no text)") : ""}${atts ? `<div class="mt-3">${atts}</div>` : ""}</div>` +
+      stagePillHtml(m.message_id || "") +
       `</article>`
     );
   }
 
   function readerHtml(b, thread) {
+    STAGE_CACHE[b.message_id] = b;
     const tags = []
       .concat((b.tags || []).map((t) => tag(t)))
       .concat((b.labels || []).map((l) => tag(l, window.Oaken.labelColor(l))))
@@ -675,7 +701,7 @@
       `<h1>${esc(b.subject)}</h1>` +
       (many ? `<div class="small text-muted mb-2">${thread.total || nodes.length} messages in this conversation</div>` : "") +
       `<div class="d-flex gap-2 mb-3 flex-wrap">${tags}</div>` +
-      `<div class="ok-stage-panel mb-4" data-stage-panel data-id="${esc(b.message_id)}">${stagePanelHtml(b)}</div>` + body +
+      body +
       (thread && thread.cut ? `<div class="small text-muted">Showing ${nodes.length} of ${thread.total} messages.</div>` : "") +
       `</div>`
     );
@@ -749,22 +775,34 @@
     document.addEventListener("click", async (e) => {
       const again = e.target.closest("[data-stage-rerun]");
       if (again) { // run a later stage again for this message: the stages before it are skipped
-        const panel = again.closest("[data-stage-panel]");
-        if (await mutate("rerun_stage", { message_id: panel.dataset.id, stage: again.dataset.stageRerun }, "Queued. Refresh in a moment for the new results.")) { /* results arrive when the stage finishes */ }
+        const id = again.closest(".ok-thread-msg").dataset.id;
+        await mutate("rerun_stage", { message_id: id, stage: again.dataset.stageRerun }, "Queued. Fetch in a moment for the new results.");
         return;
       }
       const pick = e.target.closest("[data-stage-pick]");
-      if (pick) { // load one stage's results into the panel; a second click closes it
-        const panel = pick.closest("[data-stage-panel]");
-        panel.dataset.open = panel.dataset.open === pick.dataset.stagePick ? "" : pick.dataset.stagePick;
-        panel.innerHTML = stagePanelHtml(STAGE_CACHE[panel.dataset.id], panel.dataset.open);
+      if (pick) { // open one stage's results in this card, collapse the rest of the thread; a second click closes it
+        const card = pick.closest(".ok-thread-msg"), pill = pick.closest("[data-stage-panel]"), box = qs("[data-stage-results]", card);
+        pill.dataset.open = pill.dataset.open === pick.dataset.stagePick ? "" : pick.dataset.stagePick;
+        qsa("[data-stage-pick]", pill).forEach((b) => { const on = b.dataset.stagePick === pill.dataset.open; b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on)); });
+        card.classList.toggle("has-stage", !!pill.dataset.open);
+        if (!pill.dataset.open) { box.hidden = true; return; }
+        qsa(".ok-thread-msg", card.parentElement).forEach((c) => { if (c !== card) c.classList.add("collapsed"); });
+        box.hidden = false;
+        if (!STAGE_CACHE[card.dataset.id]) {
+          box.textContent = "Loading…";
+          try { STAGE_CACHE[card.dataset.id] = (await api("get_message", { message_id: card.dataset.id })).output; }
+          catch (err) { box.textContent = "Could not load results."; return; }
+        }
+        box.innerHTML = stageResultsHtml(STAGE_CACHE[card.dataset.id], pill.dataset.open);
         return;
       }
       const refresh = e.target.closest("[data-stage-refresh]");
-      if (refresh) { // fetch this message's stage results again, from the reading pane
-        const panel = refresh.closest("[data-stage-panel]");
-        try { panel.innerHTML = stagePanelHtml((await api("get_message", { message_id: panel.dataset.id })).output, panel.dataset.open); }
-        catch (err) { toast((err && err.message) || "Could not fetch the results."); }
+      if (refresh) { // fetch this message's stage results again
+        const card = refresh.closest(".ok-thread-msg"), pill = qs("[data-stage-panel]", card);
+        try {
+          STAGE_CACHE[card.dataset.id] = (await api("get_message", { message_id: card.dataset.id })).output;
+          qs("[data-stage-results]", card).innerHTML = stageResultsHtml(STAGE_CACHE[card.dataset.id], pill.dataset.open);
+        } catch (err) { toast((err && err.message) || "Could not fetch the results."); }
         return;
       }
       const t = e.target.closest("[data-oaken-action]");
@@ -874,10 +912,10 @@
       <a href="index.html?view=sent" data-view="sent"><i class="bi bi-send"></i>Sent</a>
       <a href="index.html?view=drafts" data-view="drafts"><i class="bi bi-file-earmark"></i>Drafts</a>
       <a href="index.html?view=archive" data-view="archive"><i class="bi bi-archive"></i>Archive</a>
-      <div class="ok-nav-heading" data-fold-folders role="button" tabindex="0" aria-expanded="true" style="cursor:pointer"><span>Folders</span><i class="bi bi-chevron-down"></i></div>
+      <div class="ok-nav-heading" data-fold-folders role="button" tabindex="0" aria-expanded="true" style="cursor:pointer"><span>Folders</span><span class="d-flex align-items-center gap-1"><button type="button" class="btn btn-ghost ok-nav-plus" data-oaken-plus="folder" title="New folder" aria-label="New folder"><i class="bi bi-plus-lg"></i></button><i class="bi bi-chevron-down"></i></span></div>
       <div data-oaken-folders><div class="small text-muted px-3 py-1">No folders yet.</div></div>
       <a href="index.html?view=discarded" data-view="discarded"><i class="bi bi-trash3"></i>Discarded</a>
-      <div class="ok-nav-heading">Labels</div>
+      <div class="ok-nav-heading"><span>Labels</span><button type="button" class="btn btn-ghost ok-nav-plus" data-oaken-plus="label" title="New label" aria-label="New label"><i class="bi bi-plus-lg"></i></button></div>
       <div data-oaken-labels><div class="small text-muted px-3 py-1">No tags yet.</div></div>
       <div class="ok-nav-heading">More</div>
 ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join("")}
@@ -892,10 +930,10 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
     if (!h || !box) return;
     box.hidden = !open;
     h.setAttribute("aria-expanded", String(open));
-    qs("i", h).className = "bi " + (open ? "bi-chevron-down" : "bi-chevron-right");
+    qs(".bi-chevron-down, .bi-chevron-right", h).className = "bi " + (open ? "bi-chevron-down" : "bi-chevron-right");
     try { localStorage.setItem("oaken.foldersOpen", open ? "1" : "0"); } catch { /* private mode: it just resets */ }
   }
-  document.addEventListener("click", (e) => { const h = e.target.closest("[data-fold-folders]"); if (h) foldFolders(h.getAttribute("aria-expanded") !== "true"); });
+  document.addEventListener("click", (e) => { if (e.target.closest("[data-oaken-plus]")) return; const h = e.target.closest("[data-fold-folders]"); if (h) foldFolders(h.getAttribute("aria-expanded") !== "true"); });
   document.addEventListener("keydown", (e) => { const h = e.target.closest && e.target.closest("[data-fold-folders]"); if (h && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); foldFolders(h.getAttribute("aria-expanded") !== "true"); } });
 
   // Folders the person folded, by path; kept in this browser only.
@@ -918,8 +956,8 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
     const label = url.searchParams.get("label") || "";
     nav.querySelectorAll("a").forEach((a) => a.classList.remove("active"));
     const hit =
-      (page === "index.html" && folder && nav.querySelector(`a[href*="location=${encodeURIComponent(folder)}"]`)) ||
-      (page === "index.html" && label && nav.querySelector(`a[href*="label=${encodeURIComponent(label)}"]`)) ||
+      (page === "index.html" && folder && nav.querySelector(`a[href="index.html?location=${encodeURIComponent(folder)}"]`)) ||
+      (page === "index.html" && label && nav.querySelector(`a[href="index.html?label=${encodeURIComponent(label)}"]`)) ||
       (page === "index.html" && view && nav.querySelector(`a[data-view="${view}"]`)) ||
       (page === "stage.html" && nav.querySelector(`a[data-stage="${url.searchParams.get("s") || "intake"}"]`)) ||
       nav.querySelector(`a[data-page="${page}"]`);
@@ -985,25 +1023,33 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
       const id = `pc-${esc(f.name)}`, val = f.value, lbl = `<label class="form-label small mb-1" for="${id}">${esc(f.name)}${f.required ? " *" : ""}</label>`;
       const hint = f.description ? `<div class="form-text">${esc(f.description)}</div>` : "";
       if (f.type === "boolean") return `<div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="${id}" data-cfg="${esc(f.name)}" data-type="boolean" ${val ? "checked" : ""}><label class="form-check-label small" for="${id}">${esc(f.name)}</label>${hint}</div>`;
+      if (f.type === "choice" && f.choices) return `<div class="mb-2">${lbl}<select class="form-select form-select-sm" id="${id}" data-cfg="${esc(f.name)}" data-type="choice">` +
+        (f.choices || []).concat(f.choices && f.choices.includes(val) || val == null || val === "" ? [] : [val]).map((c) => `<option value="${esc(c)}"${c === (val == null ? "" : val) ? " selected" : ""}>${c === "" ? "(default)" : esc(c)}</option>`).join("") + `</select>${hint}</div>`;
       const num = f.type === "integer" || f.type === "number";
       const shown = val == null ? "" : typeof val === "object" ? JSON.stringify(val) : val;
       const area = f.type !== "string" && !num;
       return `<div class="mb-2">${lbl}` + (area ? `<textarea class="form-control form-control-sm font-monospace" rows="2" id="${id}" data-cfg="${esc(f.name)}" data-type="json">${esc(shown)}</textarea>`
         : `<input class="form-control form-control-sm" id="${id}" type="${num ? "number" : "text"}" data-cfg="${esc(f.name)}" data-type="${esc(f.type)}" value="${esc(shown)}">`) + `${hint}</div>`;
     };
+    // Settings open in a modal, not inline. The modal lives in the page; this fills it for one plugin.
+    const sm = qs("#pluginSettingsModal");
     async function openSettings(row) {
-      const d = qs("[data-plugin-edit]", row);
-      if (!d.hidden) { d.hidden = true; return; }
-      d.innerHTML = '<div class="text-muted">Loading…</div>'; d.hidden = false;
+      const body = qs("[data-settings-body]", sm), save = qs("[data-plugin-save]", sm);
+      sm.dataset.plugin = row.dataset.plugin;
+      qs("[data-settings-title]", sm).textContent = row.dataset.plugin;
+      body.innerHTML = '<div class="text-muted">Loading…</div>'; save.hidden = true;
+      modalOf(sm)?.show();
       try {
-        const { settings } = (await api("get_plugin_config", { plugin: row.dataset.plugin })).output;
-        d._orig = Object.fromEntries(settings.map((x) => [x.name, x.value]));
-        d.innerHTML = (settings.length ? settings.map(editField).join("") : '<div class="text-muted">This plugin has no settings.</div>') +
-          (settings.length ? '<button class="btn btn-oaken btn-sm mt-1" data-plugin-save>Save and reload</button> <span class="text-muted" data-plugin-note></span>' : "");
-      } catch (err) { d.textContent = (err && err.message) || "Could not load its settings."; }
+        const out = (await api("get_plugin_config", { plugin: row.dataset.plugin })).output;
+        const settings = out.settings || [], wiring = out.wiring || [];
+        body._orig = Object.fromEntries(settings.concat(wiring).map((x) => [x.name, x.value == null ? (x.type === "choice" || x.type === "string" ? "" : x.value) : x.value]));
+        body.innerHTML = (settings.length ? settings.map(editField).join("") : '<div class="text-muted mb-2">This plugin declares no settings of its own.</div>') +
+          (wiring.length ? '<details class="mt-3"><summary class="text-muted small text-uppercase" style="letter-spacing:.08em;cursor:pointer">Advanced: stage, model server, filters</summary><div class="mt-2">' + wiring.map(editField).join("") + "</div></details>" : "");
+        save.hidden = false;
+      } catch (err) { body.textContent = (err && err.message) || "Could not load its settings."; }
     }
-    async function saveSettings(row) {
-      const d = qs("[data-plugin-edit]", row), config = {};
+    async function saveSettings() {
+      const d = qs("[data-settings-body]", sm), config = {};
       try {
         qsa("[data-cfg]", d).forEach((el) => {
           const name = el.dataset.cfg, t = el.dataset.type;
@@ -1015,9 +1061,10 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
         });
       } catch (err) { toast("One value is not valid JSON."); return; }
       if (!Object.keys(config).length) { toast("Nothing changed."); return; }
-      const out = await mutate("set_plugin_config", { plugin: row.dataset.plugin, config }, "Saved. Core is reloading.");
-      if (out) { qs("[data-plugin-note]", d).textContent = out.note || ""; setTimeout(loadPlugins, 3000); }
+      const out = await mutate("set_plugin_config", { plugin: sm.dataset.plugin, config }, "Saved. Core is reloading.");
+      if (out) { modalOf(sm)?.hide(); setTimeout(loadPlugins, 3000); }
     }
+    qs("[data-plugin-save]", sm)?.addEventListener("click", saveSettings);
     async function loadPlugins() {
       const box = qs("[data-stage-plugins]");
       try {
@@ -1028,7 +1075,7 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
           `<div class="d-flex justify-content-between align-items-center py-2 border-top" data-plugin="${esc(p.id)}">` +
           `<div class="flex-grow-1"><a href="#" class="fw-semibold text-reset text-decoration-none" data-plugin-look title="Show what it is and how it is set up">${esc(p.name)}</a> ${p.started ? (p.healthy ? "" : '<span class="badge text-bg-warning">Unhealthy</span>') : '<span class="badge text-bg-secondary">Off</span>'}` +
           `<div class="text-muted small">${esc(p.summary || "")}${p.warning ? ` <span class="text-danger">${esc(p.warning)}</span>` : ""}</div>` +
-          `<div class="small mt-2" data-plugin-detail hidden>${pluginDetail(p)}</div><div class="small mt-2" data-plugin-edit hidden></div></div>` +
+          `<div class="small mt-2" data-plugin-detail hidden>${pluginDetail(p)}</div></div>` +
           `<div class="d-flex gap-2 align-items-center"><button class="btn btn-sm btn-ghost text-muted" data-plugin-settings title="Settings"><i class="bi bi-gear"></i></button><button class="btn btn-sm btn-ghost text-muted" data-plugin-remove title="Remove this instance"><i class="bi bi-trash3"></i></button>` +
           `<div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" role="switch" data-plugin-toggle ${p.enabled ? "checked" : ""} aria-label="Switch ${esc(p.name)}"></div></div></div>`
         ).join("") || '<div class="text-muted small">Nothing here yet.</div>';
@@ -1044,8 +1091,6 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
     qs("[data-stage-plugins]").addEventListener("click", async (e) => {
       const gear = e.target.closest("[data-plugin-settings]");
       if (gear) { openSettings(gear.closest("[data-plugin]")); return; }
-      const save = e.target.closest("[data-plugin-save]");
-      if (save) { saveSettings(save.closest("[data-plugin]")); return; }
       const look = e.target.closest("[data-plugin-look]");
       if (look) { e.preventDefault(); const d = look.closest("[data-plugin]").querySelector("[data-plugin-detail]"); d.hidden = !d.hidden; return; }
       const t = e.target.closest("[data-plugin-remove]"); if (!t) return;
@@ -1164,6 +1209,8 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
             ).join("")
           : '<div class="small text-muted px-3 py-1">No tags yet.</div>';
       }
+      const nav = qs("[data-oaken-nav]");
+      if (nav) markActive(nav); // folders and labels arrive after the first mark, so mark again
     } catch (e) {
       // A sidebar failure should not break the page; leave the static fallback in place.
       toast(e.message || "Could not load folders.");
@@ -1185,6 +1232,17 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
     );
 
   function wireMailboxUi() {
+    // The + beside Folders and Labels opens the new-folder / new-label dialog (it lives on the mailbox page).
+    document.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-oaken-plus]");
+      if (!b) return;
+      e.preventDefault(); e.stopPropagation();
+      const modal = qs(b.dataset.oakenPlus === "label" ? "#newLabelModal" : "#newFolderModal");
+      if (modal) modalOf(modal)?.show(); else location.href = "index.html?new=" + b.dataset.oakenPlus;
+    });
+    const want = new URLSearchParams(location.search).get("new");
+    if (want) setTimeout(() => modalOf(qs(want === "label" ? "#newLabelModal" : "#newFolderModal"))?.show(), 300);
+
     // New folder / new label forms.
     document.addEventListener("submit", async (e) => {
       const form = e.target.closest("form[data-oaken-new]");
@@ -1196,7 +1254,7 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
       let out;
       if (kind === "folder") {
         const parent = form.elements.parent ? form.elements.parent.value : "";
-        out = await mutate("create_folder", { path: parent ? `${parent}/${name}` : name });
+        out = await mutate("create_folder", { path: parent ? `${parent}/${name}` : name, ids: selectedIds(qs("[data-oaken-list]")) });
       } else {
         out = await mutate("create_label", { name });
         if (out && form.elements.color) labelColors.set(out.name, form.elements.color.value);
