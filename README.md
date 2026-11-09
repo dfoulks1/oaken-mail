@@ -11,7 +11,7 @@ pip install oaken-mail          # or: uv tool install oaken-mail
 oknpost start                   # the daemon, in the background
 ```
 
-Then open the console at <http://127.0.0.1:62536/> (this machine only). `oknpost` is the only command; it is core's CLI under Oaken Mail's name.
+Then open the console at <http://127.0.0.1:62536/> (this machine only). `oknpost` is core's CLI under Oaken Mail's name; `oknpost-webui` serves the browser UI (below).
 
 ## Add an account
 
@@ -32,10 +32,24 @@ oknpost work check
 A new account's sync is scheduled when core starts, so restart once (`oknpost restart`) after signing in. `oknpost plugins --kind provider` lists
 what you can add.
 
+## The browser UI
+
+`oknpost-webui` serves a browser UI that looks like a mail client. It is a second process beside the daemon: start core, then the UI.
+
+```bash
+oknpost start                   # the daemon
+oknpost-webui                   # the UI, on http://127.0.0.1:62584/
+```
+
+Loopback only, default port 62584 (`--port` to change). It holds core's API token and adds it on the way through, so the token never
+reaches the browser; the browser sees one same-origin server. It does not start core: if core is down the UI says so, same as the CLI.
+`oknpost-webui` takes `start` (the default), `stop`, `restart`, `status`, and `--detach` to run in the background.
+
 ## What it does and does not
 
 - **Mail only.** A provider loads only if it is core's own or tagged `mail`; the ingestor refuses anything that is not really mail.
-- **Not ported from the original Oaken Mail yet:** reading state and folders, Sieve, ask and retrieval, the enrichers and scanners. IMAP is pull only.
+- **Not rebuilt from the original UI yet:** sending, and the mail-derived CRM (contacts/people). Reading, search, threads, accounts and Sieve are wired to core operations.
+- **Not ported from the original Oaken Mail yet:** ask and retrieval, the enrichers and scanners. IMAP is pull only.
 - Your home (config, data) is chosen by `OAKEN_MAIL_HOME`; without it, core remembers the last home it ran in.
 
 ## Develop

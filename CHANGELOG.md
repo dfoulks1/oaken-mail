@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.1 (alpha)
+
+The WebUI comes in-tree. It was a separate repo (`oaken-webui`); it is no longer separable from Oaken Mail, so it ships here.
+
+- `oknpost-webui` serves a browser UI (looks like a mail client) on loopback, port 62584, and reverse-proxies `/v1/*` to a running `oknpost` daemon. It holds the API token; the browser never sees it. Two processes: `oknpost start`, then `oknpost-webui`.
+- The UI reaches core only through the general API the CLI uses (now `oaken_core.cli`), never core internals or the MCP surface. Every mail action stays a registry operation behind the confirm gate.
+- Not rebuilt from the original UI: send, the mail-derived CRM (contacts/people).
+
 ## 1.0.0 (alpha)
 
 Oaken Mail rebuilt as a thin layer on oaken-core 1.0 and oaken-plugins 1.0, in place of the original application (which is in git history at `cf3b187`).
