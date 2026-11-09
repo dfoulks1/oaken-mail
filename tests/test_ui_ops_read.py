@@ -134,3 +134,13 @@ def test_icon_keeps_only_bootstrap_class_names_and_an_account_says_it_is_a_mail_
     assert ui_ops._icon("bi-google") == "bi-google" and ui_ops._icon('bi-x" onclick="y') == "" and ui_ops._icon(None) == ""
     a = ui_ops._account({"name": "me", "plugin": "gmail", "enabled": True, "healthy": True, "warning": "", "hint": "", "commands": [], "icon": "bi-google", "tags": ["mail"]})
     assert (a["icon"], a["role"]) == ("bi-google", "mail identity")
+
+
+def test_icon_falls_back_to_the_kind_and_socket_is_not_listed():
+    assert ui_ops._icon(None, "store") == "bi-database" and ui_ops._icon("bi-envelope", "store") == "bi-envelope" and ui_ops._icon(None, "triager") == ""
+    assert ("provider", "socket") in ui_ops._HIDDEN
+
+
+def test_stored_enrichment_data_becomes_blocks_with_lists_kept_and_confidence_dropped():
+    rows = [{"name": "summary", "data": {"summary": "Dave proposes recording IP clearance.", "facts": ["a", "b"], "confidence": 0.95, "empty": ""}, "labels": {}}]
+    assert ui_ops._enrichment_blocks(rows) == [{"name": "summary", "fields": [{"name": "summary", "items": ["Dave proposes recording IP clearance."]}, {"name": "facts", "items": ["a", "b"]}]}]

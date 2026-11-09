@@ -206,15 +206,26 @@
   }
 
   // The open stage's results, inside the card it belongs to. Fetch re-reads; Run now sends the message back through the stage.
-  function stageResultsHtml(m, open) {
+  function stageResultsHtml(m, open, pick) {
     const st = m.stages || {};
     const r = st[open] || [];
     const name = (STAGE_BADGES.find(([k]) => k === open) || [])[2] || open;
-    const rows = r.length ? r.map((x) => `<div class="small"><span class="text-muted">${esc(x.key)}</span> ${esc(x.value)}</div>`).join("") : `<div class="small text-muted">No ${esc(name.toLowerCase())} results yet.</div>`;
+    const nice = (t) => { const w = String(t).replace(/[_-]+/g, " "); return w.charAt(0).toUpperCase() + w.slice(1); };
+    // Stored enrichment data draws as a block per enricher: a bold field name, then bullets (a list stays a list).
+    const blocks = open === "enrich" ? (m.enrichments || []) : [];
+    // Several enrichers: a dropdown beside the title picks which one this pane shows (the first by default).
+    const chosen = blocks.find((b) => b.name === pick) || blocks[0];
+    const picker = blocks.length > 1
+      ? `<select class="form-select form-select-sm d-inline-block w-auto ms-1 py-0" data-enrich-pick aria-label="Which enrichment">${blocks.map((b) => `<option value="${esc(b.name)}"${b === chosen ? " selected" : ""}>${esc(nice(b.name))}</option>`).join("")}</select>`
+      : chosen ? " " + esc(nice(chosen.name)) : "";
+    const drawn = chosen ? `<div class="fw-semibold small mt-2 mb-1">Enrich:${picker}</div>` + chosen.fields.map((f) =>
+      `<div class="fw-semibold small">${esc(nice(f.name))}</div><ul class="small mb-2 ps-3">${f.items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`).join("") : "";
+    const labeled = r.map((x) => `<div class="small"><span class="text-muted">${esc(x.key)}</span> ${esc(x.value)}</div>`).join("");
+    const rows = drawn || labeled ? drawn + labeled : `<div class="small text-muted">No ${esc(name.toLowerCase())} results yet.</div>`;
     const folder = open === "triage" && m.location ? `<div class="small mb-1"><i class="bi bi-folder2 me-1"></i>Filed in <strong>${esc(m.location.split(".").join(" › "))}</strong>${m.location_by ? ` <span class="text-muted">set by ${esc(m.location_by)}</span>` : ""}</div>` : "";
     // shortcut: core's item_rerun takes enrich and act only, and has no priority; triage re-run and priority wait on core
     const rerun = open === "enrich" ? `<button class="btn btn-sm btn-ghost" data-stage-rerun="enrich" title="Send this message back through the enrichers now"><i class="bi bi-arrow-repeat"></i> Run now</button>` : "";
-    return `<div class="d-flex align-items-start gap-2"><div class="flex-grow-1"><div class="fw-semibold small mb-1">${esc(name)}</div>${folder}${rows}</div>` +
+    return `<div class="d-flex align-items-start gap-2"><div class="flex-grow-1">${drawn ? "" : `<div class="fw-semibold small mb-1">${esc(name)}</div>`}${folder}${rows}</div>` +
       `<div class="d-flex flex-column gap-1">${rerun}<button class="btn btn-sm btn-ghost" data-stage-refresh title="Fetch the results again"><i class="bi bi-arrow-clockwise"></i> Fetch</button></div></div>`;
   }
 
@@ -777,6 +788,13 @@
   }
 
   function wireActions() {
+    document.addEventListener("change", (e) => {
+      const sel = e.target.closest("[data-enrich-pick]");
+      if (!sel) return;
+      const card = sel.closest(".ok-thread-msg"), box = qs("[data-stage-results]", card);
+      box.dataset.pick = sel.value; // kept per message pane, so Fetch redraws the same one
+      box.innerHTML = stageResultsHtml(STAGE_CACHE[card.dataset.id], "enrich", sel.value);
+    });
     document.addEventListener("click", async (e) => {
       const again = e.target.closest("[data-stage-rerun]");
       if (again) { // run a later stage again for this message: the stages before it are skipped
@@ -798,7 +816,7 @@
           try { STAGE_CACHE[card.dataset.id] = (await api("get_message", { message_id: card.dataset.id })).output; }
           catch (err) { box.textContent = "Could not load results."; return; }
         }
-        box.innerHTML = stageResultsHtml(STAGE_CACHE[card.dataset.id], pill.dataset.open);
+        box.innerHTML = stageResultsHtml(STAGE_CACHE[card.dataset.id], pill.dataset.open, box.dataset.pick);
         return;
       }
       const refresh = e.target.closest("[data-stage-refresh]");
@@ -806,7 +824,7 @@
         const card = refresh.closest(".ok-thread-msg"), pill = qs("[data-stage-panel]", card);
         try {
           STAGE_CACHE[card.dataset.id] = (await api("get_message", { message_id: card.dataset.id })).output;
-          qs("[data-stage-results]", card).innerHTML = stageResultsHtml(STAGE_CACHE[card.dataset.id], pill.dataset.open);
+          const box = qs("[data-stage-results]", card); box.innerHTML = stageResultsHtml(STAGE_CACHE[card.dataset.id], pill.dataset.open, box.dataset.pick);
         } catch (err) { toast((err && err.message) || "Could not fetch the results."); }
         return;
       }
@@ -1111,7 +1129,8 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
       const hint = f.description ? `<div class="form-text">${esc(f.description)}</div>` : "";
       if (f.type === "boolean") return `<div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" id="af-${esc(f.name)}" data-cfg="${esc(f.name)}" data-type="boolean" ${f.default ? "checked" : ""}><label class="form-check-label" for="af-${esc(f.name)}">${esc(f.name)}</label>${hint}</div>`;
       const type = f.type === "integer" || f.type === "number" ? "number" : "text";
-      return `<div class="mb-3">${label}<input class="form-control" id="af-${esc(f.name)}" type="${type}" data-cfg="${esc(f.name)}" data-type="${esc(f.type)}" value="${f.default == null ? "" : esc(f.default)}">${hint}</div>`;
+      const list = f.type === "array", dflt = f.default == null ? "" : list && Array.isArray(f.default) ? f.default.join(", ") : esc(f.default);
+      return `<div class="mb-3">${label}<input class="form-control" id="af-${esc(f.name)}" type="${type}" data-cfg="${esc(f.name)}" data-type="${esc(f.type)}" value="${dflt}"${list ? ' placeholder="separate with commas"' : ""}>${hint}</div>`;
     };
     qs("[data-stage-add]").addEventListener("click", () => {
       body.innerHTML = `<div class="mb-3"><label class="form-label small mb-1" for="af-pick">What to add</label><select class="form-select" id="af-pick">` +
@@ -1133,7 +1152,7 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
         const type = el.dataset.type;
         if (type === "boolean") { config[el.dataset.cfg] = el.checked; return; }
         if (el.value === "") return; // blank means the plugin's own default
-        config[el.dataset.cfg] = type === "integer" || type === "number" ? Number(el.value) : el.value;
+        config[el.dataset.cfg] = type === "integer" || type === "number" ? Number(el.value) : type === "array" ? el.value.split(",").map((x) => x.trim()).filter(Boolean) : el.value;
       });
       const out = await mutate("stage_plugin_add", { template: t.id, name: qs("#af-name", body)?.value || "", config }, "Added.");
       if (out) { bootstrap.Modal.getInstance(modalEl)?.hide(); loadPlugins(); }

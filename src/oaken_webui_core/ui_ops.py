@@ -8,6 +8,7 @@ asks for those and reshapes the answer to the fields the page reads. A name not 
 
 import asyncio
 import hashlib
+import json
 import re
 from collections.abc import Awaitable, Callable, Mapping
 from email.utils import getaddresses, parseaddr
@@ -193,14 +194,41 @@ async def _set_by(client: ApiClient, sid: str, key: str) -> str:
     return (f"{row['actor_kind']}:{row['actor']}" if row and row.get("actor") else row["actor_kind"]) if row else ""
 
 
+_HIDE_FIELDS = {"confidence"}  # a number the model reports about itself: not worth a line
+
+
+def _enrichment_blocks(rows: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """What enrichers stored, as blocks the stage pane draws: one per enricher, one field per key of its data, each a list of lines.
+    A list stays a list (bullets); anything else is one line."""
+    blocks: list[dict[str, Any]] = []
+    for r in rows:
+        fields = []
+        for k, v in (r.get("data") or {}).items():
+            if k in _HIDE_FIELDS or v in ("", None, [], {}):
+                continue
+            items = [str(x) for x in v] if isinstance(v, list) else [json.dumps(v) if isinstance(v, dict) else str(v)]
+            fields.append({"name": k, "items": items})
+        if fields:
+            blocks.append({"name": r["name"], "fields": fields})
+    return blocks
+
+
+async def _stored_enrichments(client: ApiClient, sid: str) -> list[dict[str, Any]]:
+    try:
+        return _enrichment_blocks((await _call(client, "item_enrichments", {"id": sid}))["enrichments"])
+    except CliError:
+        return []  # a core without the operation: only what labels carry shows
+
+
 async def get_message(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
     m = await _call(client, "mail.get", {"subject_id": inp["message_id"]})
     parts = m["parts"]
     headers = parts.get("headers", {})
+    shaped = await _labels(client, m["subject_id"], await _stage_of_prefix(client))
     return {
         "message_id": m["subject_id"], "thread_key": m["thread_id"], "subject": m["subject"], "from_name": parseaddr(_header(headers, "from"))[0],
         "from_addr": m["from_addr"], "to_addrs": _people(headers, "to"), "cc_addrs": _people(headers, "cc"), "date": m["sent_at"],
-        "is_read": m["is_read"], **await _labels(client, m["subject_id"], await _stage_of_prefix(client)),
+        "is_read": m["is_read"], **shaped, "enrichments": await _stored_enrichments(client, m["subject_id"]),
         "text": parts.get("text") or parts.get("clean") or "",
         "html": parts.get("html") or "",  # the page shows it in a sandboxed frame with no scripts and no remote loads
         "attachments": [_attachment(v) for k, v in parts.items() if k.startswith("attachment-")],
@@ -346,7 +374,7 @@ def _nature(kind: str, plugin: str, tags: Any) -> str:
 
 def _plugin_row(d: Mapping[str, Any]) -> dict[str, Any]:
     keys = ("name", "summary", "template", "enabled", "started", "healthy", "warning", "hint", "setup_help", "contextual", "tags", "doc", "version")
-    return {"id": f"{d['kind']}.{d['name']}", "kind": d["kind"], "nature": _nature(d["kind"], str(d.get("plugin") or d["name"]), d.get("tags")), "icon": _icon(d.get("icon")), **{k: d.get(k) for k in keys},
+    return {"id": f"{d['kind']}.{d['name']}", "kind": d["kind"], "nature": _nature(d["kind"], str(d.get("plugin") or d["name"]), d.get("tags")), "icon": _icon(d.get("icon"), d["kind"]), **{k: d.get(k) for k in keys},
             "commands": [{k: c.get(k) for k in ("name", "summary")} for c in d.get("commands", [])], "settings": [
         {k: x.get(k) for k in ("name", "type", "required", "default", "description")} for x in d.get("settings", [])]}
 
@@ -356,7 +384,7 @@ async def get_stage_plugins(client: ApiClient, inp: Mapping[str, Any]) -> dict[s
     if stage not in STAGE_KINDS:
         raise CliError(f"no stage {stage!r}")
     docs = (await _call(client, "plugin_describe", {}))["plugins"]
-    rows = [_plugin_row(d) for d in docs if d["kind"] in STAGE_KINDS[stage]]
+    rows = [_plugin_row(d) for d in docs if d["kind"] in STAGE_KINDS[stage] and (d["kind"], d["name"]) not in _HIDDEN]
     # a template is only a pattern for instances; it is not itself something that runs
     return {"plugins": [r for r in rows if not r["template"]], "templates": [r for r in rows if r["template"]]}
 
@@ -468,12 +496,17 @@ def _cmds(p: Mapping[str, Any]) -> list[str]:
 
 async def list_plugins(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
     return {"plugins": [{"name": p["plugin"] if p["template"] else p["name"], "kind": p["kind"], "capabilities": p["tags"], "operations": _cmds(p),
-                         "setup_help": p["setup_help"], "icon": _icon(p.get("icon")), "account_defaults": {}} for p in await _plugins(client) if p["template"] or p["kind"] != "provider"]}  # fmt: skip
+                         "setup_help": p["setup_help"], "icon": _icon(p.get("icon"), p["kind"]), "account_defaults": {}} for p in await _plugins(client) if (p["template"] or p["kind"] != "provider") and (p["kind"], p["plugin"]) not in _HIDDEN]}  # fmt: skip
 
 
-def _icon(value: Any) -> str:
-    """A plugin's own icon, kept only if it is a Bootstrap Icons class name: it becomes a class in the page, so nothing else gets through."""
-    return value if isinstance(value, str) and re.fullmatch(r"bi-[a-z0-9-]{1,40}", value) else ""
+_KIND_ICON = {"store": "bi-database", "vector_store": "bi-database", "formatter": "bi-file-earmark-text", "ingestor": "bi-box-arrow-in-down"}
+_HIDDEN = {("provider", "socket")}  # core's own door: the product may use it, but it is nothing an owner adds or switches
+
+
+def _icon(value: Any, kind: str = "") -> str:
+    """A plugin's own icon, kept only if it is a Bootstrap Icons class name (it becomes a class in the page, so nothing else gets through);
+    a plugin that declares none gets its kind's default, where there is one."""
+    return value if isinstance(value, str) and re.fullmatch(r"bi-[a-z0-9-]{1,40}", value) else _KIND_ICON.get(kind, "")
 
 
 def _account(p: Mapping[str, Any]) -> dict[str, Any]:
@@ -485,7 +518,7 @@ def _account(p: Mapping[str, Any]) -> dict[str, Any]:
 
 
 async def list_accounts(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
-    return {"accounts": [_account(p) for p in await _plugins(client) if p["kind"] == "provider" and not p["template"]]}
+    return {"accounts": [_account(p) for p in await _plugins(client) if p["kind"] == "provider" and not p["template"] and (p["kind"], p["plugin"]) not in _HIDDEN]}
 
 
 async def create_account(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
@@ -590,7 +623,9 @@ async def list_all_plugins(client: ApiClient, inp: Mapping[str, Any]) -> dict[st
     out = []
     for p in (await _call(client, "plugin_list", {}))["plugins"]:
         kind = p["id"].partition(".")[0]
-        out.append({**{k: p.get(k) for k in ("id", "provider", "version", "started", "healthy", "enabled", "detail", "warning", "hint")}, "kind": kind, "nature": _nature(kind, str(p.get("provider") or ""), p.get("tags")), "icon": _icon(p.get("icon")), "switchable": kind in _SWITCHABLE})
+        if tuple(p["id"].split(".", 1)) in _HIDDEN:
+            continue
+        out.append({**{k: p.get(k) for k in ("id", "provider", "version", "started", "healthy", "enabled", "detail", "warning", "hint")}, "kind": kind, "nature": _nature(kind, str(p.get("provider") or ""), p.get("tags")), "icon": _icon(p.get("icon"), kind), "switchable": kind in _SWITCHABLE})
     return {"plugins": sorted(out, key=lambda x: (x["kind"], x["id"]))}
 
 
