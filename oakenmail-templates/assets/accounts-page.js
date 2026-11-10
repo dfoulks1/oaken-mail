@@ -44,7 +44,7 @@
     const ops = ((providers[provider] || {}).operations) || [];
     if (ops.includes(provider + ".auth_status")) return "consent";
     if (ops.includes(provider + ".auth")) return "password";
-    return "none";
+    return "keyring"; // no sign-in page and no auth command (SMTP): the password goes to the keyring, then `check` tries it
   }
   function providerChanged() {
     const sel = $("[data-wiz-provider]");
@@ -57,6 +57,8 @@
     if (wrap) wrap.hidden = !(caps.includes("sync.pull") && caps.includes("send"));
     const sw = $("[data-wiz-secret-wrap]");
     if (sw) sw.hidden = !(sel && sel.value === "gmail");
+    const sm = $("[data-wiz-smtp-wrap]");
+    if (sm) sm.hidden = !(sel && sel.value === "smtp");
     const ro = $("[data-wiz-receive-only]");
     if (ro) ro.checked = !!(p.account_defaults && p.account_defaults.receive_only);
   }
@@ -97,6 +99,17 @@
     caps.innerHTML = (acct.capabilities || []).map((c) => '<span class="ok-tag">' + c + "</span>").join("") || '<span class="text-muted small">none yet</span>';
     $("[data-acct-display]", card).value = acct.display_name || "";
     $("[data-acct-receive-only]", card).checked = !!acct.receive_only;
+    const keyring = !!providers[acct.provider] && credKind(acct.provider) === "keyring"; // not before the provider list has loaded: credKind would guess // SMTP: no sign-in step, the password is set on the card
+    const authBtn = $("[data-acct-action=reauth]", card);
+    if (keyring || !(acct.capabilities || []).includes("auth")) { authBtn.disabled = true; authBtn.title = keyring ? "Nothing to authorize: set the password on the card." : "This account has no sign-in command (core may need a restart)."; }
+    $("[data-acct-pw-wrap]", card).hidden = !keyring;
+    const smtp = acct.provider === "smtp", c = acct.config || {};
+    $("[data-acct-smtp-wrap]", card).hidden = !smtp;
+    if (smtp) {
+      $("[data-acct-host]", card).value = c.host || ""; $("[data-acct-from]", card).value = c.from_address || "";
+      $("[data-acct-login]", card).value = c.username || ""; $("[data-acct-security]", card).value = c.security || "starttls";
+      $("[data-acct-receive-only]", card).closest(".col-sm-6").hidden = true; // send-only
+    }
     return tpl;
   }
 
@@ -127,10 +140,14 @@
     try {
       const current = (await api("get_account", { account_id: id })).output || {};
       const config = Object.assign({}, current.config || {});
-      if ($("[data-acct-receive-only]", card).checked) config.receive_only = true;
+      if (card.dataset.provider === "smtp") {
+        Object.assign(config, { host: $("[data-acct-host]", card).value.trim(), from_address: $("[data-acct-from]", card).value.trim(), security: $("[data-acct-security]", card).value });
+        const login = $("[data-acct-login]", card).value.trim();
+        config.username = login; // "" clears it: core merges keys, it cannot delete one
+      } else if ($("[data-acct-receive-only]", card).checked) config.receive_only = true;
       else delete config.receive_only;
       await api("set_account_config", { account_id: id, config: config, display_name: $("[data-acct-display]", card).value }, { confirm: true });
-      setStatus(status, "ok", "Saved — the running provider keeps its old settings until core restarts.");
+      setStatus(status, "ok", "Saved. Core reloaded.");
       load();
     } catch (err) {
       setStatus(status, "err", "Save failed: " + (err && err.message || err));
@@ -162,12 +179,30 @@
 
   async function reauth(card) {
     const status = $("[data-acct-status]", card);
+    if (credKind(card.dataset.provider) === "keyring") { // SMTP: no sign-in page, a password in the keyring
+      card.classList.add("is-open");
+      $("[data-acct-pw-wrap]", card).hidden = false;
+      $("[data-acct-password]", card).focus();
+      return;
+    }
     try {
       const res = (await api("account_auth", { account_id: card.dataset.accountId }, { confirm: true })).output || {};
       if (res.open_url) { window.open(res.open_url, "_blank", "noopener"); setStatus(status, "warn", "Finish signing in in the new tab, then choose Check sign-in."); }
     } catch (err) {
       setStatus(status, "err", "Could not start: " + (err && err.message || err));
     }
+  }
+
+  async function setPassword(card) {
+    const status = $("[data-acct-status]", card), box = $("[data-acct-password]", card);
+    if (!box.value) { setStatus(status, "err", "A password is required."); return; }
+    setStatus(status, "", "Storing…");
+    try {
+      await api("set_account_password", { account_id: card.dataset.accountId, password: box.value }, { confirm: true });
+      box.value = "";
+      setStatus(status, "ok", "Password stored. Choose Check sign-in to try it.");
+      $("[data-acct-pw-wrap]", card).hidden = true;
+    } catch (err) { setStatus(status, "err", "Failed: " + (err && err.message || err)); }
   }
 
   async function syncAccount(card) {
@@ -200,6 +235,7 @@
     else if (action === "check") checkAccount(card);
     else if (action === "remove") removeAccount(card);
     else if (action === "reauth") reauth(card);
+    else if (action === "setpw") setPassword(card);
     else if (action === "sync") syncAccount(card);
   });
 
@@ -245,6 +281,12 @@
         config.account = id;
         config.client_secret_file = secret.value.trim();
       }
+      if (wiz.provider === "smtp") {
+        const host = $("[data-wiz-host]", modalEl).value.trim(), from = $("[data-wiz-from]", modalEl).value.trim(), login = $("[data-wiz-login]", modalEl).value.trim();
+        if (!host || !from) { setStatus(status, "err", "SMTP needs a host and a from address."); return; }
+        Object.assign(config, { host, from_address: from, security: $("[data-wiz-security]", modalEl).value });
+        if (login) config.username = login;
+      }
       setStatus(status, "", "Creating…");
       try {
         await api("create_account", { account_id: id, provider: wiz.provider, display_name: name, config: config }, { confirm: true });
@@ -253,7 +295,7 @@
         // Prepare step 2 for the provider's credential kind.
         const kind = credKind(wiz.provider);
         $("[data-wiz-cred-consent]", modalEl).hidden = kind !== "consent";
-        $("[data-wiz-cred-password]", modalEl).hidden = kind !== "password";
+        $("[data-wiz-cred-password]", modalEl).hidden = kind !== "password" && kind !== "keyring";
         if (kind === "consent") {
           const res = (await api(wiz.provider + ".auth", { account_id: id }, { confirm: true })).output || {};
           $("[data-wiz-consent-link]", modalEl).href = res.open_url || "#";
@@ -273,6 +315,12 @@
           const st = (await api(wiz.provider + ".auth_status", { account_id: wiz.accountId })).output || {};
           if (st.state !== "done") { setStatus(status, "warn", "Sign-in is not finished yet (" + (st.state || "pending") + "). Approve in the other tab, then Next."); return; }
           res = (await api(wiz.provider + ".auth", { account_id: wiz.accountId, check: true }, { confirm: true })).output || {};
+        } else if (kind === "keyring") {
+          const pw = $("[data-wiz-password]", modalEl).value;
+          if (!pw) { setStatus(status, "err", "A password is required."); return; }
+          await api("set_account_password", { account_id: wiz.accountId, password: pw }, { confirm: true });
+          $("[data-wiz-password]", modalEl).value = "";
+          res = (await api("account_check", { account_id: wiz.accountId }, { confirm: true })).output || {};
         } else if (kind === "password") {
           const pw = $("[data-wiz-password]", modalEl).value;
           if (!pw) { setStatus(status, "err", "A password is required."); return; }

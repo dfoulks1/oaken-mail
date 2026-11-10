@@ -5,13 +5,13 @@
     "mark_read", "mark_unread", "set_starred", "list_schedules", "run_schedule", "get_logs", "get_events", "get_ai", "clear_cache", "list_all_plugins", "plugin_reload", "get_storage", "run_vacuum", "set_archived", "set_discarded", "empty_discarded", "list_mailbox", "create_folder", "create_label",
     "move_to_folder", "set_labels", "sync_now",
     "list_accounts", "get_account", "create_account", "set_account_config", "remove_account",
-    "list_plugins", "list_operations", "account_auth", "account_check", "account_toggle",
+    "list_plugins", "list_operations", "account_auth", "account_check", "set_account_password", "account_toggle",
     "get_features", "sieve_list", "sieve_get", "sieve_check", "sieve_test", "sieve_save", "sieve_delete",
     "filters_list", "filters_get", "filters_check", "filters_save", "filters_delete",
     "reprocess", "get_enrichment",
     "list_search_modes", "send", "list_senders", "rerun_stage", "enrich_thread", "thread_progress", "summarize_thread",
     "stage_health", "get_stage", "stage_pause", "stage_resume", "stage_requeue_failed", "stage_set_workers",
-    "get_stage_plugins", "stage_plugin_toggle", "get_plugin_config", "set_plugin_config", "stage_plugin_add", "stage_plugin_remove", "list_stage_jobs", "job_retry", "job_cancel", "get_exposure", "set_exposure", "request_thread_rollup", "get_thread_rollup", "mark_view_read", "thread_enrichments", "get_swarm", "set_swarm", "get_agents", "create_agent", "revoke_agent", "set_console"
+    "get_stage_plugins", "stage_plugin_toggle", "get_plugin_config", "set_plugin_config", "stage_plugin_add", "stage_plugin_remove", "list_stage_jobs", "job_retry", "job_cancel", "get_exposure", "set_exposure", "request_thread_rollup", "get_thread_rollup", "mark_view_read", "thread_enrichments", "get_swarm", "set_swarm", "get_agents", "create_agent", "revoke_agent"
   ],
   "fields": {
     "list_messages": [
@@ -98,10 +98,9 @@
     "mark_view_read": ["marked", "seen"],
     "get_swarm": ["enabled", "allowed", "queues[].name", "queues[].label", "queues[].kind"],
     "set_swarm": [],
-    "get_agents": ["agents[].id", "agents[].label", "agents[].queues", "agents[].revoked", "agents[].last_seen_at", "queues", "console"],
+    "get_agents": ["agents[].id", "agents[].label", "agents[].queues", "agents[].revoked", "agents[].last_seen_at", "queues"],
     "create_agent": ["token", "agent"],
     "revoke_agent": ["revoked"],
-    "set_console": [],
     "stage_set_workers": ["stage", "title", "paused", "queued", "running", "failed", "workers", "done", "last_error", "queues[].queue", "queues[].title", "queues[].workers", "queues[].default"]
   }
 }

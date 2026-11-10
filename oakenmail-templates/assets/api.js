@@ -79,7 +79,47 @@
         return fx.demoCall(name, input || {}, opts || {});
       }
     }
-    return callLive(name, input || {}, opts || {});
+    return callResilient(name, input || {}, opts || {});
+  }
+
+  /* ---- a core reload is not an error ----
+   * Core rebuilds itself in about 15 seconds after a settings save, an account add or `oaken-mail reload`. A call that finds core
+   * down waits and retries instead of failing, so no toast. A read that was answered a moment ago is answered again from memory
+   * (stale, but there) while core is away. A confirmed change is retried only when core said it was unavailable: it never ran. */
+  const KEEP_MS = 60000, WAIT_MS = 25000;
+  const cache = new Map();
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  function coreState(up) {
+    let bar = document.getElementById("ok-core-state");
+    if (up) { if (bar) bar.remove(); return; }
+    if (bar) return;
+    bar = document.createElement("div");
+    bar.id = "ok-core-state"; bar.setAttribute("role", "status");
+    bar.style.cssText = "position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:2000;padding:.25rem .9rem;border-radius:0 0 .6rem .6rem;" +
+      "background:var(--ok-surface-2,#eee);color:var(--ok-fg,#222);border:1px solid var(--ok-border,#ccc);border-top:0;font-size:.8rem";
+    bar.textContent = "Core is restarting. This clears by itself.";
+    document.body.appendChild(bar);
+  }
+  async function callResilient(name, input, opts) {
+    const key = opts.confirm ? null : name + "\0" + JSON.stringify(input);
+    const until = Date.now() + WAIT_MS;
+    let delay = 400;
+    for (;;) {
+      try {
+        const r = await callLive(name, input, opts);
+        if (key && !r.proposal && r.output) cache.set(key, { r, t: Date.now() });
+        coreState(true);
+        return r;
+      } catch (e) {
+        const down = (e && e.code === "core_unavailable") || (e instanceof TypeError && !opts.confirm); // a TypeError is a fetch that never got an answer
+        if (!down) throw e;
+        const kept = key && cache.get(key);
+        if (kept && Date.now() - kept.t < KEEP_MS) { coreState(false); return kept.r; }
+        if (Date.now() > until) { coreState(true); throw e; }
+        coreState(false);
+        await sleep(delay); delay = Math.min(delay * 1.5, 2000);
+      }
+    }
   }
 
   /* ---- UI config (not mail data) ----

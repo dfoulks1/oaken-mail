@@ -18,8 +18,12 @@
   const loaders = {
     async identities(box) {
       const { senders = [] } = (await api("list_senders", {})).output || {};
+      let def = "";
+      try { def = localStorage.getItem("oaken.defaultSender") || ""; } catch (e) { /* no default without storage */ }
+      if (!def && senders.length) def = senders[0].account; // the From box falls back to the first, so say so
       box.innerHTML = senders.length ? `<div class="list-group">${senders.map((s) =>
-        `<div class="list-group-item d-flex align-items-center"><div class="fw-semibold">${esc(s.account)}</div><span class="ok-tag ms-2">${esc(s.provider)}</span></div>`).join("")}</div>`
+        `<div class="list-group-item d-flex align-items-center"><div class="fw-semibold">${esc(s.address || s.account)}</div><span class="ok-tag ms-2">${esc(s.provider)}</span>` +
+        (s.account === def ? '<span class="ms-auto small text-muted">Default</span>' : `<button class="btn btn-sm btn-outline-oaken ms-auto" data-default-sender="${esc(s.account)}">Make default</button>`) + "</div>").join("")}</div>`
         : '<div class="text-muted small">No account can send yet.</div>';
     },
 
@@ -51,14 +55,14 @@
       const row = (o) => `<tr class="${o.allowed ? "" : "text-muted"}"><td class="text-nowrap"><div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" data-expose="${esc(o.name)}" ${o.exposed ? "checked" : ""} ${o.allowed ? "" : "disabled"} aria-label="${esc(o.name)}"></div></td>` +
         `<td><code>${esc(o.name)}</code>${o.allowed ? "" : ' <i class="bi bi-lock-fill" title="Closed in code"></i>'}</td><td><span class="badge text-bg-${o.permission === "read" ? "secondary" : "warning"}">${esc(o.permission)}</span></td><td class="small">${esc(o.summary)}</td></tr>`;
       const on = operations.filter((o) => o.exposed).length;
-      const { agents = [], queues: open = [], console: serving = true } = (await api("get_agents", {})).output || {};
+      const { agents = [], queues: open = [] } = (await api("get_agents", {})).output || {};
       const live = agents.filter((a) => !a.revoked);
       const provision = `<h3 class="h6">External agents</h3>` + (live.length ? `<table class="table table-sm align-middle"><tbody>${live.map((a) =>
         `<tr><td>${esc(a.label)}</td><td class="text-muted small">${a.queues ? esc(a.queues.join(", ")) : "any queue"}</td><td class="text-muted small">${a.last_seen_at ? esc(when(a.last_seen_at)) : "never seen"}</td>` +
         `<td class="text-end"><button class="btn btn-sm btn-outline-danger" data-agent-revoke="${esc(a.id)}">Revoke</button></td></tr>`).join("")}</tbody></table>` : '<p class="text-muted small">No agents yet.</p>') +
         `<div class="d-flex gap-2 align-items-start mb-2"><input class="form-control form-control-sm" data-agent-label placeholder="Label"><select class="form-select form-select-sm" multiple size="3" data-agent-queues aria-label="Queues">${open.map((q) => `<option value="${esc(q)}">${esc(q)}</option>`).join("")}</select>` +
         `<button class="btn btn-sm btn-outline-oaken text-nowrap" data-agent-create>Add agent</button></div><div data-agent-token></div>` +
-        `<div class="form-check form-switch my-3"><input class="form-check-input" type="checkbox" data-console ${serving ? "checked" : ""} id="ok-console"><label class="form-check-label" for="ok-console">Serve the core console</label></div><hr>`;
+        "<hr>";
       box.innerHTML = provision + `<p class="small mb-3"><strong>${on}</strong> of ${operations.length} operations are open to agents.</p>` + Object.keys(groups).sort().map((g) =>
         `<h3 class="h6 mt-3">${esc(g)}</h3><div class="table-responsive"><table class="table table-sm align-middle ok-ptable ok-optable"><colgroup><col class="c-sw"><col class="c-name"><col class="c-perm"><col></colgroup><tbody>${groups[g].map(row).join("")}</tbody></table></div>`).join("");
     },
@@ -126,6 +130,8 @@
   document.addEventListener("click", async (ev) => {
     const t = ev.target;
     const reload = t.closest("[data-set-reload]"); if (reload) return load(reload.dataset.setReload);
+    const mk = t.closest("[data-default-sender]");
+    if (mk) { try { localStorage.setItem("oaken.defaultSender", mk.dataset.defaultSender); } catch (e) { toast("This browser will not remember it."); } return load("identities"); }
     const run = t.closest("[data-run]");
     if (run) { if (await call("run_schedule", { name: run.dataset.run })) { toast("Started."); setTimeout(() => load("schedule"), 1500); } return; }
     if (t.closest("[data-clear-cache]")) {
@@ -159,8 +165,6 @@
       if (!ok) sw.checked = !sw.checked;
       load("plugins"); return;
     }
-    const cs = ev.target.closest("[data-console]");
-    if (cs) { if (!(await call("set_console", { enabled: cs.checked }))) cs.checked = !cs.checked; return; }
     const ex = ev.target.closest("[data-expose]");
     if (ex) { const ok = await call("set_exposure", { name: ex.dataset.expose, enabled: ex.checked }); if (!ok) ex.checked = !ex.checked; load("agents"); return; }
     if (ev.target.matches("[data-log-level],[data-log-kind]")) load("logs");

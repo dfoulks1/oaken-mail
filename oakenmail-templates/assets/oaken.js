@@ -287,6 +287,10 @@
     return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric",
       year: d.getFullYear() === now.getFullYear() ? undefined : "numeric" });
   }
+  function fullDate(iso) { // the open message: day, date and time in this machine's zone, not the header's raw ISO text
+    const d = new Date(iso);
+    return !iso || isNaN(d) ? String(iso || "") : d.toLocaleString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
   function fmtDate(iso) {
     const d = new Date(iso);
     if (!iso || isNaN(d)) return String(iso || "");
@@ -774,7 +778,7 @@
       (to ? `<div class="small text-muted">to ${esc(to)}</div>` : "") +
       (replyTo ? `<div class="small text-muted">in reply to ${esc(replyTo)}</div>` : "") +
       (current ? "" : `<div class="small text-muted ok-thread-snippet">${esc(m.snippet || "")}</div>`) + `</div>` +
-      `<span class="small text-muted ok-thread-date">${esc(current ? m.date || "" : fmtDate(m.date))}</span></header>` +
+      `<span class="small text-muted ok-thread-date">${esc(current ? fullDate(m.date) : fmtDate(m.date))}</span></header>` +
       `<div class="ok-stage-results" data-stage-results hidden></div>` +
       `<div class="ok-msg-body" style="white-space:pre-wrap">${current ? (text ? esc(text) : "(no text)") : ""}${atts ? `<div class="mt-3">${atts}</div>` : ""}</div>` +
       stagePillHtml(m.message_id || "", m) +
@@ -1023,8 +1027,10 @@
     sendersP = sendersP || api("list_senders", {}).then((r) => r.output.senders || []).catch(() => { sendersP = null; return []; });
     sendersP.then((senders) => {
       if (!senders.length) return; // keep the page's placeholder options when core offers none
+      let def = ""; // shortcut: the default sender is remembered by this browser only; move it to core's settings if a second browser should share it
+      try { def = localStorage.getItem("oaken.defaultSender") || ""; } catch (e) { /* private window: no default */ }
       root.querySelectorAll("select[name=from]").forEach((sel) => {
-        sel.innerHTML = senders.map((s) => `<option value="${esc(s.account)}">${esc(s.account)}${s.provider ? ` (${esc(s.provider)})` : ""}</option>`).join("");
+        sel.innerHTML = senders.map((s) => `<option value="${esc(s.account)}"${s.account === def ? " selected" : ""}>${esc(s.address || s.account)}${s.provider ? ` (${esc(s.provider)})` : ""}</option>`).join("");
       });
     });
   }

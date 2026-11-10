@@ -484,9 +484,12 @@ h1, h2, h3, h4, h5, h6, .ok-brand, .modal-title { font-family: var(--ok-font-hea
 .ok-empty .bi { font-size: 3rem; color: var(--ok-border); }
 
 /* Compose */
+.ok-compose-card { background: var(--ok-card, var(--ok-surface)); border: 1px solid var(--ok-border); border-radius: .75rem; padding: .5rem 1.5rem 1rem; margin-top: 1rem; margin-bottom: 1rem; }
 .ok-compose-field { display: flex; align-items: center; border-bottom: 1px solid var(--ok-border); padding: .1rem 0; }
 .ok-compose-field label { width: 4.5rem; color: var(--ok-muted); font-size: .9rem; flex-shrink: 0; }
-.ok-compose-field .form-control, .ok-compose-field .form-select { border: none; box-shadow: none !important; background: transparent; padding-left: 0; }
+.ok-compose-field .form-control, .ok-compose-field .form-select { border: none; border-radius: 0; box-shadow: none !important; background: transparent; padding-left: 0; }
+.ok-compose-field .form-control:focus, .ok-compose-field .form-select:focus { background: transparent; }
+.ok-compose-field:focus-within { border-bottom-color: var(--ok-primary); }
 .ok-editor { min-height: 320px; padding: 1rem 0; outline: none; line-height: 1.65; }
 .ok-editor:empty::before { content: attr(data-placeholder); color: var(--ok-muted); }
 .ok-chip { display: inline-flex; align-items: center; gap: .35rem; background: var(--ok-surface-2); border-radius: 999px; padding: .15rem .3rem .15rem .65rem; font-size: .85rem; margin: .15rem .25rem .15rem 0; }
@@ -638,7 +641,7 @@ h1, h2, h3, h4, h5, h6, .ok-brand, .modal-title { font-family: var(--ok-font-hea
 [data-oaken-mode="light"] .ok-reader, [data-oaken-mode="light"] .ok-reader .ok-toolbar { background: var(--ok-lift); }
 /* Rule: every content card is white; parchment is only ever the page. */
 [data-oaken-mode="light"] :is(.card, .modal-content, .dropdown-menu, .list-group-item, .ok-section, .ok-thread-msg, .ok-stage-panel,
-  .ok-float, .ok-theme-swatch, .ok-acct-card, .ok-config-card, .ok-file-card, .ok-file-head, .ok-metric, .ok-attach, .ok-log, .ok-file-text, .ok-toast, .form-control:not(.ok-search .form-control), .form-select) { background-color: var(--ok-card); }
+  .ok-float, .ok-theme-swatch, .ok-acct-card, .ok-config-card, .ok-file-card, .ok-file-head, .ok-metric, .ok-attach, .ok-log, .ok-file-text, .ok-toast, .form-control:not(.ok-search .form-control, .ok-compose-field .form-control), .form-select:not(.ok-compose-field .form-select)) { background-color: var(--ok-card); }
 /* The message tiles in the list are white like the other cards; parchment stays the page behind them. */
 [data-oaken-mode="light"] .ok-msg { background: var(--ok-card); }
 [data-oaken-mode="light"] .ok-msg:hover { background: color-mix(in srgb, var(--ok-fg) 4%, var(--ok-card)); }
