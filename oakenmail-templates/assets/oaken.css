@@ -637,7 +637,7 @@ h1, h2, h3, h4, h5, h6, .ok-brand, .modal-title { font-family: var(--ok-font-hea
 [data-oaken-mode="light"] .ok-reader, [data-oaken-mode="light"] .ok-reader .ok-toolbar { background: var(--ok-lift); }
 /* Rule: every content card is white; parchment is only ever the page. */
 [data-oaken-mode="light"] :is(.card, .modal-content, .dropdown-menu, .list-group-item, .ok-section, .ok-thread-msg, .ok-stage-panel,
-  .ok-float, .ok-theme-swatch, .ok-file-card, .ok-file-head, .ok-metric, .ok-attach, .ok-log, .ok-file-text, .ok-toast, .form-control:not(.ok-search .form-control), .form-select) { background-color: var(--ok-card); }
+  .ok-float, .ok-theme-swatch, .ok-acct-card, .ok-config-card, .ok-file-card, .ok-file-head, .ok-metric, .ok-attach, .ok-log, .ok-file-text, .ok-toast, .form-control:not(.ok-search .form-control), .form-select) { background-color: var(--ok-card); }
 [data-oaken-mode="light"] .ok-msg.selected { background: var(--ok-lift); box-shadow: inset 3px 0 0 var(--ok-primary); }
 /* Stronger "you are here": primary-tinted fill with an edge, on the rail and in the list. */
 [data-oaken-mode="light"] .ok-nav a.active { background: color-mix(in srgb, var(--ok-primary) 22%, var(--ok-rail)); box-shadow: inset 3px 0 0 var(--ok-primary); }
@@ -650,6 +650,8 @@ h1, h2, h3, h4, h5, h6, .ok-brand, .modal-title { font-family: var(--ok-font-hea
 .ok-thread-msg.collapsed .ok-stage-pill { display: none; }
 .ok-stg-icon { width: 2rem; height: 2rem; border: 0; border-radius: 50%; background: transparent; color: var(--ok-muted); display: grid; place-items: center; cursor: pointer; }
 .ok-stg-icon:hover { background: var(--ok-hover); color: var(--ok-fg); }
+.ok-stg-icon { position: relative; }
+.ok-stg-icon.ran::after { content: ""; position: absolute; top: .3rem; right: .3rem; width: .45rem; height: .45rem; border-radius: 50%; background: var(--ok-primary); }
 .ok-stg-icon.active { background: var(--ok-primary-ghost); color: var(--ok-primary-ink, var(--ok-primary)); }
 .ok-thread-msg.has-stage { border-color: var(--ok-primary); }
 .ok-stage-results { margin: 0 1.25rem .75rem 4.1rem; padding: .6rem .9rem; border-radius: .5rem; background: color-mix(in srgb, var(--ok-fg) 4%, transparent); }
@@ -665,3 +667,22 @@ h1, h2, h3, h4, h5, h6, .ok-brand, .modal-title { font-family: var(--ok-font-hea
 .ok-ptable tbody td { padding: .6rem .25rem; border-bottom: 1px solid color-mix(in srgb, var(--ok-border) 55%, transparent); }
 .ok-ptable tbody tr:last-child td { border-bottom: 0; }
 .ok-pname .bi { color: var(--ok-muted); }
+
+/* Thread bar: the stage pill laid out in a row, above the messages. */
+.ok-stage-pill-row { position: static; display: inline-flex; flex-direction: row; vertical-align: middle; }
+.ok-stg-icon:disabled { opacity: .35; cursor: not-allowed; }
+
+/* Agents (MCP) operations: one table per group, so fix the columns or each group sizes itself and they do not line up. */
+.ok-optable { table-layout: fixed; min-width: 38rem; }
+.ok-optable .c-sw { width: 3.5rem; }
+.ok-optable .c-name { width: 17rem; }
+.ok-optable .c-perm { width: 5.5rem; }
+.ok-optable td:nth-child(2) { overflow-wrap: anywhere; }
+.ok-optable code { color: var(--ok-fg); font-size: .85em; }  /* Bootstrap's pink is the one thing the Plugins table does not use */
+
+/* Bootstrap fills every .table cell with --bs-table-bg, which this theme resolves to the page cream, so tables looked like tan slabs on the card.
+   One rule for all of them; .ok-ptable and the modals' bg-transparent already did this one table at a time. */
+.table { --bs-table-bg: transparent; --bs-table-color: var(--ok-fg); --bs-table-accent-bg: transparent; --bs-table-striped-bg: transparent;
+  --bs-table-hover-bg: transparent; --bs-table-active-bg: transparent; }
+/* Bootstrap also paints cells with an inset box-shadow (stripe, hover, active): no fill on a table, ever. */
+.table > :not(caption) > * > * { background-color: transparent; box-shadow: none; }

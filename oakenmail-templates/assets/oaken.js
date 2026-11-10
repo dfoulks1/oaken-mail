@@ -46,17 +46,6 @@
         if (row && window.Oaken && window.Oaken.api) window.Oaken.api("set_starred", { ids: [row.dataset.id], starred: on }, { confirm: true }).catch((err) => { toast((err && err.message) || "Could not star."); t.classList.toggle("on"); t.querySelector(".bi")?.classList.toggle("bi-star-fill"); t.querySelector(".bi")?.classList.toggle("bi-star"); });
         t.classList.toggle("on"); t.querySelector(".bi")?.classList.toggle("bi-star-fill"); t.querySelector(".bi")?.classList.toggle("bi-star"); }
       if (a === "toggle-thread") t.closest(".ok-thread-msg")?.classList.toggle("collapsed");
-      if (a === "select-all") selectLoaded(t.checked);
-    });
-    document.addEventListener("click", async (e) => {
-      const all = e.target.closest("[data-select-everything]");
-      if (!all) return;
-      e.preventDefault();
-      all.textContent = "Loading every message…";
-      while (view.more && view.next) { const n = view.items.length; await view.next(); if (view.items.length === n) break; } // shortcut: pages the rest in; a very large view loads slowly
-      qsa(".ok-msg input[type=checkbox]").forEach((c) => (c.checked = true));
-      const text = qs("[data-oaken-pager-text]");
-      if (text) text.textContent = `All ${view.items.length.toLocaleString()} selected`;
     });
 
     /* Clicking a message: split layout shows it in reader; list layout navigates */
@@ -200,12 +189,17 @@
   // The reading pane shows the same icons as the list. Pick one to load that stage's results below it.
   const STAGE_CACHE = {}; // message_id -> the message the panel last drew, so a pick needs no fetch
   // One vertical pill per message, drawn beside its own card and shown only while that card is expanded.
-  function stagePillHtml(id) {
+  function stagePillHtml(id, m = {}) {
+    // A pip marks a stage that has already run: it has stored results.
+    const ran = (k) => ((m.stages || {})[k] || []).length > 0 || (k === "enrich" && (m.enrichments || []).length > 0);
     return `<aside class="ok-stage-pill" data-stage-panel data-id="${esc(id)}" aria-label="Stage results for this message">` +
-      STAGE_BADGES.map(([k, icon, name]) => `<button type="button" class="ok-stg-icon" data-stage-pick="${k}" title="${name}" aria-pressed="false"><i class="bi ${icon}"></i></button>`).join("") + `</aside>`;
+      STAGE_BADGES.map(([k, icon, name]) => `<button type="button" class="ok-stg-icon${ran(k) ? " ran" : ""}" data-stage-pick="${k}" title="${name}${ran(k) ? ": has run" : ""}" aria-pressed="false"><i class="bi ${icon}"></i></button>`).join("") + `</aside>`;
   }
 
-  // The open stage's results, inside the card it belongs to. Fetch re-reads; Run now sends the message back through the stage.
+  // The open stage's results, inside the card it belongs to. Run now sends the message back through the stage.
+  // How long a step took, for what it cost: 850 ms, 12.4 s, 2 min 3 s.
+  const took = (ms) => ms == null ? "" : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.floor(ms / 60000)} min ${Math.round((ms % 60000) / 1000)} s`;
+
   function stageResultsHtml(m, open, pick) {
     const st = m.stages || {};
     const r = st[open] || [];
@@ -218,7 +212,7 @@
     const picker = blocks.length > 1
       ? `<select class="form-select form-select-sm d-inline-block w-auto ms-1 py-0" data-enrich-pick aria-label="Which enrichment">${blocks.map((b) => `<option value="${esc(b.name)}"${b === chosen ? " selected" : ""}>${esc(nice(b.name))}</option>`).join("")}</select>`
       : chosen ? " " + esc(nice(chosen.name)) : "";
-    const drawn = chosen ? `<div class="fw-semibold small mt-2 mb-1">Enrich:${picker}</div>` + chosen.fields.map((f) =>
+    const drawn = chosen ? `<div class="fw-semibold small mt-2 mb-1">Enrich:${picker}${chosen.duration_ms != null ? ` <span class="fw-normal text-muted">· took ${took(chosen.duration_ms)}</span>` : ""}</div>` + chosen.fields.map((f) =>
       `<div class="fw-semibold small">${esc(nice(f.name))}</div><ul class="small mb-2 ps-3">${f.items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`).join("") : "";
     const labeled = r.map((x) => `<div class="small"><span class="text-muted">${esc(x.key)}</span> ${esc(x.value)}</div>`).join("");
     const rows = drawn || labeled ? drawn + labeled : `<div class="small text-muted">No ${esc(name.toLowerCase())} results yet.</div>`;
@@ -226,7 +220,7 @@
     // shortcut: core's item_rerun takes enrich and act only, and has no priority; triage re-run and priority wait on core
     const rerun = open === "enrich" ? `<button class="btn btn-sm btn-ghost" data-stage-rerun="enrich" title="Send this message back through the enrichers now"><i class="bi bi-arrow-repeat"></i> Run now</button>` : "";
     return `<div class="d-flex align-items-start gap-2"><div class="flex-grow-1">${drawn ? "" : `<div class="fw-semibold small mb-1">${esc(name)}</div>`}${folder}${rows}</div>` +
-      `<div class="d-flex flex-column gap-1">${rerun}<button class="btn btn-sm btn-ghost" data-stage-refresh title="Fetch the results again"><i class="bi bi-arrow-clockwise"></i> Fetch</button></div></div>`;
+      (rerun ? `<div class="d-flex flex-column gap-1">${rerun}</div>` : "") + `</div>`;
   }
 
   function rowHtml(m) {
@@ -365,6 +359,35 @@
     text.innerHTML = `${view.items.length.toLocaleString()} selected. <a href="#" data-select-everything>Select all ${view.total.toLocaleString()}</a>`;
   }
 
+  // Keep the header box and the count in step with the row boxes (a row ticked or cleared, rows loaded, a refresh).
+  function syncSelection() {
+    const boxes = qsa(".ok-msg input[type=checkbox]");
+    const n = boxes.filter((c) => c.checked).length;
+    const head = qs("[data-action=select-all]");
+    if (head) { head.checked = n > 0 && n === boxes.length; head.indeterminate = n > 0 && n < boxes.length; }
+    const text = qs("[data-oaken-pager-text]");
+    if (!text) return;
+    if (!n) renderStatus();
+    else if (head && head.checked && view.more && view.next && view.total !== null) selectLoaded(true);
+    else text.textContent = `${n.toLocaleString()} selected`;
+  }
+
+  // These sit here, not with the first wrapper's click handler: they need view, qsa and the selection helpers above.
+  document.addEventListener("click", async (e) => {
+    const head = e.target.closest("[data-action=select-all]");
+    if (head) { selectLoaded(head.checked); return; }
+    const all = e.target.closest("[data-select-everything]");
+    if (!all) return;
+    e.preventDefault();
+    all.textContent = "Loading every message…";
+    while (view.more && view.next) { const n = view.items.length; await view.next(); if (view.items.length === n) break; } // shortcut: pages the rest in; a very large view loads slowly
+    qsa(".ok-msg input[type=checkbox]").forEach((c) => (c.checked = true));
+    syncSelection();
+    const text = qs("[data-oaken-pager-text]");
+    if (text) text.textContent = `All ${view.items.length.toLocaleString()} selected`;
+  });
+  document.addEventListener("change", (e) => { if (e.target.matches && e.target.matches(".ok-msg input[type=checkbox]")) syncSelection(); });
+
   function renderStatus() {
     const text = qs("[data-oaken-pager-text]");
     if (!text) return;
@@ -481,7 +504,7 @@
       if (out.degraded && out.degraded_reason) toast(out.degraded_reason.charAt(0).toUpperCase() + out.degraded_reason.slice(1) + ".");
       else if (out.degraded) toast("Search ran keyword-only (meaning search unavailable).");
       (out.warnings || []).forEach((w) => toast(w));
-      renderStatus();
+      syncSelection();
       bindRows(container);
       container.scrollTop = scroll;
       watchEnd(container, list, op, input);
@@ -510,9 +533,11 @@
       const sentinel = setSentinel(list);
       const before = list.children.length;
       sentinel.insertAdjacentHTML("beforebegin", html);
-      bindRows(container, Array.from(list.children).slice(before - 1, -1));
+      const fresh = Array.from(list.children).slice(before - 1, -1);
+      bindRows(container, fresh);
+      if (qs("[data-action=select-all]")?.checked) fresh.forEach((r) => { const b = qs("input[type=checkbox]", r); if (b) b.checked = true; }); // select-all covers rows that arrive later
       updateFoldCounts(list);
-      renderStatus();
+      syncSelection();
     } catch (e) {
       view.more = false;
       toast(e.message || "Could not load more messages.");
@@ -578,6 +603,8 @@
           qsa(".ok-msg.selected", container).forEach((r) => r.classList.remove("selected"));
           row.classList.add("selected");
           loadReader(reader, row.dataset.id, { markPresented: true });
+        } else if (row.dataset.href) {
+          window.location.href = row.dataset.href; // list layout (search results, narrow windows): open the message page
         }
       });
     });
@@ -601,6 +628,7 @@
       const b = output || {};
       const thread = await fetchThread(b.message_id);
       container.innerHTML = readerHtml(b, thread);
+      threadProgress(container);
       if (b.html) { const cur = qs(".ok-thread-msg.current .ok-msg-body", container); cur && showBody(cur, { text: b.text, html: b.html }); }
       // The reader starts hidden (d-none) beside the "Select a message" placeholder: swap them.
       container.classList.remove("d-none");
@@ -680,9 +708,60 @@
       `<span class="small text-muted ok-thread-date">${esc(current ? m.date || "" : fmtDate(m.date))}</span></header>` +
       `<div class="ok-stage-results" data-stage-results hidden></div>` +
       `<div class="ok-msg-body" style="white-space:pre-wrap">${current ? (text ? esc(text) : "(no text)") : ""}${atts ? `<div class="mt-3">${atts}</div>` : ""}</div>` +
-      stagePillHtml(m.message_id || "") +
+      stagePillHtml(m.message_id || "", m) +
       `</article>`
     );
+  }
+
+  // The whole-thread bar: the same three marks as a message's pill, in a row. Only enrich works on a thread today.
+  function threadBarHtml(id) {
+    const icon = (k) => STAGE_BADGES.find(([x]) => x === k)[1];
+    return `<div class="ok-thread-bar mb-3" data-thread-bar data-id="${esc(id)}"><aside class="ok-stage-pill ok-stage-pill-row" aria-label="The whole thread">` +
+      `<button type="button" class="ok-stg-icon" disabled title="Triage: not available for a whole thread yet"><i class="bi ${icon("triage")}"></i></button>` +
+      `<button type="button" class="ok-stg-icon" data-thread-enrich title="Enrich every message in this thread, then summarise the whole thread"><i class="bi ${icon("enrich")}"></i></button>` +
+      `<button type="button" class="ok-stg-icon" disabled title="Act: not available for a whole thread yet"><i class="bi ${icon("act")}"></i></button></aside>` +
+      `<span class="small text-muted ms-2" data-thread-status></span><div class="ok-stage-results mx-0 mt-2" data-thread-results hidden></div></div>`;
+  }
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // On open, say how far the thread is: what is enriched is stored, so a reload shows it too.
+  async function threadProgress(root) {
+    const bar = qs("[data-thread-bar]", root), status = bar && qs("[data-thread-status]", bar);
+    if (!status) return;
+    try {
+      const { done, total, enriched } = (await api("thread_progress", { message_id: bar.dataset.id })).output;
+      if (!bar.dataset.busy && done) status.textContent = `${done} of ${total} enriched`;
+      // The card's own data has no enrichments (only the full message does), so the pips come from here.
+      for (const id of enriched) qsa(`[data-stage-panel][data-id="${CSS.escape(id)}"] [data-stage-pick="enrich"]`, root).forEach((b) => b.classList.add("ran"));
+    } catch (err) { /* the bar works without it */ }
+  }
+  async function runThread(bar) {
+    if (bar.dataset.busy) return;
+    bar.dataset.busy = "1";
+    const id = bar.dataset.id, status = qs("[data-thread-status]", bar), box = qs("[data-thread-results]", bar), btn = qs("[data-thread-enrich]", bar);
+    btn.classList.add("active");
+    try {
+      const q = await mutate("enrich_thread", { message_id: id });
+      if (!q) return;
+      const total = q.queued.length;
+      let done = 0;
+      status.textContent = `Queued ${total} messages…`;
+      for (let waited = 0; done < total && waited < 300000; waited += 3000) { // shortcut: polls every 3s for up to 5 minutes; a longer thread summarises what is ready
+        await sleep(3000);
+        done = (await api("thread_progress", { message_id: id })).output.done;
+        status.textContent = done ? `Enriching ${done} of ${total}…` : `Queued ${total} messages…`;
+      }
+      status.textContent = "Summarising the thread…";
+      const out = (await api("summarize_thread", { message_id: id })).output;
+      status.textContent = `${out.messages} messages` + (out.without_summary ? `, ${out.without_summary} not enriched yet` : "");
+      const nice = (t) => { const w = String(t).replace(/[_-]+/g, " "); return w.charAt(0).toUpperCase() + w.slice(1); };
+      box.innerHTML = `<div class="fw-semibold small mb-1">Thread summary${out.blocks[0] && out.blocks[0].duration_ms != null ? ` <span class="fw-normal text-muted">· took ${took(out.blocks[0].duration_ms)}</span>` : ""}</div>` + (out.blocks[0] ? out.blocks[0].fields.map((f) =>
+        `<div class="fw-semibold small">${esc(nice(f.name))}</div><ul class="small mb-2 ps-3">${f.items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`).join("") : '<div class="small text-muted">Nothing came back.</div>');
+      box.hidden = false;
+    } catch (err) {
+      status.textContent = "";
+      toast((err && err.message) || "Could not summarise the thread.");
+    } finally { delete bar.dataset.busy; btn.classList.remove("active"); }
   }
 
   function readerHtml(b, thread) {
@@ -715,7 +794,7 @@
     return (
       `<div class="ok-reader-inner">` +
       `<h1>${esc(b.subject)}</h1>` +
-      (many ? `<div class="small text-muted mb-2">${thread.total || nodes.length} messages in this conversation</div>` : "") +
+      (many ? `<div class="small text-muted mb-2">${thread.total || nodes.length} messages in this conversation</div>` + threadBarHtml(b.message_id) : "") +
       `<div class="d-flex gap-2 mb-3 flex-wrap">${tags}</div>` +
       body +
       (thread && thread.cut ? `<div class="small text-muted">Showing ${nodes.length} of ${thread.total} messages.</div>` : "") +
@@ -792,14 +871,16 @@
       const sel = e.target.closest("[data-enrich-pick]");
       if (!sel) return;
       const card = sel.closest(".ok-thread-msg"), box = qs("[data-stage-results]", card);
-      box.dataset.pick = sel.value; // kept per message pane, so Fetch redraws the same one
+      box.dataset.pick = sel.value; // kept per message pane, so a redraw keeps the same one
       box.innerHTML = stageResultsHtml(STAGE_CACHE[card.dataset.id], "enrich", sel.value);
     });
     document.addEventListener("click", async (e) => {
+      const te = e.target.closest("[data-thread-enrich]");
+      if (te) { runThread(te.closest("[data-thread-bar]")); return; }
       const again = e.target.closest("[data-stage-rerun]");
       if (again) { // run a later stage again for this message: the stages before it are skipped
         const id = again.closest(".ok-thread-msg").dataset.id;
-        await mutate("rerun_stage", { message_id: id, stage: again.dataset.stageRerun }, "Queued. Fetch in a moment for the new results.");
+        await mutate("rerun_stage", { message_id: id, stage: again.dataset.stageRerun }, "Queued. Reopen in a moment for the new results.");
         return;
       }
       const pick = e.target.closest("[data-stage-pick]");
@@ -817,15 +898,6 @@
           catch (err) { box.textContent = "Could not load results."; return; }
         }
         box.innerHTML = stageResultsHtml(STAGE_CACHE[card.dataset.id], pill.dataset.open, box.dataset.pick);
-        return;
-      }
-      const refresh = e.target.closest("[data-stage-refresh]");
-      if (refresh) { // fetch this message's stage results again
-        const card = refresh.closest(".ok-thread-msg"), pill = qs("[data-stage-panel]", card);
-        try {
-          STAGE_CACHE[card.dataset.id] = (await api("get_message", { message_id: card.dataset.id })).output;
-          const box = qs("[data-stage-results]", card); box.innerHTML = stageResultsHtml(STAGE_CACHE[card.dataset.id], pill.dataset.open, box.dataset.pick);
-        } catch (err) { toast((err && err.message) || "Could not fetch the results."); }
         return;
       }
       const t = e.target.closest("[data-oaken-action]");

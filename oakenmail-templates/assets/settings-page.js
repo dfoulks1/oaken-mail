@@ -52,7 +52,7 @@
         `<td><code>${esc(o.name)}</code>${o.allowed ? "" : ' <i class="bi bi-lock-fill" title="Closed in code"></i>'}</td><td><span class="badge text-bg-${o.permission === "read" ? "secondary" : "warning"}">${esc(o.permission)}</span></td><td class="small">${esc(o.summary)}</td></tr>`;
       const on = operations.filter((o) => o.exposed).length;
       box.innerHTML = `<p class="small mb-3"><strong>${on}</strong> of ${operations.length} operations are open to agents.</p>` + Object.keys(groups).sort().map((g) =>
-        `<h3 class="h6 mt-3">${esc(g)}</h3><div class="table-responsive"><table class="table table-sm align-middle"><tbody>${groups[g].map(row).join("")}</tbody></table></div>`).join("");
+        `<h3 class="h6 mt-3">${esc(g)}</h3><div class="table-responsive"><table class="table table-sm align-middle ok-ptable ok-optable"><colgroup><col class="c-sw"><col class="c-name"><col class="c-perm"><col></colgroup><tbody>${groups[g].map(row).join("")}</tbody></table></div>`).join("");
     },
 
     async plugins(box) {
