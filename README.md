@@ -7,11 +7,12 @@ pipeline, the plugin loader, the console and the doors (CLI, API, MCP); mail its
 **Alpha.** It reads real mail from Gmail today; IMAP and SMTP have only been tested against fakes.
 
 ```bash
-pip install oaken-mail          # or: uv tool install oaken-mail
-oknpost start                   # the daemon, in the background
+pip install oaken-mail          # or: uv tool install oaken-mail   (uvx oaken-mail start runs it without installing)
+oaken-mail start                # core and the browser UI, in the background
 ```
 
-Then open the console at <http://127.0.0.1:62536/> (this machine only). `oknpost` is core's CLI under Oaken Mail's name; `oknpost-webui` serves the browser UI (below).
+Then open <http://127.0.0.1:62584/> (this machine only). `oaken-mail` is core's CLI under Oaken Mail's name; `start`, `stop` and `restart` cover both
+core and the UI. Core's own console is off; put `[console]` / `enabled = true` in `config.toml` to serve it on port 62536.
 
 ## Add an account
 
@@ -19,31 +20,25 @@ Gmail, IMAP and SMTP are *templates*: one instance per account. Passwords and to
 
 ```bash
 # Gmail: bring your own Google OAuth client (Desktop app type, published to Production)
-oknpost plugin add provider.gmail --name me --yes --config '{"account":"me","client_secret_file":"/path/to/client.json","include_labels":["INBOX"]}'
-oknpost me auth                 # prints a URL to open in a browser; finishes when Google redirects back
-oknpost me check
+oaken-mail plugin add provider.gmail --name me --yes --config '{"account":"me","client_secret_file":"/path/to/client.json","include_labels":["INBOX"]}'
+oaken-mail me auth                 # prints a URL to open in a browser; finishes when Google redirects back
+oaken-mail me check
 
 # IMAP
-oknpost plugin add provider.imap --name work --yes --config '{"host":"imap.example.com","username":"you@example.com"}'
-oknpost secret set --kind provider --name work --key password
-oknpost work check
+oaken-mail plugin add provider.imap --name work --yes --config '{"host":"imap.example.com","username":"you@example.com"}'
+oaken-mail secret set --kind provider --name work --key password
+oaken-mail work check
 ```
 
-A new account's sync is scheduled when core starts, so restart once (`oknpost restart`) after signing in. `oknpost plugins --kind provider` lists
+A new account's sync is scheduled when core starts, so restart once (`oaken-mail restart`) after signing in. `oaken-mail plugins --kind provider` lists
 what you can add.
 
 ## The browser UI
 
-`oknpost-webui` serves a browser UI that looks like a mail client. It is a second process beside the daemon: start core, then the UI.
+The browser UI looks like a mail client and is the way in: add accounts, read, send and set plugins there. `oaken-mail start` runs it beside core.
 
-```bash
-oknpost start                   # the daemon
-oknpost-webui                   # the UI, on http://127.0.0.1:62584/
-```
-
-Loopback only, default port 62584 (`--port` to change). It holds core's API token and adds it on the way through, so the token never
-reaches the browser; the browser sees one same-origin server. It does not start core: if core is down the UI says so, same as the CLI.
-`oknpost-webui` takes `start` (the default), `stop`, `restart`, `status`, and `--fg` to stay attached to the terminal (it runs in the background otherwise).
+Loopback only, port 62584. It holds core's API token and adds it on the way through, so the token never reaches the browser; the browser sees one
+same-origin server. `oaken-mail start --fg` keeps core alone in the terminal, without the UI. If core is down the UI says so.
 
 ## What it does and does not
 
