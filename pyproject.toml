@@ -19,7 +19,7 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "oaken-core>=1.0.0,<2",
+    "oaken-core>=1.0.1,<2",
     "oaken-plugins[imap,smtp]>=1.0.0,<2",  # the extras bring the IMAP and SMTP client libraries
     "quart>=0.20",  # the WebUI server
     "uvicorn",  # serves the WebUI's ASGI app on loopback
@@ -47,7 +47,7 @@ rfc822 = "oaken_plugins.formatter_rfc822:Rfc822Formatter"
 [project.entry-points."oaken_core.ingestors"]
 mail = "oaken_plugins.ingestor_mail:MailIngestor"
 
-# shortcut: sibling checkouts while core and its plugins are unreleased; use their PyPI versions once published.
+# Development only: sibling checkouts. uv ignores this when it builds or installs the wheel; a PyPI install takes the ranges above.
 [tool.uv.sources]
 oaken-core = { path = "../oaken-core", editable = true }
 oaken-plugins = { path = "../oaken-plugins", editable = true }
