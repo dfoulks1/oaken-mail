@@ -1,4 +1,8 @@
-# Oaken Mail's starting config: written to your config folder the first time `oknpost` runs, then yours to edit.
+# Oaken Mail's starting config: written to your config folder the first time `oaken-mail` runs, then yours to edit.
+
+# Core's own console (a second web page, on port 62536) is off. Uncomment to serve it:
+# [console]
+# enabled = true
 
 [jobs]
 # An item nobody can format stays in Intake's failed jobs (shown on the console, kept to requeue) instead of passing on as non-mail.
@@ -6,7 +10,7 @@ unmatched_format = "fail"
 failed_format = "fail"
 
 # Mail in: Intake splits a message into parts (the rfc822 formatter) and the mail ingestor stores it under its Message-ID, threaded. Both load
-# by themselves. Gmail, IMAP and SMTP are templates: make one instance per account with the + on the Providers page (or `oknpost plugin add provider.gmail --name ACCOUNT`, and likewise for `imap` and `smtp`).
+# by themselves. Gmail, IMAP and SMTP are templates: make one instance per account with the + on the Providers page (or `oaken-mail plugin add provider.gmail --name ACCOUNT`, and likewise for `imap` and `smtp`).
 
 # Attachments are kept apart from the mail: each one is written, with no permissions, to the quarantine folder (named by its sha256), and the message
 # points to it. Nothing opens them yet. Set false to drop attachment bytes and keep only the filename, type and size. quarantine_dir defaults to a

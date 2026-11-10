@@ -10,8 +10,8 @@ from oaken_core.plugins.host import PluginTables
 from oaken_core.settings import Settings
 from starlette.responses import Response
 
-from oknpost import _clean, permitted
-from oknpost.daemon import Brand, make
+from oaken_mail import _clean, permitted
+from oaken_mail.daemon import Brand, make
 
 GMAIL = "oaken_plugins.provider_gmail:GmailProvider"
 EXEC = "oaken_plugins.provider_exec:ExecProvider"

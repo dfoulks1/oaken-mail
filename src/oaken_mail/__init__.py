@@ -7,9 +7,12 @@ extension directories, the oaken-plugins catalog, a class path given to ``plugin
 ingestor (``ingestor.mail``) still refuses anything that is not really mail: that is what holds when a door lets the wrong thing in.
 """
 
+import contextlib
 import importlib.util
+import io
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from oaken_core import identity, paths
@@ -42,6 +45,8 @@ FILTERING = {"sieve": {"class": "oaken_plugins.triager_sieve:SieveTriager"}, "fi
 
 
 def _clean(s: Settings) -> Settings:
+    if "enabled" not in s.console.model_fields_set:
+        s.console.enabled = False  # core's own console is off unless config.toml says `[console] enabled = true`; the browser UI is the product
     s.extensions.dirs = []  # shortcut: a directory of plugins is a door no tag check reaches; drop them all, allow some when a product needs one
     for name, table in FILTERING.items():
         s.plugins.tables.setdefault("triager", {}).setdefault(name, dict(table))  # the owner's own [plugins.triager.<name>] (even enabled = false) wins
@@ -58,7 +63,7 @@ def _first_run() -> None:
 
 
 def _make(settings: Settings):  # type: ignore[no-untyped-def]
-    from oknpost.daemon import (
+    from oaken_mail.daemon import (
         make,  # the daemon's imports (the MCP library alone is a third of a second) are not paid by a client command
     )
 
@@ -66,24 +71,39 @@ def _make(settings: Settings):  # type: ignore[no-untyped-def]
 
 
 def main(argv: list[str] | None = None) -> int:
-    identity.configure(app="oaken-mail", title="Oaken Mail", prog="oknpost", daemon=[sys.executable, "-m", "oknpost"])
+    identity.configure(app="oaken-mail", title="Oaken Mail", prog="oaken-mail", daemon=[sys.executable, "-m", "oaken_mail"])
     real = catalog.entries
     catalog.entries = lambda kinds: [e for e in real(kinds) if e.kind != LIMITED or ALLOWED_TAGS & set(e.tags)]  # the listing and add-by-name see only mail providers
     _first_run()
     args = take_home(list(sys.argv[1:] if argv is None else argv))
+    if args and args[0] == "reload" and "--fg" not in args:
+        return _reload()
     if args and args[0] in ("start", "stop", "restart") and "--fg" not in args:  # --fg keeps core alone in the terminal
         return _with_ui(args)
-    return core_main(args, prog="oknpost", make=_make)
+    return core_main(args, prog="oaken-mail", make=_make)
 
 
 def _ui(command: str) -> int:
-    """`oknpost-webui <command>`, as its own process: it is a separate server and keeps its own pid file."""
+    """The UI server's own command, run as its own process: it is a separate server and keeps its own pid file."""
     return subprocess.run([sys.executable, "-m", "oaken_webui.main", command], check=False).returncode
+
+
+def _reload() -> int:
+    """Re-read config.toml and bring the UI back up on the rebuilt core: core reloads in its own process, then the UI restarts once core answers."""
+    code = core_main(["core", "reload", "--yes"], prog="oaken-mail", make=_make)
+    if code:
+        return code
+    for _ in range(40):  # core rebuilds half a second after it answers; the UI finds core when it starts, so wait for it
+        time.sleep(0.5)
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.suppress(SystemExit, Exception):
+            if core_main(["status"], prog="oaken-mail", make=_make) == 0:
+                break
+    return _ui("restart")
 
 
 def _with_ui(args: list[str]) -> int:
     """start, stop and restart cover the UI too, in order: stop the UI before core, start it after."""
     if args[0] != "start":
         _ui("stop")  # not running is fine here; core's stop is what matters
-    code = core_main(args, prog="oknpost", make=_make)
+    code = core_main(args, prog="oaken-mail", make=_make)
     return _ui("start") if args[0] != "stop" and code == 0 else code

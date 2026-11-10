@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LicenseRef-Proprietary
-"""The ``oknpost-webui`` entry point: serve the browser UI and proxy to core.
+"""The browser UI server, run by ``oaken-mail start`` (and by ``python -m oaken_webui.main``): serve the browser UI and proxy to core.
 
 Thin by design. This module builds the ASGI app (:mod:`oaken_webui.app`) and runs it under
 ``uvicorn`` on loopback. Core is reached through the same discovery the CLI uses
@@ -35,7 +35,7 @@ from oaken_core.cli.exits import CoreUnavailable, ExitCode
 from oaken_webui import __version__
 from oaken_webui.app import build_app
 
-PROG = "oknpost-webui"
+PROG = "oaken-mail"  # the UI has no command of its own: `oaken-mail start|stop|restart` run it (python -m oaken_webui.main is what they call)
 LOOPBACK = "127.0.0.1"
 DEFAULT_PORT = 62584  # loopback UI port (OAKUI in T9); override with --port or OAKEN_WEBUI_PORT
 PORT_ENV = "OAKEN_WEBUI_PORT"
@@ -231,7 +231,7 @@ def _status() -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     # Without this the app is plain core: paths follow OAKEN_HOME, not OAKEN_MAIL_HOME, and discovery misses the daemon.
-    identity.configure(app="oaken-mail", title="Oaken Mail", prog="oknpost", daemon=[sys.executable, "-m", "oknpost"])
+    identity.configure(app="oaken-mail", title="Oaken Mail", prog="oaken-mail", daemon=[sys.executable, "-m", "oaken_mail"])
     args = build_parser().parse_args(list(sys.argv[1:] if argv is None else argv))
     command = "stop" if args.stop else args.command
     if command == "status":
@@ -263,6 +263,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         log_config=None,
         access_log=False,  # a URL can hold a search the user typed; never log requests
         server_header=False,
+        timeout_graceful_shutdown=2,  # a browser's open connections must not keep a stop waiting
     )
     server = uvicorn.Server(config)
     print(f"{PROG}: serving the Oaken Mail UI on http://{LOOPBACK}:{args.port}", file=sys.stderr)

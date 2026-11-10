@@ -16,7 +16,7 @@ from oaken_core.plugins.kinds import KindRegistry
 from oaken_core.settings import Settings
 from starlette.responses import Response
 
-from oknpost import ALLOWED_TAGS, LIMITED, _clean, permitted
+from oaken_mail import ALLOWED_TAGS, LIMITED, _clean, permitted
 
 LOGO_CSS = '\n/* Oaken Mail: its own mark in place of core\'s, in full colour (core draws /static/logo.png as a mask in the brand colour) */\n.brand .logo { background: url(/static/logo.png) center / contain no-repeat; -webkit-mask: none; mask: none; }\n'
 

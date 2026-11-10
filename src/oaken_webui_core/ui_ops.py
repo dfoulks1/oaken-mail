@@ -124,10 +124,22 @@ async def _listed(client: ApiClient, out: Mapping[str, Any], offset: int, limit:
     return {**page, "items": await _enrich(client, page["items"])}
 
 
-def _view_ask(inp: Mapping[str, Any], limit: int, offset: int) -> dict[str, Any]:
+_OWN: tuple[float, list[str]] = (0.0, [])
+
+
+async def _own(client: ApiClient) -> list[str]:
+    """The addresses this person sends as (every sender's full address): mail from them is sent mail. Kept for two minutes, since every list asks."""
+    global _OWN
+    if time.monotonic() - _OWN[0] > 120:
+        senders = (await list_senders(client, {}))["senders"]
+        _OWN = (time.monotonic(), [s["address"] for s in senders if s.get("address")])
+    return _OWN[1]
+
+
+def _view_ask(inp: Mapping[str, Any], limit: int, offset: int, own: list[str]) -> dict[str, Any]:
     """The mail.index question for a view, folder or tag: what the list and a bulk action over the whole view both ask."""
     view = inp.get("view") or "inbox"
-    ask: dict[str, Any] = {"limit": limit, "offset": offset, "view": view if view in ("inbox", "starred", "archive", "discarded", "new") else "inbox"}
+    ask: dict[str, Any] = {"limit": limit, "offset": offset, "view": view if view in ("inbox", "starred", "archive", "discarded", "new", "sent") else "inbox", "own": own}
     if inp.get("location"):
         ask["folder"] = str(inp["location"]).strip(".")
         ask["exact"] = True  # a folder shows what is filed in it, not the folders below: its count says the same
@@ -141,7 +153,7 @@ def _view_ask(inp: Mapping[str, Any], limit: int, offset: int) -> dict[str, Any]
 async def list_messages(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
     """A page of mail for a view, folder or tag, from the mail ingestor's index: one query for the page, its labels and its count."""
     offset, limit = int(inp.get("offset") or 0), int(inp.get("limit") or 50)
-    ask = _view_ask(inp, limit, offset)
+    ask = _view_ask(inp, limit, offset, await _own(client))
     out = await _call(client, "mail.index", ask)
     stage_of = await _stage_of_prefix(client)
     items = [{"message_id": r["subject_id"], "subject": r["subject"], "from_name": r["from_name"], "from_addr": r["from_addr"], "date": r["sent_at"] or r["sort_at"],
@@ -155,7 +167,7 @@ async def mark_view_read(client: ApiClient, inp: Mapping[str, Any]) -> dict[str,
     ids: list[str] = []
     total = 0
     while True:
-        out = await _call(client, "mail.index", _view_ask(inp, 2000, len(ids)))
+        out = await _call(client, "mail.index", _view_ask(inp, 2000, len(ids), await _own(client)))
         total = out["total"]
         got = [r["subject_id"] for r in out["rows"]]
         ids += got
@@ -453,7 +465,7 @@ def _own_unread(rolled: Mapping[str, list[int]], path: str) -> int:
 
 async def list_mailbox(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
     """The sidebar: unread in the system labels, and every folder and tag, counted by the mail ingestor in SQL."""
-    c = await _call(client, "mail.counts", {})
+    c = await _call(client, "mail.counts", {"own": await _own(client)})
     return {
         "inbox": {"unread": c["inbox"]}, "new": {"unread": c["new"]}, "starred": {"unread": c["starred"]}, "archive": {"unread": c["archive"]}, "discarded": {"unread": c["discarded"]},
         "folders": [{"path": p, "name": p.rpartition(".")[2], "depth": p.count("."), "tree": {"unread": _own_unread(c["folders"], p)}} for p in sorted(c["folders"])],  # sub-labels: ASF.infra nests ASF > infra
@@ -484,10 +496,23 @@ def _mark(read: bool) -> Handler:
     return run
 
 
+async def _address(client: ApiClient, account: str) -> str:
+    """The full address an account sends as: its from_address, else what the mailbox says it is. Blank when neither can be had."""
+    try:
+        have = (await _call(client, "plugin_config_get", {"plugin": f"provider.{account}"}))["config"]
+        if have.get("from_address"):
+            return str(have["from_address"])
+        return str((await _call(client, f"{account}.check", {})).get("address") or "")  # Gmail names its own mailbox
+    except CliError:
+        return ""
+
+
 async def list_senders(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
     """The accounts the From box offers: every instance with a ``send`` operation, whatever its provider."""
     ops = await client.list_ops()
     senders = [{"account": o.name.removesuffix(".send"), "provider": o.template or o.plugin or ""} for o in ops if o.name.endswith(".send")]
+    for s, address in zip(senders, await asyncio.gather(*(_address(client, s["account"]) for s in senders))):
+        s["address"] = address
     return {"senders": sorted(senders, key=lambda x: x["account"])}
 
 
@@ -786,7 +811,11 @@ async def move_to_folder(client: ApiClient, inp: Mapping[str, Any]) -> dict[str,
 async def get_account(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
     for a in (await list_accounts(client, {}))["accounts"]:
         if a["account_id"] == inp.get("account_id"):
-            return a
+            try:  # what is written in config.toml (host, login...); never a secret, those live in the keyring
+                have = (await _call(client, "plugin_config_get", {"plugin": f"provider.{a['account_id']}"}))["config"]
+            except CliError:
+                have = {}
+            return {**a, "config": {k: v for k, v in have.items() if k != "plugin"}, "receive_only": bool(have.get("receive_only"))}
     raise NotAvailable(str(inp.get("account_id")))
 
 
@@ -802,8 +831,27 @@ async def account_auth(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, A
 
 
 async def account_check(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
-    out = await _call(client, f"{await _own_account(client, inp)}.check", {}, confirm=True)
+    acct = await _own_account(client, inp)
+    caps = (await get_account(client, {"account_id": acct}))["capabilities"]
+    out = await _call(client, f"{acct}.{'check' if 'check' in caps else 'auth'}", {}, confirm=True)  # SMTP signs in with `auth`: no password given, it tries the stored one
     return {"state": "done" if out.get("ok") else "error", "detail": out.get("detail")}
+
+
+async def set_account_password(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    """Store a password-login account's password in the OS keyring (never in config.toml). Trying it is account_check."""
+    acct = await _own_account(client, inp)
+    if not inp.get("password"):
+        raise CliError("a password is required")
+    await _call(client, "secret_set", {"kind": "provider", "name": acct, "key": "password", "value": str(inp["password"])}, confirm=True)
+    return {"account_id": acct, "stored": True}
+
+
+async def set_account_config(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    """Change an account's settings (core reloads, which also registers a new account's commands). shortcut: display_name has no home in core yet."""
+    acct = await _own_account(client, inp)
+    config = {k: v for k, v in dict(inp.get("config") or {}).items() if k != "plugin"}
+    out = await _call(client, "plugin_config_set", {"plugin": f"provider.{acct}", "config": config}, confirm=True)
+    return {"account_id": acct, "note": out.get("note", "")}
 
 
 async def account_toggle(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
@@ -890,7 +938,7 @@ async def _engine(client: ApiClient, plugin: str) -> str:
     for p in await _plugins(client):
         if p["kind"] == "triager" and p["plugin"] == plugin and not p["template"]:
             return str(p["name"])
-    raise CliError(f"The {plugin} plugin is not in this stack. Add it on the Triage page (Add), or run: oknpost plugin add {plugin} --kind triager")
+    raise CliError(f"The {plugin} plugin is not in this stack. Add it on the Triage page (Add), or run: oaken-mail plugin add {plugin} --kind triager")
 
 
 def _sha(text: str) -> str:
@@ -994,10 +1042,9 @@ async def _swarm_rows(client: ApiClient) -> dict[str, Any]:
 
 
 async def get_agents(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
-    """The external agents core knows (tokens are never listed), the queues agents may be given, and whether the console is served."""
+    """The external agents core knows (tokens are never listed) and the queues agents may be given."""
     agents = (await _call(client, "agent_list", {}))["agents"]
-    rows = (await _call(client, "settings_get", {"section": "console"}))["sections"][0]["settings"]
-    return {"agents": agents, "queues": (await _swarm_rows(client))["allowed_queues"], "console": next(r["value"] for r in rows if r["key"] == "enabled")}
+    return {"agents": agents, "queues": (await _swarm_rows(client))["allowed_queues"]}
 
 
 async def create_agent(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
@@ -1009,13 +1056,6 @@ async def create_agent(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, A
 
 async def revoke_agent(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
     return {"revoked": (await _call(client, "agent_revoke", {"agent_id": str(inp["agent_id"])}, confirm=True))["revoked"]}
-
-
-async def set_console(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
-    """Serve the console or not. Saved to config.toml, then core rebuilds on it (the console, if it is the one being turned off, goes with it)."""
-    await _call(client, "settings_set", {"section": "console", "values": {"enabled": bool(inp.get("enabled"))}}, confirm=True)
-    await _call(client, "core_reload", {}, confirm=True)
-    return {}
 
 
 async def get_swarm(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
@@ -1038,7 +1078,7 @@ HANDLERS: Mapping[str, Handler] = {
     "thread_enrichments": thread_enrichments,
     "mark_view_read": mark_view_read,
     "get_swarm": get_swarm, "set_swarm": set_swarm,
-    "get_agents": get_agents, "create_agent": create_agent, "revoke_agent": revoke_agent, "set_console": set_console,
+    "get_agents": get_agents, "create_agent": create_agent, "revoke_agent": revoke_agent,
     "get_exposure": get_exposure, "set_exposure": set_exposure,
     "list_messages": list_messages, "search": search, "get_message": get_message, "get_thread": get_thread,
     "list_mailbox": list_mailbox, "mark_read": _mark(True), "mark_unread": _mark(False),
@@ -1047,7 +1087,7 @@ HANDLERS: Mapping[str, Handler] = {
     "stage_set_workers": _stage_act("workers"),
     "get_stage_plugins": get_stage_plugins, "stage_plugin_toggle": stage_plugin_toggle, "get_plugin_config": get_plugin_config, "set_plugin_config": set_plugin_config, "stage_plugin_add": stage_plugin_add,
     "stage_plugin_remove": stage_plugin_remove, "list_stage_jobs": list_stage_jobs, "job_retry": job_retry, "sync_now": sync_now, "get_features": get_features, **_script_ops("sieve"), **_script_ops("filters"), "list_schedules": list_schedules, "run_schedule": run_schedule, "get_logs": get_logs, "get_events": get_events,
-    "get_ai": get_ai, "clear_cache": clear_cache, "list_all_plugins": list_all_plugins, "plugin_reload": plugin_reload, "get_storage": get_storage, "run_vacuum": run_vacuum, "set_starred": _flag("mail.starred", "starred"), "set_archived": _flag("mail.archived", "archived"), "set_discarded": _flag("mail.discarded", "discarded"), "empty_discarded": empty_discarded, "list_plugins": list_plugins, "list_accounts": list_accounts, "get_account": get_account, "list_operations": list_operations, "account_auth": account_auth, "account_check": account_check,
+    "get_ai": get_ai, "clear_cache": clear_cache, "list_all_plugins": list_all_plugins, "plugin_reload": plugin_reload, "get_storage": get_storage, "run_vacuum": run_vacuum, "set_starred": _flag("mail.starred", "starred"), "set_archived": _flag("mail.archived", "archived"), "set_discarded": _flag("mail.discarded", "discarded"), "empty_discarded": empty_discarded, "list_plugins": list_plugins, "list_accounts": list_accounts, "get_account": get_account, "list_operations": list_operations, "account_auth": account_auth, "account_check": account_check, "set_account_password": set_account_password, "set_account_config": set_account_config,
     "create_account": create_account, "create_folder": create_folder, "set_labels": set_labels, "move_to_folder": move_to_folder, "account_toggle": account_toggle, "remove_account": remove_account, "job_cancel": job_cancel, "list_search_modes": list_search_modes,
 }
 
