@@ -70,6 +70,13 @@ Files: `jobs.py`, `stagerun.py`, `intake.py`, `daemon/core.py`, `operations/buil
 `plugin_describe`, and the catalog reads it from source (`Entry.icon`). Every plugin in `oaken-plugins` (22) and eight core built-ins
 set one; a test in `oaken-plugins` fails if one is missing. The web UI accepts only `bi-` plus lowercase letters, digits and dashes.
 
+### 7. `item_rerun` takes a batch
+
+`ItemRerunIn.ids` (up to 500) sends every message through the stage, one job each, as one gate decision (one confirm, one audit
+entry; the preview counts them). `id` still works. What a group of messages is (a thread) stays the product's: `oaken-mail` expands a
+thread into ids with the mail ingestor's `mail.thread` and sends the list. Core never learns the word. Branch `rerun-batch` in
+`oaken-core`.
+
 ### In `oaken-plugins`: `action_exec`
 
 A template action: runs a configured program on a message when one of its `routes` fires. The message goes to stdin as JSON; exit 0

@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import json
 import re
+import time
 from collections.abc import Awaitable, Callable, Mapping
 from email.utils import getaddresses, parseaddr
 from typing import Any
@@ -209,7 +210,7 @@ def _enrichment_blocks(rows: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
             items = [str(x) for x in v] if isinstance(v, list) else [json.dumps(v) if isinstance(v, dict) else str(v)]
             fields.append({"name": k, "items": items})
         if fields:
-            blocks.append({"name": r["name"], "fields": fields})
+            blocks.append({"name": r["name"], "fields": fields, "duration_ms": r.get("duration_ms")})
     return blocks
 
 
@@ -243,6 +244,60 @@ async def get_thread(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any
     return {"items": items, "total": out["total"], "truncated": len(items) < out["total"]}
 
 
+async def _thread_messages(client: ApiClient, message_id: str) -> list[Mapping[str, Any]]:
+    return (await _call(client, "mail.thread", {"subject_id": message_id}))["items"]
+
+
+async def enrich_thread(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    """Queue every message of the thread through the enrichers, at the user's priority (they run next, even on a paused queue)."""
+    ids = [m["subject_id"] for m in await _thread_messages(client, str(inp.get("message_id") or ""))]
+    if ids:  # one batch to core: what a thread is stays here, core only sees the list
+        source = (await _call(client, "mail.get", {"subject_id": ids[0]}))["source"]  # shortcut: one source for the batch; a thread across accounts would need one per message
+        await _call(client, "item_rerun", {"ids": ids, "stage": "enrich", "source": source}, confirm=True)
+    return {"queued": ids}
+
+
+async def _enriched_text(client: ApiClient, sid: str) -> str:
+    """What the enrichers stored for one message, as plain lines (empty if it has none yet)."""
+    try:
+        rows = (await _call(client, "item_enrichments", {"id": sid}))["enrichments"]
+    except CliError:
+        return ""
+    return " ".join(str(v) for r in rows for k, v in (r.get("data") or {}).items() if k == "summary" and v)
+
+
+async def thread_progress(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    msgs = await _thread_messages(client, str(inp.get("message_id") or ""))
+    have = [bool(await _enriched_text(client, m["subject_id"])) for m in msgs]
+    return {"done": sum(have), "total": len(msgs), "enriched": [m["subject_id"] for m, h in zip(msgs, have) if h]}
+
+
+async def summarize_thread(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    """One summary of the whole thread, from each message's own stored summary. Stores nothing (the enricher's `try` command).
+    shortcut: it uses the first `llm` enricher's instructions, which say "this message"; a thread-specific instance would read better."""
+    msgs = await _thread_messages(client, str(inp.get("message_id") or ""))
+    lines, missing = [], 0
+    for m in msgs:
+        labels = (await _call(client, "label_get", {"subject_id": m["subject_id"]})).get("labels", [])
+        if any(x["key"] == "confidential" and x["effective"] == "true" for x in labels):
+            raise CliError("a confidential message is in this thread: it is not sent to a model from here")
+        text = await _enriched_text(client, m["subject_id"])
+        if not text:
+            missing += 1
+            continue
+        lines.append(f"[{m['sent_at']}] {m['from_addr']}: {text}")
+    if not lines:
+        raise CliError("no message in this thread has been enriched yet")
+    instance = next((p["name"] for p in await _plugins(client) if p["kind"] == "enricher" and p.get("plugin") == "llm" and not p["template"]), None)
+    if instance is None:
+        raise CliError("no llm enricher is set up to write the summary")
+    subject = next((m["subject"] for m in msgs if m.get("subject")), "")
+    started = time.monotonic()
+    out = await _call(client, f"{instance}.try", {"text": f"Thread: {subject}\nOne line per message, oldest first:\n" + "\n".join(lines), "source": "thread"})
+    took = int((time.monotonic() - started) * 1000)
+    return {"blocks": _enrichment_blocks([{"name": "thread summary", "data": out, "duration_ms": took}]), "messages": len(msgs), "without_summary": missing}
+
+
 async def list_mailbox(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
     """The sidebar: unread in the system labels, and every folder and tag, counted by the mail ingestor in SQL."""
     c = await _call(client, "mail.counts", {})
@@ -255,21 +310,23 @@ async def list_mailbox(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, A
 
 def _mark(read: bool) -> Handler:
     async def run(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
-        ids = list(inp.get("ids") or ([inp["message_id"]] if inp.get("message_id") else []))
-        # the click is the confirmation: this flips local read state, then asks each owning provider, which pushes only if its write_back is on
-        await _call(client, "mail.mark_read" if read else "mail.mark_unread", {"subject_ids": ids}, confirm=True)
-        keys: dict[str, list[str]] = {}
-        for sid in ids:
-            m = await _call(client, "mail.get", {"subject_id": sid})
-            if m["item_key"]:
-                keys.setdefault(m["source"], []).append(m["item_key"])
-        for source, item_keys in keys.items():
+        ids = list(dict.fromkeys(inp.get("ids") or ([inp["message_id"]] if inp.get("message_id") else [])))
+        if not ids:
+            return {"changed": [], "unchanged": [], "local_only": [], "missing": []}
+        # one call however many ids (a select-all is thousands, and the API is rate limited): the click is the confirmation. It flips local read
+        # state and says which ids it knows and which provider keys they have; each owning provider then hears of it, and pushes only if its write_back is on
+        done = await _call(client, "mail.mark_read" if read else "mail.mark_unread", {"subject_ids": ids}, confirm=True)
+        local_only: list[str] = []
+        for source, keys in (done.get("sources") or {}).items():
             instance = source.partition(":")[2]  # shortcut: "gmail:<account>" names the instance by its account; breaks if an instance is named otherwise
-            try:
-                await _call(client, f"{instance}.set_read", {"item_keys": item_keys, "read": read}, confirm=True)
-            except CliError as exc:
-                raise CliError(f"marked here, but not at {source}: {exc}") from exc  # shortcut: no retry queue yet, so the two now differ until the next change
-        return {"changed": ids, "unchanged": [], "local_only": [], "missing": []}  # the page reads these as id lists; shortcut: local_only/missing are not told apart yet
+            pairs = list(keys.items())  # (subject id, item key)
+            for i in range(0, len(pairs), 500):
+                chunk = pairs[i : i + 500]
+                try:
+                    await _call(client, f"{instance}.set_read", {"item_keys": [k for _, k in chunk], "read": read}, confirm=True)
+                except CliError:
+                    local_only += [s for s, _ in chunk]  # marked here, not at the source; the page says so. shortcut: no retry queue, the two differ until the next change
+        return {"changed": done.get("found", ids), "unchanged": [], "local_only": local_only, "missing": done.get("missing", [])}  # shortcut: "unchanged" is not told apart yet (core counts requests, not rows)
 
     return run
 
@@ -753,7 +810,7 @@ HANDLERS: Mapping[str, Handler] = {
     "get_exposure": get_exposure, "set_exposure": set_exposure,
     "list_messages": list_messages, "search": search, "get_message": get_message, "get_thread": get_thread,
     "list_mailbox": list_mailbox, "mark_read": _mark(True), "mark_unread": _mark(False),
-    "message_presented": message_presented, "send": send, "rerun_stage": rerun_stage, "list_senders": list_senders, "stage_health": stage_health, "get_stage": get_stage,
+    "message_presented": message_presented, "send": send, "rerun_stage": rerun_stage, "enrich_thread": enrich_thread, "thread_progress": thread_progress, "summarize_thread": summarize_thread, "list_senders": list_senders, "stage_health": stage_health, "get_stage": get_stage,
     "stage_pause": _stage_act("pause"), "stage_resume": _stage_act("resume"), "stage_requeue_failed": _stage_act("requeue_failed"),
     "stage_set_workers": _stage_act("workers"),
     "get_stage_plugins": get_stage_plugins, "stage_plugin_toggle": stage_plugin_toggle, "get_plugin_config": get_plugin_config, "set_plugin_config": set_plugin_config, "stage_plugin_add": stage_plugin_add,

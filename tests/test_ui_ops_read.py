@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from oaken_core.cli.client import CallResult
+from oaken_core.cli.exits import CliError
 from oaken_webui_core import ui_ops
 
 ROW = {"subject_id": "s1", "thread_id": "t", "sent_at": "2026-11-01T10:00:00+00:00", "from_addr": "ann@example.org", "subject": "Invoice", "is_read": False, "attachments": 1}
@@ -142,5 +143,101 @@ def test_icon_falls_back_to_the_kind_and_socket_is_not_listed():
 
 
 def test_stored_enrichment_data_becomes_blocks_with_lists_kept_and_confidence_dropped():
-    rows = [{"name": "summary", "data": {"summary": "Dave proposes recording IP clearance.", "facts": ["a", "b"], "confidence": 0.95, "empty": ""}, "labels": {}}]
-    assert ui_ops._enrichment_blocks(rows) == [{"name": "summary", "fields": [{"name": "summary", "items": ["Dave proposes recording IP clearance."]}, {"name": "facts", "items": ["a", "b"]}]}]
+    rows = [{"name": "summary", "data": {"summary": "Dave proposes recording IP clearance.", "facts": ["a", "b"], "confidence": 0.95, "empty": ""}, "labels": {}, "duration_ms": 12400}]
+    assert ui_ops._enrichment_blocks(rows) == [{"name": "summary", "fields": [{"name": "summary", "items": ["Dave proposes recording IP clearance."]}, {"name": "facts", "items": ["a", "b"]}],
+                                                "duration_ms": 12400}]
+
+
+class ThreadClient:
+    def __init__(self, confidential: bool = False) -> None:
+        self.calls, self.confidential = [], confidential
+
+    async def call(self, name, payload=None, **_):
+        self.calls.append((name, payload))
+        out = {
+            "mail.thread": {"items": [{"subject_id": "a", "subject": "T", "sent_at": "d1", "from_addr": "x@y"}, {"subject_id": "b", "subject": "T", "sent_at": "d2", "from_addr": "z@y"}]},
+            "mail.get": {"source": "gmail:me"},
+            "item_rerun": {},
+            "item_enrichments": {"enrichments": [{"name": "summary", "data": {"summary": "said hi"}}] if payload and payload.get("id") == "a" else []},
+            "label_get": {"labels": [{"key": "confidential", "effective": "true"}] if self.confidential else []},
+            "plugin_describe": {"plugins": [{"name": "summary", "kind": "enricher", "plugin": "llm", "template": False}]},
+            "summary.try": {"summary": "They greeted each other.", "facts": ["a", "b"], "confidence": 1.0},
+        }[name]
+        return CallResult("r", output=out)
+
+
+async def test_enrich_thread_queues_every_message_and_progress_counts_the_enriched():
+    c = ThreadClient()
+    assert (await ui_ops.run(c, "enrich_thread", {"message_id": "a"}))["queued"] == ["a", "b"]
+    reruns = [x[1] for x in c.calls if x[0] == "item_rerun"]
+    assert len(reruns) == 1 and reruns[0]["ids"] == ["a", "b"] and reruns[0]["stage"] == "enrich"  # one batch, not one call per message
+    prog = await ui_ops.run(c, "thread_progress", {"message_id": "a"})
+    assert (prog["done"], prog["total"]) == (1, 2) and len(prog["enriched"]) == 1
+
+
+async def test_summarize_thread_asks_the_enricher_once_over_the_stored_summaries_and_refuses_confidential_mail():
+    c = ThreadClient()
+    out = await ui_ops.run(c, "summarize_thread", {"message_id": "a"})
+    asked = [x for x in c.calls if x[0] == "summary.try"]
+    assert len(asked) == 1 and "said hi" in asked[0][1]["text"] and out["without_summary"] == 1
+    assert out["blocks"][0]["fields"][0]["items"] == ["They greeted each other."]
+    import pytest
+
+    with pytest.raises(ui_ops.CliError):
+        await ui_ops.run(ThreadClient(confidential=True), "summarize_thread", {"message_id": "a"})
+
+
+class MarkClient:
+    """What core's mail.mark_read answers: the ids it knows, the ones it does not, and each source's keys. `gone` is unknown, s3 has no
+    provider key, and me.set_read can be made to fail."""
+
+    def __init__(self, fail_write_back: bool = False) -> None:
+        self.calls, self.fail = [], fail_write_back
+
+    async def call(self, name, payload=None, **_):
+        self.calls.append((name, payload))
+        if name in ("mail.mark_read", "mail.mark_unread"):
+            ids = payload["subject_ids"]
+            found = [i for i in ids if i != "gone"]
+            keyed = {i: f"k-{i}" for i in found if i != "s3"}
+            return CallResult("r", output={"marked": len(found), "found": found, "missing": [i for i in ids if i == "gone"], "sources": {"gmail:me": keyed} if keyed else {}})
+        if name == "me.set_read" and self.fail:
+            raise CliError("provider down")
+        return CallResult("r", output={})
+
+
+async def test_mark_read_dedupes_reports_missing_ids_and_writes_back_only_what_has_a_key():
+    c = MarkClient()
+    out = await ui_ops.run(c, "mark_read", {"ids": ["s1", "s1", "gone", "s3"]})
+    assert out["changed"] == ["s1", "s3"] and out["missing"] == ["gone"] and out["local_only"] == []
+    (local,) = [p for n, p in c.calls if n == "mail.mark_read"]
+    assert local == {"subject_ids": ["s1", "gone", "s3"]}  # the duplicate once; core says which are not stored
+    (remote,) = [p for n, p in c.calls if n == "me.set_read"]
+    assert remote == {"item_keys": ["k-s1"], "read": True}  # s3 has no item key: nothing to write back
+
+
+async def test_mark_unread_goes_the_other_way_locally_and_at_the_source():
+    c = MarkClient()
+    await ui_ops.run(c, "mark_unread", {"ids": ["s1", "s2"]})
+    assert [n for n, _ in c.calls if n in ("mail.mark_read", "mail.mark_unread")] == ["mail.mark_unread"]
+    assert [p for n, p in c.calls if n == "me.set_read"] == [{"item_keys": ["k-s1", "k-s2"], "read": False}]
+
+
+async def test_a_failed_write_back_is_reported_not_raised_so_the_page_still_updates_its_rows():
+    out = await ui_ops.run(MarkClient(fail_write_back=True), "mark_read", {"ids": ["s1", "s2", "s3"]})
+    assert out["changed"] == ["s1", "s2", "s3"] and out["local_only"] == ["s1", "s2"]  # marked here; the two with a source key were not written back
+
+
+async def test_a_select_all_sized_mark_is_one_core_call_and_the_write_back_comes_in_chunks():
+    c = MarkClient()
+    out = await ui_ops.run(c, "mark_read", {"ids": [f"m{i}" for i in range(2460)]})
+    assert len(out["changed"]) == 2460
+    assert len([1 for n, _ in c.calls if n == "mail.mark_read"]) == 1  # the API is rate limited: never a call per message
+    writes = [p for n, p in c.calls if n == "me.set_read"]
+    assert len(writes) == 5 and max(len(w["item_keys"]) for w in writes) == 500
+    assert len(c.calls) == 6
+
+
+async def test_mark_read_with_nothing_selected_calls_nothing():
+    c = MarkClient()
+    assert (await ui_ops.run(c, "mark_read", {"ids": []}))["changed"] == [] and c.calls == []

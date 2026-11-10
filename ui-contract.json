@@ -9,7 +9,7 @@
     "get_features", "sieve_list", "sieve_get", "sieve_check", "sieve_test", "sieve_save", "sieve_delete",
     "filters_list", "filters_get", "filters_check", "filters_save", "filters_delete",
     "reprocess", "get_enrichment",
-    "list_search_modes", "send", "list_senders", "rerun_stage",
+    "list_search_modes", "send", "list_senders", "rerun_stage", "enrich_thread", "thread_progress", "summarize_thread",
     "stage_health", "get_stage", "stage_pause", "stage_resume", "stage_requeue_failed", "stage_set_workers",
     "get_stage_plugins", "stage_plugin_toggle", "get_plugin_config", "set_plugin_config", "stage_plugin_add", "stage_plugin_remove", "list_stage_jobs", "job_retry", "job_cancel", "get_exposure", "set_exposure"
   ],
@@ -74,6 +74,9 @@
     "list_search_modes": ["modes[].id", "modes[].label", "modes[].icon", "modes[].action", "modes[].placeholder"],
     "send": ["message_id"],
     "rerun_stage": ["message_id", "stage"],
+    "enrich_thread": ["queued"],
+    "thread_progress": ["done", "total", "enriched"],
+    "summarize_thread": ["blocks", "messages", "without_summary"],
     "list_senders": ["senders[].account", "senders[].provider"],
     "stage_health": ["stages[].stage", "stages[].title", "stages[].paused", "stages[].queued", "stages[].failed", "stages[].done"],
     "get_stage": ["stage", "title", "paused", "queued", "running", "failed", "workers", "done", "last_error", "queues[].queue", "queues[].title", "queues[].workers", "queues[].default"],
