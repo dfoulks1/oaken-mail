@@ -11,7 +11,7 @@
     "reprocess", "get_enrichment",
     "list_search_modes", "send", "list_senders", "rerun_stage", "enrich_thread", "thread_progress", "summarize_thread",
     "stage_health", "get_stage", "stage_pause", "stage_resume", "stage_requeue_failed", "stage_set_workers",
-    "get_stage_plugins", "stage_plugin_toggle", "get_plugin_config", "set_plugin_config", "stage_plugin_add", "stage_plugin_remove", "list_stage_jobs", "job_retry", "job_cancel", "get_exposure", "set_exposure"
+    "get_stage_plugins", "stage_plugin_toggle", "get_plugin_config", "set_plugin_config", "stage_plugin_add", "stage_plugin_remove", "list_stage_jobs", "job_retry", "job_cancel", "get_exposure", "set_exposure", "request_thread_rollup", "get_thread_rollup", "mark_view_read", "thread_enrichments", "get_swarm", "set_swarm", "get_agents", "create_agent", "revoke_agent", "set_console"
   ],
   "fields": {
     "list_messages": [
@@ -35,7 +35,7 @@
       "items[].from_name", "items[].from_addr", "items[].date", "items[].snippet",
       "items[].is_read", "total", "truncated"
     ],
-    "list_mailbox": ["inbox", "discarded", "folders", "labels"],
+    "list_mailbox": ["inbox", "new", "discarded", "folders", "labels"],
     "list_accounts": [
       "accounts[].account_id", "accounts[].provider", "accounts[].display_name",
       "accounts[].receive_only", "accounts[].capabilities"
@@ -74,7 +74,7 @@
     "list_search_modes": ["modes[].id", "modes[].label", "modes[].icon", "modes[].action", "modes[].placeholder"],
     "send": ["message_id"],
     "rerun_stage": ["message_id", "stage"],
-    "enrich_thread": ["queued"],
+    "enrich_thread": ["queued", "kept"],
     "thread_progress": ["done", "total", "enriched"],
     "summarize_thread": ["blocks", "messages", "without_summary"],
     "list_senders": ["senders[].account", "senders[].provider"],
@@ -92,6 +92,16 @@
     "job_cancel": ["job_id"],
     "get_exposure": ["operations[].name", "operations[].plugin", "operations[].permission", "operations[].ceiling", "operations[].allowed", "operations[].exposed", "operations[].group", "operations[].summary"],
     "set_exposure": ["before"],
+    "thread_enrichments": ["items[].message_id", "items[].from", "items[].from_addr", "items[].depth", "items[].date", "items[].summary", "total"],
+    "request_thread_rollup": ["job_id", "summaries", "without_summary"],
+    "get_thread_rollup": ["status", "job_id", "result.about", "result.summary", "result.issues[].issue", "result.issues[].plus", "result.issues[].minus", "result.issues[].note", "result.hot_spots[].where", "result.hot_spots[].why", "result.hot_spots[].tone", "result.talking_points", "result.summaries", "result.by", "result.at"],
+    "mark_view_read": ["marked", "seen"],
+    "get_swarm": ["enabled", "allowed", "queues[].name", "queues[].label", "queues[].kind"],
+    "set_swarm": [],
+    "get_agents": ["agents[].id", "agents[].label", "agents[].queues", "agents[].revoked", "agents[].last_seen_at", "queues", "console"],
+    "create_agent": ["token", "agent"],
+    "revoke_agent": ["revoked"],
+    "set_console": [],
     "stage_set_workers": ["stage", "title", "paused", "queued", "running", "failed", "workers", "done", "last_error", "queues[].queue", "queues[].title", "queues[].workers", "queues[].default"]
   }
 }

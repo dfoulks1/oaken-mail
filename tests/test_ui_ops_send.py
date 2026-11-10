@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 import pytest
-
 from oaken_core.cli.client import CallResult
 from oaken_core.cli.exits import CliError
+
 from oaken_webui_core import ui_ops
 
 

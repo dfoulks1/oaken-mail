@@ -446,6 +446,7 @@ h1, h2, h3, h4, h5, h6, .ok-brand, .modal-title { font-family: var(--ok-font-hea
 .ok-fold-count { margin-left: auto; font-weight: 500; opacity: .7; }
 .ok-sentinel { list-style: none; text-align: center; font-size: .8rem; color: var(--ok-muted); padding: .75rem; min-height: 1px; }
 .ok-sentinel:empty { padding: 0; }
+.ok-sentinel:not(:empty) { cursor: pointer; }
 .ok-sort { width: auto; min-width: 8.5rem; }
 .ok-list-group { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--ok-muted); padding: .9rem 1rem .4rem; font-weight: 600; background: var(--ok-surface); position: sticky; top: 0; z-index: 1; }
 
@@ -638,6 +639,9 @@ h1, h2, h3, h4, h5, h6, .ok-brand, .modal-title { font-family: var(--ok-font-hea
 /* Rule: every content card is white; parchment is only ever the page. */
 [data-oaken-mode="light"] :is(.card, .modal-content, .dropdown-menu, .list-group-item, .ok-section, .ok-thread-msg, .ok-stage-panel,
   .ok-float, .ok-theme-swatch, .ok-acct-card, .ok-config-card, .ok-file-card, .ok-file-head, .ok-metric, .ok-attach, .ok-log, .ok-file-text, .ok-toast, .form-control:not(.ok-search .form-control), .form-select) { background-color: var(--ok-card); }
+/* The message tiles in the list are white like the other cards; parchment stays the page behind them. */
+[data-oaken-mode="light"] .ok-msg { background: var(--ok-card); }
+[data-oaken-mode="light"] .ok-msg:hover { background: color-mix(in srgb, var(--ok-fg) 4%, var(--ok-card)); }
 [data-oaken-mode="light"] .ok-msg.selected { background: var(--ok-lift); box-shadow: inset 3px 0 0 var(--ok-primary); }
 /* Stronger "you are here": primary-tinted fill with an edge, on the rail and in the list. */
 [data-oaken-mode="light"] .ok-nav a.active { background: color-mix(in srgb, var(--ok-primary) 22%, var(--ok-rail)); box-shadow: inset 3px 0 0 var(--ok-primary); }
@@ -686,3 +690,13 @@ h1, h2, h3, h4, h5, h6, .ok-brand, .modal-title { font-family: var(--ok-font-hea
   --bs-table-hover-bg: transparent; --bs-table-active-bg: transparent; }
 /* Bootstrap also paints cells with an inset box-shadow (stripe, hover, active): no fill on a table, ever. */
 .table > :not(caption) > * > * { background-color: transparent; box-shadow: none; }
+
+.ok-heat-strip { display: flex; flex-wrap: wrap; gap: .15rem; }
+.ok-heat { border: 1px solid transparent; background: none; border-radius: 6px; padding: 0 .2rem; font-size: 1rem; line-height: 1.4; }
+.ok-heat:hover { background: var(--ok-surface-2); }
+.ok-heat-hot { border-color: var(--ok-primary); background: var(--ok-surface-2); }
+
+.ok-below { color: var(--ok-primary); margin-left: .35rem; font-weight: 700; }
+/* an icon with a small "all" mark at its corner: the open envelope for read, with a double check */
+.ok-ico-all { position: relative; display: inline-block; line-height: 1; }
+.ok-ico-all > .bi-check-all { position: absolute; right: -.45em; bottom: -.3em; font-size: .75em; background: var(--bs-body-bg, #fff); border-radius: .2em; line-height: 1; }

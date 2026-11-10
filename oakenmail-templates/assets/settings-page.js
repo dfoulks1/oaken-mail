@@ -42,7 +42,7 @@
       box.innerHTML = `<div class="row g-3 mb-3">${tiles.join("")}</div>` + (usage ? "" : '<p class="text-muted small">No model router is running in this stack.</p>') +
         (rows ? `<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Analyzer</th><th>Model</th><th>Backend</th><th class="text-end">Calls</th><th class="text-end">Tokens in / out</th><th class="text-end">No-model answers</th></tr></thead><tbody>${rows}</tbody></table></div>` : "") +
         `<button class="btn btn-sm btn-outline-danger" data-clear-cache ${cache.entries ? "" : "disabled"}>Clear the answer cache</button>
-         <span class="small text-muted ms-2">Answers are recomputed on demand, at the cost of the model calls the cache saved.</span>`;
+         <span class="small text-muted ms-2">Answers are recomputed on demand, at the cost of the model calls the cache saved.</span>` + await swarmBlock();
     },
 
     async agents(box) {
@@ -51,7 +51,15 @@
       const row = (o) => `<tr class="${o.allowed ? "" : "text-muted"}"><td class="text-nowrap"><div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" data-expose="${esc(o.name)}" ${o.exposed ? "checked" : ""} ${o.allowed ? "" : "disabled"} aria-label="${esc(o.name)}"></div></td>` +
         `<td><code>${esc(o.name)}</code>${o.allowed ? "" : ' <i class="bi bi-lock-fill" title="Closed in code"></i>'}</td><td><span class="badge text-bg-${o.permission === "read" ? "secondary" : "warning"}">${esc(o.permission)}</span></td><td class="small">${esc(o.summary)}</td></tr>`;
       const on = operations.filter((o) => o.exposed).length;
-      box.innerHTML = `<p class="small mb-3"><strong>${on}</strong> of ${operations.length} operations are open to agents.</p>` + Object.keys(groups).sort().map((g) =>
+      const { agents = [], queues: open = [], console: serving = true } = (await api("get_agents", {})).output || {};
+      const live = agents.filter((a) => !a.revoked);
+      const provision = `<h3 class="h6">External agents</h3>` + (live.length ? `<table class="table table-sm align-middle"><tbody>${live.map((a) =>
+        `<tr><td>${esc(a.label)}</td><td class="text-muted small">${a.queues ? esc(a.queues.join(", ")) : "any queue"}</td><td class="text-muted small">${a.last_seen_at ? esc(when(a.last_seen_at)) : "never seen"}</td>` +
+        `<td class="text-end"><button class="btn btn-sm btn-outline-danger" data-agent-revoke="${esc(a.id)}">Revoke</button></td></tr>`).join("")}</tbody></table>` : '<p class="text-muted small">No agents yet.</p>') +
+        `<div class="d-flex gap-2 align-items-start mb-2"><input class="form-control form-control-sm" data-agent-label placeholder="Label"><select class="form-select form-select-sm" multiple size="3" data-agent-queues aria-label="Queues">${open.map((q) => `<option value="${esc(q)}">${esc(q)}</option>`).join("")}</select>` +
+        `<button class="btn btn-sm btn-outline-oaken text-nowrap" data-agent-create>Add agent</button></div><div data-agent-token></div>` +
+        `<div class="form-check form-switch my-3"><input class="form-check-input" type="checkbox" data-console ${serving ? "checked" : ""} id="ok-console"><label class="form-check-label" for="ok-console">Serve the core console</label></div><hr>`;
+      box.innerHTML = provision + `<p class="small mb-3"><strong>${on}</strong> of ${operations.length} operations are open to agents.</p>` + Object.keys(groups).sort().map((g) =>
         `<h3 class="h6 mt-3">${esc(g)}</h3><div class="table-responsive"><table class="table table-sm align-middle ok-ptable ok-optable"><colgroup><col class="c-sw"><col class="c-name"><col class="c-perm"><col></colgroup><tbody>${groups[g].map(row).join("")}</tbody></table></div>`).join("");
     },
 
@@ -98,6 +106,18 @@
     },
   };
 
+  async function swarmBlock() {
+    const sw = (await api("get_swarm", {})).output || { enabled: false, allowed: [], queues: [] };
+    return `<details class="mt-4" data-swarm><summary class="fw-semibold">Advanced settings</summary><div class="pt-3">` +
+      `<div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="ok-swarm" data-swarm-on ${sw.enabled ? "checked" : ""}><label class="form-check-label" for="ok-swarm">Allow external agents (swarm)</label></div>` +
+      `<p class="small text-muted">An agent leases the jobs of a queue and is sent their text, so it leaves this machine. Only the queues ticked below can be given to an agent.</p>` +
+      `<fieldset class="mb-2"><legend class="small fw-semibold">Queues agents may take jobs from</legend>` + (sw.queues.length ? sw.queues.map((q) =>
+        `<div class="form-check"><input class="form-check-input" type="checkbox" data-swarm-queue="${esc(q.name)}" id="ok-q-${esc(q.name)}" ${sw.allowed.includes(q.name) ? "checked" : ""}>` +
+        `<label class="form-check-label" for="ok-q-${esc(q.name)}">${esc(q.label)} <code>${esc(q.name)}</code>${q.kind ? ` <span class="text-muted small">${esc(q.kind)} stage</span>` : ""}</label></div>`).join("")
+        : '<div class="text-muted small">There are no queues.</div>') + `</fieldset>` +
+      `<button class="btn btn-sm btn-outline-oaken" data-swarm-save>Save</button></div></details>`;
+  }
+
   async function load(name) {
     const box = $(`[data-set="${name}"]`); if (!box) return;
     try { await loaders[name](box); } catch (e) { failed(box, e); }
@@ -116,6 +136,19 @@
       if (!confirm("Vacuum the database now? Writes wait while it runs.")) return;
       if (await call("run_vacuum")) toast("Vacuum queued."); return;
     }
+    if (t.closest("[data-swarm-save]")) {
+      const enabled = $("[data-swarm-on]").checked, allowed = $$("[data-swarm-queue]").filter((c) => c.checked).map((c) => c.dataset.swarmQueue);
+      if (enabled && !confirm("External agents will be sent the text of the allowed kinds of job. Save?")) return;
+      if (await call("set_swarm", { enabled, allowed })) { toast("Saved."); load("ai"); } return;
+    }
+    const ac = t.closest("[data-agent-create]");
+    if (ac) {
+      const pane = ac.parentElement, out = await call("create_agent", { label: $("[data-agent-label]", pane).value, queues: Array.from($("[data-agent-queues]", pane).selectedOptions).map((o) => o.value) });
+      if (out) { $("[data-agent-token]").innerHTML = `<div class="alert alert-warning small">Token for <strong>${esc(out.agent)}</strong>, shown once: <code>${esc(out.token)}</code></div>`; }
+      return;
+    }
+    const ar = t.closest("[data-agent-revoke]");
+    if (ar) { if (!confirm("Revoke this agent now?")) return; if (await call("revoke_agent", { agent_id: ar.dataset.agentRevoke })) load("agents"); return; }
     const rl = t.closest("[data-reload]");
     if (rl) { if (await call("plugin_reload", { plugin: rl.closest("[data-plugin]").dataset.plugin })) { toast("Reloaded."); load("plugins"); } }
   });
@@ -126,6 +159,8 @@
       if (!ok) sw.checked = !sw.checked;
       load("plugins"); return;
     }
+    const cs = ev.target.closest("[data-console]");
+    if (cs) { if (!(await call("set_console", { enabled: cs.checked }))) cs.checked = !cs.checked; return; }
     const ex = ev.target.closest("[data-expose]");
     if (ex) { const ok = await call("set_exposure", { name: ex.dataset.expose, enabled: ex.checked }); if (!ok) ex.checked = !ex.checked; load("agents"); return; }
     if (ev.target.matches("[data-log-level],[data-log-kind]")) load("logs");

@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
+from typing import ClassVar
+
 from oaken_core.cli.client import CallResult
 from oaken_core.cli.exits import CliError
+
 from oaken_webui_core import ui_ops
 
 ROW = {"subject_id": "s1", "thread_id": "t", "sent_at": "2026-11-01T10:00:00+00:00", "from_addr": "ann@example.org", "subject": "Invoice", "is_read": False, "attachments": 1}
@@ -12,9 +15,13 @@ LABELS = {"labels": [{"key": "mail.starred", "effective": "true"}, {"key": "mail
 PLUGINS = {"plugins": [{"name": "spamfilter", "kind": "triager"}, {"name": "sieve", "kind": "triager"}, {"name": "summary", "kind": "enricher"}, {"name": "mail", "kind": "ingestor"}]}
 
 
+INDEX = {"total": 1, "rows": [{**ROW, "from_name": "Ann Lee", "sort_at": ROW["sent_at"], "snippet": "Please pay by Friday.",
+                              "labels": {"mail.starred": "true", "sieve.labels": "a, b", "spamfilter.verdict": "allowed", "summary.text": "Invoice due"}}]}
+
+
 class Client:
     async def call(self, name, payload=None, **_):
-        out = {"mail.get": GET, "label_get": LABELS, "plugin_describe": PLUGINS, "mail.list": {"total": 1, "messages": [ROW]}}[name]
+        out = {"mail.get": GET, "label_get": LABELS, "plugin_describe": PLUGINS, "mail.index": INDEX, "item_enrichments": {"enrichments": []}, "log_list": {"rows": []}}[name]
         return CallResult("r", output=out)
 
 
@@ -241,3 +248,45 @@ async def test_a_select_all_sized_mark_is_one_core_call_and_the_write_back_comes
 async def test_mark_read_with_nothing_selected_calls_nothing():
     c = MarkClient()
     assert (await ui_ops.run(c, "mark_read", {"ids": []}))["changed"] == [] and c.calls == []
+
+
+class Writer(Client):
+    def __init__(self):
+        self.sent = []
+
+    async def call(self, name, payload=None, **_):
+        if name == "label_set":
+            self.sent.append(payload)
+            return CallResult("r", output={})
+        return await super().call(name, payload)
+
+
+async def test_removing_a_tag_overrides_it_and_adding_appends_to_the_sieve_list():
+    c = Writer()
+    await ui_ops.run(c, "set_labels", {"ids": ["s1"], "remove": ["a"], "add": ["z"]})
+    assert c.sent == [{"subject_id": "s1", "key": "sieve.labels", "value": "b, z"}]
+
+
+async def test_move_to_folder_with_no_path_sets_the_folder_empty():
+    c = Writer(); c.sent = []
+    await ui_ops.run(c, "move_to_folder", {"ids": ["s1"], "path": None})
+    assert c.sent == [{"subject_id": "s1", "key": "mail.folder", "value": ""}]
+
+
+async def test_a_folder_counts_only_what_is_filed_in_it_and_lists_the_same():
+    class C:
+        asked: ClassVar[dict] = {}
+
+        async def call(self, name, payload=None, **_):
+            if name == "mail.counts":
+                return CallResult("r", output={"inbox": 0, "new": 0, "starred": 0, "archive": 0, "discarded": 0, "tags": {},
+                                               "folders": {"A": [10, 9], "A.b": [4, 3], "A.b.c": [1, 1]}})
+            if name == "plugin_describe":
+                return CallResult("r", output={"plugins": []})
+            C.asked = payload
+            return CallResult("r", output={"rows": [], "total": 0})
+
+    m = await ui_ops.run(C(), "list_mailbox", {})
+    assert {f["path"]: f["tree"]["unread"] for f in m["folders"]} == {"A": 6, "A.b": 2, "A.b.c": 1}
+    await ui_ops.run(C(), "list_messages", {"location": "A"})
+    assert C.asked["exact"] is True

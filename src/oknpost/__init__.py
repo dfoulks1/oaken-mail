@@ -8,11 +8,13 @@ ingestor (``ingestor.mail``) still refuses anything that is not really mail: tha
 """
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
 from oaken_core import identity, paths
 from oaken_core.cli.commands import main as core_main
+from oaken_core.cli.commands import take_home
 from oaken_core.plugins import catalog
 from oaken_core.settings import Settings
 
@@ -68,4 +70,20 @@ def main(argv: list[str] | None = None) -> int:
     real = catalog.entries
     catalog.entries = lambda kinds: [e for e in real(kinds) if e.kind != LIMITED or ALLOWED_TAGS & set(e.tags)]  # the listing and add-by-name see only mail providers
     _first_run()
-    return core_main(argv, prog="oknpost", make=_make)
+    args = take_home(list(sys.argv[1:] if argv is None else argv))
+    if args and args[0] in ("start", "stop", "restart") and "--fg" not in args:  # --fg keeps core alone in the terminal
+        return _with_ui(args)
+    return core_main(args, prog="oknpost", make=_make)
+
+
+def _ui(command: str) -> int:
+    """`oknpost-webui <command>`, as its own process: it is a separate server and keeps its own pid file."""
+    return subprocess.run([sys.executable, "-m", "oaken_webui.main", command], check=False).returncode
+
+
+def _with_ui(args: list[str]) -> int:
+    """start, stop and restart cover the UI too, in order: stop the UI before core, start it after."""
+    if args[0] != "start":
+        _ui("stop")  # not running is fine here; core's stop is what matters
+    code = core_main(args, prog="oknpost", make=_make)
+    return _ui("start") if args[0] != "stop" and code == 0 else code

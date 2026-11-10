@@ -27,8 +27,21 @@ class NotAvailable(KeyError):
 
 
 async def _call(client: ApiClient, op: str, payload: dict[str, Any], *, confirm: bool = False) -> dict[str, Any]:
-    result = await client.call(op, payload, confirm=confirm)
+    for wait in (0.4, 1.5, 4, 8):  # core rate limits a burst (a long thread asks hundreds of times): wait it out, then try again
+        try:
+            result = await client.call(op, payload, confirm=confirm)
+            return dict(result.output or {})
+        except CliError as exc:
+            if "too many" not in str(exc).lower():
+                raise
+            await asyncio.sleep(wait)
+    result = await client.call(op, payload, confirm=confirm)  # the last try says why, if it still fails
     return dict(result.output or {})
+
+
+def _sender_name(from_header: str) -> str:
+    """The display name of a From, without a list's ' via <list>': the list rewrites 'Ann Lee <ann@x>' to 'Ann Lee via members <members@apache.org>'."""
+    return re.sub(r"\s+via\s+\S+$", "", parseaddr(from_header)[0], flags=re.IGNORECASE).strip()
 
 
 def _item(m: Mapping[str, Any]) -> dict[str, Any]:
@@ -72,7 +85,7 @@ def _shape(eff: Mapping[str, str], stage_of: Mapping[str, str] | None) -> dict[s
     stages: dict[str, list[dict[str, str]]] = {"triage": [], "enrich": [], "act": []}
     for key, value in sorted(eff.items()):
         stage = (stage_of or {}).get(key.partition(".")[0])
-        if stage and value is not None:
+        if stage and value is not None and key not in _TAG_KEYS:  # the tag lists show as tags, not again as a triage result
             stages[stage].append({"key": key, "value": value})
     tags = [x.strip() for k in ("sieve.labels", "filters.labels") for x in (eff.get(k) or "").split(",") if x.strip()]
     return {"starred": eff.get("mail.starred") == "true", "location": eff.get("mail.folder") or "", "labels": list(dict.fromkeys(tags)), "stages": stages}
@@ -101,7 +114,7 @@ async def _enrich(client: ApiClient, items: list[dict[str, Any]]) -> list[dict[s
                 return it  # a row that vanished between list and get stays as listed
             lab = await _labels(client, it["message_id"], stage_of)
         headers = m["parts"].get("headers", {})
-        return {**it, "from_name": parseaddr(_header(headers, "from"))[0], "snippet": _snippet(m["parts"]), **lab}
+        return {**it, "from_name": _sender_name(_header(headers, "from")), "snippet": _snippet(m["parts"]), **lab}
 
     return list(await asyncio.gather(*(one(i) for i in items)))
 
@@ -111,22 +124,45 @@ async def _listed(client: ApiClient, out: Mapping[str, Any], offset: int, limit:
     return {**page, "items": await _enrich(client, page["items"])}
 
 
-async def list_messages(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
-    """A page of mail for a view, folder or tag, from the mail ingestor's index: one query for the page, its labels and its count."""
-    offset, limit = int(inp.get("offset") or 0), int(inp.get("limit") or 50)
+def _view_ask(inp: Mapping[str, Any], limit: int, offset: int) -> dict[str, Any]:
+    """The mail.index question for a view, folder or tag: what the list and a bulk action over the whole view both ask."""
     view = inp.get("view") or "inbox"
-    ask: dict[str, Any] = {"limit": limit, "offset": offset, "view": view if view in ("inbox", "starred", "archive", "discarded") else "inbox"}
+    ask: dict[str, Any] = {"limit": limit, "offset": offset, "view": view if view in ("inbox", "starred", "archive", "discarded", "new") else "inbox"}
     if inp.get("location"):
         ask["folder"] = str(inp["location"]).strip(".")
+        ask["exact"] = True  # a folder shows what is filed in it, not the folders below: its count says the same
     if inp.get("label"):
         ask["tag"] = str(inp["label"])
     if "folder" in ask or "tag" in ask:
         ask["view"] = "all"  # the inbox view leaves out mail filed in a folder, so a folder or tag asks across views
+    return ask
+
+
+async def list_messages(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    """A page of mail for a view, folder or tag, from the mail ingestor's index: one query for the page, its labels and its count."""
+    offset, limit = int(inp.get("offset") or 0), int(inp.get("limit") or 50)
+    ask = _view_ask(inp, limit, offset)
     out = await _call(client, "mail.index", ask)
     stage_of = await _stage_of_prefix(client)
     items = [{"message_id": r["subject_id"], "subject": r["subject"], "from_name": r["from_name"], "from_addr": r["from_addr"], "date": r["sent_at"] or r["sort_at"],
               "snippet": r["snippet"], "is_read": r["is_read"], "has_attachments": r["attachments"] > 0, **_shape(r["labels"], stage_of)} for r in out["rows"]]
     return {"items": items, "total": out["total"], "offset": offset, "truncated": offset + len(items) < out["total"]}
+
+
+async def mark_view_read(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    """Mark every unread message of a view, folder or tag as read, however many pages it spans: the ids are read from the index in big pages
+    and marked in one go (a select-all would only reach the rows the page has loaded). The caller's confirmation is the click."""
+    ids: list[str] = []
+    total = 0
+    while True:
+        out = await _call(client, "mail.index", _view_ask(inp, 2000, len(ids)))
+        total = out["total"]
+        got = [r["subject_id"] for r in out["rows"]]
+        ids += got
+        if not got or len(ids) >= total:
+            break
+    done = await _mark(True)(client, {"ids": ids})  # a read one is a no-op, so the whole view can go
+    return {"marked": len(done.get("changed", [])), "seen": len(ids)}
 
 
 async def empty_discarded(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
@@ -227,7 +263,7 @@ async def get_message(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, An
     headers = parts.get("headers", {})
     shaped = await _labels(client, m["subject_id"], await _stage_of_prefix(client))
     return {
-        "message_id": m["subject_id"], "thread_key": m["thread_id"], "subject": m["subject"], "from_name": parseaddr(_header(headers, "from"))[0],
+        "message_id": m["subject_id"], "thread_key": m["thread_id"], "subject": m["subject"], "from_name": _sender_name(_header(headers, "from")),
         "from_addr": m["from_addr"], "to_addrs": _people(headers, "to"), "cc_addrs": _people(headers, "cc"), "date": m["sent_at"],
         "is_read": m["is_read"], **shaped, "enrichments": await _stored_enrichments(client, m["subject_id"]),
         "text": parts.get("text") or parts.get("clean") or "",
@@ -251,18 +287,125 @@ async def _thread_messages(client: ApiClient, message_id: str) -> list[Mapping[s
 async def enrich_thread(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
     """Queue every message of the thread through the enrichers, at the user's priority (they run next, even on a paused queue)."""
     ids = [m["subject_id"] for m in await _thread_messages(client, str(inp.get("message_id") or ""))]
+    total = len(ids)
+    if not inp.get("redo"):  # a message that already has its summary keeps it; `redo` asks for a new one
+        ids = [i for i in ids if not await _enriched_text(client, i)]
     if ids:  # one batch to core: what a thread is stays here, core only sees the list
         source = (await _call(client, "mail.get", {"subject_id": ids[0]}))["source"]  # shortcut: one source for the batch; a thread across accounts would need one per message
         await _call(client, "item_rerun", {"ids": ids, "stage": "enrich", "source": source}, confirm=True)
-    return {"queued": ids}
+    return {"queued": ids, "kept": total - len(ids)}
+
+
+ROLLUP_KIND = "thread.rollup"
+ROLLUP_QUEUE = "analyze"  # shortcut: the stage agents already work from; give it a queue of its own if rollups should not wait behind enrichment
+_ROLLUP_ASK = (
+    "You are given one line per message of a conversation, oldest first: [date] sender (tone 0 hostile to 5 glowing, where measured): summary | facts. "
+    "Work only from these lines; do not guess what a message said beyond them. Return: "
+    "about: what the conversation is about, in two sentences. "
+    "summary: at most 120 words, plain and neutral, no quoting of insults: the proposal, the main positions, what is decided, what is still open. "
+    "issues: each distinct question people took a side on, with plus (distinct people for it, +1) and minus (distinct people against it, -1). "
+    "Count each sender once per issue, by their latest stated position. Count only a position the lines state or clearly imply; a message with no stance counts for nothing. "
+    "If a count is unsure, say so in that issue's note. "
+    "hot_spots: where the tone ran hot or sharp (low tone scores, hostile wording): who, when, why. "
+    "talking_points: the recurring arguments, one short line each.")
+
+
+async def _thread_lines(client: ApiClient, msgs: list[Mapping[str, Any]]) -> tuple[list[str], int]:
+    """One line per message that has a stored summary: date, sender, tone and the summary. The second value is how many have none."""
+    gate = asyncio.Semaphore(3)
+
+    async def one(m: Mapping[str, Any]) -> str | None:
+        async with gate:
+            labels = (await _call(client, "label_get", {"subject_id": m["subject_id"]})).get("labels", [])
+            if any(x["key"] == "confidential" and x["effective"] == "true" for x in labels):
+                raise CliError("a confidential message is in this thread: it is not sent to a worker")
+            text, facts = await _enriched_pair(client, m["subject_id"])
+        if not text:
+            return None
+        tone = next((f" (tone {x['effective']}/5)" for x in labels if x["key"] == "sentiment.score" and x["effective"]), "")
+        return f"[{str(m['sent_at'])[:10]}] {m.get('from_name') or m['from_addr']}{tone}: {text}" + (f" | {'; '.join(facts)}" if facts else "")
+
+    lines = [x for x in await asyncio.gather(*(one(m) for m in msgs))]
+    return [x for x in lines if x], sum(1 for x in lines if x is None)
+
+
+async def request_thread_rollup(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    """Queue the rollup of a thread for a worker. Nothing is re-enriched; the stored summaries are the input. Returns the job id."""
+    msgs = await _thread_messages(client, str(inp.get("message_id") or ""))
+    lines, missing = await _thread_lines(client, msgs)
+    if not lines:
+        raise CliError("no message in this thread has been enriched yet")
+    subject = next((m["subject"] for m in msgs if m.get("subject")), "")
+    out = await _call(client, "queue_submit", {"queue": ROLLUP_QUEUE, "kind": ROLLUP_KIND, "subject": msgs[0]["subject_id"], "priority": 100,
+                                               "payload": json.dumps({"title": subject, "instruction": _ROLLUP_ASK, "lines": lines, "summaries": len(lines)})}, confirm=True)  # core takes the payload as JSON text
+    return {"job_id": out["job_id"], "summaries": len(lines), "without_summary": missing}
+
+
+async def get_thread_rollup(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    """The newest rollup of a thread: waiting, working, failed, or done with its text and how many summaries it was made from."""
+    msgs = await _thread_messages(client, str(inp.get("message_id") or ""))
+    if not msgs:
+        return {"status": "none"}
+    jobs = (await _call(client, "job_list", {"subject": msgs[0]["subject_id"], "kind": ROLLUP_KIND, "limit": 5}))["jobs"]
+    if not jobs:
+        return {"status": "none"}
+    done = next((j for j in jobs if j["status"] == "succeeded"), None)
+    latest = jobs[0]
+    out: dict[str, Any] = {"status": latest["status"], "job_id": latest["id"]}
+    if done:
+        got = await _call(client, "job_get", {"job_id": done["id"], "payload": True})
+        r = got.get("result") or {}
+        out["result"] = {**{k: r.get(k) for k in ("about", "summary", "issues", "hot_spots", "talking_points")}, "summaries": (got.get("payload") or {}).get("summaries"),
+                         "by": got.get("completed_by"), "at": done["updated_at"]}
+    return out
+
+
+async def thread_enrichments(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    """What is stored for each message of a thread, in thread order: sender, date and the summary (empty if it has none).
+    shortcut: one item_enrichments call per message (three at a time); a thread of a hundred takes a few seconds. Have core batch it if that bites."""
+    msgs = await _thread_messages(client, str(inp.get("message_id") or ""))
+    gate = asyncio.Semaphore(3)
+
+    async def one(m: Mapping[str, Any]) -> dict[str, Any]:
+        async with gate:
+            text = await _enriched_text(client, m["subject_id"])
+        return {"message_id": m["subject_id"], "from": m.get("from_name") or m.get("from_addr") or "", "from_addr": m.get("from_addr") or "", "depth": m.get("depth") or 0,
+                "date": m.get("sent_at") or "", "summary": text}
+
+    return {"items": list(await asyncio.gather(*(one(m) for m in msgs))), "total": len(msgs)}
+
+
+async def _enriched_pair(client: ApiClient, sid: str) -> tuple[str, list[str]]:
+    """The stored summary and facts of one message (empty if it has none): what a rollup is made from, and nothing else."""
+    for wait in (0.5, 2, 5, 10):
+        try:
+            rows = (await _call(client, "item_enrichments", {"id": sid}))["enrichments"]
+            break
+        except CliError as exc:
+            if "too many" not in str(exc).lower():
+                return "", []
+            await asyncio.sleep(wait)
+    else:
+        raise CliError("core is busy: try again in a moment")
+    data = [r.get("data") or {} for r in rows]
+    text = " ".join(str(d["summary"]) for d in data if d.get("summary"))
+    facts = [str(x) for d in data for x in (d.get("facts") or [])][:6]
+    return text, facts
 
 
 async def _enriched_text(client: ApiClient, sid: str) -> str:
     """What the enrichers stored for one message, as plain lines (empty if it has none yet)."""
-    try:
-        rows = (await _call(client, "item_enrichments", {"id": sid}))["enrichments"]
-    except CliError:
-        return ""
+    rows: list[Mapping[str, Any]] = []
+    for wait in (0.5, 2, 5, 10):  # the API is rate limited: a busy answer is waited out, not read as "nothing stored"
+        try:
+            rows = (await _call(client, "item_enrichments", {"id": sid}))["enrichments"]
+            break
+        except CliError as exc:
+            if "too many" not in str(exc).lower():
+                return ""
+            await asyncio.sleep(wait)
+    else:
+        raise CliError("core is busy: try again in a moment")  # not "empty": a wrong count is worse than no count
     return " ".join(str(v) for r in rows for k, v in (r.get("data") or {}).items() if k == "summary" and v)
 
 
@@ -270,6 +413,10 @@ async def thread_progress(client: ApiClient, inp: Mapping[str, Any]) -> dict[str
     msgs = await _thread_messages(client, str(inp.get("message_id") or ""))
     have = [bool(await _enriched_text(client, m["subject_id"])) for m in msgs]
     return {"done": sum(have), "total": len(msgs), "enriched": [m["subject_id"] for m, h in zip(msgs, have) if h]}
+
+
+_THREAD_ASK = ("Summarise this whole thread for a reader who will not read it. Give: each person's position in one line; where it turned sharp and between whom; "
+               "what was decided; what is still open; what is asked of the reader. Plain and neutral, no quoting of insults.")
 
 
 async def summarize_thread(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
@@ -285,7 +432,8 @@ async def summarize_thread(client: ApiClient, inp: Mapping[str, Any]) -> dict[st
         if not text:
             missing += 1
             continue
-        lines.append(f"[{m['sent_at']}] {m['from_addr']}: {text}")
+        tone = next((f" (tone {x['effective']}/5)" for x in labels if x["key"] == "sentiment.score" and x["effective"]), "")
+        lines.append(f"[{m['sent_at']}] {m['from_addr']}{tone}: {text}")
     if not lines:
         raise CliError("no message in this thread has been enriched yet")
     instance = next((p["name"] for p in await _plugins(client) if p["kind"] == "enricher" and p.get("plugin") == "llm" and not p["template"]), None)
@@ -293,17 +441,22 @@ async def summarize_thread(client: ApiClient, inp: Mapping[str, Any]) -> dict[st
         raise CliError("no llm enricher is set up to write the summary")
     subject = next((m["subject"] for m in msgs if m.get("subject")), "")
     started = time.monotonic()
-    out = await _call(client, f"{instance}.try", {"text": f"Thread: {subject}\nOne line per message, oldest first:\n" + "\n".join(lines), "source": "thread"})
+    out = await _call(client, f"{instance}.try", {"text": f"Thread: {subject}\n{_THREAD_ASK}\nOne line per message, oldest first (tone 0 hostile to 5 glowing, where measured):\n" + "\n".join(lines), "source": "thread"})
     took = int((time.monotonic() - started) * 1000)
     return {"blocks": _enrichment_blocks([{"name": "thread summary", "data": out, "duration_ms": took}]), "messages": len(msgs), "without_summary": missing}
+
+
+def _own_unread(rolled: Mapping[str, list[int]], path: str) -> int:
+    """Unread filed in this folder itself: core counts each folder with the ones below it, and a message is filed in one folder, so take the children off."""
+    return rolled[path][1] - sum(n[1] for q, n in rolled.items() if q.rpartition(".")[0] == path)
 
 
 async def list_mailbox(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
     """The sidebar: unread in the system labels, and every folder and tag, counted by the mail ingestor in SQL."""
     c = await _call(client, "mail.counts", {})
     return {
-        "inbox": {"unread": c["inbox"]}, "starred": {"unread": c["starred"]}, "archive": {"unread": c["archive"]}, "discarded": {"unread": c["discarded"]},
-        "folders": [{"path": p, "name": p.rpartition(".")[2], "depth": p.count("."), "tree": {"unread": n[1]}} for p, n in sorted(c["folders"].items())],  # sub-labels: ASF.infra nests ASF > infra
+        "inbox": {"unread": c["inbox"]}, "new": {"unread": c["new"]}, "starred": {"unread": c["starred"]}, "archive": {"unread": c["archive"]}, "discarded": {"unread": c["discarded"]},
+        "folders": [{"path": p, "name": p.rpartition(".")[2], "depth": p.count("."), "tree": {"unread": _own_unread(c["folders"], p)}} for p in sorted(c["folders"])],  # sub-labels: ASF.infra nests ASF > infra
         "labels": [{"name": name, "count": {"unread": n[1]}} for name, n in sorted(c["tags"].items())],
     }
 
@@ -377,7 +530,7 @@ async def _stage_queues(client: ApiClient, stage: str) -> list[dict[str, Any]]:
 
 
 def _stage(stage: str, queues: list[dict[str, Any]]) -> dict[str, Any]:
-    n = lambda k: sum(int(q[k] or 0) for q in queues)  # noqa: E731
+    n = lambda k: sum(int(q[k] or 0) for q in queues)
     return {
         "stage": stage, "title": STAGES[stage][1], "paused": bool(queues) and all(q["paused"] for q in queues), "queued": n("queued"),
         "running": n("running"), "failed": n("failed"), "workers": n("workers"), "done": n("succeeded_in_window"),
@@ -600,6 +753,36 @@ async def create_folder(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, 
     return {"path": path, "created": [path]}
 
 
+_TAG_KEYS = ("sieve.labels", "filters.labels")
+
+
+def _split(v: str | None) -> list[str]:
+    return [t.strip() for t in (v or "").split(",") if t.strip()]
+
+
+async def set_labels(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    """Add or remove tags. A tag lives in a comma list a filter wrote; a person's edit is the human layer over that list, so it overrides the filter."""
+    add, remove = [str(x).strip() for x in inp.get("add") or [] if str(x).strip()], {str(x).strip() for x in inp.get("remove") or []}
+    for sid in _ids(inp):
+        got = {x["key"]: x["effective"] for x in (await _call(client, "label_get", {"subject_id": sid})).get("labels", [])}
+        lists = {k: _split(got.get(k)) for k in _TAG_KEYS}
+        lists["sieve.labels"] += [t for t in add if t not in lists["sieve.labels"]]  # shortcut: new tags go under sieve.labels, the key the sidebar counts; own key when more than one source of hand tags exists
+        for key, tags in lists.items():
+            kept = [t for t in tags if t not in remove]
+            if kept != _split(got.get(key)):
+                await _call(client, "label_set", {"subject_id": sid, "key": key, "value": ", ".join(kept)}, confirm=True)
+    return {"changed": _ids(inp)}
+
+
+async def move_to_folder(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    """File messages in a folder, or out of one (no path: back to the Inbox). A person's value overrides a filter's."""
+    path = ".".join(x.strip() for x in str(inp.get("path") or "").replace("/", ".").split(".") if x.strip())
+    ids = _ids(inp)
+    for sid in ids:
+        await _call(client, "label_set", {"subject_id": sid, "key": "mail.folder", "value": path}, confirm=True)
+    return {"path": path, "moved": ids}
+
+
 async def get_account(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
     for a in (await list_accounts(client, {}))["accounts"]:
         if a["account_id"] == inp.get("account_id"):
@@ -716,7 +899,7 @@ def _sha(text: str) -> str:
 
 def _where(message: str) -> dict[str, Any]:
     """The line number inside a compile message, if it names one."""
-    m = re.search(r"line (\d+)", message, re.I)
+    m = re.search(r"line (\d+)", message, re.IGNORECASE)
     return {"line": int(m.group(1)) if m else None, "error": message}
 
 
@@ -806,7 +989,56 @@ async def set_exposure(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, A
     return {"before": out.get("before")}
 
 
+async def _swarm_rows(client: ApiClient) -> dict[str, Any]:
+    return {r["key"]: r["value"] for r in (await _call(client, "settings_get", {"section": "swarm"}))["sections"][0]["settings"]}
+
+
+async def get_agents(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    """The external agents core knows (tokens are never listed), the queues agents may be given, and whether the console is served."""
+    agents = (await _call(client, "agent_list", {}))["agents"]
+    rows = (await _call(client, "settings_get", {"section": "console"}))["sections"][0]["settings"]
+    return {"agents": agents, "queues": (await _swarm_rows(client))["allowed_queues"], "console": next(r["value"] for r in rows if r["key"] == "enabled")}
+
+
+async def create_agent(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    """Provision an agent for some queues. The token comes back once, here, and is not kept."""
+    queues = [str(q) for q in inp.get("queues", [])]
+    out = await _call(client, "agent_create", {"label": str(inp.get("label", "")).strip(), "queues": queues}, confirm=True)
+    return {"token": out["token"], "agent": out["agent"]["label"]}
+
+
+async def revoke_agent(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    return {"revoked": (await _call(client, "agent_revoke", {"agent_id": str(inp["agent_id"])}, confirm=True))["revoked"]}
+
+
+async def set_console(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    """Serve the console or not. Saved to config.toml, then core rebuilds on it (the console, if it is the one being turned off, goes with it)."""
+    await _call(client, "settings_set", {"section": "console", "values": {"enabled": bool(inp.get("enabled"))}}, confirm=True)
+    await _call(client, "core_reload", {}, confirm=True)
+    return {}
+
+
+async def get_swarm(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    """Whether external agents may lease jobs, which queues they may take from, and the queues there are."""
+    rows = await _swarm_rows(client)
+    queues = (await _call(client, "agent_list", {}))["queues"]
+    return {"enabled": rows["enabled"], "allowed": list(rows["allowed_queues"]), "queues": queues}
+
+
+async def set_swarm(client: ApiClient, inp: Mapping[str, Any]) -> dict[str, Any]:
+    """Save the switch and the queues to config, then rebuild core on them. Enabling sends job text to outside models: the page asks first."""
+    values = {"enabled": bool(inp.get("enabled")), "allowed_queues": [str(q) for q in inp.get("allowed", [])]}
+    await _call(client, "settings_set", {"section": "swarm", "values": values}, confirm=True)
+    await _call(client, "core_reload", {}, confirm=True)
+    return {}
+
+
 HANDLERS: Mapping[str, Handler] = {
+    "request_thread_rollup": request_thread_rollup, "get_thread_rollup": get_thread_rollup,
+    "thread_enrichments": thread_enrichments,
+    "mark_view_read": mark_view_read,
+    "get_swarm": get_swarm, "set_swarm": set_swarm,
+    "get_agents": get_agents, "create_agent": create_agent, "revoke_agent": revoke_agent, "set_console": set_console,
     "get_exposure": get_exposure, "set_exposure": set_exposure,
     "list_messages": list_messages, "search": search, "get_message": get_message, "get_thread": get_thread,
     "list_mailbox": list_mailbox, "mark_read": _mark(True), "mark_unread": _mark(False),
@@ -816,7 +1048,7 @@ HANDLERS: Mapping[str, Handler] = {
     "get_stage_plugins": get_stage_plugins, "stage_plugin_toggle": stage_plugin_toggle, "get_plugin_config": get_plugin_config, "set_plugin_config": set_plugin_config, "stage_plugin_add": stage_plugin_add,
     "stage_plugin_remove": stage_plugin_remove, "list_stage_jobs": list_stage_jobs, "job_retry": job_retry, "sync_now": sync_now, "get_features": get_features, **_script_ops("sieve"), **_script_ops("filters"), "list_schedules": list_schedules, "run_schedule": run_schedule, "get_logs": get_logs, "get_events": get_events,
     "get_ai": get_ai, "clear_cache": clear_cache, "list_all_plugins": list_all_plugins, "plugin_reload": plugin_reload, "get_storage": get_storage, "run_vacuum": run_vacuum, "set_starred": _flag("mail.starred", "starred"), "set_archived": _flag("mail.archived", "archived"), "set_discarded": _flag("mail.discarded", "discarded"), "empty_discarded": empty_discarded, "list_plugins": list_plugins, "list_accounts": list_accounts, "get_account": get_account, "list_operations": list_operations, "account_auth": account_auth, "account_check": account_check,
-    "create_account": create_account, "create_folder": create_folder, "account_toggle": account_toggle, "remove_account": remove_account, "job_cancel": job_cancel, "list_search_modes": list_search_modes,
+    "create_account": create_account, "create_folder": create_folder, "set_labels": set_labels, "move_to_folder": move_to_folder, "account_toggle": account_toggle, "remove_account": remove_account, "job_cancel": job_cancel, "list_search_modes": list_search_modes,
 }
 
 

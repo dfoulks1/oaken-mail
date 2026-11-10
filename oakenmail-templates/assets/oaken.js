@@ -228,7 +228,9 @@
     const starIcon = m.starred ? "bi-star-fill" : "bi-star";
     const unread = m.is_read === false ? " unread" : "";
     const clip = m.has_attachments ? '<i class="bi bi-paperclip text-muted"></i> ' : "";
-    const tags = []
+    // What's new spans every folder, so each row says where it is filed, then its labels.
+    const where = m.location && new URL(location.href).searchParams.get("view") === "new" ? `<span class="ok-tag"><i class="bi bi-folder2"></i>${esc(m.location.split(".").join(" › "))}</span>` : "";
+    const tags = [where]
       .concat((m.tags || []).map((t) => tag(t)))
       .concat((m.labels || []).map((l) => tag(l, window.Oaken.labelColor(l))))
       .join("");
@@ -252,6 +254,7 @@
    * the folds always agree. Counts on a fold are of the rows loaded so far. Which folds are
    * closed is remembered per view in this browser. */
   const PAGE = 40;
+  const AUTO_PAGES = 3; // pages that load on their own while nobody scrolls (folded groups keep the end in view); after that, scroll or press Load more
   const REFRESH_PAGES = 5; // a refresh re-fetches what is loaded, up to this many pages
   const SORTS = [
     ["date_desc", "Newest first"], ["date_asc", "Oldest first"], ["sender_asc", "Sender A–Z"],
@@ -261,7 +264,7 @@
     get(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { window.localStorage.setItem(k, v); } catch (e) { /* private window */ } },
   };
-  const view = { key: "", items: [], total: null, exact: true, more: false, loading: false,
+  const view = { key: "", items: [], total: null, exact: true, more: false, loading: false, auto: 0,
     token: 0, sort: "date_desc", folded: new Set(), last: null, counts: {} };
   let observer = null;
 
@@ -353,6 +356,7 @@
 
   // Select-all ticks what is loaded; if more exists, offer to load and tick the rest (Gmail's "select all N").
   function selectLoaded(on) {
+    view.selTest = null;
     qsa(".ok-msg input[type=checkbox]").forEach((c) => (c.checked = on));
     const text = qs("[data-oaken-pager-text]");
     if (!on || !view.more || !view.next || view.total === null || !text) { renderStatus(); return; }
@@ -381,12 +385,69 @@
     e.preventDefault();
     all.textContent = "Loading every message…";
     while (view.more && view.next) { const n = view.items.length; await view.next(); if (view.items.length === n) break; } // shortcut: pages the rest in; a very large view loads slowly
-    qsa(".ok-msg input[type=checkbox]").forEach((c) => (c.checked = true));
+    const test = view.selTest;
+    qsa(".ok-msg").forEach((row) => { const c = qs("input[type=checkbox]", row); if (c) c.checked = test ? test(itemsById.get(row.dataset.id) || {}) : true; });
     syncSelection();
     const text = qs("[data-oaken-pager-text]");
-    if (text) text.textContent = `All ${view.items.length.toLocaleString()} selected`;
+    if (text) text.textContent = test ? `${qsa(".ok-msg input:checked").length.toLocaleString()} of ${view.items.length.toLocaleString()} selected` : `All ${view.items.length.toLocaleString()} selected`;
   });
   document.addEventListener("change", (e) => { if (e.target.matches && e.target.matches(".ok-msg input[type=checkbox]")) syncSelection(); });
+
+  // Shift-click a row's box: every row between it and the last box you clicked takes the same state.
+  let lastBox = null;
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest(".ok-msg input[type=checkbox]");
+    if (!b) return;
+    if (e.shiftKey && lastBox && lastBox !== b && lastBox.isConnected) {
+      const boxes = qsa(".ok-msg input[type=checkbox]"), [i, k] = [boxes.indexOf(lastBox), boxes.indexOf(b)].sort((x, y) => x - y);
+      boxes.slice(i, k + 1).forEach((c) => (c.checked = b.checked));
+      syncSelection();
+    }
+    lastBox = b;
+  });
+
+  // Tick the loaded rows that pass `test`; if more rows exist unloaded, offer to load them all and apply the same test.
+  function selectWhere(test) {
+    view.selTest = test;
+    qsa(".ok-msg").forEach((row) => { const c = qs("input[type=checkbox]", row); if (c) c.checked = test(itemsById.get(row.dataset.id) || {}); });
+    syncSelection();
+    const text = qs("[data-oaken-pager-text]"), n = qsa(".ok-msg input:checked").length;
+    if (text && n && view.more && view.next && view.total !== null) text.innerHTML = `${n.toLocaleString()} selected. <a href="#" data-select-everything>Load all ${view.total.toLocaleString()} and select all matching</a>`;
+  }
+
+  // The caret beside the header box ticks the loaded rows that fit a test, replacing the selection.
+  const SELECT_TESTS = {
+    all: () => true, none: () => false,
+    unread: (m) => m.is_read === false, read: (m) => m.is_read !== false,
+    starred: (m) => !!m.starred, unstarred: (m) => !m.starred,
+    attachments: (m) => !!m.has_attachments,
+    sharp: (m) => { const s = ((m.stages || {}).enrich || []).find((x) => x.key === "sentiment.score"); return !!s && Number(s.value) <= 1; },
+  };
+  // "By label" lists the labels on the loaded rows, with how many carry each, built each time the menu opens.
+  document.addEventListener("show.bs.dropdown", (e) => {
+    const menu = qs("[data-oaken-select-menu]", e.target);
+    if (!menu) return;
+    const counts = new Map();
+    qsa(".ok-msg").forEach((row) => (itemsById.get(row.dataset.id)?.labels || []).forEach((l) => counts.set(l, (counts.get(l) || 0) + 1)));
+    qsa("[data-select-label-item]", menu).forEach((li) => li.remove());
+    if (!counts.size) return;
+    menu.insertAdjacentHTML("beforeend", '<li data-select-label-item><hr class="dropdown-divider"></li><li data-select-label-item><h6 class="dropdown-header">By label</h6></li>' +
+      [...counts].sort((a, b) => a[0].localeCompare(b[0])).map(([l, n]) =>
+        `<li data-select-label-item><button class="dropdown-item d-flex justify-content-between gap-3" data-select-label="${esc(l)}"><span><span class="ok-label-dot me-2" style="background:${window.Oaken.labelColor(l)}"></span>${esc(l)}</span><span class="text-muted">${n}</span></button></li>`).join(""));
+  });
+  document.addEventListener("click", (e) => {
+    const lb = e.target.closest("[data-select-label]");
+    if (!lb) return;
+    const name = lb.dataset.selectLabel;
+    selectWhere((m) => (m.labels || []).includes(name));
+  });
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-select]");
+    const test = b && SELECT_TESTS[b.dataset.select];
+    if (!test) return;
+    if (b.dataset.select === "all" || b.dataset.select === "none") { selectLoaded(b.dataset.select === "all"); syncSelection(); return; }
+    selectWhere(test);
+  });
 
   function renderStatus() {
     const text = qs("[data-oaken-pager-text]");
@@ -399,7 +460,7 @@
   function setSentinel(list) {
     let s = qs(".ok-sentinel", list);
     if (!s) { s = document.createElement("li"); s.className = "ok-sentinel"; list.appendChild(s); }
-    s.textContent = view.loading ? "Loading…" : "";
+    s.textContent = view.loading ? "Loading…" : (view.more ? "Load more" : "");
     s.hidden = !view.more && !view.loading;
     return s;
   }
@@ -473,6 +534,7 @@
     const sameView = key === view.key;
     const want = sameView ? Math.min(Math.max(view.items.length, PAGE), PAGE * REFRESH_PAGES) : PAGE;
     const token = ++view.token;
+    view.auto = 0;
     sortMenu(op);
     container.classList.add("ok-loading");
     try {
@@ -544,7 +606,7 @@
     } finally {
       view.loading = false;
       const s = setSentinel(list);
-      if (view.more && observer) { observer.unobserve(s); observer.observe(s); } // still in view? go on
+      if (view.more && observer && view.auto < AUTO_PAGES) { observer.unobserve(s); observer.observe(s); } // still in view? go on, a few pages at most
     }
   }
 
@@ -554,11 +616,17 @@
     const token = view.token;
     view.next = () => loadMore(container, list, op, input, token);
     observer = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) loadMore(container, list, op, input, token);
+      if (entries.some((e) => e.isIntersecting) && view.auto < AUTO_PAGES) { view.auto++; loadMore(container, list, op, input, token); }
     }, { root: container, rootMargin: "0px 0px 400px 0px" });
+    if (!container._okScroll) { // a real scroll lets it load again
+      container._okScroll = true;
+      container.addEventListener("scroll", () => { if (view.auto >= AUTO_PAGES) { view.auto = 0; const e = qs(".ok-sentinel", list); if (e && observer) { observer.unobserve(e); observer.observe(e); } } }, { passive: true });
+    }
     const s = qs(".ok-sentinel", list);
     if (s) observer.observe(s);
   }
+
+  document.addEventListener("click", (e) => { if (e.target.closest(".ok-sentinel") && view.more && !view.loading && view.next) { view.auto = 0; view.next(); } });
 
   // Fold and unfold a group (click, or Enter/Space on the focused header).
   function toggleFold(h) {
@@ -628,6 +696,7 @@
       const b = output || {};
       const thread = await fetchThread(b.message_id);
       container.innerHTML = readerHtml(b, thread);
+      container.dataset.id = b.message_id;
       threadProgress(container);
       if (b.html) { const cur = qs(".ok-thread-msg.current .ok-msg-body", container); cur && showBody(cur, { text: b.text, html: b.html }); }
       // The reader starts hidden (d-none) beside the "Select a message" placeholder: swap them.
@@ -714,13 +783,25 @@
   }
 
   // The whole-thread bar: the same three marks as a message's pill, in a row. Only enrich works on a thread today.
-  function threadBarHtml(id) {
+  // The tone of each message as a face, in thread order, from the sentiment enricher's labels. A sharp or hostile one (0-1) is marked; a click opens it.
+  function heatStripHtml(nodes) {
+    const pick = (m, k) => ((m.stages || {}).enrich || []).find((x) => x.key === k)?.value;
+    const cells = nodes.map((m) => ({ m, score: pick(m, "sentiment.score"), face: pick(m, "sentiment.face") })).filter((c) => c.face && c.score !== undefined);
+    if (!cells.length) return "";
+    return `<div class="ok-heat-strip mt-2" aria-label="Tone of each message">` + cells.map(({ m, score, face }) =>
+      `<button type="button" class="ok-heat${score <= 1 ? " ok-heat-hot" : ""}" data-heat="${esc(m.message_id)}" title="${esc(nameOfNode(m))}, tone ${esc(score)} of 5">${esc(face)}</button>`).join("") + `</div>`;
+  }
+  const nameOfNode = (m) => (m && (m.from_name || m.from_addr)) || "";
+
+  const THREAD_NODES = {}; // thread bar id -> the thread's messages as drawn (names, depth, order), so the analysis pane needs no second look
+  function threadBarHtml(id, nodes = []) {
+    THREAD_NODES[id] = nodes;
     const icon = (k) => STAGE_BADGES.find(([x]) => x === k)[1];
     return `<div class="ok-thread-bar mb-3" data-thread-bar data-id="${esc(id)}"><aside class="ok-stage-pill ok-stage-pill-row" aria-label="The whole thread">` +
       `<button type="button" class="ok-stg-icon" disabled title="Triage: not available for a whole thread yet"><i class="bi ${icon("triage")}"></i></button>` +
-      `<button type="button" class="ok-stg-icon" data-thread-enrich title="Enrich every message in this thread, then summarise the whole thread"><i class="bi ${icon("enrich")}"></i></button>` +
+      `<button type="button" class="ok-stg-icon" data-thread-enrich title="Show what is stored for each message in this thread, and enrich the rest"><i class="bi ${icon("enrich")}"></i></button>` +
       `<button type="button" class="ok-stg-icon" disabled title="Act: not available for a whole thread yet"><i class="bi ${icon("act")}"></i></button></aside>` +
-      `<span class="small text-muted ms-2" data-thread-status></span><div class="ok-stage-results mx-0 mt-2" data-thread-results hidden></div></div>`;
+      `<span class="small text-muted ms-2" data-thread-status></span><div class="ok-stage-results mx-0 mt-2" data-thread-results hidden></div>${heatStripHtml(nodes)}</div>`;
   }
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -735,17 +816,129 @@
       for (const id of enriched) qsa(`[data-stage-panel][data-id="${CSS.escape(id)}"] [data-stage-pick="enrich"]`, root).forEach((b) => b.classList.add("ran"));
     } catch (err) { /* the bar works without it */ }
   }
-  async function runThread(bar) {
+  // One question with a check (yes) and an x (no). Resolves true, false, or null when it is dismissed.
+  function askYesNo(text) {
+    return new Promise((resolve) => {
+      const el = document.createElement("div");
+      el.className = "modal fade"; el.tabIndex = -1;
+      el.innerHTML = `<div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-body text-center">` +
+        `<p class="mb-3">${esc(text)}</p>` +
+        `<button type="button" class="btn btn-oaken me-2" data-pick="yes" aria-label="Yes"><i class="bi bi-check-lg"></i></button>` +
+        `<button type="button" class="btn btn-outline-oaken" data-pick="no" aria-label="No"><i class="bi bi-x-lg"></i></button></div></div></div>`;
+      let pick = null;
+      el.addEventListener("click", (e) => { const b = e.target.closest("[data-pick]"); if (b) { pick = b.dataset.pick === "yes"; window.bootstrap.Modal.getInstance(el).hide(); } });
+      el.addEventListener("hidden.bs.modal", () => { el.remove(); resolve(pick); });
+      document.body.appendChild(el);
+      window.bootstrap.Modal.getOrCreateInstance(el).show();
+    });
+  }
+  // Part of the thread already has a summary: re-enrich those too? "redo" (yes), "missing" (no: only what lacks one) or null (dismissed).
+  async function askEnrich(done) {
+    const yes = await askYesNo(`Do you want to re-enrich ${done} message${done === 1 ? "" : "s"}?`);
+    return yes === null ? null : (yes ? "redo" : "missing");
+  }
+
+  const niceName = (t) => { const w = String(t).replace(/[_-]+/g, " "); return w.charAt(0).toUpperCase() + w.slice(1); };
+  function threadSummaryHtml(out) {
+    const b = out.blocks && out.blocks[0];
+    return `<div class="fw-semibold small mb-1">Thread summary${b && b.duration_ms != null ? ` <span class="fw-normal text-muted">· took ${took(b.duration_ms)}</span>` : ""}</div>` +
+      (b ? b.fields.map((f) => `<div class="fw-semibold small">${esc(niceName(f.name))}</div><ul class="small mb-2 ps-3">${f.items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`).join("") : '<div class="small text-muted">Nothing came back.</div>');
+  }
+  // The rollup of a thread is written by a worker from the stored summaries. It is a job: queued, then taken, then done.
+  function rollupHtml(roll, have) {
+    const r = roll.result;
+    const stale = r.summaries != null && have != null && r.summaries !== have;
+    const head = (t) => `<div class="fw-semibold small mt-2">${t}</div>`;
+    const issues = (r.issues || []).length ? head("Issues: for (+1) and against (−1), each person once") +
+      `<table class="table table-sm small mb-1"><tbody>${r.issues.map((i) => `<tr><td>${esc(i.issue)}${i.note ? `<div class="text-muted">${esc(i.note)}</div>` : ""}</td>` +
+        `<td class="text-end text-nowrap">+${Number(i.plus) || 0}</td><td class="text-end text-nowrap">−${Number(i.minus) || 0}</td></tr>`).join("")}</tbody></table>` : "";
+    const hot = (r.hot_spots || []).length ? head("Hot spots") + `<ul class="small ps-3 mb-1">${r.hot_spots.map((h) => `<li><span class="fw-semibold">${esc(h.where)}</span>${h.tone != null ? ` <span class="text-muted">tone ${esc(h.tone)}/5</span>` : ""}: ${esc(h.why)}</li>`).join("")}</ul>` : "";
+    const points = (r.talking_points || []).length ? head("Talking points") + `<ul class="small ps-3 mb-1">${r.talking_points.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "";
+    return `<div class="fw-semibold small mb-1">Thread summary <span class="fw-normal text-muted">· from ${r.summaries ?? "?"} summaries${r.by ? ` · ${esc(String(r.by).replace(/^agent:.*$/, "a worker"))}` : ""}</span></div>` +
+      (r.about ? `<p class="small mb-1"><span class="fw-semibold">About:</span> ${esc(r.about)}</p>` : "") + `<p class="small mb-1">${esc(r.summary)}</p>` + issues + hot + points +
+      `<button type="button" class="btn btn-sm btn-ghost mt-1" data-thread-summarise>${stale ? `Refresh (${have} summaries now)` : "Refresh"}</button>`;
+  }
+  function rollupSlot(bar, roll, have) {
+    const slot = qs("[data-thread-sum]", bar);
+    if (!slot) return;
+    if (roll.result) slot.innerHTML = rollupHtml(roll, have);
+    else if (roll.status === "queued" || roll.status === "running") slot.innerHTML = `<div class="small text-muted"><span class="spinner-border spinner-border-sm me-1"></span>${roll.status === "running" ? "A worker is writing it…" : "Queued for a worker…"}</div>`;
+    else slot.innerHTML = `${roll.status === "failed" || roll.status === "cancelled" ? `<div class="small text-danger mb-1">The last try ${esc(roll.status)}.</div>` : ""}<button type="button" class="btn btn-sm btn-outline-oaken" data-thread-summarise>Summarise the thread</button>`;
+  }
+  const rollupTimers = new WeakMap();
+  function pollRollup(bar, have) {
+    clearInterval(rollupTimers.get(bar));
+    const started = Date.now();
+    rollupTimers.set(bar, setInterval(async () => {
+      if (!document.body.contains(bar) || Date.now() - started > 15 * 60 * 1000) { clearInterval(rollupTimers.get(bar)); return; }
+      try {
+        const roll = (await api("get_thread_rollup", { message_id: bar.dataset.id })).output || { status: "none" };
+        if (roll.status !== "queued" && roll.status !== "running") clearInterval(rollupTimers.get(bar));
+        rollupSlot(bar, roll, have);
+      } catch { /* the next tick tries again */ }
+    }, 6000));
+  }
+  const faceOf = (m) => (((m.stages || {}).enrich || []).find((x) => x.key === "sentiment.face") || {}).value || "";
+
+  // Who wrote it, as a Member would say it: the name (a list's "X via members" is X), then the Apache id when the address is an apache.org one.
+  // A list's own address is never the sender: if there is no name, the address stays as is.
+  function senderLabel(m) {
+    const name = String(m.from_name || "").replace(/\s+via\s+\S+$/i, "").trim();
+    const addr = String(m.from_addr || m.from || "");
+    const id = /@apache\.org$/i.test(addr) ? addr.split("@")[0] : "";
+    if (name) return id && id.toLowerCase() !== name.toLowerCase() ? `${name} (${id})` : name;
+    return addr;
+  }
+
+  // The thread pill's Enrich icon opens this: what is already stored for each message, in thread order and indented under what it answers,
+  // with the queueing as a button inside it.
+  async function openThreadPane(bar) {
+    const box = qs("[data-thread-results]", bar), status = qs("[data-thread-status]", bar);
+    if (bar.dataset.busy) return;
+    if (!box.hidden && box.dataset.pane === "analysis") { box.hidden = true; return; } // a second click closes it
+    status.textContent = "Loading the analysis…";
+    try {
+      const { items = [], total = 0 } = (await api("thread_enrichments", { message_id: bar.dataset.id })).output || {};
+      const text = new Map(items.map((i) => [i.message_id, i.summary]));
+      const nodes = (THREAD_NODES[bar.dataset.id] || []).length ? THREAD_NODES[bar.dataset.id] : items; // the nodes carry names and depth; the op's rows are the fallback
+      const have = items.filter((i) => i.summary).length;
+      const faces = new Map();
+      nodes.forEach((m) => { const f = faceOf(m); if (f) faces.set(f, (faces.get(f) || 0) + 1); });
+      const roll = (await api("get_thread_rollup", { message_id: bar.dataset.id })).output || { status: "none" };
+      box.dataset.pane = "analysis";
+      box.innerHTML = `<div class="mb-3" data-thread-sum></div>` +
+        (faces.size ? `<div class="small mb-2" aria-label="Tone of the thread">Tone ${[...faces].map(([f, n]) => `<span class="ms-2">${esc(f)} ${n}</span>`).join("")}</div>` : "") +
+        `<div class="fw-semibold small mb-1">Analysis <span class="fw-normal text-muted">· ${have} of ${total} messages enriched</span></div>` +
+        (have < total ? `<div class="mb-2"><button type="button" class="btn btn-sm btn-outline-oaken" data-thread-run data-n="${total - have}">Enrich the other ${total - have}</button></div>` : "") +
+        (nodes.length ? `<ul class="small list-unstyled mb-0">${nodes.map((m) => {
+          const id = m.message_id, depth = Math.min(Number(m.depth) || 0, MAX_INDENT), s = text.get(id);
+          return `<li class="mb-2" style="margin-left:${depth * 0.9}rem;${depth ? "border-left:2px solid var(--ok-border);padding-left:.6rem" : ""}">` +
+            `${faceOf(m) ? `<span class="me-1">${esc(faceOf(m))}</span>` : ""}<span class="fw-semibold">${esc(senderLabel(m))}</span> <span class="text-muted">${esc(String(m.date || "").slice(0, 10))}</span>` +
+            `<div>${s ? esc(s) : '<span class="text-muted">not enriched</span>'}</div></li>`;
+        }).join("")}</ul>` : '<div class="small text-muted">No messages.</div>');
+      box.hidden = false;
+      status.textContent = "";
+      rollupSlot(bar, roll, have);
+      if (roll.status === "queued" || roll.status === "running") pollRollup(bar, have);
+    } catch (err) {
+      status.textContent = "";
+      toast((err && err.message) || "Could not load the analysis.");
+    }
+  }
+  async function runThread(bar, opts) {
     if (bar.dataset.busy) return;
     bar.dataset.busy = "1";
     const id = bar.dataset.id, status = qs("[data-thread-status]", bar), box = qs("[data-thread-results]", bar), btn = qs("[data-thread-enrich]", bar);
     btn.classList.add("active");
     try {
-      const q = await mutate("enrich_thread", { message_id: id });
+      const have = (await api("thread_progress", { message_id: id })).output;
+      let redo = false;
+      if (have.done && !(opts && opts.asked)) { const pick = await askEnrich(have.done); if (!pick) return; redo = pick === "redo"; }
+      const q = await mutate("enrich_thread", { message_id: id, redo });  // shortcut: after a redo the wait below counts old summaries as done, so it can end early
       if (!q) return;
-      const total = q.queued.length;
+      const total = q.queued.length + (q.kept || 0);  // the kept ones already have a summary and count as done
       let done = 0;
-      status.textContent = `Queued ${total} messages…`;
+      status.textContent = q.kept ? `Queued ${q.queued.length}, kept ${q.kept} already summarised…` : `Queued ${total} messages…`;
       for (let waited = 0; done < total && waited < 300000; waited += 3000) { // shortcut: polls every 3s for up to 5 minutes; a longer thread summarises what is ready
         await sleep(3000);
         done = (await api("thread_progress", { message_id: id })).output.done;
@@ -754,9 +947,8 @@
       status.textContent = "Summarising the thread…";
       const out = (await api("summarize_thread", { message_id: id })).output;
       status.textContent = `${out.messages} messages` + (out.without_summary ? `, ${out.without_summary} not enriched yet` : "");
-      const nice = (t) => { const w = String(t).replace(/[_-]+/g, " "); return w.charAt(0).toUpperCase() + w.slice(1); };
-      box.innerHTML = `<div class="fw-semibold small mb-1">Thread summary${out.blocks[0] && out.blocks[0].duration_ms != null ? ` <span class="fw-normal text-muted">· took ${took(out.blocks[0].duration_ms)}</span>` : ""}</div>` + (out.blocks[0] ? out.blocks[0].fields.map((f) =>
-        `<div class="fw-semibold small">${esc(nice(f.name))}</div><ul class="small mb-2 ps-3">${f.items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`).join("") : '<div class="small text-muted">Nothing came back.</div>');
+      box.innerHTML = threadSummaryHtml(out);
+      box.dataset.pane = "summary";
       box.hidden = false;
     } catch (err) {
       status.textContent = "";
@@ -794,8 +986,8 @@
     return (
       `<div class="ok-reader-inner">` +
       `<h1>${esc(b.subject)}</h1>` +
-      (many ? `<div class="small text-muted mb-2">${thread.total || nodes.length} messages in this conversation</div>` + threadBarHtml(b.message_id) : "") +
-      `<div class="d-flex gap-2 mb-3 flex-wrap">${tags}</div>` +
+      (many ? `<div class="small text-muted mb-2">${thread.total || nodes.length} messages in this conversation</div>` + threadBarHtml(b.message_id, nodes) : "") +
+      `<div class="d-flex gap-2 mb-3 flex-wrap" data-reader-tags>${tags}</div>` +
       body +
       (thread && thread.cut ? `<div class="small text-muted">Showing ${nodes.length} of ${thread.total} messages.</div>` : "") +
       `</div>`
@@ -876,7 +1068,24 @@
     });
     document.addEventListener("click", async (e) => {
       const te = e.target.closest("[data-thread-enrich]");
-      if (te) { runThread(te.closest("[data-thread-bar]")); return; }
+      if (te) { openThreadPane(te.closest("[data-thread-bar]")); return; }
+      const ts = e.target.closest("[data-thread-summarise]");
+      if (ts) {
+        const bar = ts.closest("[data-thread-bar]");
+        if (!(await askYesNo("Summarise this thread? The stored summaries are sent to a worker, which writes one rollup. Nothing is re-enriched."))) return;
+        ts.disabled = true;
+        api("request_thread_rollup", { message_id: bar.dataset.id }).then(({ output }) => {
+          rollupSlot(bar, { status: "queued" });
+          pollRollup(bar, output.summaries);
+        }).catch((err) => { ts.disabled = false; toast((err && err.message) || "Could not queue the thread summary."); });
+        return;
+      }
+      const tr = e.target.closest("[data-thread-run]");
+      if (tr) {
+        const n = Number(tr.dataset.n) || 0;
+        if (await askYesNo(`Enrich the other ${n} message${n === 1 ? "" : "s"}? They are queued for the model. The ones already done are left alone.`)) runThread(tr.closest("[data-thread-bar]"), { asked: true });
+        return;
+      }
       const again = e.target.closest("[data-stage-rerun]");
       if (again) { // run a later stage again for this message: the stages before it are skipped
         const id = again.closest(".ok-thread-msg").dataset.id;
@@ -931,6 +1140,16 @@
           ids.forEach((id) => qs(`.ok-msg[data-id="${CSS.escape(id)}"]`, list)?.remove()); // it leaves this view either way
           renderSidebar();
           toast(`${ids.length} ${inArchive ? "moved back to the inbox" : "archived"}.`);
+        });
+      }
+      else if (a === "mark-view-read") {
+        const n = view.total;
+        askYesNo(`Mark ${n === null ? "everything" : n.toLocaleString() + " message" + (n === 1 ? "" : "s")} in this view as read?`).then(async (yes) => {
+          if (!yes) return;
+          const out = await mutate("mark_view_read", inputFor(list.closest("[data-oaken-list]") || list, "list_messages").input);
+          if (!out) return;
+          toast(`${out.marked.toLocaleString()} marked read.`);
+          loadList(list.closest("[data-oaken-list]") || list); renderSidebar();
         });
       }
       else if (a === "mark-read" || a === "mark-unread") {
@@ -1002,6 +1221,7 @@
   const SIDEBAR_HTML = `
     <button class="btn btn-oaken btn-compose" data-action="compose"><i class="bi bi-pencil-square"></i>Compose</button>
     <nav class="ok-nav" data-oaken-nav>
+      <a href="index.html?view=new" data-view="new"><i class="bi bi-envelope-exclamation"></i>What's new</a>
       <a href="index.html?view=inbox" data-view="inbox"><i class="bi bi-inbox"></i>Inbox</a>
       <a href="index.html?view=starred" data-view="starred"><i class="bi bi-star"></i>Starred</a>
       <a href="index.html?view=sent" data-view="sent"><i class="bi bi-send"></i>Sent</a>
@@ -1040,7 +1260,7 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
     const set = foldedPaths(), p = c.dataset.foldPath;
     set.has(p) ? set.delete(p) : set.add(p);
     try { localStorage.setItem("oaken.foldedPaths", JSON.stringify([...set])); } catch { /* private mode: it just resets */ }
-    renderSidebar();
+    renderSidebar({ lazy: true });
   });
 
   function markActive(nav) {
@@ -1272,45 +1492,59 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
     revealFeatures();
   }
 
-  async function renderSidebar() {
+  function paintSidebar(output) {
     const folders = qs("[data-oaken-folders]");
     const labelsBox = qs("[data-oaken-labels]");
-    if (!folders && !labelsBox) return;
+    mailbox = { folders: (output && output.folders) || [], labels: (output && output.labels) || [] };
+    topBadge("new", (output && output.new && output.new.unread) || 0);
+    topBadge("inbox", (output && output.inbox && output.inbox.unread) || 0);
+    topBadge("discarded", (output && output.discarded && output.discarded.unread) || 0);
+    topBadge("starred", (output && output.starred && output.starred.unread) || 0);
+    topBadge("archive", (output && output.archive && output.archive.unread) || 0);
+    if (folders) {
+      const shut = foldedPaths(), here = new URL(location.href).searchParams.get("location") || "";
+      const isShut = (p) => shut.has(p) && !here.startsWith(p + "."); // never hide the folder you are in
+      const unreadBelow = (p) => mailbox.folders.some((a) => a.path.startsWith(p + ".") && a.tree.unread > 0); // a count is that folder's own, so a folded parent only hints
+      folders.innerHTML = mailbox.folders.length
+        ? mailbox.folders.map((f, i) => {
+            const kids = mailbox.folders[i + 1] && mailbox.folders[i + 1].depth > f.depth;
+            const hidden = mailbox.folders.some((a) => f.path.startsWith(a.path + ".") && isShut(a.path));
+            const caret = kids ? `<i class="bi ${isShut(f.path) ? "bi-chevron-right" : "bi-chevron-down"} ms-n1" data-fold-path="${esc(f.path)}" style="font-size:.7rem"></i>` : `<i style="width:.7rem;display:inline-block"></i>`;
+            return `<a href="index.html?location=${encodeURIComponent(f.path)}" title="Inbox/${esc(f.path)}"${hidden ? " hidden" : ""} ` +
+              `style="padding-left:${0.75 + f.depth * 1.1}rem">${caret}<i class="bi ${FOLDER_ICON.filed}"></i>` +
+              `${esc(f.name)}${badge(f.tree.unread)}${isShut(f.path) && unreadBelow(f.path) ? '<span class="ok-below" title="Unread in a folder below">•</span>' : ""}</a>`;
+          }).join("")
+        : '<div class="small text-muted px-3 py-1">No folders yet.</div>';
+    }
+    if (labelsBox) {
+      labelsBox.innerHTML = mailbox.labels.length
+        ? mailbox.labels.map((l) =>
+            `<a href="index.html?label=${encodeURIComponent(l.name)}">` +
+            `<span class="ok-label-dot" style="background:${window.Oaken.labelColor(l.name)}"></span>` +
+            `${esc(l.name)}${badge(l.count.unread)}</a>`
+          ).join("")
+        : '<div class="small text-muted px-3 py-1">No tags yet.</div>';
+    }
+    const nav = qs("[data-oaken-nav]");
+    if (nav) markActive(nav); // folders and labels arrive after the first mark, so mark again
+  }
+
+  // The last folders, labels and counts are kept in this browser, so the sidebar draws at once and still shows something when core is down.
+  // A `lazy` call (a page load, a fold) trusts a copy under 30s old and skips the fetch; any other call asks core.
+  async function renderSidebar(opts) {
+    if (!qs("[data-oaken-folders]") && !qs("[data-oaken-labels]")) return;
+    let shown = null;
+    if (opts && opts.lazy) {
+      try { shown = JSON.parse(store.get("mailbox", "null")); } catch { /* a bad copy is just not used */ }
+      if (shown && shown.output) { paintSidebar(shown.output); if (Date.now() - shown.at < 30000) return; }
+    }
     try {
       const { output } = await api("list_mailbox", {});
-      mailbox = { folders: (output && output.folders) || [], labels: (output && output.labels) || [] };
-      topBadge("inbox", (output && output.inbox && output.inbox.unread) || 0);
-      topBadge("discarded", (output && output.discarded && output.discarded.unread) || 0);
-      topBadge("starred", (output && output.starred && output.starred.unread) || 0);
-      topBadge("archive", (output && output.archive && output.archive.unread) || 0);
-      if (folders) {
-        const shut = foldedPaths(), here = new URL(location.href).searchParams.get("location") || "";
-        const isShut = (p) => shut.has(p) && !here.startsWith(p + "."); // never hide the folder you are in
-        folders.innerHTML = mailbox.folders.length
-          ? mailbox.folders.map((f, i) => {
-              const kids = mailbox.folders[i + 1] && mailbox.folders[i + 1].depth > f.depth;
-              const hidden = mailbox.folders.some((a) => f.path.startsWith(a.path + ".") && isShut(a.path));
-              const caret = kids ? `<i class="bi ${isShut(f.path) ? "bi-chevron-right" : "bi-chevron-down"} ms-n1" data-fold-path="${esc(f.path)}" style="font-size:.7rem"></i>` : `<i style="width:.7rem;display:inline-block"></i>`;
-              return `<a href="index.html?location=${encodeURIComponent(f.path)}" title="Inbox/${esc(f.path)}"${hidden ? " hidden" : ""} ` +
-                `style="padding-left:${0.75 + f.depth * 1.1}rem">${caret}<i class="bi ${FOLDER_ICON.filed}"></i>` +
-                `${esc(f.name)}${badge(f.tree.unread)}</a>`;
-            }).join("")
-          : '<div class="small text-muted px-3 py-1">No folders yet.</div>';
-      }
-      if (labelsBox) {
-        labelsBox.innerHTML = mailbox.labels.length
-          ? mailbox.labels.map((l) =>
-              `<a href="index.html?label=${encodeURIComponent(l.name)}">` +
-              `<span class="ok-label-dot" style="background:${window.Oaken.labelColor(l.name)}"></span>` +
-              `${esc(l.name)}${badge(l.count.unread)}</a>`
-            ).join("")
-          : '<div class="small text-muted px-3 py-1">No tags yet.</div>';
-      }
-      const nav = qs("[data-oaken-nav]");
-      if (nav) markActive(nav); // folders and labels arrive after the first mark, so mark again
+      store.set("mailbox", JSON.stringify({ at: Date.now(), output }));
+      paintSidebar(output);
     } catch (e) {
-      // A sidebar failure should not break the page; leave the static fallback in place.
-      toast(e.message || "Could not load folders.");
+      // A sidebar failure should not break the page; the copy (or the static fallback) stays in place.
+      toast(shown && shown.output ? "Core is not answering: showing the last folders and counts." : (e.message || "Could not load folders."));
     }
   }
 
@@ -1398,6 +1632,53 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
       }
     });
 
+
+    // Labels modal (reader kebab): the open message's folder and tags as removable pills, and a box to add a tag.
+    {
+      const modal = qs("#labelsModal");
+      const cur = () => { const id = qs("[data-oaken-reader]")?.dataset.id; return { id, m: STAGE_CACHE[id] }; };
+      const x = (attr, v) => `<button type="button" class="btn-close ms-2" style="font-size:.6em" ${attr}="${esc(v)}" aria-label="Remove ${esc(v)}"></button>`;
+      const draw = () => {
+        const { m } = cur();
+        const ls = (m && m.labels) || [];
+        const folder = m && m.location ? `<span class="ok-tag" title="Folder${m.location_by ? ", set by " + esc(m.location_by) : ""}"><i class="bi bi-folder2"></i>${esc(m.location)}${x("data-folder-remove", m.location)}</span>` : "";
+        qs("[data-oaken-labels-list]", modal).innerHTML = folder + ls.map((l) => `<span class="ok-tag">${esc(l)}${x("data-label-remove", l)}</span>`).join("")
+          || '<span class="small text-muted">No labels on this message.</span>';
+        qs("#labelsOptions", modal).innerHTML = (mailbox.labels || []).filter((l) => !ls.includes(l.name)).map((l) => `<option value="${esc(l.name)}">`).join("");
+        const pills = qs("[data-reader-tags]");
+        if (pills && m) pills.innerHTML = (m.tags || []).map((t) => tag(t)).concat(ls.map((l) => tag(l, window.Oaken.labelColor(l)))).join("");
+      };
+      const done = (id, m, field, val) => {
+        m[field] = val;
+        const row = itemsById.get(id);
+        if (row) row[field] = val;
+        draw(); renderSidebar();
+        const list = qs("[data-oaken-list]"); list && loadList(list, [id]);
+      };
+      const change = async (name, on) => {
+        const { id, m } = cur();
+        if (!m || !(await mutate("set_labels", on ? { ids: [id], add: [name] } : { ids: [id], remove: [name] }))) return;
+        const set = new Set(m.labels || []);
+        on ? set.add(name) : set.delete(name);
+        done(id, m, "labels", [...set]);
+      };
+      const unfile = async () => {
+        const { id, m } = cur();
+        if (m && await mutate("move_to_folder", { ids: [id], path: null })) done(id, m, "location", "");
+      };
+      modal?.addEventListener("show.bs.modal", () => { if (cur().m) draw(); });
+      modal?.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-label-remove]");
+        if (b) change(b.dataset.labelRemove, false);
+        else if (e.target.closest("[data-folder-remove]")) unfile();
+      });
+      qs("[data-oaken-labels-add]", modal)?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name = e.target.elements.name.value.trim();
+        if (name) { await change(name, true); e.target.reset(); }
+      });
+    }
+
     // Label menu: a checkbox per label for the selected messages, plus "New label…".
     document.addEventListener("show.bs.dropdown", (e) => {
       const menu = qs("[data-oaken-label-menu]", e.target);
@@ -1439,7 +1720,7 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
   let _sidebarTimer = null;
   function refreshSidebarSoon() {
     clearTimeout(_sidebarTimer);
-    _sidebarTimer = setTimeout(renderSidebar, 250);
+    _sidebarTimer = setTimeout(renderSidebar, 1500); // counts cost seconds in a big mailbox: wait out a burst of marking, then fetch once
   }
   function watchEvents() {
     if (typeof EventSource === "undefined" || window.Oaken.isDemo) return;
@@ -1449,6 +1730,8 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
         const d = JSON.parse(e.data);
         const row = qs(`.ok-msg[data-id="${CSS.escape(d.message_id)}"]`);
         row && row.classList.toggle("unread", d.read === false);
+        // What's new holds only what is unread: once addressed, a row leaves (the open message stays in the reader).
+        if (row && d.read === true && new URL(location.href).searchParams.get("view") === "new") { itemsById.delete(d.message_id); row.remove(); }
       } catch { /* a malformed frame is ignored; the counts refresh below still runs */ }
       refreshSidebarSoon();
     });
@@ -1463,7 +1746,7 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
     wireMailboxUi();
     buildMasthead();
     buildSidebar();
-    renderSidebar();
+    renderSidebar({ lazy: true });
     refreshPips();
     setInterval(refreshPips, 30000);
     initStagePage();
@@ -1485,6 +1768,12 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
     }
     // A collapsed card of the thread loads its text the first time it is opened.
     document.addEventListener("click", (e) => {
+      const heat = e.target.closest("[data-heat]");
+      if (heat) {
+        const card = qs(`.ok-thread-msg[data-id="${CSS.escape(heat.dataset.heat)}"]`);
+        card?.classList.remove("collapsed"); openThreadCard(card); card?.scrollIntoView({ block: "start", behavior: "smooth" });
+        return;
+      }
       const h = e.target.closest(".ok-thread-msg > header");
       if (h) openThreadCard(h.parentElement);
     });
@@ -1500,4 +1789,3 @@ ${STAGE_META.map(([id, name, icon]) => stageLink(id, name, icon, "", true)).join
     });
   });
 })();
-

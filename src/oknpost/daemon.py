@@ -6,6 +6,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from oaken_core.console.app import HERE as CONSOLE
 from oaken_core.daemon.core import Core
 from oaken_core.errors import PluginError
@@ -67,9 +69,35 @@ def _discover(group: str) -> Iterable[Any]:
     return [ep for ep in discover_entry_points(group) if permitted(kind, ep.value)]
 
 
+ROLLUP_KIND = "thread.rollup"  # one summary of a whole conversation, written by a worker from the stored summaries of its messages
+
+
+class Issue(BaseModel):
+    issue: str = Field(max_length=200)
+    plus: int = Field(ge=0, description="Distinct people for it (+1, support).")
+    minus: int = Field(ge=0, description="Distinct people against it (-1, oppose).")
+    note: str = Field(default="", max_length=300)
+
+
+class HotSpot(BaseModel):
+    where: str = Field(max_length=200, description="Who and when.")
+    why: str = Field(max_length=400)
+    tone: int | None = Field(default=None, ge=0, le=5)
+
+
+class RollupResult(BaseModel):
+    about: str = Field(max_length=500)
+    summary: str = Field(max_length=2000)
+    issues: list[Issue] = Field(default_factory=list, max_length=15)
+    hot_spots: list[HotSpot] = Field(default_factory=list, max_length=10)
+    talking_points: list[str] = Field(default_factory=list, max_length=15)
+    confidence: float = Field(default=1.0, ge=0, le=1)
+
+
 class MailCore(Core):
     async def open(self) -> None:
         await super().open()
+        self.runner.jobs.register_result(ROLLUP_KIND, RollupResult)  # no handler: only an agent can take it, so it waits in the queue until one does
         self.console.app.app = Brand(self.console.app.app)  # shortcut: reaches into the console's guard; use a hook if core grows one
         add = self.host.plan_add
 

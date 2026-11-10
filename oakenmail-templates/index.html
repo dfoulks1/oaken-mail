@@ -38,12 +38,19 @@
     <section class="ok-pane ok-listpane">
         <div class="ok-toolbar">
           <input class="form-check-input mx-2" type="checkbox" data-action="select-all" aria-label="Select all">
+          <div class="dropdown"><button class="btn btn-sm btn-ghost px-1" data-bs-toggle="dropdown" title="Select…" aria-label="Select which"><i class="bi bi-chevron-down"></i></button>
+            <ul class="dropdown-menu" data-oaken-select-menu>
+              <li><button class="dropdown-item" data-select="all">All</button></li><li><button class="dropdown-item" data-select="none">None</button></li><li><hr class="dropdown-divider"></li>
+              <li><button class="dropdown-item" data-select="unread">Unread</button></li><li><button class="dropdown-item" data-select="read">Read</button></li>
+              <li><button class="dropdown-item" data-select="starred">Starred</button></li><li><button class="dropdown-item" data-select="unstarred">Unstarred</button></li>
+              <li><button class="dropdown-item" data-select="attachments">With attachments</button></li><li><button class="dropdown-item" data-select="sharp">Sharp tone (0 to 1)</button></li></ul></div>
           <button class="btn btn-sm btn-ghost" title="Sync now" data-oaken-action="sync"><i class="bi bi-arrow-clockwise"></i></button>
           <button class="btn btn-sm btn-ghost" title="Archive (out of the inbox)" data-oaken-action="archive"><i class="bi bi-archive"></i></button>
           <button class="btn btn-sm btn-ghost" title="Discard" data-oaken-action="discard"><i class="bi bi-trash3"></i></button>
           <button class="btn btn-sm btn-outline-danger" title="Delete every discarded message for good" data-oaken-action="empty-discarded" hidden>Empty Discarded</button>
           <span class="vr"></span>
           <button class="btn btn-sm btn-ghost" title="Mark as read" data-oaken-action="mark-read"><i class="bi bi-envelope-open"></i></button>
+          <button class="btn btn-sm btn-ghost" title="Mark everything in this view as read" data-oaken-action="mark-view-read"><span class="ok-ico-all"><i class="bi bi-envelope-open"></i><i class="bi bi-check-all"></i></span></button>
           <button class="btn btn-sm btn-ghost" title="Mark as unread" data-oaken-action="mark-unread"><i class="bi bi-envelope"></i></button>
           <button class="btn btn-sm btn-ghost" title="Move to" data-bs-toggle="modal" data-bs-target="#moveModal"><i class="bi bi-folder-symlink"></i></button>
           <div class="dropdown"><button class="btn btn-sm btn-ghost" data-bs-toggle="dropdown" title="Label"><i class="bi bi-tag"></i></button>
@@ -80,6 +87,7 @@
           <div class="dropdown"><button class="btn btn-sm btn-ghost" data-bs-toggle="dropdown" title="More"><i class="bi bi-three-dots"></i></button>
             <ul class="dropdown-menu dropdown-menu-end">
               <li><button class="dropdown-item">Mark as unread</button></li><li><button class="dropdown-item">Snooze…</button></li>
+              <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#labelsModal" data-oaken-labels>Labels…</button></li>
               <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#sourceModal" data-oaken-source="m-vote-2463">View source</button></li>
               <li><button class="dropdown-item">Print</button></li><li><button class="dropdown-item">Block sender</button></li></ul></div>
           <a class="btn btn-sm btn-ghost ms-auto" href="message.html?popout=1" data-action="popout" title="Open in new window"><i class="bi bi-box-arrow-up-right"></i></a>
@@ -204,6 +212,11 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="assets/api.js"></script>
 <script src="assets/oaken.js"></script>
+
+<div class="modal fade" id="labelsModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">Labels</h5><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+  <div class="modal-body"><div class="d-flex gap-2 flex-wrap mb-3" data-oaken-labels-list></div>
+    <form class="d-flex gap-2" data-oaken-labels-add><input class="form-control form-control-sm" name="name" list="labelsOptions" maxlength="64" placeholder="Add a label" required autocomplete="off"><datalist id="labelsOptions"></datalist><button class="btn btn-sm btn-oaken">Add</button></form></div></div></div></div>
 
 <div class="modal fade" id="sourceModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
   <div class="modal-header"><h5 class="modal-title">Message source</h5><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
