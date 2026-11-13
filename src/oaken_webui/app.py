@@ -30,13 +30,14 @@ UI_CLIENT = "ui"
 _DEMO_ATTR = re.compile(rb"\s+data-oaken-demo\b")
 _ASSET_REF = re.compile(rb'(src|href)="(assets/[^"?]+\.(?:js|css))"')
 
-# Bootstrap and icons come from jsDelivr, fonts from Google; no remote images can load. Tighten to
-# 'self' once those are vendored under assets/.
+# Everything the page loads is served from here: Bootstrap, its icons and the fonts are vendored under
+# assets/vendor/. No other origin is allowed, so a page that can read all mail through the proxy runs no
+# third-party code and the browser contacts no CDN.
 _CSP = (
     "default-src 'self'; "
-    "script-src 'self' https://cdn.jsdelivr.net; "
-    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
-    "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "font-src 'self'; "
     "img-src 'self' data:; "
     "connect-src 'self'; "
     "frame-ancestors 'none'; "
