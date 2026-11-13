@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- The browser UI loads nothing from another origin. Bootstrap 5.3.3, Bootstrap Icons 1.11.3 and the Outfit and Figtree fonts are vendored under
+  `assets/vendor/` (licenses in `NOTICE`), and the page's Content-Security-Policy allows `'self'` only. Before, every page load fetched them from
+  jsDelivr and Google Fonts with no integrity check, in a page that can read all mail through the proxy.
+
 ## 1.0.1 (alpha)
 
 The WebUI comes in-tree. It was a separate repo (`oaken-webui`); it is no longer separable from Oaken Mail, so it ships here.

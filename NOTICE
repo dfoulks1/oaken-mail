@@ -3,3 +3,13 @@ Copyright 2026 The Oaken Mail contributors
 
 This product includes software developed by The Oaken Mail contributors.
 Licensed under the Apache License, Version 2.0.
+
+The browser UI ships third-party files under oakenmail-templates/assets/vendor/, unchanged from their
+npm packages:
+- Bootstrap 5.3.3 (bootstrap.min.css, bootstrap.bundle.min.js, which includes Popper),
+  Copyright 2011-2024 The Bootstrap Authors, MIT License (assets/vendor/bootstrap/LICENSE).
+- Bootstrap Icons 1.11.3, Copyright 2019-2024 The Bootstrap Authors, MIT License
+  (assets/vendor/bootstrap-icons/LICENSE).
+- Outfit, Copyright 2021 The Outfit Project Authors, and Figtree, Copyright 2022 The Figtree Project
+  Authors: variable woff2 files from @fontsource-variable/outfit and @fontsource-variable/figtree 5.3.0,
+  SIL Open Font License 1.1 (assets/vendor/fonts/OFL-*.txt).
